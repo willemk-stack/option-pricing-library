@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: option_pricing
+Version: 0.1.0
+Summary: Core option pricing library
+Author-email: Willem Knibbe <willemknibbe0@gmail.com>
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy
+Requires-Dist: scipy
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: jupyter; extra == "dev"

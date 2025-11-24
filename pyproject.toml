@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "option_pricing"            # this is the name you'll install with pip
+version = "0.1.0"
+description = "Core option pricing library"
+readme = "README.md"
+requires-python = ">=3.10"
+
+authors = [
+  { name = "Willem Knibbe", email = "willemknibbe0@gmail.com" }
+]
+
+dependencies = [
+  "numpy",
+  "scipy",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "jupyter",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["option_pricing*"]
