@@ -1,6 +1,0 @@
-numpy
-scipy
-
-[dev]
-pytest
-jupyter

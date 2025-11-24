@@ -1,8 +1,0 @@
-pyproject.toml
-option_pricing/__init__.py
-option_pricing/processes.py
-option_pricing.egg-info/PKG-INFO
-option_pricing.egg-info/SOURCES.txt
-option_pricing.egg-info/dependency_links.txt
-option_pricing.egg-info/requires.txt
-option_pricing.egg-info/top_level.txt
