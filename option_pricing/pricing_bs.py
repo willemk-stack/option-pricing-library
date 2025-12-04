@@ -9,7 +9,7 @@ def _d_plus_minus(t, x, K, r, sigma, T):
     d_minus = d_plus - sigma * sqrt_tau
     return d_plus, d_minus, tau
 
-def c(t, x, K, r, sigma, T):
+def bs_call(t, x, K, r, sigma, T):
     """Price of a European call option under the Black-Scholes model.
 
     This function computes the time-t price of a European call option with
@@ -44,12 +44,15 @@ def c(t, x, K, r, sigma, T):
         - This implementation assumes no dividends.
         - The function is vectorized with respect to `x` when used with NumPy arrays.
     """
+    assert 0 <= t < T, "Must have 0 <= t < T"
+    assert x > 0 and K > 0 and sigma > 0, "x, K, sigma must be positive"
+
     d_plus, d_minus, tau = _d_plus_minus(t, x, K, r, sigma, T)
     N_d_plus = norm.cdf(d_plus)
     N_d_minus = norm.cdf(d_minus)
     return x * N_d_plus - K * np.exp(-r * tau) * N_d_minus
 
-def p(t, x, K, r, sigma, T):
+def bs_put(t, x, K, r, sigma, T):
     """Price of a European put option under the Black-Scholes model.
 
     This function computes the time-t price of a European put option with
@@ -87,6 +90,9 @@ def p(t, x, K, r, sigma, T):
               c(t, x, K, r, sigma, T) - p(t, x, K, r, sigma, T)
               = x - K * exp(-r * (T - t)).
     """
+    assert 0 <= t < T, "Must have 0 <= t < T"
+    assert x > 0 and K > 0 and sigma > 0, "x, K, sigma must be positive"
+    
     d_plus, d_minus, tau = _d_plus_minus(t, x, K, r, sigma, T)
     N_minus_d_plus = norm.cdf(-d_plus)
     N_minus_d_minus = norm.cdf(-d_minus)
