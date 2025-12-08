@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.stats import norm
+from .params import PricingInputs
 
 def _d_plus_minus(t, x, K, r, sigma, T):
     """Return d_plus, d_minus for given parameters."""
@@ -52,6 +53,17 @@ def bs_call(t, x, K, r, sigma, T):
     N_d_minus = norm.cdf(d_minus)
     return x * N_d_plus - K * np.exp(-r * tau) * N_d_minus
 
+# Wrapper for bs_call for feeding params from PricingInputs
+def bs_call_from_inputs(p: PricingInputs) -> float:
+    return bs_call(
+        t=p.t,
+        x=p.S,
+        K=p.K,
+        r=p.r,
+        sigma=p.sigma,
+        T=p.T,
+    )
+
 def bs_put(t, x, K, r, sigma, T):
     """Price of a European put option under the Black-Scholes model.
 
@@ -97,6 +109,17 @@ def bs_put(t, x, K, r, sigma, T):
     N_minus_d_plus = norm.cdf(-d_plus)
     N_minus_d_minus = norm.cdf(-d_minus)
     return K * np.exp(-r * tau) * N_minus_d_minus - x * N_minus_d_plus
+
+# Wrapper for bs_put for feeding params from PricingInputs
+def bs_put_from_inputs(p: PricingInputs) -> float:
+    return bs_put(
+        t=p.t,
+        x=p.S,
+        K=p.K,
+        r=p.r,
+        sigma=p.sigma,
+        T=p.T,
+    )
 
 def finite_diff_greeks(t, x, K, r, sigma, T,
                        h_x=None, h_sigma=None, h_t=None):
