@@ -22,8 +22,12 @@ dependencies = [
 dev = [
   "pytest",
   "jupyter",
+  "matplotlib",
 ]
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["option_pricing*"]
