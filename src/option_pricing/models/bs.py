@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import norm
 
@@ -195,6 +194,14 @@ def sweep_x(
 
     method: "analytic" (default) or "fd"
     """
+
+    try:
+        import matplotlib.pyplot as plt
+    except ModuleNotFoundError as e:
+        raise ModuleNotFoundError(
+            "plot_sweep requires matplotlib. Install it with: pip install matplotlib"
+        ) from e
+
     if x_min is None:
         x_min = 0.5 * K
     if x_max is None:
