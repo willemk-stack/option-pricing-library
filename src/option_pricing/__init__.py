@@ -14,7 +14,7 @@ from .types import OptionSpec, OptionType, MarketData, PricingInputs
 
 # Re-export pricing entrypoints (nice public names)
 from .models.bs import bs_call_from_inputs as bs_price_call
-# from .models.bs import bs_greeks  # uncomment if you have it
+from .models.bs import bs_call_greeks_analytic_from_inputs as bs_call_greeks  # uncomment if you have it
 
 from .pricers.mc import mc_call_from_inputs as mc_price_call
 from .pricers.mc import mc_put_from_inputs as mc_price_put
@@ -33,5 +33,5 @@ __all__ = [
     "mc_price_put",
     "binom_price_call",
     "binom_price_put",
-    # "bs_greeks",
+    "bs_greeks",
 ]
