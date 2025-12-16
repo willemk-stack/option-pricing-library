@@ -14,7 +14,7 @@ authors = [{ name = "Willem Knibbe", email = "willemknibbe0@gmail.com" }]
 dependencies = ["numpy", "scipy"]
 
 [project.optional-dependencies]
-dev = ["pytest", "jupyter", "matplotlib"]
+dev = ["pytest", "jupyter", "ruff", "black", "mypy", "matplotlib"]
 notebooks = ["jupyter", "matplotlib", "pandas"]
 
 [tool.black]
