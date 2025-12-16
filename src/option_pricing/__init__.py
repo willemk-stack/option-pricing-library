@@ -18,7 +18,6 @@ from .models.bs import bs_call_from_inputs as bs_price_call
 from .models.bs import (
     bs_call_greeks_analytic_from_inputs as bs_call_greeks,
 )  # uncomment if you have it
-from .plotting.core import DistSpec, plot_specs
 from .pricers.mc import mc_call_from_inputs as mc_price_call
 from .pricers.mc import mc_put_from_inputs as mc_price_put
 from .types import MarketData, OptionSpec, OptionType, PricingInputs
@@ -36,7 +35,4 @@ __all__ = [
     "binom_price_put",
     "bs_price_call",
     "bs_call_greeks",
-    # Plotters
-    "DistSpec",
-    "plot_specs",
 ]
