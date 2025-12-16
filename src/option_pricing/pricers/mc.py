@@ -2,8 +2,8 @@
 from dataclasses import dataclass, field
 import numpy as np
 from collections.abc import Callable
-from .params import PricingInputs
-from .processes import sim_gbm_terminal
+from ..types import PricingInputs
+from ..models.stochastic_processes import sim_gbm_terminal
 
 @dataclass(frozen=True, slots=True)
 class McGBMModel:

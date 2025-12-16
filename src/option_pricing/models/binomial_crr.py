@@ -2,7 +2,7 @@ from __future__ import annotations # Recommended for forward references
 from math import comb, exp, sqrt
 from dataclasses import dataclass
 from collections.abc import Callable
-from .params import PricingInputs
+from ..types import PricingInputs
 
 @dataclass(frozen=True, slots=True)
 class BinomialModel:
@@ -122,3 +122,15 @@ def binom_call_from_inputs(p: PricingInputs, n_steps: int) -> float:
         n_steps=n_steps,
     )
     return model.price_european_call(p.K)
+
+def binom_put_from_inputs(p: PricingInputs, n_steps: int) -> float:
+    effective_T = p.T - p.t
+
+    model = BinomialModel.from_crr(
+        S0=p.S,
+        r=p.r,
+        sigma=p.sigma,
+        T=effective_T,
+        n_steps=n_steps,
+    )
+    return model.price_european_put(p.K)
