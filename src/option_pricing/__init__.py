@@ -10,7 +10,7 @@ can write, for example:
 """
 
 # Re-export key functions from submodules
-from .processes import sim_brownian, sim_gbm, plot_sample_paths
+from .models.stochastic_processes import sim_brownian, sim_gbm, plot_sample_paths
 
 __all__ = [
     "sim_brownian",

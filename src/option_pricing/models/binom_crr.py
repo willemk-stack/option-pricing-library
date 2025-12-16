@@ -2,7 +2,7 @@ from __future__ import annotations # Recommended for forward references
 from math import comb, exp, sqrt
 from dataclasses import dataclass
 from collections.abc import Callable
-from .types import PricingInputs
+from .params import PricingInputs
 
 @dataclass(frozen=True, slots=True)
 class BinomialModel:

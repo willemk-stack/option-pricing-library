@@ -4,7 +4,7 @@ import math
 import numpy as np
 import pytest
 
-from option_pricing.pricing_bs import bs_call, bs_put
+from option_pricing.models.bs import bs_call, bs_put
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.stats import norm
-from .params import PricingInputs
+from ..types import PricingInputs
 
 def _d_plus_minus(t, x, K, r, sigma, T):
     """Return d_plus, d_minus for given parameters."""

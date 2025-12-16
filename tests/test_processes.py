@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from option_pricing.processes import sim_brownian, sim_gbm  # adapt this import if needed (check level in __init__.py)
+from option_pricing.models.stochastic_processes import sim_brownian, sim_gbm  # adapt this import if needed (check level in __init__.py)
 
 
 def test_brownian_terminal_mean_and_variance():
