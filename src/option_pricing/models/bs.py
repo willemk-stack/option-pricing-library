@@ -1,5 +1,7 @@
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import norm
+
 from ..types import PricingInputs
 
 
@@ -48,6 +50,7 @@ def bs_put_from_inputs(p: PricingInputs) -> float:
 # Analytic Greeks (NEW)
 # ----------------------------
 
+
 def bs_call_greeks_analytic(t, x, K, r, sigma, T):
     """
     Analytic Greeks for the Black-Scholes European CALL (no dividends).
@@ -67,10 +70,16 @@ def bs_call_greeks_analytic(t, x, K, r, sigma, T):
     price = x * Nd1 - K * disc * Nd2
     delta = Nd1
     gamma = phi_d1 / (x * sigma * sqrt_tau)
-    vega  = x * phi_d1 * sqrt_tau
+    vega = x * phi_d1 * sqrt_tau
     theta = -(x * phi_d1 * sigma) / (2.0 * sqrt_tau) - r * K * disc * Nd2
 
-    return {"price": price, "delta": delta, "gamma": gamma, "vega": vega, "theta": theta}
+    return {
+        "price": price,
+        "delta": delta,
+        "gamma": gamma,
+        "vega": vega,
+        "theta": theta,
+    }
 
 
 def bs_put_greeks_analytic(t, x, K, r, sigma, T):
@@ -92,10 +101,16 @@ def bs_put_greeks_analytic(t, x, K, r, sigma, T):
     price = K * disc * Nmd2 - x * Nmd1
     delta = norm.cdf(d1) - 1.0
     gamma = phi_d1 / (x * sigma * sqrt_tau)
-    vega  = x * phi_d1 * sqrt_tau
+    vega = x * phi_d1 * sqrt_tau
     theta = -(x * phi_d1 * sigma) / (2.0 * sqrt_tau) + r * K * disc * Nmd2
 
-    return {"price": price, "delta": delta, "gamma": gamma, "vega": vega, "theta": theta}
+    return {
+        "price": price,
+        "delta": delta,
+        "gamma": gamma,
+        "vega": vega,
+        "theta": theta,
+    }
 
 
 def bs_call_greeks_analytic_from_inputs(p: PricingInputs):
@@ -110,8 +125,8 @@ def bs_put_greeks_analytic_from_inputs(p: PricingInputs):
 # Finite-difference Greeks (your existing code)
 # ----------------------------
 
-def finite_diff_greeks(t, x, K, r, sigma, T,
-                       h_x=None, h_sigma=None, h_t=None):
+
+def finite_diff_greeks(t, x, K, r, sigma, T, h_x=None, h_sigma=None, h_t=None):
     """
     Finite-difference Greeks for the Black-Scholes call with signature
         bs_call(t, x, K, r, sigma, T).
@@ -121,21 +136,21 @@ def finite_diff_greeks(t, x, K, r, sigma, T,
     """
     _ = _validate_inputs(t, x, K, r, sigma, T)
 
-    h_x     = h_x     or (0.01 * x)        # 1% of spot
-    h_sigma = h_sigma or (0.01 * sigma)    # 1% of vol
-    h_t     = h_t     or (1.0 / 365.0)     # 1 day in years
+    h_x = h_x or (0.01 * x)  # 1% of spot
+    h_sigma = h_sigma or (0.01 * sigma)  # 1% of vol
+    h_t = h_t or (1.0 / 365.0)  # 1 day in years
 
     h_sigma = min(h_sigma, 0.5 * sigma)
 
     V = bs_call(t, x, K, r, sigma, T)
 
-    V_up_x   = bs_call(t, x + h_x, K, r, sigma, T)
+    V_up_x = bs_call(t, x + h_x, K, r, sigma, T)
     V_down_x = bs_call(t, x - h_x, K, r, sigma, T)
 
     delta = (V_up_x - V_down_x) / (2.0 * h_x)
-    gamma = (V_up_x - 2.0 * V + V_down_x) / (h_x ** 2)
+    gamma = (V_up_x - 2.0 * V + V_down_x) / (h_x**2)
 
-    V_up_sigma   = bs_call(t, x, K, r, sigma + h_sigma, T)
+    V_up_sigma = bs_call(t, x, K, r, sigma + h_sigma, T)
     V_down_sigma = bs_call(t, x, K, r, sigma - h_sigma, T)
 
     vega = (V_up_sigma - V_down_sigma) / (2.0 * h_sigma)
@@ -144,7 +159,7 @@ def finite_diff_greeks(t, x, K, r, sigma, T,
     h_t = min(h_t, 0.5 * (T - t)) if T > t else h_t
 
     if t - h_t >= 0.0 and t + h_t < T:
-        V_up_t   = bs_call(t + h_t, x, K, r, sigma, T)
+        V_up_t = bs_call(t + h_t, x, K, r, sigma, T)
         V_down_t = bs_call(t - h_t, x, K, r, sigma, T)
         theta = (V_up_t - V_down_t) / (2.0 * h_t)
     elif t + h_t < T:
@@ -162,11 +177,19 @@ def finite_diff_greeks(t, x, K, r, sigma, T,
 # ----------------------------
 # Plot sweep (optional: choose analytic vs FD)
 # ----------------------------
-import matplotlib.pyplot as plt
 
 
-def sweep_x(t=0.0, K=100, r=0.01, sigma=0.2, T=1.0,
-            x_min=None, x_max=None, n=100, method="analytic"):
+def sweep_x(
+    t=0.0,
+    K=100,
+    r=0.01,
+    sigma=0.2,
+    T=1.0,
+    x_min=None,
+    x_max=None,
+    n=100,
+    method="analytic",
+):
     """
     Sweep underlying price x and plot price + Greeks.
 
@@ -198,16 +221,22 @@ def sweep_x(t=0.0, K=100, r=0.01, sigma=0.2, T=1.0,
     prices = np.array(prices)
     deltas = np.array(deltas)
     gammas = np.array(gammas)
-    vegas  = np.array(vegas)
+    vegas = np.array(vegas)
     thetas = np.array(thetas)
 
     fig, axs = plt.subplots(5, 1, sharex=True, figsize=(8, 12))
 
-    axs[0].plot(x_grid, prices); axs[0].set_ylabel("Price")
-    axs[1].plot(x_grid, deltas); axs[1].set_ylabel("Delta")
-    axs[2].plot(x_grid, gammas); axs[2].set_ylabel("Gamma")
-    axs[3].plot(x_grid, vegas);  axs[3].set_ylabel("Vega")
-    axs[4].plot(x_grid, thetas); axs[4].set_ylabel("Theta"); axs[4].set_xlabel("Underlying x")
+    axs[0].plot(x_grid, prices)
+    axs[0].set_ylabel("Price")
+    axs[1].plot(x_grid, deltas)
+    axs[1].set_ylabel("Delta")
+    axs[2].plot(x_grid, gammas)
+    axs[2].set_ylabel("Gamma")
+    axs[3].plot(x_grid, vegas)
+    axs[3].set_ylabel("Vega")
+    axs[4].plot(x_grid, thetas)
+    axs[4].set_ylabel("Theta")
+    axs[4].set_xlabel("Underlying x")
 
     plt.tight_layout()
     plt.show()

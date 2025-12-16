@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
@@ -18,7 +18,6 @@ def _pretty_ax(ax: Axes) -> None:
         frame = leg.get_frame()
         if frame is not None:
             frame.set_alpha(0.95)
-
 
 
 def plot_mc_bs_errorbars(
@@ -82,10 +81,12 @@ def plot_mc_bs_errorbars(
         # Small footnote for SE==0 cases
         if np.any(d["_se"].to_numpy() == 0):
             ax.text(
-                0.99, 0.01,
+                0.99,
+                0.01,
                 "Note: cases with SE=0 have no error bars (all simulated payoffs identical).",
                 transform=ax.transAxes,
-                ha="right", va="bottom",
+                ha="right",
+                va="bottom",
                 fontsize=9,
             )
 
@@ -113,13 +114,16 @@ def plot_mc_bs_errorbars(
         # Optional note for undefined z (SE=0)
         if np.any(~finite):
             ax.text(
-                0.99, 0.01,
+                0.99,
+                0.01,
                 "Some cases have z undefined (SE=0; e.g., all payoffs identical).",
-                transform=ax.transAxes, ha="right", va="bottom", fontsize=9
+                transform=ax.transAxes,
+                ha="right",
+                va="bottom",
+                fontsize=9,
             )
 
     ax.legend()
-
 
     ax.set_yticks(y)
     ax.set_yticklabels(labels)
@@ -174,6 +178,7 @@ def plot_convergence(
 
     _pretty_ax(ax)
     return fig, ax
+
 
 def plot_se_scaling(
     df_conv: pd.DataFrame,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import replace
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -10,10 +10,10 @@ from option_pricing.params import PricingInputs
 from option_pricing.pricing_bs import bs_call_from_inputs
 from option_pricing.pricing_mc import mc_call_from_inputs
 
-
 # -----------------------------
 # Case generation
 # -----------------------------
+
 
 def default_cases(base: PricingInputs) -> list[tuple[str, PricingInputs]]:
     """
@@ -41,7 +41,7 @@ def grid_cases(
     base: PricingInputs,
     *,
     moneyness: Iterable[float] = (0.7, 0.9, 1.0, 1.1, 1.3),  # S/K
-    taus: Iterable[float] = (1.0 / 52.0, 0.25, 1.0, 2.0),    # time-to-maturity
+    taus: Iterable[float] = (1.0 / 52.0, 0.25, 1.0, 2.0),  # time-to-maturity
     vols: Iterable[float] = (0.1, 0.2, 0.4),
     rates: Iterable[float] = (0.0, 0.02, 0.05),
 ) -> list[tuple[str, PricingInputs]]:
@@ -70,6 +70,7 @@ def grid_cases(
 # -----------------------------
 # Notebook-friendly tables
 # -----------------------------
+
 
 def compare_table(
     cases: list[tuple[str, PricingInputs]],
@@ -141,7 +142,9 @@ def compare_table(
         )
 
     df = pd.DataFrame(rows)
-    return df.sort_values("abs_z", ascending=False, na_position="last").reset_index(drop=True)
+    return df.sort_values("abs_z", ascending=False, na_position="last").reset_index(
+        drop=True
+    )
 
 
 def multi_seed_summary(
@@ -186,14 +189,20 @@ def multi_seed_summary(
                 "BS": bs,
                 "MC_mean": float(mcs_arr.mean()),
                 "mean_error": float(mcs_arr.mean() - bs),
-                "MC_std_across_seeds": float(mcs_arr.std(ddof=1)) if len(mcs_arr) > 1 else 0.0,
+                "MC_std_across_seeds": (
+                    float(mcs_arr.std(ddof=1)) if len(mcs_arr) > 1 else 0.0
+                ),
                 "avg_reported_SE": float(ses_arr.mean()),
                 "n_paths": int(n_paths),
                 "n_seeds": len(seeds),
             }
         )
 
-    return pd.DataFrame(rows).sort_values("MC_std_across_seeds", ascending=False).reset_index(drop=True)
+    return (
+        pd.DataFrame(rows)
+        .sort_values("MC_std_across_seeds", ascending=False)
+        .reset_index(drop=True)
+    )
 
 
 def convergence_table(

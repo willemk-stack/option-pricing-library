@@ -1,7 +1,10 @@
 import math
 
+from option_pricing.models.binomial_crr import (
+    binom_call_from_inputs,
+    binom_put_from_inputs,
+)
 from option_pricing.models.bs import bs_call_from_inputs
-from option_pricing.models.binomial_crr import binom_call_from_inputs, binom_put_from_inputs
 
 
 def test_binomial_converges_toward_bs_as_steps_increase(make_inputs):

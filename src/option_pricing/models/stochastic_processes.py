@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def sim_brownian(
@@ -128,7 +128,9 @@ def sim_gbm_terminal(
     return S0 * np.exp((mu - 0.5 * sigma**2) * T + sigma * np.sqrt(T) * Z)
 
 
-def plot_sample_paths(t: np.ndarray, paths: np.ndarray, n_plot: int = 10, title: str = "Sample paths") -> None:
+def plot_sample_paths(
+    t: np.ndarray, paths: np.ndarray, n_plot: int = 10, title: str = "Sample paths"
+) -> None:
     """
     Plot up to n_plot sample paths against the time grid t.
     """

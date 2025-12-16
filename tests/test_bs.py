@@ -1,4 +1,5 @@
 import math
+
 import numpy as np
 
 from option_pricing.models.bs import bs_call, bs_put
@@ -65,7 +66,10 @@ def test_call_monotone_decreasing_in_strike():
     T = 1.0
 
     strikes = np.array([60, 80, 100, 120, 140], dtype=float)
-    prices = np.array([bs_call(t=t, x=S, K=float(K), r=r, sigma=sigma, T=T) for K in strikes], dtype=float)
+    prices = np.array(
+        [bs_call(t=t, x=S, K=float(K), r=r, sigma=sigma, T=T) for K in strikes],
+        dtype=float,
+    )
 
     assert np.all(np.diff(prices) <= 1e-10)
 
@@ -79,6 +83,9 @@ def test_put_monotone_increasing_in_strike():
     T = 1.0
 
     strikes = np.array([60, 80, 100, 120, 140], dtype=float)
-    prices = np.array([bs_put(t=t, x=S, K=float(K), r=r, sigma=sigma, T=T) for K in strikes], dtype=float)
+    prices = np.array(
+        [bs_put(t=t, x=S, K=float(K), r=r, sigma=sigma, T=T) for K in strikes],
+        dtype=float,
+    )
 
     assert np.all(np.diff(prices) >= -1e-10)

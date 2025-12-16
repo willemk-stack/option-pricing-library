@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import numpy as np
-from option_pricing.plotting import DistSpec, plot_specs
+
+from option_pricing import DistSpec, plot_specs
 
 
 def _pretty_ax(ax, _samples) -> None:
@@ -30,7 +32,7 @@ def plot_gbm_terminal_dists(
     Requires SciPy for the theoretical PDFs.
     """
     try:
-        from scipy.stats import norm, lognorm
+        from scipy.stats import lognorm, norm
     except ImportError as e:
         raise ImportError(
             "plot_gbm_terminal_dists requires scipy. Install with: pip install scipy"
@@ -70,7 +72,7 @@ def plot_gbm_terminal_dists(
             bins=bins,
             density=True,
             title=r"Terminal Prices: $S_T$ vs Lognormal PDF",
-            xlabel=fr"$S_T$ at T={T}",
+            xlabel=rf"$S_T$ at T={T}",
             show_mean=show_mean,
             show_median=show_median,
             hist_kwargs={"label": "MC histogram"},
