@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -134,6 +133,13 @@ def plot_sample_paths(
     """
     Plot up to n_plot sample paths against the time grid t.
     """
+    try:
+        import matplotlib.pyplot as plt
+    except ModuleNotFoundError as e:
+        raise ModuleNotFoundError(
+            "plot_sample_paths requires matplotlib. Install it with: pip install matplotlib"
+        ) from e
+
     plt.figure(figsize=(10, 5))
     for i in range(min(n_plot, len(paths))):
         plt.plot(t, paths[i], lw=0.8)
