@@ -16,6 +16,7 @@ dependencies = ["numpy", "scipy"]
 [project.optional-dependencies]
 dev = ["pytest", "jupyter", "ruff", "black", "mypy", "matplotlib"]
 notebooks = ["jupyter", "matplotlib", "pandas"]
+plot = ["matplotlib"]
 
 [tool.black]
 line-length = 88

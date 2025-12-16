@@ -1,10 +1,26 @@
 from __future__ import annotations
 
-import matplotlib.pyplot as plt
+from typing import TYPE_CHECKING, Any
+
 import numpy as np
 import pandas as pd
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
+else:
+    Axes = Any  # type: ignore[assignment]
+    Figure = Any  # type: ignore[assignment]
+
+
+def _get_plt():
+    try:
+        import matplotlib.pyplot as plt
+    except ModuleNotFoundError as e:
+        raise ModuleNotFoundError(
+            "This plotting function requires matplotlib. Install it with: pip install matplotlib"
+        ) from e
+    return plt
 
 
 def _pretty_ax(ax: Axes) -> None:
@@ -66,6 +82,7 @@ def plot_mc_bs_errorbars(
     y = np.arange(len(d))
     labels = d[case_col].astype(str).tolist()
 
+    plt = _get_plt()
     fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
 
     if mode == "error":
@@ -162,6 +179,7 @@ def plot_convergence(
     yerr = zcrit * se
 
     if ax is None:
+        plt = _get_plt()
         fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
     else:
         fig = ax.figure
@@ -200,6 +218,7 @@ def plot_se_scaling(
     se = d[se_col].to_numpy(dtype=float)
 
     if ax is None:
+        plt = _get_plt()
         fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
     else:
         fig = ax.figure

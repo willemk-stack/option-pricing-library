@@ -3,12 +3,16 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
+else:
+    Axes = Any  # runtime fallback when matplotlib isn't installed
+    Figure = Any
 
 CurveFn = Callable[[np.ndarray], np.ndarray]
 PostAxFn = Callable[[Axes, np.ndarray], None]
@@ -170,6 +174,13 @@ def plot_specs(
     """
     if ncols <= 0:
         raise ValueError("ncols must be >= 1")
+
+    try:
+        import matplotlib.pyplot as plt
+    except ModuleNotFoundError as e:
+        raise ModuleNotFoundError(
+            "plot_specs requires matplotlib. Install it with: pip install matplotlib"
+        ) from e
 
     nrows = math.ceil(len(specs) / ncols) if specs else 1
     fig, axes = plt.subplots(nrows, ncols, figsize=figsize, constrained_layout=True)

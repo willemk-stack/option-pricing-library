@@ -6,9 +6,9 @@ from dataclasses import replace
 import numpy as np
 import pandas as pd
 
-from option_pricing.params import PricingInputs
-from option_pricing.pricing_bs import bs_call_from_inputs
-from option_pricing.pricing_mc import mc_call_from_inputs
+from option_pricing import PricingInputs
+from option_pricing.models.bs import bs_call_from_inputs
+from option_pricing.pricers.mc import mc_call_from_inputs
 
 # -----------------------------
 # Case generation
