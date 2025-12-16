@@ -52,7 +52,7 @@ class BinomialModel:
             S_T = self.S0 * (self.u**j) * (self.d ** (N - j))
             total += comb(N, j) * p**j * (1 - p) ** (N - j) * payoff(S_T)
 
-        return disc_factor * sum
+        return disc_factor * total
 
     # --- the "helpers" for call/put, using the generic method ---
     def price_european_call(self, K: float) -> float:
