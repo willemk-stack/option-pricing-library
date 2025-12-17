@@ -125,4 +125,4 @@ There is a `docs/` folder with:
 
 ## License
 
-Add your license here (e.g. MIT) once you decide on one.
+This project is licensed under the MIT License – see the [LICENSE](./LICENSE) file for details.
