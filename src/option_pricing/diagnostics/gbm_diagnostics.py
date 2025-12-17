@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from option_pricing import DistSpec, plot_specs
+from option_pricing.plotting.core import DistSpec, plot_specs
 
 
 def _pretty_ax(ax, _samples) -> None:

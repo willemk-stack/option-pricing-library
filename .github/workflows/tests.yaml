@@ -41,6 +41,7 @@ jobs:
         
       - name: Mypy
         run: |
-          pip install mypy numpy
+          pip install mypy numpy scipy scipy-stubs
           mypy
+
 

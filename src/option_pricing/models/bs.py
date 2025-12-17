@@ -1,44 +1,49 @@
+import math
+
 import numpy as np
 from scipy.stats import norm
 
 from ..types import PricingInputs
 
 
-def _validate_inputs(t, x, K, r, sigma, T):
+def _validate_inputs(
+    t: float, x: float, K: float, r: float, sigma: float, T: float
+) -> float:
     assert 0 <= t < T, "Must have 0 <= t < T"
     assert K > 0 and sigma > 0, "K and sigma must be positive"
 
-    x_arr = np.asarray(x, dtype=float)
-    assert np.all(x_arr > 0), "x must be positive"
+    x_f = float(x)
+    assert x_f > 0, "x must be positive"
+    return x_f
 
-    return x_arr
 
-
-def _d_plus_minus(t, x, K, r, sigma, T):
+def _d_plus_minus(
+    t: float, x: float, K: float, r: float, sigma: float, T: float
+) -> tuple[float, float, float]:
     """Return d_plus (d1), d_minus (d2), tau for given parameters."""
     tau = T - t
-    sqrt_tau = np.sqrt(tau)
-    d_plus = (np.log(x / K) + (r + 0.5 * sigma**2) * tau) / (sigma * sqrt_tau)
+    sqrt_tau = math.sqrt(tau)
+    d_plus = (math.log(x / K) + (r + 0.5 * sigma**2) * tau) / (sigma * sqrt_tau)
     d_minus = d_plus - sigma * sqrt_tau
-    return d_plus, d_minus, tau
+    return float(d_plus), float(d_minus), float(tau)
 
 
-def bs_call(t, x, K, r, sigma, T):
+def bs_call(t: float, x: float, K: float, r: float, sigma: float, T: float) -> float:
     """Black-Scholes price of a European call (no dividends)."""
     x = _validate_inputs(t, x, K, r, sigma, T)
     d_plus, d_minus, tau = _d_plus_minus(t, x, K, r, sigma, T)
-    return x * norm.cdf(d_plus) - K * np.exp(-r * tau) * norm.cdf(d_minus)
+    return x * norm.cdf(d_plus) - K * math.exp(-r * tau) * norm.cdf(d_minus)
 
 
 def bs_call_from_inputs(p: PricingInputs) -> float:
     return bs_call(t=p.t, x=p.S, K=p.K, r=p.r, sigma=p.sigma, T=p.T)
 
 
-def bs_put(t, x, K, r, sigma, T):
+def bs_put(t: float, x: float, K: float, r: float, sigma: float, T: float) -> float:
     """Black-Scholes price of a European put (no dividends)."""
     x = _validate_inputs(t, x, K, r, sigma, T)
     d_plus, d_minus, tau = _d_plus_minus(t, x, K, r, sigma, T)
-    return K * np.exp(-r * tau) * norm.cdf(-d_minus) - x * norm.cdf(-d_plus)
+    return K * math.exp(-r * tau) * norm.cdf(-d_minus) - x * norm.cdf(-d_plus)
 
 
 def bs_put_from_inputs(p: PricingInputs) -> float:
@@ -50,7 +55,9 @@ def bs_put_from_inputs(p: PricingInputs) -> float:
 # ----------------------------
 
 
-def bs_call_greeks_analytic(t, x, K, r, sigma, T):
+def bs_call_greeks_analytic(
+    t: float, x: float, K: float, r: float, sigma: float, T: float
+):
     """
     Analytic Greeks for the Black-Scholes European CALL (no dividends).
 
@@ -81,7 +88,9 @@ def bs_call_greeks_analytic(t, x, K, r, sigma, T):
     }
 
 
-def bs_put_greeks_analytic(t, x, K, r, sigma, T):
+def bs_put_greeks_analytic(
+    t: float, x: float, K: float, r: float, sigma: float, T: float
+):
     """
     Analytic Greeks for the Black-Scholes European PUT (no dividends).
 
@@ -125,7 +134,17 @@ def bs_put_greeks_analytic_from_inputs(p: PricingInputs):
 # ----------------------------
 
 
-def finite_diff_greeks(t, x, K, r, sigma, T, h_x=None, h_sigma=None, h_t=None):
+def finite_diff_greeks(
+    t: float,
+    x: float,
+    K: float,
+    r: float,
+    sigma: float,
+    T: float,
+    h_x=None,
+    h_sigma=None,
+    h_t=None,
+):
     """
     Finite-difference Greeks for the Black-Scholes call with signature
         bs_call(t, x, K, r, sigma, T).

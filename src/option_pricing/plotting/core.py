@@ -89,7 +89,7 @@ def hist_with_curve(
         "linewidth": 2.5,
         "zorder": 3,
     }
-    mean_style = {
+    mean_style: dict[str, Any] = {
         "color": "#111111",
         "linestyle": "--",
         "linewidth": 2.4,  # <- thicker
@@ -97,7 +97,7 @@ def hist_with_curve(
         "zorder": 6,  # <- foreground
         "label": "Sample mean",
     }
-    med_style = {
+    med_style: dict[str, Any] = {
         "color": "#7A5195",
         "linestyle": ":",
         "linewidth": 2.4,  # <- thicker
@@ -141,9 +141,10 @@ def hist_with_curve(
 
     # Mean/median reference lines (now styled + legend-ready)
     if show_mean:
-        ax.axvline(float(np.mean(x)), **mean_style)
+        ax.axvline(x=float(np.mean(x)), **mean_style)
+
     if show_median:
-        ax.axvline(float(np.median(x)), **med_style)
+        ax.axvline(x=float(np.median(x)), **med_style)
 
     if title:
         ax.set_title(title)
