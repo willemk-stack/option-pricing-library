@@ -9,8 +9,8 @@ class OptionType(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class MarketData:
-    spot: float  # same as your S
-    rate: float  # same as your r
+    spot: float
+    rate: float
     dividend_yield: float = 0.0
 
 
@@ -18,7 +18,7 @@ class MarketData:
 class OptionSpec:
     kind: OptionType
     strike: float
-    expiry: float  # or datetime/date later
+    expiry: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,17 +29,28 @@ class PricingInputs:
     t: float = 0.0
 
     @property
-    def S(self):
+    def S(self) -> float:
         return self.market.spot
 
     @property
-    def K(self):
+    def K(self) -> float:
         return self.spec.strike
 
     @property
-    def r(self):
+    def r(self) -> float:
         return self.market.rate
 
     @property
-    def T(self):
+    def q(self) -> float:
+        return self.market.dividend_yield
+
+    @property
+    def T(self) -> float:
         return self.spec.expiry
+
+    @property
+    def tau(self) -> float:
+        tau = self.T - self.t
+        if tau <= 0.0:
+            raise ValueError("Need expiry > t")
+        return tau

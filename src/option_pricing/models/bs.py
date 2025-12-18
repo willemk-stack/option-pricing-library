@@ -1,83 +1,93 @@
+from __future__ import annotations
+
 import math
 
-import numpy as np
 from scipy.stats import norm
 
-from ..types import PricingInputs
+
+def _validate_scalar_inputs(
+    *, spot: float, strike: float, sigma: float, tau: float
+) -> None:
+    if spot <= 0.0:
+        raise ValueError("spot must be positive")
+    if strike <= 0.0:
+        raise ValueError("strike must be positive")
+    if sigma <= 0.0:
+        raise ValueError("sigma must be positive")
+    if tau <= 0.0:
+        raise ValueError("tau must be positive")
 
 
-def _validate_inputs(
-    t: float, x: float, K: float, r: float, sigma: float, T: float
+def discount_factor(rate: float, tau: float) -> float:
+    return math.exp(-rate * tau)
+
+
+def forward(spot: float, r: float, q: float, tau: float) -> float:
+    # F = S * e^{(r-q) tau}
+    return spot * math.exp((r - q) * tau)
+
+
+def d1_d2_from_spot(
+    *, spot: float, strike: float, r: float, q: float, sigma: float, tau: float
+) -> tuple[float, float]:
+    _validate_scalar_inputs(spot=spot, strike=strike, sigma=sigma, tau=tau)
+    vol_sqrt_t = sigma * math.sqrt(tau)
+    num = math.log(spot / strike) + (r - q + 0.5 * sigma * sigma) * tau
+    d1 = num / vol_sqrt_t
+    d2 = d1 - vol_sqrt_t
+    return float(d1), float(d2)
+
+
+def call_price(
+    *, spot: float, strike: float, r: float, q: float, sigma: float, tau: float
 ) -> float:
-    assert 0 <= t < T, "Must have 0 <= t < T"
-    assert K > 0 and sigma > 0, "K and sigma must be positive"
+    """
+    Black–Scholes European call with continuous dividend yield q.
+    """
+    d1, d2 = d1_d2_from_spot(spot=spot, strike=strike, r=r, q=q, sigma=sigma, tau=tau)
+    df_r = discount_factor(r, tau)
+    df_q = discount_factor(q, tau)
+    return spot * df_q * norm.cdf(d1) - strike * df_r * norm.cdf(d2)
 
-    x_f = float(x)
-    assert x_f > 0, "x must be positive"
-    return x_f
+
+def put_price(
+    *, spot: float, strike: float, r: float, q: float, sigma: float, tau: float
+) -> float:
+    """
+    Black–Scholes European put with continuous dividend yield q.
+    """
+    d1, d2 = d1_d2_from_spot(spot=spot, strike=strike, r=r, q=q, sigma=sigma, tau=tau)
+    df_r = discount_factor(r, tau)
+    df_q = discount_factor(q, tau)
+    return strike * df_r * norm.cdf(-d2) - spot * df_q * norm.cdf(-d1)
 
 
-def _d_plus_minus(
-    t: float, x: float, K: float, r: float, sigma: float, T: float
-) -> tuple[float, float, float]:
-    """Return d_plus (d1), d_minus (d2), tau for given parameters."""
-    tau = T - t
+def call_greeks(
+    *, spot: float, strike: float, r: float, q: float, sigma: float, tau: float
+) -> dict[str, float]:
+    """
+    Analytic Greeks for BS European call (with dividend yield q).
+
+    theta is ∂Price/∂t (calendar time, holding expiry fixed), per year.
+    """
+    d1, d2 = d1_d2_from_spot(spot=spot, strike=strike, r=r, q=q, sigma=sigma, tau=tau)
     sqrt_tau = math.sqrt(tau)
-    d_plus = (math.log(x / K) + (r + 0.5 * sigma**2) * tau) / (sigma * sqrt_tau)
-    d_minus = d_plus - sigma * sqrt_tau
-    return float(d_plus), float(d_minus), float(tau)
-
-
-def bs_call(t: float, x: float, K: float, r: float, sigma: float, T: float) -> float:
-    """Black-Scholes price of a European call (no dividends)."""
-    x = _validate_inputs(t, x, K, r, sigma, T)
-    d_plus, d_minus, tau = _d_plus_minus(t, x, K, r, sigma, T)
-    return x * norm.cdf(d_plus) - K * math.exp(-r * tau) * norm.cdf(d_minus)
-
-
-def bs_call_from_inputs(p: PricingInputs) -> float:
-    return bs_call(t=p.t, x=p.S, K=p.K, r=p.r, sigma=p.sigma, T=p.T)
-
-
-def bs_put(t: float, x: float, K: float, r: float, sigma: float, T: float) -> float:
-    """Black-Scholes price of a European put (no dividends)."""
-    x = _validate_inputs(t, x, K, r, sigma, T)
-    d_plus, d_minus, tau = _d_plus_minus(t, x, K, r, sigma, T)
-    return K * math.exp(-r * tau) * norm.cdf(-d_minus) - x * norm.cdf(-d_plus)
-
-
-def bs_put_from_inputs(p: PricingInputs) -> float:
-    return bs_put(t=p.t, x=p.S, K=p.K, r=p.r, sigma=p.sigma, T=p.T)
-
-
-# ----------------------------
-# Analytic Greeks (NEW)
-# ----------------------------
-
-
-def bs_call_greeks_analytic(
-    t: float, x: float, K: float, r: float, sigma: float, T: float
-):
-    """
-    Analytic Greeks for the Black-Scholes European CALL (no dividends).
-
-    Returns a dict with price, delta, gamma, vega, theta
-    where theta = ∂C/∂t (calendar time, holding T fixed), per year.
-    """
-    x = _validate_inputs(t, x, K, r, sigma, T)
-    d1, d2, tau = _d_plus_minus(t, x, K, r, sigma, T)
-    sqrt_tau = np.sqrt(tau)
+    df_r = discount_factor(r, tau)
+    df_q = discount_factor(q, tau)
 
     Nd1 = norm.cdf(d1)
     Nd2 = norm.cdf(d2)
     phi_d1 = norm.pdf(d1)
-    disc = np.exp(-r * tau)
 
-    price = x * Nd1 - K * disc * Nd2
-    delta = Nd1
-    gamma = phi_d1 / (x * sigma * sqrt_tau)
-    vega = x * phi_d1 * sqrt_tau
-    theta = -(x * phi_d1 * sigma) / (2.0 * sqrt_tau) - r * K * disc * Nd2
+    price = spot * df_q * Nd1 - strike * df_r * Nd2
+    delta = df_q * Nd1
+    gamma = df_q * phi_d1 / (spot * sigma * sqrt_tau)
+    vega = spot * df_q * phi_d1 * sqrt_tau
+    theta = (
+        -(spot * df_q * phi_d1 * sigma) / (2.0 * sqrt_tau)
+        - r * strike * df_r * Nd2
+        + q * spot * df_q * Nd1
+    )
 
     return {
         "price": price,
@@ -88,29 +98,32 @@ def bs_call_greeks_analytic(
     }
 
 
-def bs_put_greeks_analytic(
-    t: float, x: float, K: float, r: float, sigma: float, T: float
-):
+def put_greeks(
+    *, spot: float, strike: float, r: float, q: float, sigma: float, tau: float
+) -> dict[str, float]:
     """
-    Analytic Greeks for the Black-Scholes European PUT (no dividends).
+    Analytic Greeks for BS European put (with dividend yield q).
 
-    Returns a dict with price, delta, gamma, vega, theta
-    where theta = ∂P/∂t (calendar time, holding T fixed), per year.
+    theta is ∂Price/∂t (calendar time, holding expiry fixed), per year.
     """
-    x = _validate_inputs(t, x, K, r, sigma, T)
-    d1, d2, tau = _d_plus_minus(t, x, K, r, sigma, T)
-    sqrt_tau = np.sqrt(tau)
+    d1, d2 = d1_d2_from_spot(spot=spot, strike=strike, r=r, q=q, sigma=sigma, tau=tau)
+    sqrt_tau = math.sqrt(tau)
+    df_r = discount_factor(r, tau)
+    df_q = discount_factor(q, tau)
 
     Nmd1 = norm.cdf(-d1)
     Nmd2 = norm.cdf(-d2)
     phi_d1 = norm.pdf(d1)
-    disc = np.exp(-r * tau)
 
-    price = K * disc * Nmd2 - x * Nmd1
-    delta = norm.cdf(d1) - 1.0
-    gamma = phi_d1 / (x * sigma * sqrt_tau)
-    vega = x * phi_d1 * sqrt_tau
-    theta = -(x * phi_d1 * sigma) / (2.0 * sqrt_tau) + r * K * disc * Nmd2
+    price = strike * df_r * Nmd2 - spot * df_q * Nmd1
+    delta = df_q * (norm.cdf(d1) - 1.0)
+    gamma = df_q * phi_d1 / (spot * sigma * sqrt_tau)
+    vega = spot * df_q * phi_d1 * sqrt_tau
+    theta = (
+        -(spot * df_q * phi_d1 * sigma) / (2.0 * sqrt_tau)
+        + r * strike * df_r * Nmd2
+        - q * spot * df_q * Nmd1
+    )
 
     return {
         "price": price,
@@ -119,150 +132,3 @@ def bs_put_greeks_analytic(
         "vega": vega,
         "theta": theta,
     }
-
-
-def bs_call_greeks_analytic_from_inputs(p: PricingInputs):
-    return bs_call_greeks_analytic(t=p.t, x=p.S, K=p.K, r=p.r, sigma=p.sigma, T=p.T)
-
-
-def bs_put_greeks_analytic_from_inputs(p: PricingInputs):
-    return bs_put_greeks_analytic(t=p.t, x=p.S, K=p.K, r=p.r, sigma=p.sigma, T=p.T)
-
-
-# ----------------------------
-# Finite-difference Greeks (your existing code)
-# ----------------------------
-
-
-def finite_diff_greeks(
-    t: float,
-    x: float,
-    K: float,
-    r: float,
-    sigma: float,
-    T: float,
-    h_x=None,
-    h_sigma=None,
-    h_t=None,
-):
-    """
-    Finite-difference Greeks for the Black-Scholes call with signature
-        bs_call(t, x, K, r, sigma, T).
-
-    Returns a dict with price, delta, gamma, vega, theta,
-    where theta ≈ ∂C/∂t (calendar time, holding T fixed).
-    """
-    _ = _validate_inputs(t, x, K, r, sigma, T)
-
-    h_x = h_x or (0.01 * x)  # 1% of spot
-    h_sigma = h_sigma or (0.01 * sigma)  # 1% of vol
-    h_t = h_t or (1.0 / 365.0)  # 1 day in years
-
-    h_sigma = min(h_sigma, 0.5 * sigma)
-
-    V = bs_call(t, x, K, r, sigma, T)
-
-    V_up_x = bs_call(t, x + h_x, K, r, sigma, T)
-    V_down_x = bs_call(t, x - h_x, K, r, sigma, T)
-
-    delta = (V_up_x - V_down_x) / (2.0 * h_x)
-    gamma = (V_up_x - 2.0 * V + V_down_x) / (h_x**2)
-
-    V_up_sigma = bs_call(t, x, K, r, sigma + h_sigma, T)
-    V_down_sigma = bs_call(t, x, K, r, sigma - h_sigma, T)
-
-    vega = (V_up_sigma - V_down_sigma) / (2.0 * h_sigma)
-
-    theta = None
-    h_t = min(h_t, 0.5 * (T - t)) if T > t else h_t
-
-    if t - h_t >= 0.0 and t + h_t < T:
-        V_up_t = bs_call(t + h_t, x, K, r, sigma, T)
-        V_down_t = bs_call(t - h_t, x, K, r, sigma, T)
-        theta = (V_up_t - V_down_t) / (2.0 * h_t)
-    elif t + h_t < T:
-        V_up_t = bs_call(t + h_t, x, K, r, sigma, T)
-        theta = (V_up_t - V) / h_t
-    elif t - h_t >= 0.0:
-        V_down_t = bs_call(t - h_t, x, K, r, sigma, T)
-        theta = (V - V_down_t) / h_t
-    else:
-        raise ValueError("Cannot compute Theta: time steps violate 0 <= t < T.")
-
-    return {"price": V, "delta": delta, "gamma": gamma, "vega": vega, "theta": theta}
-
-
-# ----------------------------
-# Plot sweep (optional: choose analytic vs FD)
-# ----------------------------
-
-
-def sweep_x(
-    t=0.0,
-    K=100,
-    r=0.01,
-    sigma=0.2,
-    T=1.0,
-    x_min=None,
-    x_max=None,
-    n=100,
-    method="analytic",
-):
-    """
-    Sweep underlying price x and plot price + Greeks.
-
-    method: "analytic" (default) or "fd"
-    """
-
-    try:
-        import matplotlib.pyplot as plt
-    except ModuleNotFoundError as e:
-        raise ModuleNotFoundError(
-            "plot_sweep requires matplotlib. Install it with: pip install matplotlib"
-        ) from e
-
-    if x_min is None:
-        x_min = 0.5 * K
-    if x_max is None:
-        x_max = 1.5 * K
-
-    x_grid = np.linspace(x_min, x_max, n)
-
-    prices, deltas, gammas, vegas, thetas = [], [], [], [], []
-
-    for x in x_grid:
-        if method == "analytic":
-            g = bs_call_greeks_analytic(t, x, K, r, sigma, T)
-        elif method == "fd":
-            g = finite_diff_greeks(t, x, K, r, sigma, T)
-        else:
-            raise ValueError("method must be 'analytic' or 'fd'")
-
-        prices.append(g["price"])
-        deltas.append(g["delta"])
-        gammas.append(g["gamma"])
-        vegas.append(g["vega"])
-        thetas.append(g["theta"])
-
-    prices = np.array(prices)
-    deltas = np.array(deltas)
-    gammas = np.array(gammas)
-    vegas = np.array(vegas)
-    thetas = np.array(thetas)
-
-    fig, axs = plt.subplots(5, 1, sharex=True, figsize=(8, 12))
-
-    axs[0].plot(x_grid, prices)
-    axs[0].set_ylabel("Price")
-    axs[1].plot(x_grid, deltas)
-    axs[1].set_ylabel("Delta")
-    axs[2].plot(x_grid, gammas)
-    axs[2].set_ylabel("Gamma")
-    axs[3].plot(x_grid, vegas)
-    axs[3].set_ylabel("Vega")
-    axs[4].plot(x_grid, thetas)
-    axs[4].set_ylabel("Theta")
-    axs[4].set_xlabel("Underlying x")
-
-    plt.tight_layout()
-    plt.show()

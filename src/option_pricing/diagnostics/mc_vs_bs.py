@@ -6,9 +6,14 @@ from dataclasses import replace
 import numpy as np
 import pandas as pd
 
-from option_pricing.models.bs import bs_call_from_inputs
-from option_pricing.pricers.mc import mc_call_from_inputs
+from option_pricing.pricers.black_scholes import bs_price
+from option_pricing.pricers.mc import mc_price
 from option_pricing.types import PricingInputs
+
+
+def _get_q(p: PricingInputs) -> float:
+    # If you added p.q, use it; otherwise use nested market field.
+    return getattr(p, "q", p.market.dividend_yield)
 
 
 def _with_params(
@@ -17,6 +22,7 @@ def _with_params(
     S: float | None = None,
     K: float | None = None,
     r: float | None = None,
+    q: float | None = None,
     T: float | None = None,
     sigma: float | None = None,
 ) -> PricingInputs:
@@ -24,9 +30,9 @@ def _with_params(
     Create a modified copy of PricingInputs by replacing nested dataclasses.
 
     Assumes:
-      - base.market has fields like spot, rate
-      - base.spec has fields like strike, expiry
-      - base has fields like market, spec, sigma
+      - base.market has fields: spot, rate, dividend_yield
+      - base.spec has fields: strike, expiry, kind
+      - base has fields: market, spec, sigma, t
     """
     market = base.market
     spec = base.spec
@@ -35,6 +41,8 @@ def _with_params(
         market = replace(market, spot=float(S))
     if r is not None:
         market = replace(market, rate=float(r))
+    if q is not None:
+        market = replace(market, dividend_yield=float(q))
 
     if K is not None:
         spec = replace(spec, strike=float(K))
@@ -58,7 +66,7 @@ def default_cases(base: PricingInputs) -> list[tuple[str, PricingInputs]]:
     """
     Small curated set of regimes for demos.
 
-    Note: PricingInputs.T is the (absolute) maturity time, not tau.
+    Note: PricingInputs.T is absolute expiry time, not tau.
     So for short/long maturity tweaks we set T = base.t + tau.
     """
     t0 = base.t
@@ -73,6 +81,8 @@ def default_cases(base: PricingInputs) -> list[tuple[str, PricingInputs]]:
         ("Low vol (5%)", _with_params(base, sigma=0.05)),
         ("High vol (80%)", _with_params(base, sigma=0.80)),
         ("High rate (10%)", _with_params(base, r=0.10)),
+        # optional dividend regime (continuous yield)
+        ("Dividend (q=2%)", _with_params(base, q=0.02)),
     ]
 
 
@@ -91,10 +101,7 @@ def grid_cases(
       T = t + tau
     """
     out: list[tuple[str, PricingInputs]] = []
-
-    K0 = float(
-        base.K
-    )  # relies on your property; if you remove it, use base.spec.strike
+    K0 = float(base.K)
 
     for r in rates:
         for sig in vols:
@@ -129,17 +136,13 @@ def compare_table(
     """
     One MC run per case + BS benchmark.
 
-    - Uses mc_call_from_inputs(..., seed=..., rng=...)
-    - Assumes the MC function returns (price, std_err) where std_err is already SE
-    - If seed is provided and per_case_seed=True, uses seed+i for case i (stable & independent-ish)
-    - If rng is provided, it is passed through (and will be advanced across cases)
+    - Uses mc_price(p, n_paths=..., seed=..., rng=...)
+    - mc_price returns (price, std_err)
     """
-    rows: list[dict] = []
+    rows: list[dict[str, object]] = []
 
     for i, (name, p) in enumerate(cases):
-        tau = p.T - p.t
-        if tau < 0:
-            raise ValueError(f"{name}: negative time-to-maturity tau = T-t = {tau}")
+        tau = float(p.tau)  # raises if tau <= 0
 
         seed_i: int | None = None
         rng_i: np.random.Generator | None = None
@@ -149,8 +152,8 @@ def compare_table(
         elif seed is not None:
             seed_i = int(seed) + i if per_case_seed else int(seed)
 
-        mc, se = mc_call_from_inputs(p, n_paths=int(n_paths), seed=seed_i, rng=rng_i)
-        bs = float(bs_call_from_inputs(p))
+        mc, se = mc_price(p, n_paths=int(n_paths), seed=seed_i, rng=rng_i)
+        bs = float(bs_price(p))
 
         err = float(mc - bs)
         rel_err = err / bs if bs != 0.0 else np.nan
@@ -163,24 +166,26 @@ def compare_table(
         rows.append(
             {
                 "case": name,
-                "t": p.t,
-                "S": p.S,
-                "K": p.K,
-                "r": p.r,
-                "sigma": p.sigma,
-                "T": p.T,
+                "kind": p.spec.kind.value,
+                "t": float(p.t),
+                "S": float(p.S),
+                "K": float(p.K),
+                "r": float(p.r),
+                "q": float(_get_q(p)),
+                "sigma": float(p.sigma),
+                "T": float(p.T),
                 "tau": tau,
                 "n_paths": int(n_paths),
                 "MC": float(mc),
                 "SE": float(se),
-                "BS": bs,
+                "BS": float(bs),
                 "MC-BS": err,
                 "rel_err": rel_err,
                 "z": z,
                 "abs_z": abs(z) if np.isfinite(z) else np.nan,
                 "CI_low": ci_low,
                 "CI_high": ci_high,
-                "BS_in_CI": in_ci,
+                "BS_in_CI": bool(in_ci),
             }
         )
 
@@ -198,28 +203,25 @@ def multi_seed_summary(
 ) -> pd.DataFrame:
     """
     Repeat MC across multiple seeds per case and summarize:
-
       - MC_mean vs BS (bias check)
       - MC_std_across_seeds (empirical jitter)
-      - avg_reported_SE (mean of your reported SE)
+      - avg_reported_SE (mean of reported SE)
     """
-    seeds = list(seeds)
-    if not seeds:
+    seeds_list = list(seeds)
+    if not seeds_list:
         raise ValueError("seeds must be non-empty")
 
-    rows: list[dict] = []
+    rows: list[dict[str, object]] = []
 
     for name, p in cases:
-        tau = p.T - p.t
-        if tau < 0:
-            raise ValueError(f"{name}: negative time-to-maturity tau = T-t = {tau}")
+        tau = float(p.tau)  # validates tau
 
-        bs = float(bs_call_from_inputs(p))
+        bs = float(bs_price(p))
 
         mcs: list[float] = []
         ses: list[float] = []
-        for s in seeds:
-            mc, se = mc_call_from_inputs(p, n_paths=int(n_paths), seed=int(s), rng=None)
+        for s in seeds_list:
+            mc, se = mc_price(p, n_paths=int(n_paths), seed=int(s), rng=None)
             mcs.append(float(mc))
             ses.append(float(se))
 
@@ -229,7 +231,9 @@ def multi_seed_summary(
         rows.append(
             {
                 "case": name,
-                "BS": bs,
+                "kind": p.spec.kind.value,
+                "q": float(_get_q(p)),
+                "BS": float(bs),
                 "MC_mean": float(mcs_arr.mean()),
                 "mean_error": float(mcs_arr.mean() - bs),
                 "MC_std_across_seeds": (
@@ -237,7 +241,8 @@ def multi_seed_summary(
                 ),
                 "avg_reported_SE": float(ses_arr.mean()),
                 "n_paths": int(n_paths),
-                "n_seeds": len(seeds),
+                "n_seeds": int(len(seeds_list)),
+                "tau": float(tau),
             }
         )
 
@@ -257,24 +262,25 @@ def convergence_table(
     """
     For one parameter set, show how MC and SE behave as n_paths increases.
     """
-    tau = p.T - p.t
-    if tau < 0:
-        raise ValueError(f"negative time-to-maturity tau = T-t = {tau}")
+    tau = float(p.tau)  # validates tau
 
-    bs = float(bs_call_from_inputs(p))
-    rows: list[dict] = []
+    bs = float(bs_price(p))
+    rows: list[dict[str, object]] = []
 
     for n in n_paths_list:
-        mc, se = mc_call_from_inputs(p, n_paths=int(n), seed=seed, rng=None)
+        mc, se = mc_price(p, n_paths=int(n), seed=seed, rng=None)
         err = float(mc - bs)
         rows.append(
             {
                 "n_paths": int(n),
                 "MC": float(mc),
                 "SE": float(se),
-                "BS": bs,
+                "BS": float(bs),
                 "MC-BS": err,
                 "abs_err": abs(err),
+                "tau": float(tau),
+                "kind": p.spec.kind.value,
+                "q": float(_get_q(p)),
             }
         )
 

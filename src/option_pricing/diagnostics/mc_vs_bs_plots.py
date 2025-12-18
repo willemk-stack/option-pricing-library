@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
@@ -8,9 +8,6 @@ import pandas as pd
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
     from matplotlib.figure import Figure
-else:
-    Axes = Any  # type: ignore[assignment]
-    Figure = Any  # type: ignore[assignment]
 
 
 def _get_plt():
@@ -36,15 +33,23 @@ def _pretty_ax(ax: Axes) -> None:
             frame.set_alpha(0.95)
 
 
+def _require_columns(df: pd.DataFrame, cols: list[str]) -> None:
+    missing = [c for c in cols if c not in df.columns]
+    if missing:
+        raise KeyError(
+            f"Missing required columns: {missing}. Present columns: {list(df.columns)}"
+        )
+
+
 def plot_mc_bs_errorbars(
     df: pd.DataFrame,
     *,
-    mode: str = "z",
+    mode: Literal["error", "z"] = "z",
     case_col: str = "case",
     err_col: str = "MC-BS",
     se_col: str = "SE",
     zcrit: float = 1.96,
-    sort: str = "abs_z",
+    sort: Literal["abs_z", "abs_err"] = "abs_z",
     figsize: tuple[float, float] = (11, 5),
 ) -> tuple[Figure, Axes]:
     """
@@ -57,29 +62,22 @@ def plot_mc_bs_errorbars(
     Expected columns in df:
       case_col, err_col, se_col
     """
-    if mode not in {"error", "z"}:
-        raise ValueError("mode must be 'error' or 'z'")
+    _require_columns(df, [case_col, err_col, se_col])
 
     d = df.copy()
-
-    # compute z if needed (and for sorting)
     d["_err"] = d[err_col].astype(float)
     d["_se"] = d[se_col].astype(float)
     d["_z"] = np.where(d["_se"] > 0, d["_err"] / d["_se"], np.nan)
     d["_abs_z"] = np.abs(d["_z"])
     d["_abs_err"] = np.abs(d["_err"])
 
-    # Sorting: by abs_z (best default), or abs_err
     if sort == "abs_z":
         d = d.sort_values("_abs_z", ascending=False, na_position="last")
-    elif sort == "abs_err":
+    else:  # "abs_err"
         d = d.sort_values("_abs_err", ascending=False, na_position="last")
-    else:
-        raise ValueError("sort must be 'abs_z' or 'abs_err'")
 
     d = d.reset_index(drop=True)
-
-    y = np.arange(len(d))
+    y = np.arange(len(d), dtype=float)
     labels = d[case_col].astype(str).tolist()
 
     plt = _get_plt()
@@ -95,7 +93,6 @@ def plot_mc_bs_errorbars(
         ax.set_xlabel(f"{err_col}  (error bars: ±{zcrit}·{se_col})")
         ax.set_title("MC − BS across cases (with Monte Carlo uncertainty)")
 
-        # Small footnote for SE==0 cases
         if np.any(d["_se"].to_numpy() == 0):
             ax.text(
                 0.99,
@@ -106,21 +103,17 @@ def plot_mc_bs_errorbars(
                 va="bottom",
                 fontsize=9,
             )
-
     else:  # mode == "z"
         x = d["_z"].to_numpy(dtype=float)
         finite = np.isfinite(x)
 
-        # Shade the "consistent with MC noise" region
         ax.axvspan(-zcrit, +zcrit, alpha=0.12, label=f"|z| ≤ {zcrit} (~95%)")
 
-        # Plot points, and highlight those outside
         ax.plot(x[finite], y[finite], "o", label="cases")
         out = finite & (np.abs(x) > zcrit)
         if np.any(out):
             ax.plot(x[out], y[out], "o", label="outside band")
 
-        # Reference lines
         ax.axvline(0.0, linewidth=1.0)
         ax.axvline(+zcrit, linestyle="--", linewidth=1.0)
         ax.axvline(-zcrit, linestyle="--", linewidth=1.0)
@@ -128,7 +121,6 @@ def plot_mc_bs_errorbars(
         ax.set_xlabel(f"z = ({err_col}) / {se_col}")
         ax.set_title("Standardized MC error across cases")
 
-        # Optional note for undefined z (SE=0)
         if np.any(~finite):
             ax.text(
                 0.99,
@@ -141,10 +133,9 @@ def plot_mc_bs_errorbars(
             )
 
     ax.legend()
-
     ax.set_yticks(y)
     ax.set_yticklabels(labels)
-    ax.invert_yaxis()  # biggest at top
+    ax.invert_yaxis()
 
     _pretty_ax(ax)
     return fig, ax
@@ -168,6 +159,8 @@ def plot_convergence(
 
     Expected columns: n_paths, MC, SE, BS.
     """
+    _require_columns(df_conv, [n_col, mc_col, se_col, bs_col])
+
     d = df_conv.sort_values(n_col).reset_index(drop=True)
 
     n = d[n_col].to_numpy(dtype=float)
@@ -213,6 +206,8 @@ def plot_se_scaling(
 
     Expects columns: n_paths, SE.
     """
+    _require_columns(df_conv, [n_col, se_col])
+
     d = df_conv.sort_values(n_col).reset_index(drop=True)
     n = d[n_col].to_numpy(dtype=float)
     se = d[se_col].to_numpy(dtype=float)
@@ -226,7 +221,6 @@ def plot_se_scaling(
     ax.plot(n, se, marker="o", label="SE")
 
     if fit_ref and len(n) >= 1 and se[0] > 0:
-        # Reference curve: se_ref(N) = se0 * sqrt(n0 / N)
         n0 = n[0]
         se0 = se[0]
         se_ref = se0 * np.sqrt(n0 / n)
