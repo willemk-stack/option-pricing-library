@@ -1,3 +1,17 @@
+**Objectives**
+- State and explain the assumptions of the Black-Scholes-Merton model.
+- State the PDE and explain greeks
+- Introduce a closed-form solution for European put/call options
+- Provide derivation sketches for the PDE aswell as the closed form solutions for easy validation.
+- Use `option_pricing.pricing_bs` to price calls and puts.
+- Verify the implementation against textbook examples (e.g. Hull).
+**References**
+- Shreve, *Stochastic Calculus for Finance II*, Black-Scholes chapters.
+- Shreve, *Stochastic Calculus for Finance I*, Binomial-tree chapters.
+- Hull, *Options, Futures, and Other Derivatives*, chapters on BS formula and the Binomial-tree.
+- Cox, Ross & Rubinstein (1979) – "Option Pricing: A Simplified Approach"
+
+
 ## Theory recap
 A binomial tree is a **discrete-time model** for the evolution of a stock price. Time is divided into steps of length $\Delta t$, and at each step the stock either moves **up by a factor $u$** or **down by a factor $d$**. Starting from $S_0$, this generates all possible stock prices up to the option's maturity $T=n\Delta t$.
 

@@ -1,3 +1,16 @@
+**Objectives**
+- State and explain the assumptions of the Black-Scholes-Merton model.
+- State the PDE and explain greeks
+- Introduce a closed-form solution for European put/call options
+- Provide derivation sketches for the PDE aswell as the closed form solutions for easy validation.
+- Use `option_pricing.pricing_bs` to price calls and puts.
+- Verify the implementation against textbook examples (e.g. Hull).
+
+**References**
+- Shreve, *Stochastic Calculus for Finance II*, Black–Scholes chapters.
+- Hull, *Options, Futures, and Other Derivatives*, chapters on BS formula and Greeks.
+
+
 ## BSM assumptions and PDE
 (1–2 paragraphs: market assumptions, no arbitrage, continuous trading, etc.)
 Hull!!!!

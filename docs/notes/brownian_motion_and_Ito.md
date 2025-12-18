@@ -1,3 +1,19 @@
+# Brownian Motion
+
+## Goals
+- Explore properties of brownian motion
+    - Simulate sample paths
+    - Analyse mean and variance
+- Introduce a simple example of Ito math.
+- Build a foundation and intivituity of brownian motion for later more complex projects.
+
+## Contents
+1. Definition and intuition
+2. Simulation of paths
+3. Mean and variance over time
+4. Independence of increments
+5. Ito example: W_t^2
+
 ## **1: Definition and intuition**
 ### Formal definition of Brownian motion
 In this Notebook, we will be working with a Brownian motion, which is a continuous-time stochastic process satisfying these properties:

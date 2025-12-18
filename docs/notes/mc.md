@@ -1,3 +1,9 @@
+**Objectives**
+- Shortly reflect on MC theory and risk-neutral pricing theory
+- Implement a MC pricer and use it for european calls
+- Compare to BS and demonstrate convergence and error
+- Apply variance reduction techniques
+
 In quantitative finance, \textbf{Monte Carlo (MC)} methods provide a way to price derivatives by approximating payoff expectations taken under a risk-neutral measure. The central idea is that, under standard no-arbitrage assumptions, the discounted value of an option equals the  expectation of its payoff.
 
 ### Risk-neutral pricing
