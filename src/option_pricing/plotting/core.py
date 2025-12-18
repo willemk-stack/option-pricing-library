@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from collections.abc import Callable, Sequence
-from typing import Any
-
 import math
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+    from matplotlib.figure import Figure
+else:
+    Axes = Any  # runtime fallback when matplotlib isn't installed
+    Figure = Any
 
 CurveFn = Callable[[np.ndarray], np.ndarray]
 PostAxFn = Callable[[Axes, np.ndarray], None]
@@ -23,11 +26,12 @@ class DistSpec:
     The key idea: this stays *generic*. `curve_fn` can be a PDF, KDE, fitted curve,
     or any function y = f(x).
     """
+
     name: str
     samples: np.ndarray
     curve_fn: CurveFn | None = None
 
-    bins: int | str = 50          # can be int, or e.g. "fd" (numpy-supported strings)
+    bins: int | str = 50  # can be int, or e.g. "fd" (numpy-supported strings)
     density: bool = True
     n_grid: int = 400
     xlim_quantiles: tuple[float, float] = (0.001, 0.999)
@@ -36,8 +40,8 @@ class DistSpec:
     xlabel: str | None = None
     ylabel: str | None = "Probability Density"
 
-    xscale: str = "linear"        # "linear" or "log"
-    yscale: str = "linear"        # "linear" or "log"
+    xscale: str = "linear"  # "linear" or "log"
+    yscale: str = "linear"  # "linear" or "log"
 
     show_mean: bool = False
     show_median: bool = False
@@ -46,6 +50,7 @@ class DistSpec:
     curve_kwargs: dict[str, Any] | None = None
 
     post_ax: PostAxFn | None = None
+
 
 def hist_with_curve(
     ax: Axes,
@@ -73,34 +78,34 @@ def hist_with_curve(
 
     # --- Style defaults (overrideable by user kwargs) ---
     default_hist = {
-        "color": "#4C78A8",        # muted blue
+        "color": "#4C78A8",  # muted blue
         "alpha": 0.85,
         "edgecolor": "white",
         "linewidth": 0.4,
         "zorder": 1,
     }
     default_curve = {
-        "color": "#F58518",        # orange
+        "color": "#F58518",  # orange
         "linewidth": 2.5,
         "zorder": 3,
     }
-    mean_style = {
-    "color": "#111111",
-    "linestyle": "--",
-    "linewidth": 2.4,     # <- thicker
-    "alpha": 1.0,
-    "zorder": 6,          # <- foreground
-    "label": "Sample mean",
+    mean_style: dict[str, Any] = {
+        "color": "#111111",
+        "linestyle": "--",
+        "linewidth": 2.4,  # <- thicker
+        "alpha": 1.0,
+        "zorder": 6,  # <- foreground
+        "label": "Sample mean",
     }
-    med_style = {
+    med_style: dict[str, Any] = {
         "color": "#7A5195",
         "linestyle": ":",
-        "linewidth": 2.4,     # <- thicker
+        "linewidth": 2.4,  # <- thicker
         "alpha": 1.0,
-        "zorder": 7,          # <- foreground
+        "zorder": 7,  # <- foreground
         "label": "Sample median",
     }
-    
+
     hist_kwargs = {**default_hist, **(hist_kwargs or {})}
     curve_kwargs = {**default_curve, **(curve_kwargs or {})}
 
@@ -136,9 +141,10 @@ def hist_with_curve(
 
     # Mean/median reference lines (now styled + legend-ready)
     if show_mean:
-        ax.axvline(float(np.mean(x)), **mean_style)
+        ax.axvline(x=float(np.mean(x)), **mean_style)
+
     if show_median:
-        ax.axvline(float(np.median(x)), **med_style)
+        ax.axvline(x=float(np.median(x)), **med_style)
 
     if title:
         ax.set_title(title)
@@ -151,7 +157,6 @@ def hist_with_curve(
         post_ax(ax, x)
 
     return ax
-
 
 
 def plot_specs(
@@ -171,11 +176,18 @@ def plot_specs(
     if ncols <= 0:
         raise ValueError("ncols must be >= 1")
 
+    try:
+        import matplotlib.pyplot as plt
+    except ModuleNotFoundError as e:
+        raise ModuleNotFoundError(
+            "plot_specs requires matplotlib. Install it with: pip install matplotlib"
+        ) from e
+
     nrows = math.ceil(len(specs) / ncols) if specs else 1
     fig, axes = plt.subplots(nrows, ncols, figsize=figsize, constrained_layout=True)
     axes = np.array(axes).reshape(-1)
 
-    for ax, spec in zip(axes, specs):
+    for ax, spec in zip(axes, specs, strict=True):
         hist_with_curve(
             ax,
             spec.samples,
@@ -197,19 +209,19 @@ def plot_specs(
         )
 
     # Hide unused axes
-    for ax in axes[len(specs):]:
+    for ax in axes[len(specs) :]:
         ax.axis("off")
 
     # Apply shared limits after plotting
-    active_axes = axes[:len(specs)]
+    active_axes = axes[: len(specs)]
     if len(active_axes) and share_xlim:
-        xmins, xmaxs = zip(*(ax.get_xlim() for ax in active_axes))
+        xmins, xmaxs = zip(*(ax.get_xlim() for ax in active_axes), strict=True)
         xmin, xmax = min(xmins), max(xmaxs)
         for ax in active_axes:
             ax.set_xlim(xmin, xmax)
 
     if len(active_axes) and share_ylim:
-        ymins, ymaxs = zip(*(ax.get_ylim() for ax in active_axes))
+        ymins, ymaxs = zip(*(ax.get_ylim() for ax in active_axes), strict=True)
         ymin, ymax = min(ymins), max(ymaxs)
         for ax in active_axes:
             ax.set_ylim(ymin, ymax)

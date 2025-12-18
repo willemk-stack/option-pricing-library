@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-import matplotlib.pyplot as plt
+from numpy.typing import NDArray
 
 
 def sim_brownian(
@@ -97,7 +97,7 @@ def sim_gbm_terminal(
     sigma: float = 1.0,
     S0: float = 1.0,
     rng: np.random.Generator | None = None,
-) -> np.ndarray:
+) -> NDArray[np.float64]:
     """
     Simulate terminal values S_T of a GBM on [0, T].
 
@@ -125,13 +125,23 @@ def sim_gbm_terminal(
         rng = np.random.default_rng()
 
     Z = rng.standard_normal(n_paths)
-    return S0 * np.exp((mu - 0.5 * sigma**2) * T + sigma * np.sqrt(T) * Z)
+    out = S0 * np.exp((mu - 0.5 * sigma**2) * T + sigma * np.sqrt(T) * Z)
+    return np.asarray(out, dtype=np.float64)
 
 
-def plot_sample_paths(t: np.ndarray, paths: np.ndarray, n_plot: int = 10, title: str = "Sample paths") -> None:
+def plot_sample_paths(
+    t: np.ndarray, paths: np.ndarray, n_plot: int = 10, title: str = "Sample paths"
+) -> None:
     """
     Plot up to n_plot sample paths against the time grid t.
     """
+    try:
+        import matplotlib.pyplot as plt
+    except ModuleNotFoundError as e:
+        raise ModuleNotFoundError(
+            "plot_sample_paths requires matplotlib. Install it with: pip install matplotlib"
+        ) from e
+
     plt.figure(figsize=(10, 5))
     for i in range(min(n_plot, len(paths))):
         plt.plot(t, paths[i], lw=0.8)

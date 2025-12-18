@@ -1,19 +1,58 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import replace
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
 
-from option_pricing.params import PricingInputs
-from option_pricing.pricing_bs import bs_call_from_inputs
-from option_pricing.pricing_mc import mc_call_from_inputs
+from option_pricing.models.bs import bs_call_from_inputs
+from option_pricing.pricers.mc import mc_call_from_inputs
+from option_pricing.types import PricingInputs
+
+
+def _with_params(
+    base: PricingInputs,
+    *,
+    S: float | None = None,
+    K: float | None = None,
+    r: float | None = None,
+    T: float | None = None,
+    sigma: float | None = None,
+) -> PricingInputs:
+    """
+    Create a modified copy of PricingInputs by replacing nested dataclasses.
+
+    Assumes:
+      - base.market has fields like spot, rate
+      - base.spec has fields like strike, expiry
+      - base has fields like market, spec, sigma
+    """
+    market = base.market
+    spec = base.spec
+
+    if S is not None:
+        market = replace(market, spot=float(S))
+    if r is not None:
+        market = replace(market, rate=float(r))
+
+    if K is not None:
+        spec = replace(spec, strike=float(K))
+    if T is not None:
+        spec = replace(spec, expiry=float(T))
+
+    out = replace(base, market=market, spec=spec)
+
+    if sigma is not None:
+        out = replace(out, sigma=float(sigma))
+
+    return out
 
 
 # -----------------------------
 # Case generation
 # -----------------------------
+
 
 def default_cases(base: PricingInputs) -> list[tuple[str, PricingInputs]]:
     """
@@ -25,15 +64,15 @@ def default_cases(base: PricingInputs) -> list[tuple[str, PricingInputs]]:
     t0 = base.t
     return [
         ("ATM base", base),
-        ("ITM (S=120)", replace(base, S=120.0)),
-        ("OTM (S=80)", replace(base, S=80.0)),
-        ("Deep ITM (S=150)", replace(base, S=150.0)),
-        ("Deep OTM (S=50)", replace(base, S=50.0)),
-        ("Short tau (1w)", replace(base, T=t0 + 1.0 / 52.0)),
-        ("Long tau (5y)", replace(base, T=t0 + 5.0)),
-        ("Low vol (5%)", replace(base, sigma=0.05)),
-        ("High vol (80%)", replace(base, sigma=0.80)),
-        ("High rate (10%)", replace(base, r=0.10)),
+        ("ITM (S=120)", _with_params(base, S=120.0)),
+        ("OTM (S=80)", _with_params(base, S=80.0)),
+        ("Deep ITM (S=150)", _with_params(base, S=150.0)),
+        ("Deep OTM (S=50)", _with_params(base, S=50.0)),
+        ("Short tau (1w)", _with_params(base, T=t0 + 1.0 / 52.0)),
+        ("Long tau (5y)", _with_params(base, T=t0 + 5.0)),
+        ("Low vol (5%)", _with_params(base, sigma=0.05)),
+        ("High vol (80%)", _with_params(base, sigma=0.80)),
+        ("High rate (10%)", _with_params(base, r=0.10)),
     ]
 
 
@@ -41,7 +80,7 @@ def grid_cases(
     base: PricingInputs,
     *,
     moneyness: Iterable[float] = (0.7, 0.9, 1.0, 1.1, 1.3),  # S/K
-    taus: Iterable[float] = (1.0 / 52.0, 0.25, 1.0, 2.0),    # time-to-maturity
+    taus: Iterable[float] = (1.0 / 52.0, 0.25, 1.0, 2.0),  # time-to-maturity
     vols: Iterable[float] = (0.1, 0.2, 0.4),
     rates: Iterable[float] = (0.0, 0.02, 0.05),
 ) -> list[tuple[str, PricingInputs]]:
@@ -52,24 +91,31 @@ def grid_cases(
       T = t + tau
     """
     out: list[tuple[str, PricingInputs]] = []
+
+    K0 = float(
+        base.K
+    )  # relies on your property; if you remove it, use base.spec.strike
+
     for r in rates:
         for sig in vols:
             for tau in taus:
                 for m in moneyness:
-                    p = replace(
+                    p = _with_params(
                         base,
                         r=float(r),
                         sigma=float(sig),
-                        S=float(m * base.K),
+                        S=float(m * K0),
                         T=float(base.t + tau),
                     )
                     out.append((f"S/K={m:.2f}, tau={tau:g}, sig={sig:g}, r={r:g}", p))
+
     return out
 
 
 # -----------------------------
 # Notebook-friendly tables
 # -----------------------------
+
 
 def compare_table(
     cases: list[tuple[str, PricingInputs]],
@@ -83,7 +129,7 @@ def compare_table(
     """
     One MC run per case + BS benchmark.
 
-    - Uses your mc_call_from_inputs(..., seed=..., rng=...)
+    - Uses mc_call_from_inputs(..., seed=..., rng=...)
     - Assumes the MC function returns (price, std_err) where std_err is already SE
     - If seed is provided and per_case_seed=True, uses seed+i for case i (stable & independent-ish)
     - If rng is provided, it is passed through (and will be advanced across cases)
@@ -95,15 +141,13 @@ def compare_table(
         if tau < 0:
             raise ValueError(f"{name}: negative time-to-maturity tau = T-t = {tau}")
 
-        # Decide how to seed
-        seed_i = None
-        rng_i = None
+        seed_i: int | None = None
+        rng_i: np.random.Generator | None = None
 
         if rng is not None:
             rng_i = rng
-        else:
-            if seed is not None:
-                seed_i = int(seed) + i if per_case_seed else int(seed)
+        elif seed is not None:
+            seed_i = int(seed) + i if per_case_seed else int(seed)
 
         mc, se = mc_call_from_inputs(p, n_paths=int(n_paths), seed=seed_i, rng=rng_i)
         bs = float(bs_call_from_inputs(p))
@@ -141,7 +185,9 @@ def compare_table(
         )
 
     df = pd.DataFrame(rows)
-    return df.sort_values("abs_z", ascending=False, na_position="last").reset_index(drop=True)
+    return df.sort_values("abs_z", ascending=False, na_position="last").reset_index(
+        drop=True
+    )
 
 
 def multi_seed_summary(
@@ -186,14 +232,20 @@ def multi_seed_summary(
                 "BS": bs,
                 "MC_mean": float(mcs_arr.mean()),
                 "mean_error": float(mcs_arr.mean() - bs),
-                "MC_std_across_seeds": float(mcs_arr.std(ddof=1)) if len(mcs_arr) > 1 else 0.0,
+                "MC_std_across_seeds": (
+                    float(mcs_arr.std(ddof=1)) if len(mcs_arr) > 1 else 0.0
+                ),
                 "avg_reported_SE": float(ses_arr.mean()),
                 "n_paths": int(n_paths),
                 "n_seeds": len(seeds),
             }
         )
 
-    return pd.DataFrame(rows).sort_values("MC_std_across_seeds", ascending=False).reset_index(drop=True)
+    return (
+        pd.DataFrame(rows)
+        .sort_values("MC_std_across_seeds", ascending=False)
+        .reset_index(drop=True)
+    )
 
 
 def convergence_table(

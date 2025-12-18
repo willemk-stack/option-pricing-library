@@ -1,9 +1,11 @@
-
-from dataclasses import dataclass, field
-import numpy as np
 from collections.abc import Callable
-from .params import PricingInputs
-from .processes import sim_gbm_terminal
+from dataclasses import dataclass, field
+
+import numpy as np
+
+from ..models.stochastic_processes import sim_gbm_terminal
+from ..types import PricingInputs
+
 
 @dataclass(frozen=True, slots=True)
 class McGBMModel:
@@ -25,10 +27,12 @@ class McGBMModel:
             mu=self.r,
             sigma=self.sigma,
             S0=self.S0,
-            rng=self.rng,   # if you implemented rng support
+            rng=self.rng,  # if you implemented rng support
         )
 
-    def price_european(self, payoff: Callable[[np.ndarray], np.ndarray]) -> tuple[float, float]:
+    def price_european(
+        self, payoff: Callable[[np.ndarray], np.ndarray]
+    ) -> tuple[float, float]:
         S_T = self.simulate_terminal()
         payoff_vals = payoff(S_T)
         disc = np.exp(-self.r * self.T)
@@ -41,7 +45,7 @@ class McGBMModel:
 
     def price_put(self, K: float) -> tuple[float, float]:
         return self.price_european(lambda ST: np.maximum(K - ST, 0.0))
-    
+
 
 def mc_call_from_inputs(
     p: PricingInputs,
@@ -50,13 +54,15 @@ def mc_call_from_inputs(
     seed: int | None = None,
     rng: np.random.Generator | None = None,
 ) -> tuple[float, float]:
-    
+
     effective_T = p.T - p.t  # tau
     if effective_T < 0:
         raise ValueError(f"Negative time-to-maturity: T-t = {effective_T}")
 
     if rng is None:
-        rng = np.random.default_rng(seed) if seed is not None else np.random.default_rng()
+        rng = (
+            np.random.default_rng(seed) if seed is not None else np.random.default_rng()
+        )
 
     model = McGBMModel(
         S0=p.S,
@@ -68,15 +74,14 @@ def mc_call_from_inputs(
     )
     return model.price_call(p.K)
 
+
 def mc_put_from_inputs(p: PricingInputs, n_paths: int) -> tuple[float, float]:
     effective_T = p.T - p.t  # time to maturity
     model = McGBMModel(
         S0=p.S,
         r=p.r,
         sigma=p.sigma,
-        T=effective_T,   # <-- T is now tau, time-to-maturity
+        T=effective_T,  # <-- T is now tau, time-to-maturity
         n_paths=n_paths,
     )
     return model.price_put(p.K)
-
-

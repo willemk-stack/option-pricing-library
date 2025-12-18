@@ -1,0 +1,25 @@
+default_language_version:
+  python: python3.12
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.9
+    hooks:
+      - id: ruff-check
+        args: [--fix, --show-fixes]
+
+
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 25.12.0
+    hooks:
+      - id: black
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.19.1
+    hooks:
+      - id: mypy
+        stages: [pre-push]
+        args: [--config-file=pyproject.toml]
+        pass_filenames: false
+        additional_dependencies: [numpy==2.3.5, scipy==1.15.3, scipy-stubs==1.15.3.0]
+

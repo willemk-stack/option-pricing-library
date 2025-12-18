@@ -3,27 +3,52 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "option_pricing"            # this is the name you'll install with pip
+name = "option_pricing"                     # this is the name you'll install with pip
 version = "0.1.0"
 description = "Core option pricing library"
 readme = "README.md"
 requires-python = ">=3.10"
 
-authors = [
-  { name = "Willem Knibbe", email = "willemknibbe0@gmail.com" }
-]
+authors = [{ name = "Willem Knibbe", email = "willemknibbe0@gmail.com" }]
 
-dependencies = [
-  "numpy",
-  "scipy",
-]
+dependencies = ["numpy", "scipy"]
 
 [project.optional-dependencies]
-dev = [
-  "pytest",
-  "jupyter",
-]
+dev = ["pytest", "jupyter", "ruff", "black", "mypy", "matplotlib"]
+notebooks = ["jupyter", "matplotlib", "pandas"]
+plot = ["matplotlib"]
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+fix = true
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]                   # remove for line-length checks
+
+
+[tool.ruff.lint.isort]
+known-first-party = ["option_pricing"]
+
+# Optional mypy (only if you installed mypy)
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+files = ["src/option_pricing"]
+
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.setuptools]
+package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["option_pricing*"]
