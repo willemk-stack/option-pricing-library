@@ -1,28 +1,38 @@
-from option_pricing.models.bs import bs_call_from_inputs
-from option_pricing.pricers.mc import mc_call_from_inputs
+from option_pricing.pricers.black_scholes import bs_price_call
+from option_pricing.pricers.mc import mc_price, mc_price_call
+from option_pricing.types import OptionType
 
 
 def test_mc_matches_bs_within_a_few_standard_errors(make_inputs):
     """MC price should agree with BS within a few reported SEs."""
-    p = make_inputs(S=100.0, K=110.0, r=0.03, sigma=0.25, T=1.0)
+    p = make_inputs(
+        S=100.0,
+        K=110.0,
+        r=0.03,
+        q=0.0,
+        sigma=0.25,
+        T=1.0,
+        kind=OptionType.CALL,
+    )
 
-    bs = float(bs_call_from_inputs(p))
-    mc, se = mc_call_from_inputs(p, n_paths=40_000, seed=7)
+    bs = float(bs_price_call(p))
+    mc, se = mc_price(p, n_paths=40_000, seed=7)
 
-    # allow small extra slack for differing RNG/implementation details
-    assert se > 0
+    assert se > 0.0
     assert abs(mc - bs) <= (3.0 * se + 2e-3)
 
 
 def test_mc_standard_error_scales_like_inverse_sqrt_n(make_inputs):
     """SE should scale ~ 1/sqrt(N) (approx; allow generous tolerance)."""
-    p = make_inputs(S=100.0, K=100.0, r=0.05, sigma=0.2, T=1.0)
+    p = make_inputs(
+        S=100.0, K=100.0, r=0.05, q=0.0, sigma=0.2, T=1.0, kind=OptionType.CALL
+    )
 
     N1 = 5_000
     N2 = 20_000  # 4x more paths => SE should be ~ half
 
-    _, se1 = mc_call_from_inputs(p, n_paths=N1, seed=11)
-    _, se2 = mc_call_from_inputs(p, n_paths=N2, seed=12)
+    _, se1 = mc_price_call(p, n_paths=N1, seed=11)
+    _, se2 = mc_price_call(p, n_paths=N2, seed=12)
 
     ratio = se1 / se2
     # expected ratio ~ sqrt(N2/N1) = 2

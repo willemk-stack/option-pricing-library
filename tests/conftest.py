@@ -15,6 +15,7 @@ def base_params() -> dict:
         "S": 100.0,
         "K": 100.0,
         "r": 0.05,
+        "q": 0.0,
         "sigma": 0.2,
         "T": 1.0,
         "t": 0.0,
@@ -30,13 +31,14 @@ def make_inputs():
         S: float,
         K: float,
         r: float,
+        q: float = 0.0,
         sigma: float,
         T: float,
         t: float = 0.0,
         kind: OptionType = OptionType.CALL,
     ) -> PricingInputs:
         spec = OptionSpec(kind=kind, strike=K, expiry=T)
-        market = MarketData(spot=S, rate=r)
+        market = MarketData(spot=S, rate=r, dividend_yield=q)
         return PricingInputs(spec=spec, market=market, sigma=sigma, t=t)
 
     return _make
