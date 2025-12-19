@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from functools import partial
 
 import numpy as np
+from numpy.typing import NDArray
 
 from ..models.stochastic_processes import sim_gbm_terminal
 from ..types import PricingInputs
@@ -24,8 +25,8 @@ def _apply_control_variate(X: np.ndarray, Y: np.ndarray, EY: float) -> np.ndarra
 
 @dataclass(frozen=True, slots=True)
 class ControlVariate:
-    values: Callable[[np.ndarray], np.ndarray]  # compute Y from ST
-    mean: float  # known E[Y] at maturity
+    values: Callable[[NDArray[np.float64]], NDArray[np.float64]]
+    mean: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,17 +89,15 @@ class McGBMModel:
         control: ControlVariate | None = None,
     ) -> tuple[float, float]:
         ST = self.simulate_terminal()
-        payoff_vals = payoff(ST)  # X samples at maturity (undiscounted)
-
-        Y_vals = None
-        if control is not None:
-            Y_vals = control.values(ST)
+        payoff_vals = payoff(ST)
 
         disc = float(np.exp(-self.r * self.tau))
 
+        # ---------- plain MC ----------
         if not self.antithetic:
             X_eff = payoff_vals
             if control is not None:
+                Y_vals = control.values(ST)
                 X_eff = _apply_control_variate(X_eff, Y_vals, control.mean)
 
             mean = float(X_eff.mean())
@@ -108,11 +107,12 @@ class McGBMModel:
             std_err = disc * std / float(np.sqrt(self.n_paths))
             return price, std_err
 
-        # Antithetic: work with paired averages
+        # ---------- antithetic MC ----------
         n_pairs = self.n_paths // 2
         Xp = 0.5 * (payoff_vals[:n_pairs] + payoff_vals[n_pairs:])
 
         if control is not None:
+            Y_vals = control.values(ST)
             Yp = 0.5 * (Y_vals[:n_pairs] + Y_vals[n_pairs:])
             Xp = _apply_control_variate(Xp, Yp, control.mean)
 
