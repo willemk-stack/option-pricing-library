@@ -11,16 +11,18 @@ from option_pricing import (
     PricingInputs,
 
     # Pricers
-    bs_price_call,
-    bs_call_greeks,
-    binom_price_call,
-    binom_price_put,
-    mc_price_call,
-    mc_price_put,
+    bs_price,
+    bs_greeks,
+    mc_price,
+    binom_price,
+
+    # Advanced Monte Carlo building blocks
+    ControlVariate,
+    McGBMModel,
 )
 ```
 
-## Core types
+## Types
 
 ### `OptionType`
 
@@ -29,19 +31,6 @@ class OptionType(str, Enum):
     CALL = "call"
     PUT = "put"
 ```
-
-### `MarketData`
-
-```python
-@dataclass(frozen=True, slots=True)
-class MarketData:
-    spot: float
-    rate: float
-    dividend_yield: float = 0.0
-```
-
-Notes:
-- `dividend_yield` exists for future extension; current pricers assume **no dividends**.
 
 ### `OptionSpec`
 
@@ -53,8 +42,17 @@ class OptionSpec:
     expiry: float
 ```
 
-Notes:
-- `expiry` is an **absolute** time `T` (typically measured in years).
+`expiry` is an **absolute time** `T` (typically expressed in years). The current time is `t` in `PricingInputs`, and time-to-maturity is `tau = T - t`.
+
+### `MarketData`
+
+```python
+@dataclass(frozen=True, slots=True)
+class MarketData:
+    spot: float
+    rate: float
+    dividend_yield: float = 0.0
+```
 
 ### `PricingInputs`
 
@@ -65,86 +63,93 @@ class PricingInputs:
     market: MarketData
     sigma: float
     t: float = 0.0
-
-    # convenience properties
-    @property
-    def S(self): ...
-    @property
-    def K(self): ...
-    @property
-    def r(self): ...
-    @property
-    def T(self): ...
 ```
 
-Notes:
-- Time-to-maturity is `tau = T - t`.
-- Rates are assumed **continuously compounded**.
+`PricingInputs` also exposes convenient properties (`S`, `K`, `r`, `q`, `tau`) derived from the bundle.
 
 ## Pricers
 
-All pricers take a `PricingInputs` bundle.
-
-### `bs_price_call(p)`
+### `bs_price(p)`
 
 ```python
-def bs_price_call(p: PricingInputs) -> float: ...
+def bs_price(p: PricingInputs) -> float: ...
 ```
 
-Black–Scholes price of a **European call** (no dividends).
+Black–Scholes price for a European option. Dispatches on `p.spec.kind` (`CALL` / `PUT`).
 
-Related (not top-level):
+### `bs_greeks(p)`
 
 ```python
-from option_pricing.models.bs import bs_put_from_inputs
+def bs_greeks(p: PricingInputs) -> dict[str, float]: ...
 ```
 
-### `bs_call_greeks(p)`
-
-```python
-def bs_call_greeks(p: PricingInputs) -> dict[str, float]: ...
-```
-
-Analytic call Greeks under Black–Scholes.
+Analytic Black–Scholes Greeks. Dispatches on `p.spec.kind`.
 
 Returned keys:
 - `price`, `delta`, `gamma`, `vega`, `theta`
 
-### `binom_price_call(p, n_steps)` / `binom_price_put(p, n_steps)`
+### `mc_price(p, *, n_paths, ...)`
 
 ```python
-def binom_price_call(p: PricingInputs, n_steps: int) -> float: ...
-
-def binom_price_put(p: PricingInputs, n_steps: int) -> float: ...
-```
-
-Cox–Ross–Rubinstein (CRR) binomial model for **European** options.
-
-### `mc_price_call(p, n_paths, seed=None, rng=None)`
-
-```python
-def mc_price_call(
+def mc_price(
     p: PricingInputs,
-    n_paths: int,
     *,
+    n_paths: int,
+    antithetic: bool = False,
     seed: int | None = None,
     rng: np.random.Generator | None = None,
 ) -> tuple[float, float]: ...
 ```
 
-Monte Carlo under risk-neutral GBM. Returns `(price, standard_error)`.
+Monte Carlo price under risk-neutral GBM. Returns `(price, standard_error)`.
 
-### `mc_price_put(p, n_paths)`
+Dispatches on `p.spec.kind` (`CALL` / `PUT`).
+
+### `binom_price(p, n_steps, *, american=False, method="tree")`
 
 ```python
-def mc_price_put(p: PricingInputs, n_paths: int) -> tuple[float, float]: ...
+def binom_price(
+    p: PricingInputs,
+    n_steps: int,
+    *,
+    american: bool = False,
+    method: Literal["tree", "closed_form"] = "tree",
+) -> float: ...
 ```
 
-Monte Carlo put pricer. Returns `(price, standard_error)`.
+CRR binomial tree pricing. Dispatches on `p.spec.kind`.
 
-## Optional / advanced modules
+- `american=True` enables early exercise via backward induction (tree method only).
+- `method="closed_form"` uses a fast European-only binomial sum (no early exercise).
 
-These modules are useful in notebooks, but may require extra dependencies such as `matplotlib` and/or `pandas`:
+## Advanced Monte Carlo building blocks
 
-- `option_pricing.diagnostics.*`
-- `option_pricing.plotting.*`
+### `ControlVariate`
+
+```python
+@dataclass(frozen=True, slots=True)
+class ControlVariate:
+    values: Callable[[np.ndarray], np.ndarray]
+    mean: float
+```
+
+Used with `McGBMModel.price_european(..., control=...)` to reduce estimator variance.
+
+### `McGBMModel`
+
+```python
+@dataclass(frozen=True, slots=True)
+class McGBMModel:
+    S0: float
+    r: float
+    q: float
+    sigma: float
+    tau: float
+    n_paths: int
+    antithetic: bool = False
+    rng: np.random.Generator = ...
+```
+
+Provides:
+- `simulate_terminal()` — simulate terminal prices `S_T`
+- `price_european(payoff, *, control=None)` — price a payoff and return `(price, standard_error)`

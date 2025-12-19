@@ -5,35 +5,36 @@ The Black–Scholes model provides a closed-form price for European options unde
 ## Price a call
 
 ```python
-from option_pricing import bs_price_call
+from option_pricing import bs_price
 
-price = bs_price_call(p)
+price = bs_price(p)  # uses p.spec.kind (CALL/PUT)
 ```
 
-## Price a put (model module)
+## Price a put
 
-The put pricer isn’t currently re-exported at the top level. Import it directly from the model:
+You don’t need a separate import for puts. Set `kind=OptionType.PUT` in your `OptionSpec` and call `bs_price`:
 
 ```python
-from option_pricing.models.bs import bs_put_from_inputs
+from option_pricing import PricingInputs, OptionType, OptionSpec, bs_price
 
-put = bs_put_from_inputs(p)
+p_put = PricingInputs(
+    market=p.market,
+    spec=OptionSpec(kind=OptionType.PUT, strike=p.K, expiry=p.spec.expiry),
+    sigma=p.sigma,
+    t=p.t,
+)
+
+put = bs_price(p_put)
 ```
 
-## Call Greeks (analytic)
+## Greeks (analytic)
 
 ```python
-from option_pricing import bs_call_greeks
+from option_pricing import bs_greeks
 
-g = bs_call_greeks(p)
+g = bs_greeks(p)
 print(g["delta"], g["gamma"], g["vega"], g["theta"])
 ```
-
-Returned keys:
-- `price`, `delta`, `gamma`, `vega`, `theta`
-
-Notes:
-- `theta` is returned as ∂Price/∂t (calendar time, holding `T` fixed), per year.
 
 ## Plot sweeps (optional)
 

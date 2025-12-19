@@ -5,10 +5,17 @@ The Cox–Ross–Rubinstein (CRR) binomial model approximates the lognormal diff
 ## Price a call / put
 
 ```python
-from option_pricing import binom_price_call, binom_price_put
+from option_pricing import PricingInputs, OptionSpec, OptionType, binom_price
 
-call = binom_price_call(p, n_steps=400)
-put = binom_price_put(p, n_steps=400)
+call = binom_price(p, n_steps=400)
+
+p_put = PricingInputs(
+    market=p.market,
+    spec=OptionSpec(kind=OptionType.PUT, strike=p.K, expiry=p.spec.expiry),
+    sigma=p.sigma,
+    t=p.t,
+)
+put = binom_price(p_put, n_steps=400)
 ```
 
 ## Convergence intuition
@@ -18,11 +25,11 @@ As `n_steps` increases, CRR prices typically converge toward Black–Scholes for
 A simple experiment:
 
 ```python
-from option_pricing import bs_price_call, binom_price_call
+from option_pricing import bs_price, binom_price
 
-bs = bs_price_call(p)
+bs = bs_price(p)
 for n in [25, 50, 100, 200, 400]:
-    c = binom_price_call(p, n_steps=n)
+    c = binom_price(p, n_steps=n)
     print(n, c - bs)
 ```
 

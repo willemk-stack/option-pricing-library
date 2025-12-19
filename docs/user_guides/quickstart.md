@@ -26,11 +26,11 @@ Conventions:
 ## 2) Price a call three ways
 
 ```python
-from option_pricing import bs_price_call, binom_price_call, mc_price_call
+from option_pricing import bs_price, binom_price, mc_price
 
-bs = bs_price_call(p)
-binom = binom_price_call(p, n_steps=400)
-mc, se = mc_price_call(p, n_paths=50_000, seed=0)
+bs = bs_price(p)
+binom = binom_price(p, n_steps=400)
+mc, se = mc_price(p, n_paths=50_000, seed=0)
 
 print(bs, binom, mc, se)
 ```

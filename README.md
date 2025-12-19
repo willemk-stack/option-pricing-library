@@ -18,36 +18,31 @@ from option_pricing import (
     OptionSpec,
     OptionType,
     PricingInputs,
-    bs_price_call,
-    mc_price_call,
-    binom_price_call,
+    bs_price,
+    bs_greeks,
+    mc_price,
+    binom_price,
 )
 
 p = PricingInputs(
     market=MarketData(spot=100.0, rate=0.05),
-    spec=OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0),  # T (years)
+    spec=OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0),  # expiry T (years)
     sigma=0.20,
     t=0.0,
 )
 
-bs = bs_price_call(p)
-mc, se = mc_price_call(p, n_paths=100_000, seed=0)
-bt = binom_price_call(p, n_steps=400)
+# Prices
+bs = bs_price(p)
+mc, se = mc_price(p, n_paths=100_000, seed=0)
+bt = binom_price(p, n_steps=400)
 
-print("BS:", bs)
-print("MC:", mc, "SE:", se)
-print("Binomial:", bt)
-```
+print("Black–Scholes:", bs)
+print("Monte Carlo:  ", mc, "(SE=", se, ")")
+print("Binomial:     ", bt)
 
-### Puts + Greeks
-
-```python
-from option_pricing import mc_price_put, binom_price_put, bs_call_greeks
-
-put_mc, put_se = mc_price_put(p, n_paths=200_000, seed=1)
-put_bt = binom_price_put(p, n_steps=400)
-
-greeks = bs_call_greeks(p)  # dict: price, delta, gamma, vega, theta
+# Greeks (analytic, Black–Scholes)
+g = bs_greeks(p)  # dict: price, delta, gamma, vega, theta
+print("Delta:", g["delta"])
 ```
 
 ---
@@ -84,15 +79,24 @@ The supported “public” API is exposed from the package root:
 ```python
 from option_pricing import (
   # Types
-  OptionType, OptionSpec, MarketData, PricingInputs,
-  # Pricing entrypoints
-  bs_price_call, bs_call_greeks,
-  mc_price_call, mc_price_put,
-  binom_price_call, binom_price_put,
+  OptionType,
+  OptionSpec,
+  MarketData,
+  PricingInputs,
+
+  # Pricers
+  bs_price,
+  bs_greeks,
+  mc_price,
+  binom_price,
+
+  # Advanced MC building blocks
+  ControlVariate,
+  McGBMModel,
 )
 ```
 
-If you need internals, import from submodules under `option_pricing.models`, `option_pricing.pricers`, etc.
+Anything else should be treated as internal and may change without notice (e.g. `option_pricing.models`, `option_pricing.pricers`, etc.).
 
 ---
 

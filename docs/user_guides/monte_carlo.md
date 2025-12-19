@@ -5,13 +5,18 @@ The Monte Carlo pricer simulates terminal stock prices under risk-neutral GBM an
 ## Price a call (returns price + SE)
 
 ```python
-from option_pricing import mc_price_call
+from option_pricing import mc_price
 
-price, se = mc_price_call(p, n_paths=100_000, seed=0)
+price, se = mc_price(p, n_paths=100_000, seed=0)
 ```
 
 - `price` is the Monte Carlo estimate
 - `se` is the (discounted) standard error of the estimator
+
+
+## Calls and puts
+
+`mc_price` dispatches on `p.spec.kind`. To price a put, set `kind=OptionType.PUT` in your `OptionSpec` and call `mc_price` the same way.
 
 ## Reproducibility
 
@@ -22,11 +27,11 @@ You can control randomness in two ways:
 
 ```python
 import numpy as np
-from option_pricing import mc_price_call
+from option_pricing import mc_price
 
 rng = np.random.default_rng(123)
-price1, se1 = mc_price_call(p, n_paths=50_000, rng=rng)
-price2, se2 = mc_price_call(p, n_paths=50_000, rng=rng)  # advances the same RNG
+price1, se1 = mc_price(p, n_paths=50_000, rng=rng)
+price2, se2 = mc_price(p, n_paths=50_000, rng=rng)  # advances the same RNG
 ```
 
 ## SE scaling quick check
@@ -38,8 +43,8 @@ A useful “math-signal” check is that standard error scales roughly like:
 So if you 4× your paths, SE should drop about 2×.
 
 ```python
-p1, se1 = mc_price_call(p, n_paths=25_000, seed=0)
-p2, se2 = mc_price_call(p, n_paths=100_000, seed=0)
+p1, se1 = mc_price(p, n_paths=25_000, seed=0)
+p2, se2 = mc_price(p, n_paths=100_000, seed=0)
 print(se1 / se2)  # should be around 2
 ```
 
@@ -53,4 +58,4 @@ from option_pricing import mc_price_put
 put, se = mc_price_put(p, n_paths=100_000)
 ```
 
-(If you want the same `seed` / `rng` controls for puts, consider mirroring the `mc_price_call` signature.)
+(If you want the same `seed` / `rng` controls for puts, consider mirroring the `mc_price` signature.)
