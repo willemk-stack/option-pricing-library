@@ -80,7 +80,8 @@ class McGBMModel:
         ST_pos = self.S0 * np.exp(drift + vol * Z)
         ST_neg = self.S0 * np.exp(drift - vol * Z)
 
-        return np.concatenate([ST_pos, ST_neg]).astype(np.float64, copy=False)
+        out = np.concatenate([ST_pos, ST_neg])
+        return np.asarray(out, dtype=np.float64)
 
     def price_european(
         self,
