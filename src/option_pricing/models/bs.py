@@ -54,7 +54,7 @@ def put_price(
     *, spot: float, strike: float, r: float, q: float, sigma: float, tau: float
 ) -> float:
     """
-    Black–Scholes European put with continuous dividend yield q.
+    Black-Scholes European put with continuous dividend yield q.
     """
     d1, d2 = d1_d2_from_spot(spot=spot, strike=strike, r=r, q=q, sigma=sigma, tau=tau)
     df_r = discount_factor(r, tau)

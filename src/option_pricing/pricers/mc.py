@@ -7,24 +7,25 @@ from functools import partial
 import numpy as np
 
 from ..models.stochastic_processes import sim_gbm_terminal
-from ..types import OptionType, PricingInputs
-
-# ----------------------------
-# Payoff helpers
-# ----------------------------
+from ..types import PricingInputs
+from ..vanilla import call_payoff, make_vanilla_payoff, put_payoff
 
 
-def _call_payoff(ST: np.ndarray, *, K: float) -> np.ndarray:
-    return np.maximum(ST - K, 0.0)
+def _apply_control_variate(X: np.ndarray, Y: np.ndarray, EY: float) -> np.ndarray:
+    # Guard against degenerate controls
+    var_y = float(np.var(Y, ddof=1)) if Y.size > 1 else 0.0
+    if var_y <= 0.0:
+        return X
+
+    cov = float(np.cov(X, Y, ddof=1)[0, 1])
+    b = cov / var_y
+    return X - b * (Y - float(EY))
 
 
-def _put_payoff(ST: np.ndarray, *, K: float) -> np.ndarray:
-    return np.maximum(K - ST, 0.0)
-
-
-# ----------------------------
-# MC model (thin container + algorithm)
-# ----------------------------
+@dataclass(frozen=True, slots=True)
+class ControlVariate:
+    values: Callable[[np.ndarray], np.ndarray]  # compute Y from ST
+    mean: float  # known E[Y] at maturity
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +36,7 @@ class McGBMModel:
     sigma: float
     tau: float
     n_paths: int
+    antithetic: bool = False
     rng: np.random.Generator = field(
         default_factory=np.random.default_rng,
         repr=False,
@@ -49,40 +51,77 @@ class McGBMModel:
             raise ValueError("tau must be positive")
         if self.n_paths <= 0:
             raise ValueError("n_paths must be positive")
+        if self.antithetic and (self.n_paths % 2 != 0):
+            raise ValueError(
+                "antithetic=True requires an even n_paths (paired samples)."
+            )
 
     def simulate_terminal(self) -> np.ndarray:
-        # Risk-neutral drift with continuous dividend yield q: mu = r - q
-        return sim_gbm_terminal(
-            n_paths=self.n_paths,
-            T=self.tau,
-            mu=self.r - self.q,
-            sigma=self.sigma,
-            S0=self.S0,
-            rng=self.rng,
-        )
+        mu = self.r - self.q  # risk-neutral drift
+
+        if not self.antithetic:
+            return sim_gbm_terminal(
+                n_paths=self.n_paths,
+                T=self.tau,
+                mu=mu,
+                sigma=self.sigma,
+                S0=self.S0,
+                rng=self.rng,
+            )
+
+        # Antithetic: use Z and -Z pairs
+        n_pairs = self.n_paths // 2
+        Z = self.rng.standard_normal(n_pairs)
+
+        drift = (mu - 0.5 * self.sigma**2) * self.tau
+        vol = self.sigma * np.sqrt(self.tau)
+
+        ST_pos = self.S0 * np.exp(drift + vol * Z)
+        ST_neg = self.S0 * np.exp(drift - vol * Z)
+
+        return np.concatenate([ST_pos, ST_neg]).astype(np.float64, copy=False)
 
     def price_european(
-        self, payoff: Callable[[np.ndarray], np.ndarray]
+        self,
+        payoff: Callable[[np.ndarray], np.ndarray],
+        *,
+        control: ControlVariate | None = None,
     ) -> tuple[float, float]:
         ST = self.simulate_terminal()
-        payoff_vals = payoff(ST)
+        payoff_vals = payoff(ST)  # X samples at maturity (undiscounted)
+
+        Y_vals = None
+        if control is not None:
+            Y_vals = control.values(ST)
 
         disc = float(np.exp(-self.r * self.tau))
-        mean = float(payoff_vals.mean())
 
-        if self.n_paths > 1:
-            std = float(payoff_vals.std(ddof=1))
-        else:
-            std = 0.0
+        if not self.antithetic:
+            X_eff = payoff_vals
+            if control is not None:
+                X_eff = _apply_control_variate(X_eff, Y_vals, control.mean)
+
+            mean = float(X_eff.mean())
+            std = float(X_eff.std(ddof=1)) if self.n_paths > 1 else 0.0
+
+            price = disc * mean
+            std_err = disc * std / float(np.sqrt(self.n_paths))
+            return price, std_err
+
+        # Antithetic: work with paired averages
+        n_pairs = self.n_paths // 2
+        Xp = 0.5 * (payoff_vals[:n_pairs] + payoff_vals[n_pairs:])
+
+        if control is not None:
+            Yp = 0.5 * (Y_vals[:n_pairs] + Y_vals[n_pairs:])
+            Xp = _apply_control_variate(Xp, Yp, control.mean)
+
+        mean = float(Xp.mean())
+        std = float(Xp.std(ddof=1)) if n_pairs > 1 else 0.0
 
         price = disc * mean
-        std_err = disc * std / float(np.sqrt(self.n_paths))
+        std_err = disc * std / float(np.sqrt(n_pairs))
         return price, std_err
-
-
-# ----------------------------
-# RNG helper
-# ----------------------------
 
 
 def _make_rng(seed: int | None, rng: np.random.Generator | None) -> np.random.Generator:
@@ -93,22 +132,14 @@ def _make_rng(seed: int | None, rng: np.random.Generator | None) -> np.random.Ge
     return np.random.default_rng()
 
 
-# ----------------------------
-# Public API (PricingInputs)
-# ----------------------------
-
-
 def mc_price(
     p: PricingInputs,
     *,
     n_paths: int,
+    antithetic: bool = False,
     seed: int | None = None,
     rng: np.random.Generator | None = None,
 ) -> tuple[float, float]:
-    """
-    Generic MC pricer that dispatches on p.spec.kind (CALL/PUT).
-    Returns (price, standard_error).
-    """
     model = McGBMModel(
         S0=p.S,
         r=p.r,
@@ -116,16 +147,11 @@ def mc_price(
         sigma=p.sigma,
         tau=p.tau,
         n_paths=int(n_paths),
+        antithetic=bool(antithetic),
         rng=_make_rng(seed, rng),
     )
 
-    if p.spec.kind == OptionType.CALL:
-        payoff = partial(_call_payoff, K=p.K)
-    elif p.spec.kind == OptionType.PUT:
-        payoff = partial(_put_payoff, K=p.K)
-    else:
-        raise ValueError(f"Unsupported option kind: {p.spec.kind}")
-
+    payoff = make_vanilla_payoff(p.spec.kind, K=p.K)
     return model.price_european(payoff)
 
 
@@ -133,6 +159,7 @@ def mc_price_call(
     p: PricingInputs,
     *,
     n_paths: int,
+    antithetic: bool = False,
     seed: int | None = None,
     rng: np.random.Generator | None = None,
 ) -> tuple[float, float]:
@@ -143,9 +170,10 @@ def mc_price_call(
         sigma=p.sigma,
         tau=p.tau,
         n_paths=int(n_paths),
+        antithetic=bool(antithetic),
         rng=_make_rng(seed, rng),
     )
-    payoff = partial(_call_payoff, K=p.K)
+    payoff = partial(call_payoff, K=p.K)
     return model.price_european(payoff)
 
 
@@ -153,6 +181,7 @@ def mc_price_put(
     p: PricingInputs,
     *,
     n_paths: int,
+    antithetic: bool = False,
     seed: int | None = None,
     rng: np.random.Generator | None = None,
 ) -> tuple[float, float]:
@@ -163,32 +192,8 @@ def mc_price_put(
         sigma=p.sigma,
         tau=p.tau,
         n_paths=int(n_paths),
+        antithetic=bool(antithetic),
         rng=_make_rng(seed, rng),
     )
-    payoff = partial(_put_payoff, K=p.K)
+    payoff = partial(put_payoff, K=p.K)
     return model.price_european(payoff)
-
-
-# ----------------------------
-# Backwards-compatible aliases
-# ----------------------------
-
-
-def mc_call_from_inputs(
-    p: PricingInputs,
-    n_paths: int,
-    *,
-    seed: int | None = None,
-    rng: np.random.Generator | None = None,
-) -> tuple[float, float]:
-    return mc_price_call(p, n_paths=int(n_paths), seed=seed, rng=rng)
-
-
-def mc_put_from_inputs(
-    p: PricingInputs,
-    n_paths: int,
-    *,
-    seed: int | None = None,
-    rng: np.random.Generator | None = None,
-) -> tuple[float, float]:
-    return mc_price_put(p, n_paths=int(n_paths), seed=seed, rng=rng)
