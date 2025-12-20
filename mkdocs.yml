@@ -1,7 +1,7 @@
 site_name: option_pricing
 site_url: https://willemk-stack.github.io/option-pricing-library/
 repo_url: https://github.com/willemk-stack/option-pricing-library
-edit_uri: edit/refactor/library-first/docs/
+edit_uri: edit/main/docs/
 
 docs_dir: docs
 
@@ -10,7 +10,7 @@ theme:
 
 plugins:
   - search
-
+  - mkdocstrings
 nav:
   - Home: index.md
   - Installation: installation.md
