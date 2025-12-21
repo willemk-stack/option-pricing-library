@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 
 def bisection_method(
@@ -10,7 +11,7 @@ def bisection_method(
     tol_f: float = 1e-8,
     tol_x: float = 1e-12,
     max_iter: int = 10_000,
-    **_,  # ignore x0, dFn, etc.
+    **ignored_kwargs: Any,  # <-- renamed (no clash with loop variable)
 ) -> float:
     low, high = (a_0, b_0) if a_0 <= b_0 else (b_0, a_0)
 
@@ -27,7 +28,7 @@ def bisection_method(
             "Bisection requires Fn(low) and Fn(high) to have opposite signs."
         )
 
-    for _ in range(max_iter):
+    for _ in range(max_iter):  # <-- now fine
         mid = low + (high - low) / 2.0
         f_mid = Fn(mid)
 
