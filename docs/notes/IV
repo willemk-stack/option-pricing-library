@@ -1,5 +1,5 @@
-Why do desks quote implied vol instead of price?
-
-What does the smile/skew encode (distributional asymmetry, tail risk, demand/supply), and what should you not over-interpret?
-
-Which coordinate is “natural” for a surface: strike K, moneyness K/F, or log-moneyness k = log(K/F)?
+- Why do desks quote implied vol instead of price?
+    - Scaled parameter, which holds relevance when discussing different Strike prices and experiation dates as opposed to the just the price.
+- What does the smile/skew encode (distributional asymmetry, tail risk, demand/supply), and what should you not over-interpret?
+    - Smile/skew meaning: For a fixed maturity, the IV “smile” is the market’s way of quoting the shape of option prices across strikes. It reflects the risk-neutral distribution’s asymmetry and tail heaviness: higher IV in the left wing (OTM puts) typically means downside tail risk/crash protection is priced rich; curvature reflects fat tails. The smile also reflects risk premia and supply/demand (insurance demand, dealer hedging flows), so it’s not a pure forecast of realized vol.
+    - Don’t over-interpret: Don’t read IV as expected realized vol, and don’t treat the implied distribution as the physical probability distribution.
