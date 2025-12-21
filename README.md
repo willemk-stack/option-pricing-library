@@ -123,7 +123,6 @@ There is a `docs/` folder with:
 - `docs/api.md`
 - `docs/user_guides/*`
 
-(You can host these later with MkDocs or GitHub Pages if you want.)
 
 ---
 
