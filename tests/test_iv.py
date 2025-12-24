@@ -4,10 +4,8 @@ import pytest
 
 from option_pricing import MarketData, OptionSpec, OptionType, PricingInputs, bs_price
 from option_pricing.numerics.root_finding import bracketed_newton
-from option_pricing.vol.implied_vol import IV_solver
+from option_pricing.vol.implied_vol import implied_vol_bs_result
 
-# One place to define “golden” cases.
-# Important: per-case tolerances can vary because published prices are often rounded.
 BENCHMARKS = [
     dict(
         name="ATM no-div call",
@@ -48,8 +46,7 @@ BENCHMARKS = [
         price_tol=5e-4,
         iv_tol=5e-4,
     ),
-    # Hull-style: these are only 2 decimals in your script, so price_tol needs to be looser
-    # OR replace mkt_price with a more precise value.
+    # If you keep rounded Hull prices, loosen tolerances or use more precise reference prices.
     dict(
         name="Hull-style call",
         kind=OptionType.CALL,
@@ -59,9 +56,9 @@ BENCHMARKS = [
         q=0.0,
         tau=0.5,
         sigma_true=0.20,
-        mkt_price=4.76,
-        price_tol=2e-3,  # <-- loosened due to rounding
-        iv_tol=2e-3,
+        mkt_price=4.7594223929,
+        price_tol=5e-4,
+        iv_tol=5e-4,
     ),
     dict(
         name="Hull-style put",
@@ -72,9 +69,9 @@ BENCHMARKS = [
         q=0.0,
         tau=0.5,
         sigma_true=0.20,
-        mkt_price=0.81,
-        price_tol=2e-3,  # <-- loosened due to rounding
-        iv_tol=2e-3,
+        mkt_price=0.8085993729,
+        price_tol=5e-4,
+        iv_tol=5e-4,
     ),
 ]
 
@@ -90,7 +87,6 @@ def make_inputs(case: dict, sigma_guess: float) -> PricingInputs:
 
 @pytest.mark.parametrize("case", BENCHMARKS, ids=lambda c: c["name"])
 def test_bs_price_matches_published(case):
-    # price at sigma_true
     p_guess = make_inputs(case, sigma_guess=0.30)
     p_true = replace(p_guess, sigma=float(case["sigma_true"]))
 
@@ -104,21 +100,26 @@ def test_bs_price_matches_published(case):
 
 @pytest.mark.parametrize("case", BENCHMARKS, ids=lambda c: c["name"])
 def test_implied_vol_recovers_sigma_true(case):
-    # recover IV from published price
-    # choose a guess that isn't always equal to sigma_true
     sigma_guess = 0.30 if abs(case["sigma_true"] - 0.30) > 1e-12 else 0.20
     p_guess = make_inputs(case, sigma_guess=sigma_guess)
 
-    iv = IV_solver(
-        p_guess,
-        float(case["mkt_price"]),
+    ivres = implied_vol_bs_result(
+        mkt_price=float(case["mkt_price"]),
+        spec=p_guess.spec,
+        market=p_guess.market,
         root_method=bracketed_newton,
-        sigma0=p_guess.sigma,
+        t=float(p_guess.t),
+        sigma0=float(p_guess.sigma),
         sigma_lo=1e-8,
         sigma_hi=5.0,
+        tol_f=1e-10,
+        tol_x=1e-10,
     )
 
-    assert iv == pytest.approx(
+    assert bool(ivres.root_result.converged) is True
+    assert int(ivres.root_result.iterations) >= 0
+
+    assert ivres.vol == pytest.approx(
         float(case["sigma_true"]),
         abs=float(case["iv_tol"]),
     )
