@@ -31,13 +31,15 @@ jobs:
       - name: Install docs deps + package
         run: |
           python -m pip install -U pip
-          pip install mkdocs mkdocs-material mkdocstrings[python]
+          # ADDED pymdown-extensions here to support Arithmatex
+          pip install mkdocs mkdocs-material pymdown-extensions mkdocstrings[python]
           pip install -e .
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
       - name: Build site
+        # --strict ensures your math/links are valid, but will fail the build on any warning
         run: mkdocs build --strict --site-dir site
 
       - name: Upload Pages artifact
