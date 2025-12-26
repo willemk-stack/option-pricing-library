@@ -1,25 +1,50 @@
 ## From SDE to GBM using Itô
 In order to find a solution, let us consider $X_t = \ln S_t$. Now applying Itô's formule to $dX_t$:
-$$dX_t = \frac{1}{S_t}dS_t - \frac{1}{2}\frac{1}{S_t^2}dS_tdS_t (*)$$
+
+$$
+dX_t = \frac{1}{S_t}dS_t - \frac{1}{2}\frac{1}{S_t^2}dS_tdS_t (*)
+$$
+
 Computing $dS_tdS_t = (\mu S_tdt+\sigma S_tdW_t)^2$ using Itô's multiplication rules, we find
-$$dS_tdS_t = \sigma^2 S_t^2 dt$$
+
+$$
+dS_tdS_t = \sigma^2 S_t^2 dt
+$$
+
 Substituting this along with our formula for $dS_t$ in $(*)$
-$$dX_t = \mu dt + \sigma dW_t - \frac{1}{2}\sigma^2 dt$$
-$$dX_t = (\mu - \frac{1}{2}\sigma^2)dt + \sigma dW_t $$
+
+$$
+dX_t = \mu dt + \sigma dW_t - \frac{1}{2}\sigma^2 dt
+$$
+
+$$
+dX_t = (\mu - \frac{1}{2}\sigma^2)dt + \sigma dW_t
+$$
+
 Integrating from 0 to t:
-$$X_t = X_0 + (\mu - \frac{1}{2}\sigma^2)t + \sigma W_t \rightarrow \ln S_t = \ln S_0 + (\mu - \frac{1}{2}\sigma^2)t + \sigma W_t$$
+
+$$
+X_t = X_0 + (\mu - \frac{1}{2}\sigma^2)t + \sigma W_t \rightarrow \ln S_t = \ln S_0 + (\mu - \frac{1}{2}\sigma^2)t + \sigma W_t
+$$
+
 Where taking the exponents gives us the final result:
-$$S_t = S_0 \exp((\mu - \frac{1}{2}\sigma^2)t + \sigma W_t)$$
+
+$$
+S_t = S_0 \exp((\mu - \frac{1}{2}\sigma^2)t + \sigma W_t)
+$$
 
 ## Financial interpretation (returns vs log-returns)
 
 In finance we often describe performance in terms of **returns**.
 
-- The *simple* return over $[0,T]$ is  
+- The *simple* return over $[0,T]$ is
+
   $$
   R_T = \frac{S_T - S_0}{S_0}.
   $$
-- The **log-return** (continuously compounded return) is  
+
+- The **log-return** (continuously compounded return) is
+
   $$
   x_T = \frac{1}{T}\ln\frac{S_T}{S_0}.
   $$
@@ -28,18 +53,23 @@ For small moves, $\ln(1 + R_T) \approx R_T$, so simple returns and
 log-returns are numerically close. The key advantage of log-returns is
 that they are **additive over time**: if $0 = t_0 < t_1 < \dots < t_n = T$,
 then
+
 $$
 \ln\frac{S_T}{S_0}
   = \sum_{k=1}^n \ln\frac{S_{t_k}}{S_{t_{k-1}}}.
 $$
+
 The total log-return is just the sum of period log-returns.
 
 Under geometric Brownian motion (GBM) we have
+
 $$
 \ln\frac{S_T}{S_0} \sim
 \mathcal N\!\Big(\big(\mu - \tfrac{1}{2}\sigma^2\big)T,\; \sigma^2 T\Big),
 $$
+
 so our scaled log-return satisfies
+
 $$
 x_T = \frac{1}{T}\ln\frac{S_T}{S_0}
   \sim \mathcal N\!\left(\mu - \tfrac{1}{2}\sigma^2,\; \frac{\sigma^2}{T}\right).
