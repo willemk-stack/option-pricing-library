@@ -4,100 +4,122 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 import numpy as np
+from numpy.typing import NDArray
 
-ArrayLike = float | np.ndarray
+type FloatArray = NDArray[np.float64]
+type ArrayLike = float | FloatArray
 
 
 @dataclass(frozen=True, slots=True)
 class Smile:
     T: float  # years
-    x: np.ndarray  # log-moneyness grid: ln(K/F(T))
-    w: np.ndarray  # total variance: T * iv^2
+    x: FloatArray  # log-moneyness grid: ln(K/F(T))
+    w: FloatArray  # total variance: T * iv^2
 
-    def w_at(self, xq: ArrayLike) -> np.ndarray:
-        xq = np.asarray(xq, dtype=float)
-        return np.interp(xq, self.x, self.w, left=self.w[0], right=self.w[-1])
+    def w_at(self, xq: ArrayLike) -> FloatArray:
+        xq_arr = np.asarray(xq, dtype=np.float64)
 
-    def iv_at(self, xq: ArrayLike) -> np.ndarray:
+        # np.interp is often typed as returning Any -> wrap with np.asarray to satisfy mypy
+        out = np.interp(
+            xq_arr,
+            self.x,
+            self.w,
+            left=float(self.w[0]),
+            right=float(self.w[-1]),
+        )
+        return np.asarray(out, dtype=np.float64)
+
+    def iv_at(self, xq: ArrayLike) -> FloatArray:
         wq = self.w_at(xq)
-        return np.sqrt(np.maximum(wq / self.T, 0.0))
+        out = np.sqrt(np.maximum(wq / np.float64(self.T), np.float64(0.0)))
+        return np.asarray(out, dtype=np.float64)
 
 
 @dataclass(frozen=True, slots=True)
 class VolSurface:
-    expiries: np.ndarray
+    expiries: FloatArray
     smiles: tuple[Smile, ...]
     forward: Callable[[float], float]  # forward(T) -> float
 
-    # -------------------------
-    # Construction
-    # -------------------------
     @classmethod
     def from_grid(
         cls,
         rows: Iterable[tuple[float, float, float]],  # (T, K, iv)
-        forward,
+        forward: Callable[[float], float],
         *,
         expiry_round_decimals: int = 10,
-    ):
+    ) -> VolSurface:
         buckets: dict[float, list[tuple[float, float]]] = {}
 
-        for T, K, iv in rows:
-            T_key = round(float(T), expiry_round_decimals)
-            buckets.setdefault(T_key, []).append((float(K), float(iv)))
+        for T_raw, K_raw, iv_raw in rows:
+            T_key = round(float(T_raw), expiry_round_decimals)
+            buckets.setdefault(T_key, []).append((float(K_raw), float(iv_raw)))
 
-        expiries = np.array(sorted(buckets.keys()), dtype=float)
+        expiries = np.asarray(sorted(buckets.keys()), dtype=np.float64)
         smiles: list[Smile] = []
 
-        for T in expiries:
-            pts = buckets[T]
+        for T_np in expiries:
+            pts = buckets[float(T_np)]
             pts.sort(key=lambda p: p[0])  # sort by strike
 
-            K = np.array([p[0] for p in pts], dtype=float)
-            iv = np.array([p[1] for p in pts], dtype=float)
+            K = np.asarray([p[0] for p in pts], dtype=np.float64)
+            iv = np.asarray([p[1] for p in pts], dtype=np.float64)
 
-            F = float(forward(T))
-            x = np.log(K / F)  # <-- log-moneyness grid
-            w = T * (iv**2)  # <-- total variance grid
-
-            # important: x must be strictly increasing for np.interp
-            if np.any(np.diff(x) <= 0):
+            F = float(forward(float(T_np)))
+            if F <= 0.0:
                 raise ValueError(
-                    f"x grid not strictly increasing at T={T} (check strikes/forward)"
+                    f"forward(T) must be > 0, got {F} at T_np={float(T_np)}"
+                )
+            if np.any(K <= 0.0):
+                raise ValueError(
+                    f"All strikes must be > 0 for log-moneyness at T={float(T_np)}"
                 )
 
-            smiles.append(Smile(T=T, x=x, w=w))
+            x = np.log(K / np.float64(F)).astype(np.float64, copy=False)
+            w = (np.float64(T_np) * (iv**2)).astype(np.float64, copy=False)
+
+            if np.any(np.diff(x) <= 0):
+                raise ValueError(
+                    f"x grid not strictly increasing at T_np={float(T_np)}"
+                )
+
+            smiles.append(Smile(T=float(T_np), x=x, w=w))
 
         return cls(expiries=expiries, smiles=tuple(smiles), forward=forward)
 
-    # -------------------------
-    # Query
-    # -------------------------
-
-    def iv(self, K: ArrayLike, T: float) -> np.ndarray:
+    def iv(self, K: ArrayLike, T: float) -> FloatArray:
         T = float(T)
         if T <= 0:
             raise ValueError("T must be > 0")
 
-        K_arr = np.asarray(K, dtype=float)
-        xq = np.log(K_arr / float(self.forward(T)))  # <-- convert query strike to x
+        K_arr = np.asarray(K, dtype=np.float64)
+        if np.any(K_arr <= 0.0):
+            raise ValueError("Strikes must be > 0 for log-moneyness.")
 
-        # simplest (no time interp): pick nearest expiry or clamp
-        if T <= self.expiries[0]:
+        xq = np.log(K_arr / np.float64(self.forward(T))).astype(np.float64, copy=False)
+
+        # Clamp outside known range
+        if T <= float(self.expiries[0]):
             return self.smiles[0].iv_at(xq)
-        if T >= self.expiries[-1]:
+        if T >= float(self.expiries[-1]):
             return self.smiles[-1].iv_at(xq)
 
-        # time interpolation in total variance at fixed x
-        j = int(np.searchsorted(self.expiries, T))
+        # Find bracketing expiries
+        j = int(np.searchsorted(self.expiries, np.float64(T)))
         i = j - 1
-        T0, T1 = self.expiries[i], self.expiries[j]
-        s0, s1 = self.smiles[i], self.smiles[j]
+
+        T0 = float(
+            self.expiries[i]
+        )  # <- force scalar float (fixes your assignment errors)
+        T1 = float(self.expiries[j])
+
+        s0 = self.smiles[i]
+        s1 = self.smiles[j]
 
         w0 = s0.w_at(xq)
         w1 = s1.w_at(xq)
 
         a = (T - T0) / (T1 - T0)
-        w = (1.0 - a) * w0 + a * w1
-
-        return np.sqrt(np.maximum(w / T, 0.0))
+        w = np.float64(1.0 - a) * w0 + np.float64(a) * w1
+        out = np.sqrt(np.maximum(w / np.float64(T), np.float64(0.0)))
+        return np.asarray(out, dtype=np.float64)
