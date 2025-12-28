@@ -20,18 +20,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
+          cache-dependency-path: |
+            pyproject.toml
+            requirements*.txt
+
+      - name: README is up to date
+        run: python scripts/render_readme.py --check
 
       - name: Install docs deps + package
         run: |
           python -m pip install -U pip
-          # ADDED pymdown-extensions here to support Arithmatex
           pip install mkdocs mkdocs-material pymdown-extensions mkdocstrings[python]
           pip install -e .
 
@@ -39,7 +44,6 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Build site
-        # --strict ensures your math/links are valid, but will fail the build on any warning
         run: mkdocs build --strict --site-dir site
 
       - name: Upload Pages artifact

@@ -40,28 +40,7 @@ pip install -e ".[dev]"
 ## Quick example (runnable)
 
 ```python
-from option_pricing import (
-    MarketData,
-    OptionSpec,
-    OptionType,
-    PricingInputs,
-    bs_greeks,
-    bs_price,
-    binom_price,
-    mc_price, 
-)
-
-market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.0)
-spec = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)
-p = PricingInputs(spec=spec, market=market, sigma=0.20, t=0.0)
-
-print("BS:", bs_price(p))
-print("Greeks:", bs_greeks(p))
-
-price_mc, se = mc_price(p, n_paths=200_000, antithetic=True, seed=0)
-print("MC:", price_mc, "(SE=", se, ")")
-
-print("CRR:", binom_price(p, n_steps=500))
+{{ QUICKSTART }}
 ```
 
 ---
@@ -69,23 +48,7 @@ print("CRR:", binom_price(p, n_steps=500))
 ### Implied volatility (BS inversion)
 
 ```python
-from option_pricing import MarketData, OptionSpec, OptionType, implied_vol_bs_result
-from option_pricing.numerics.root_finding import bracketed_newton
-
-market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.0)
-spec = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)
-
-res = implied_vol_bs_result(
-    mkt_price=10.0,
-    spec=spec,
-    market=market,
-    root_method=bracketed_newton,
-)
-
-rr = res.root_result
-print(f"IV: {res.vol:.6f}")
-print(f"Converged: {rr.converged}  iters={rr.iterations}  method={rr.method}")
-print(f"f(root)={rr.f_at_root:.3e}  bracket={rr.bracket}  bounds={res.bounds}")
+{{ IMPLIED_VOL }}
 ```
 
 ---
