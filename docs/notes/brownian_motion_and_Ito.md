@@ -18,22 +18,26 @@
 ### Formal definition of Brownian motion
 In this Notebook, we will be working with a Brownian motion, which is a continuous-time stochastic process satisfying these properties:
 Let $(\Omega,\mathcal{F}, \mathbb{P})$ be a probability space. Then for a Brownian motion $W(t)$, $t \geq 0$
-1. $W_0 = 0$ Almost surely
-2. $0=t_0<t_1<\cdots<t_m$
 
-    $$
-    W_{t_{1}}-W_{t_{0}}, W_{t_{2}}-W_{t_{1}}, \cdots, W_{t_{m}}-W_{t_{m-1}}\quad
-    \text{are independent and normally distributed, satisfying:}
-    $$
+1. $W_0 = 0$ almost surely  
 
-3.
-    $
-    \mathbb{E}[W(t_{i+1})-W(t_i)] = 0, \quad \forall i
-    $
-4.
-    $
-    \text{Var}[W(t_{i+1})-W(t_i)] = t_{i+1} - t_i,\quad \forall i
-    $
+2. $0 = t_0 < t_1 < \cdots < t_m$
+
+   $$
+   W_{t_{1}}-W_{t_{0}},\; W_{t_{2}}-W_{t_{1}},\; \cdots,\; W_{t_{m}}-W_{t_{m-1}} \text{ are independent and normally distributed.}
+   $$
+
+3.  
+   $$
+   \mathbb{E}[W(t_{i+1}) - W(t_i)] = 0, \quad \forall i
+   $$
+
+4.  
+   $$
+   \mathrm{Var}[W(t_{i+1}) - W(t_i)] = t_{i+1} - t_i, \quad \forall i
+   $$
+
+    
 
 Source: Adapted from S. Shreve, *Stochastic Calculus for Finance II: Continuous-Time Models*, Definition 3.3.1.
 
