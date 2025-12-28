@@ -42,6 +42,9 @@ jobs:
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+      
+      - name: Build docs figures
+        run: python scripts/make_docs_figures.py
 
       - name: Build site
         run: mkdocs build --strict --site-dir site

@@ -8,6 +8,11 @@ A small, usage-first Python library for pricing **European options** under commo
 
 The public API is intentionally small: you build a `PricingInputs` bundle, then call top-level pricers from `option_pricing`.
 
+## Vol surface at a glance
+![Synthetic implied volatility surface](assets/iv_surface.png)
+
+![Smile slices from the surface](assets/iv_smiles.png)
+
 ## Quick example
 
 ```python
