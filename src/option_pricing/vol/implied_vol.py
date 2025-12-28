@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from math import exp
+from math import exp, log, pi, sqrt
 
 from option_pricing import MarketData, OptionSpec, OptionType, PricingInputs, bs_greeks
 from option_pricing.numerics.root_finding import RootResult
@@ -87,6 +87,55 @@ def _validate_bounds(
     return lb, ub, tau
 
 
+def _iv_seed_from_time_value(
+    mkt_price: float,
+    spec: OptionSpec,
+    market: MarketData,
+    tau: float,
+    *,
+    sigma_lo: float,
+    sigma_hi: float,
+) -> float:
+    # discount factors
+    df = _df(market.rate, tau)
+
+    # prepaid forward and forward
+    fp = _prepaid_forward(market.spot, market.dividend_yield, tau)  # S*e^{-q tau}
+    F = fp / df  # = S*e^{(r-q)tau}
+
+    # undiscounted option price
+    u = mkt_price / df
+
+    K = spec.strike
+    k = log(F / K)
+
+    # undiscounted intrinsic and time value
+    if spec.kind == OptionType.CALL:
+        intr = max(F - K, 0.0)
+    else:  # PUT
+        intr = max(K - F, 0.0)
+
+    tv = max(u - intr, 0.0)
+
+    # If essentially pure intrinsic, implied vol ~ 0 and vega is tiny.
+    # Starting Newton in this region is numerically awkward, so return a floor.
+    if tv <= 1e-16 * max(1.0, F):
+        return float(sigma_lo)
+
+    # ATM time-value seed (works best near k ~ 0)
+    sigma_atm = sqrt(2.0 * pi / tau) * (tv / F)
+
+    # MK-style moneyness seed (keeps you sane away from ATM)
+    sigma_mk = sqrt(2.0 * abs(k) / tau)
+
+    # Smooth blend: near ATM -> mostly sigma_atm; far -> mostly sigma_mk
+    w = exp(-abs(k) / 0.10)  # 0.10 is a reasonable “near-ATM” log-moneyness scale
+    sigma0 = w * sigma_atm + (1.0 - w) * sigma_mk
+
+    # Clamp into solver domain
+    return float(min(sigma_hi, max(sigma_lo, sigma0)))
+
+
 def implied_vol_bs_result(
     mkt_price: float,
     spec: OptionSpec,
@@ -102,15 +151,21 @@ def implied_vol_bs_result(
     max_iter: int | None = None,
 ) -> ImpliedVolResult:
     """
-    Black–Scholes implied vol inversion that returns diagnostics.
-
-    Contract (Option A):
-      - root_method returns RootResult
-      - implied_vol_bs_result returns ImpliedVolResult(root_result=RootResult)
+    Black-Scholes implied vol inversion that returns diagnostics.
     """
     lb, ub, tau = _validate_bounds(mkt_price, spec, market, t)
 
-    p0 = PricingInputs(spec=spec, market=market, sigma=float(sigma0 or 0.2), t=t)
+    if sigma0 is None:
+        sigma0 = _iv_seed_from_time_value(
+            mkt_price=mkt_price,
+            spec=spec,
+            market=market,
+            tau=tau,
+            sigma_lo=sigma_lo,
+            sigma_hi=sigma_hi,
+        )
+
+    p0 = PricingInputs(spec=spec, market=market, sigma=float(sigma0), t=t)
 
     def Fn(sigma: float) -> float:
         px = replace(p0, sigma=float(sigma))
