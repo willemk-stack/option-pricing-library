@@ -16,8 +16,13 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: [src] 
-
+          paths: [src]
+          options:
+            docstring_style: numpy
+            show_source: false
+            separate_signature: true
+            show_signature_annotations: true
+            
 markdown_extensions:
   - pymdownx.arithmatex:
       generic: true

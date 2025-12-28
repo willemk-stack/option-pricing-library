@@ -17,6 +17,12 @@ dependencies = ["numpy", "scipy"]
 dev = ["pytest", "jupyter", "ruff", "black", "mypy", "matplotlib"]
 notebooks = ["jupyter", "matplotlib", "pandas"]
 plot = ["matplotlib"]
+docs = [
+    "mkdocs",
+    "mkdocs-material",
+    "pymdown-extensions",
+    "mkdocstrings[python]",
+]
 
 [tool.black]
 line-length = 88
