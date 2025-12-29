@@ -1,3 +1,4 @@
+````md
 # Option Pricing Library
 
 A small, usage-first Python library for pricing **European options** under common textbook models:
@@ -9,6 +10,7 @@ A small, usage-first Python library for pricing **European options** under commo
 The public API is intentionally small: you build a `PricingInputs` bundle, then call top-level pricers from `option_pricing`.
 
 ## Vol surface at a glance
+
 ![Synthetic implied volatility surface](assets/iv_surface.png)
 
 ![Smile slices from the surface](assets/iv_smiles.png)
@@ -37,16 +39,17 @@ binom = binom_price(p, n_steps=400)
 print(f"BS:    {bs:.4f}")
 print(f"MC:    {mc:.4f}  (SE={se:.4f})")
 print(f"CRR:   {binom:.4f}")
-```
+````
 
 Notes:
 
-- Times are **floats** (typically in **years**). `t` is “now”; `expiry` is an **absolute** time `T`. Time-to-maturity is `tau = T - t`.
-- Rates are assumed to be **continuously compounded**.
-- All top-level pricers dispatch on `OptionType` (`CALL` / `PUT`) via `p.spec.kind`.
+* Times are **floats** (typically in **years**). `t` is “now”; `expiry` is an **absolute** time `T`. Time-to-maturity is `tau = T - t`.
+* Rates are assumed to be **continuously compounded**.
+* All top-level pricers dispatch on `OptionType` (`CALL` / `PUT`) via `p.spec.kind`.
 
-## Next pages
+## Where to go next
 
-- [Installation](installation.md)
-- [Public API](api.md)
-- [User guides](user_guides/quickstart.md)
+* **Get set up:** [Installation](installation.md)
+* **Build something quickly:** [Quickstart](user_guides/quickstart.md)
+* **See everything available:** [Public API](api.md)
+* **Learn the theory background:** [Notes](notes/index.md)
