@@ -1,16 +1,29 @@
 # Notes
 
-These notes provide background and derivations for the models implemented in **option_pricing**. They are more theory-oriented than the user guides and may include math-heavy explanations.
+These notes are a compact “story” of the standard option-pricing toolkit used throughout the library:
+**no-arbitrage → risk-neutral pricing → Brownian motion/Itô → GBM → Black–Scholes → implied vol → numerical methods**.
 
-## Core topics
+They are written to be readable linearly, but each note also stands on its own.
 
-- [Risk neutral pricing](risk_neutral_pricing.md) — the pricing principle behind the library.
-- [GBM](gbm.md) — the geometric Brownian motion model assumptions and implications.
-- [Brownian motion and Itô](brownian_motion_and_Ito.md) — the calculus underpinning stochastic models.
+## Suggested reading order
 
-## Model-specific notes
+1. [Risk-neutral pricing](risk_neutral_pricing.md) — why we price under \(\mathbb{Q}\) and why the drift becomes \(r\).
+2. [Brownian motion and Itô](brownian_motion_and_Ito.md) — the noise and calculus behind continuous-time models.
+3. [Geometric Brownian motion](gbm.md) — the lognormal stock model and distribution of returns.
+4. [Black–Scholes pricing](bs_pricing.md) — PDE and closed-form European option prices, plus intuition.
+5. [Implied volatility](IV.md) — “vol as the price”; inversion, bounds, and practical solver notes.
+6. [Monte Carlo](mc.md) — simulation pricing, error bars, and variance reduction.
+7. [Binomial CRR](binomial_crr.md) — discrete-time replication and convergence to Black–Scholes.
 
-- [Black–Scholes pricing](bs_pricing.md) — derivation and interpretation of the BS formula.
-- [Monte Carlo](mc.md) — estimators, variance reduction ideas, and numerical considerations.
-- [Binomial CRR](binomial_crr.md) — discrete-time replication and convergence intuition.
-- [Implied volatility](IV.md) — no-arbitrage bounds, inversion, and common pitfalls.
+## Conventions and notation
+
+- Time \(t\) is measured in **years**.
+- Rates are **continuously compounded** unless stated otherwise.
+- \(S_t\): underlying price at time \(t\).
+- \(r\): continuously-compounded risk-free rate (constant in basic models).
+- \(B_t = e^{rt}\): money-market account (numéraire in the basic setting).
+- \(W_t\): Brownian motion.
+- \(\mathbb{P}\): real-world (physical) probability measure.
+- \(\mathbb{Q}\): risk-neutral measure under which discounted traded prices are martingales.
+
+When a continuous dividend yield \(q\) is relevant, the risk-neutral drift becomes \(r-q\).

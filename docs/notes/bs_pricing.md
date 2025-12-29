@@ -1,144 +1,155 @@
-**Objectives**
-- State and explain the assumptions of the Black-Scholes-Merton model.
-- State the PDE and explain greeks
-- Introduce a closed-form solution for European put/call options
-- Provide derivation sketches for the PDE aswell as the closed form solutions for easy validation.
-- Use `option_pricing.pricing_bs` to price calls and puts.
-- Verify the implementation against textbook examples (e.g. Hull).
+# Black–Scholes–Merton pricing (European options)
 
-**References**
-- Shreve, *Stochastic Calculus for Finance II*, Black–Scholes chapters.
-- Hull, *Options, Futures, and Other Derivatives*, chapters on BS formula and Greeks.
+The Black–Scholes–Merton (BSM) model is the classic closed-form benchmark for pricing **European** calls and puts.
+It combines:
 
+1. a simple stock model (GBM with constant \(\sigma\)),
+2. a frictionless market with continuous trading,
+3. no-arbitrage replication (or equivalently, risk-neutral pricing).
 
-## BSM assumptions and PDE
-(1–2 paragraphs: market assumptions, no arbitrage, continuous trading, etc.)
-Hull!!!!
-**Assumptions:**
-- Continuous trading
-- No transaction costs
-- No payed dividends during the lifetime of the option
-- Constant interest rate $r$
-- We are in a no arbitrage environment (what does this mean exactly?)
-- Stock price follows a GBM as defined in notebook02 with constant drift $\mu$ and constant volatility $\sigma$
+## Objectives
 
+- State the BSM assumptions and understand where they enter the derivation.
+- Derive the Black–Scholes PDE via delta hedging.
+- Present the closed-form European call/put formulas and interpret their terms.
+- Connect the PDE view to the risk-neutral expectation view.
+- Use put–call parity as a consistency check.
 
-**PDE:**
-(High-level story: replication → PDE → solution; minimal equations.)
-We want to price a European option written on a stock whose price we model as a geometric Brownian motion (GBM). That is, we assume
+## Assumptions (what the model *needs*)
 
-$$
-dS_t = \mu S_t\,dt + \sigma S_t\,dW_t,
-$$
+A standard version assumes:
 
-in a frictionless market with constant volatility $\sigma$ and risk-free rate $r$. Our goal is to find a price for the option that does not create arbitrage opportunities. To do this, we consider an investor who holds a portfolio consisting of $\Delta_t$ units of the stock and some amount in the risk-free asset (bond or bank account). By choosing $\Delta_t$ appropriately, we can construct a self-financing portfolio that replicates the option’s payoff. No-arbitrage then implies that the value of this replicating portfolio must equal the option price at all times. Imposing this condition leads to the Black–Scholes partial differential equation for the option value.
+- Trading is frictionless (no transaction costs, infinite divisibility, continuous trading).
+- A constant risk-free rate \(r\) (continuous compounding).
+- The underlying follows GBM with constant volatility \(\sigma\):
+  \[
+  dS_t = \mu S_t\,dt + \sigma S_t\,dW_t^{\mathbb{P}}.
+  \]
+- No arbitrage, and enough traded instruments to replicate the claim (market completeness).
+- No dividends (add a dividend yield \(q\) by replacing \(r\) with \(r-q\) in the stock drift under \(\mathbb{Q}\)).
 
-Maybe give a small example to make no arbitrage intuitive??
+## Derivation 1: Replication \(\Rightarrow\) PDE
 
-$$
-\frac{\partial V}{\partial t}
-+ \frac{1}{2}\sigma^2 S^2 \frac{\partial^2 V}{\partial S^2}
-+ r S \frac{\partial V}{\partial S}
-- r V = 0,
-$$
+Let \(V(t,S)\) be the option value. Apply Itô’s lemma to \(V(t,S_t)\):
+\[
+dV
+= V_t\,dt + V_S\,dS + \tfrac12 V_{SS}\,(dS)^2
+= \left(V_t + \mu S V_S + \tfrac12\sigma^2 S^2 V_{SS}\right)dt + \sigma S V_S\,dW.
+\]
 
-**Greeks**
-insert section
+Form a self-financing hedged portfolio
+\[
+\Pi = V - \Delta S.
+\]
+Choose \(\Delta = V_S\) (delta hedging) so the \(dW\) term cancels:
+\[
+d\Pi = \left(V_t + \tfrac12\sigma^2 S^2 V_{SS}\right)dt.
+\]
 
-## BSM closed form solution
-In this section we present the closed form solution for a european call/put option.
+The portfolio is locally riskless, so in an arbitrage-free market it must earn the risk-free rate:
+\[
+d\Pi = r\Pi\,dt = r(V - S V_S)dt.
+\]
 
-1. For the price of european call option $c(t, x)$ with payoff, $(x-K)^+$ the closed form solution is given by:
-
-    $$
-    c(t,x) = x N(d_{+}(T-t, x)) - K e^{-r(T-t)} N(d_{-}(T-t, x)), \quad 0 \leq t < T, x > 0
-    $$
-
-    Where
-
-    $$
-    d_{\pm}(\tau, x) = \frac{1}{\sigma\sqrt{\tau}} \left[ \log \frac{x}{K} + \left(r \pm \frac{\sigma^2}{2}\right) \tau \right]
-    $$
-
-    and $N$ is the cumulative standard normal distribution. We also define $\tau=T-t$ as the time to expiration date.
-
-2. For the price of european put option $p(t, x)$, with payoff $(K-x)^+$ the closed form solution is by:
-
-    $$
-    p(t, x) = K e^{-r(T-t)} N(-d_{-}(T-t, x)) - x N(-d_{+}(T-t, x))
-    $$
-
-    Source: Steve E shreve finance Vol II
-
-# TODO: Complete explanation
-**Intuitive explanation of terms:**
-1. $K$ Strike price, the time to be paid at time T if the option is exercised
-1. $Ke^{-r(T-t)}$ Present value of K at time t
-1. $d_{+}(T-t, x)$
-1. $d_{-}(T-t, x)$
-1. $N(d_{+}(T-t, x))$
-1. $N(d_{-}(T-t, x))$
-
-**Poperties of the solution**
-
-Lets take the closed form solution for a european call option $c(t,x)$. We will see that the solution is backed up by our intuition. If we were to let the stock price approach a very large value, the option ends almost surely _in the money_, and the formula reflects this as $N(d_{-})$ approaches 1. The formula then becomes:
-
-$$
-c(t, S(t)) = S(t) - Ke^{-r(T-t)}
-$$
-
-If the stockprice were to plummet, the option is unlikely to end in the money and we observe $\frac{x}{K}<<1$, then $N(d_\pm) \rightarrow 0$.
-
-If we know look at the same situations but for the put formula, we observe the converse. Let x approach a large value and $p$ goes to:
-
-$$
-p(t, S(t)) = Ke^{-r(T-t)} - S(t)
-$$
-
-**Put–call parity**
-
-For European options on a non-dividend-paying stock, the call and put prices must satisfy **put–call parity**:
-
-$$
+Equating the two expressions yields the **Black–Scholes PDE**:
+\[
 \boxed{
-c(t,x) - p(t,x) = x - K e^{-r\tau}.
+V_t + \tfrac12\sigma^2 S^2 V_{SS} + r S V_S - rV = 0.
 }
-$$
+\]
 
-This can be seen by comparing two portfolios:
+### Terminal conditions
 
-- Portfolio A: one call and cash $K e^{-r\tau}$.
-- Portfolio B: one put and one share of stock.
+For a call with strike \(K\) and maturity \(T\),
+\[
+V(T,S) = (S-K)^+.
+\]
+For a put,
+\[
+V(T,S) = (K-S)^+.
+\]
 
-At maturity $T$, both portfolios produce the same payoff $ \max(S_T, K) $. By no-arbitrage, they must have the same value at time $t$, which leads to the parity relation above.
+Solving the PDE with these terminal conditions gives the closed-form formulas below.
 
-You can use this relationship as a strong consistency check for your numerical implementation of `bs_call` and `bs_put`.
+## Derivation 2: Risk-neutral expectation \(\Rightarrow\) same answer
 
-## Interpretation and Connection to Earlier Notebooks
-Earlier we modeled stock using the GBM given by:
+From [risk-neutral pricing](risk_neutral_pricing.md), under \(\mathbb{Q}\) (no dividends),
+\[
+dS_t = rS_t\,dt + \sigma S_t\,dW_t^{\mathbb{Q}}.
+\]
+GBM implies
+\[
+\ln S_T \sim \mathcal N\!\left(\ln S_0 + (r-\tfrac12\sigma^2)T,\;\sigma^2 T\right).
+\]
+So for a European payoff \(g(S_T)\),
+\[
+V_0 = e^{-rT}\,\mathbb{E}^{\mathbb{Q}}[g(S_T)].
+\]
+Evaluating this expectation for \(g(S_T)=(S_T-K)^+\) yields the same closed form as the PDE approach.
 
-$$
-dS_t = \mu S_t\,dt + \sigma S_t\,dW_t,
-$$
+## Closed-form prices
 
-Under the risk-neutral probability measure, this formula becomes:
+Let \(\tau=T-t\) and define
+\[
+d_1 = \frac{\ln(S/K) + (r + \tfrac12\sigma^2)\tau}{\sigma\sqrt{\tau}},
+\qquad
+d_2 = d_1 - \sigma\sqrt{\tau}.
+\]
+Let \(N(\cdot)\) be the standard normal CDF.
 
-$$
-dS_t = r S_t\,dt + \sigma S_t\,dW_t^\mathbb{Q},
-$$
+### European call
 
-Where intuitively the risk-neutral measure can be explained as a measure, where all assets have the same **expected** return $r$, which is the risk-free rate. This is also the reason why the solutions to the BSM are independent of $\mu$. The idea is that in an ideal risk-neutral world, investers don't need compensation if they were to say hold a risky stock vs investing in a money account. This is because they only care for the expected return which is equivalent in both.
+\[
+\boxed{
+C(t,S)= S\,N(d_1) - K e^{-r\tau} N(d_2).
+}
+\]
 
-In this notebook, we argued our way to the BSM PDE using the replication view. In the complete market, an investor can perfectly hedge an option, by investing in the stock and in the money market. The price to set up this hedge must then be equal to the option price.
+### European put
 
-Another way to look at it is by a probabilistic view. Where we define the option price to be the discounted expected payoff under the risk neutral measure, given the current underlying stock price.
+\[
+\boxed{
+P(t,S)= K e^{-r\tau} N(-d_2) - S\,N(-d_1).
+}
+\]
 
-$$
-V(t,S_t)=e^{-r(T-t)}\mathbb{E}^Q[\text{payoff}\midS_t]
-$$
+## Interpreting the formula
 
-As we expect, solving these two problems gives the same solution. An easy way to see this is by using the Feynman-Kac theorem to derive the equality of these two statements.
+The call price can be read as:
 
-**Finance intuition**
-- Link back to GBM and risk-neutral pricing.
-- Brief finance intuition.
+- \(S\,N(d_1)\): “present value of receiving the stock”, weighted by a hedge ratio; \(N(d_1)\) is the delta.
+- \(K e^{-r\tau} N(d_2)\): present value of paying the strike, weighted by a risk-neutral exercise probability.
+
+A useful identity: \(N(d_2)\) is the risk-neutral probability that \(S_T>K\) **under the \(T\)-forward measure**;
+in the simplest constant-rate setting it is commonly interpreted as the risk-neutral in-the-money probability.
+
+## Put–call parity
+
+For European options on a non-dividend-paying stock,
+\[
+\boxed{
+C - P = S - K e^{-r\tau}.
+}
+\]
+This is a powerful consistency check and is often used for data cleaning.
+
+## Greeks (quick reference)
+
+Under BSM (no dividends), the most common Greeks are:
+
+- Delta: \(\Delta_C = N(d_1)\), \(\Delta_P = N(d_1)-1\).
+- Gamma: \(\Gamma = \frac{\varphi(d_1)}{S\sigma\sqrt{\tau}}\), where \(\varphi\) is the standard normal pdf.
+- Vega: \(\nu = S\sqrt{\tau}\,\varphi(d_1)\).
+- Theta and rho follow by differentiating the closed form.
+
+## Practical implementation notes
+
+- Use **log-moneyness** \(\ln(S/K)\) and \(\tau\) to avoid loss of precision.
+- For very small \(\tau\) or extreme strikes, clamp \(\sigma\sqrt{\tau}\) away from 0 when computing \(d_1,d_2\).
+- To back out \(\sigma\) from a market price, see [Implied volatility](IV.md).
+
+## References
+
+- Shreve, *Stochastic Calculus for Finance II*, Black–Scholes chapters.
+- Hull, *Options, Futures, and Other Derivatives*, chapters on the BS formula and Greeks.
+- Black & Scholes (1973); Merton (1973).
