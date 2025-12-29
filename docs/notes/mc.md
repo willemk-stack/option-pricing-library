@@ -15,10 +15,13 @@ Its trade-off is statistical noise (convergence is \(O(1/\sqrt{N})\)).
 
 Let \(V_t\) be the value at time \(t\) of a claim paying \(H_T\) at \(T\).
 Then
+
 \[
 V_t = \mathbb{E}^{\mathbb{Q}}\!\left[\left.D(t,T)\,H_T\right|\mathcal{F}_t\right].
 \]
+
 In the basic constant-rate case, \(D(0,T)=e^{-rT}\) and
+
 \[
 V_0 = e^{-rT}\,\mathbb{E}^{\mathbb{Q}}[H_T].
 \]
@@ -27,6 +30,7 @@ V_0 = e^{-rT}\,\mathbb{E}^{\mathbb{Q}}[H_T].
 
 Suppose we can sample \(H_T^{(i)}\) under \(\mathbb{Q}\) for \(i=1,\dots,N\).
 The MC price estimator is
+
 \[
 \widehat V_0 = e^{-rT}\,\frac{1}{N}\sum_{i=1}^N H_T^{(i)}.
 \]
@@ -35,10 +39,13 @@ The MC price estimator is
 
 Let \(\sigma_H^2 = \operatorname{Var}^{\mathbb{Q}}(H_T)\).
 Then
+
 \[
 \operatorname{SE}(\widehat V_0) \approx e^{-rT}\,\frac{\widehat\sigma_H}{\sqrt{N}},
 \]
+
 and (approximately) a 95% confidence interval is
+
 \[
 \widehat V_0 \pm 1.96\,\operatorname{SE}(\widehat V_0).
 \]
@@ -48,15 +55,19 @@ The slow \(1/\sqrt{N}\) rate is why variance reduction matters.
 ## 3. Example: European call under Black–Scholes
 
 Payoff:
+
 \[
 H_T = (S_T-K)^+.
 \]
 
 Under \(\mathbb{Q}\) with no dividends,
+
 \[
 dS_t = rS_t\,dt + \sigma S_t\,dW_t^{\mathbb{Q}},
 \]
+
 so we can sample \(S_T\) exactly:
+
 \[
 S_T = S_0\exp\!\left((r-\tfrac12\sigma^2)T + \sigma\sqrt{T}\,Z\right),
 \qquad Z\sim\mathcal N(0,1).
@@ -80,9 +91,11 @@ This is the cleanest baseline because there is **no time-discretization error** 
 ### Antithetic variates
 
 Use \(Z\) and \(-Z\) together:
+
 \[
 \widehat H = \tfrac12\big(g(Z)+g(-Z)\big).
 \]
+
 This often reduces variance for monotone payoffs with almost no extra complexity.
 
 ### Control variates (often the biggest win)
@@ -92,9 +105,11 @@ For example, for a European call under GBM, the Black–Scholes price is known, 
 as a control via conditional expectations, or use \(S_T\) (whose expectation is known under \(\mathbb{Q}\)).
 
 A common control estimator is
+
 \[
 \widehat V^{\text{cv}} = \widehat V - \beta\,(\widehat Y - \mathbb{E}[Y]),
 \]
+
 with \(\beta\) chosen (empirically) to minimize variance.
 
 ### Stratified / quasi-Monte Carlo (QMC)
@@ -105,9 +120,11 @@ especially in low/moderate dimension. QMC needs careful scrambling and diagnosti
 ## 5. Path-dependent payoffs
 
 For payoffs depending on the full path (Asian, barrier, etc.), you typically discretize time and simulate increments:
+
 \[
 \Delta W_k \sim \mathcal N(0,\Delta t).
 \]
+
 Then you have both **statistical error** and **time-discretization error**. For GBM you can still sample exactly
 between grid points (lognormal bridges), but for more complex models you may need Euler / Milstein schemes.
 

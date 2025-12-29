@@ -16,6 +16,7 @@ This note focuses on the “practical inversion” problem: given a market price
 
 Let \(C_{\text{BS}}(S,K,r,\tau,\sigma)\) be the Black–Scholes call price (similarly for puts).
 Given a market price \(C_{\text{mkt}}\), the implied volatility \(\sigma_{\text{imp}}\) solves
+
 \[
 C_{\text{BS}}(\sigma_{\text{imp}}) = C_{\text{mkt}}.
 \]
@@ -40,6 +41,7 @@ If \(C\) is extremely close to the lower bound, IV is near 0 and numerical inver
 ## Numerically solving for IV
 
 The standard Newton–Raphson update is
+
 \[
 \sigma_{n+1} = \sigma_n - \frac{C(\sigma_n)-C_{\text{mkt}}}{\text{vega}(\sigma_n)}.
 \]
@@ -71,27 +73,33 @@ Near the intrinsic bound, time value is small and IV is close to 0.
 ### Rewriting in forward / undiscounted terms
 
 Let the forward price be \(F = S e^{r\tau}\) (no dividends). Define the undiscounted call
+
 \[
 \widetilde C := e^{r\tau} C.
 \]
+
 Then \(\widetilde C\) is a function of \(F,K,\tau,\sigma\) and is often numerically better behaved.
 
 ### ATM-forward seed (time-value based)
 
 At-the-money-forward (\(K\approx F\)), the option time value is approximately linear in \(\sigma\sqrt{\tau}\).
 A classic approximation (Brenner–Subrahmanyam style) leads to a seed
+
 \[
 \sigma_{\text{ATM}} \approx \sqrt{\frac{2\pi}{\tau}}\,\frac{\widetilde C}{F}.
 \]
+
 Use this as a safe starting point near ATM.
 
 ### Wing / OTM seed (Manaster–Koehler-style scaling)
 
 In the wings, it is often more stable to work with total volatility \(\sigma\sqrt{\tau}\) and log-moneyness
 \(k=\ln(K/F)\). A common heuristic seed is
+
 \[
 \sigma_{\text{MK}} \approx \frac{|k|}{\sqrt{\tau}}\,\left(\frac{1}{\sqrt{2\,|\ln(\widetilde C/\text{scale})|}}\right),
 \]
+
 where “scale” is chosen so the argument is dimensionless (practitioners use several variants).
 
 The main point is not the exact constant, but the behavior: **far OTM implies larger \(|k|\)** and IV should not start near zero.
@@ -99,13 +107,16 @@ The main point is not the exact constant, but the behavior: **far OTM implies la
 ### Blending and clamping
 
 Blend the seeds smoothly as a function of \(|k|\):
+
 \[
 w(|k|)=\exp\!\left(-\frac{|k|}{k_0}\right),\qquad
 \sigma_0 = w\,\sigma_{\text{ATM}}+(1-w)\,\sigma_{\text{MK}}.
 \]
+
 A typical choice is \(k_0\approx 0.10\) (roughly \(\pm 10\%\) moneyness).
 
 Finally clamp into a safe domain:
+
 \[
 \sigma_0 \leftarrow \min(\sigma_{\max},\,\max(\sigma_{\min},\,\sigma_0)).
 \]
