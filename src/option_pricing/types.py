@@ -122,43 +122,26 @@ class PricingInputs:
 
     @property
     def S(self) -> float:
-        """float: Spot price of the underlying (:math:`S`)."""
         return self.market.spot
 
     @property
     def K(self) -> float:
-        """float: Strike price (:math:`K`)."""
         return self.spec.strike
 
     @property
     def r(self) -> float:
-        """float: Continuously-compounded risk-free rate (:math:`r`)."""
         return self.market.rate
 
     @property
     def q(self) -> float:
-        """float: Continuously-compounded dividend yield (:math:`q`)."""
         return self.market.dividend_yield
 
     @property
     def T(self) -> float:
-        """float: Expiry time (:math:`T`)."""
         return self.spec.expiry
 
     @property
     def tau(self) -> float:
-        """float: Time to expiry (``T - t``).
-
-        Returns
-        -------
-        float
-            Positive time to expiry.
-
-        Raises
-        ------
-        ValueError
-            If ``T - t <= 0.0`` (i.e., expiry is not strictly after `t`).
-        """
         tau = self.T - self.t
         if tau <= 0.0:
             raise ValueError("Need expiry > t")
