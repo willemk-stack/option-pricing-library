@@ -1,4 +1,3 @@
-````md
 # Option Pricing Library
 
 A small, usage-first Python library for pricing **European options** under common textbook models:
