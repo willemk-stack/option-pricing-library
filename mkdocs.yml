@@ -9,7 +9,10 @@ theme:
   name: material
   features:
     - content.code.copy
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
+    - navigation.indexes
 
 plugins:
   - search
@@ -22,11 +25,11 @@ plugins:
             show_source: false
             separate_signature: true
             show_signature_annotations: true
-            
+
 markdown_extensions:
   - pymdownx.arithmatex:
       generic: true
-  - pymdownx.superfences # Required for nesting math in lists/blocks
+  - pymdownx.superfences
   - admonition
   - footnotes
 
@@ -36,21 +39,25 @@ extra_javascript:
 
 nav:
   - Home: index.md
-  - Installation: installation.md
-  - Quickstart: user_guides/quickstart.md
+
   - User guides:
+      - user_guides/index.md
+      - Installation: installation.md
       - Quickstart: user_guides/quickstart.md
       - Black-Scholes: user_guides/black_scholes.md
       - Monte Carlo: user_guides/monte_carlo.md
       - Binomial CRR: user_guides/binomial_crr.md
       - Diagnostics: user_guides/diagnostics.md
       - Implied volatility: user_guides/implied_vol.md
-  - API: api.md
+
   - Notes:
-      - Black–Scholes pricing: notes/bs_pricing.md
+      - notes/index.md
+      - Black-Scholes pricing: notes/bs_pricing.md
       - GBM: notes/gbm.md
       - Monte Carlo: notes/mc.md
       - Binomial CRR: notes/binomial_crr.md
       - Brownian motion and Itô: notes/brownian_motion_and_Ito.md
       - Implied volatility: notes/IV.md
       - Risk neutral pricing: notes/risk_neutral_pricing.md
+
+  - API: api.md

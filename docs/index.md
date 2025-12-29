@@ -40,6 +40,7 @@ print(f"CRR:   {binom:.4f}")
 ```
 
 Notes:
+
 - Times are **floats** (typically in **years**). `t` is “now”; `expiry` is an **absolute** time `T`. Time-to-maturity is `tau = T - t`.
 - Rates are assumed to be **continuously compounded**.
 - All top-level pricers dispatch on `OptionType` (`CALL` / `PUT`) via `p.spec.kind`.
