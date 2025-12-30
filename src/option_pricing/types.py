@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 from enum import Enum
 
@@ -21,7 +22,8 @@ class OptionType(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class MarketData:
-    """Market observables needed for option pricing.
+    """
+    Market observables needed for option pricing.
 
     Parameters
     ----------
@@ -37,11 +39,66 @@ class MarketData:
     Notes
     -----
     This container assumes continuous compounding for both `rate` and `dividend_yield`.
+
+    Methods
+    -------
+    df(T, t=0.0)
+        Calculates the risk-free discount factor.
+    forward(T, t=0.0)
+        Calculates the forward price of the underlying asset.
     """
 
     spot: float
     rate: float
     dividend_yield: float = 0.0
+
+    def df(self, T: float, t: float = 0.0) -> float:
+        """
+        Calculate the risk-free discount factor $P(t, T)$.
+
+        The discount factor is computed as:
+        $$P(t, T) = e^{-r(T - t)}$$
+
+        Parameters
+        ----------
+        T : float
+            Maturity (terminal time).
+        t : float, default 0.0
+            Valuation time.
+
+        Returns
+        -------
+        float
+            The discount factor for the period $[t, T]$.
+        """
+        tau = float(T) - float(t)
+        if tau < 0:
+            raise ValueError("T must be >= t")
+        return math.exp(-self.rate * tau)
+
+    def forward(self, T: float, t: float = 0.0) -> float:
+        """
+        Calculate the forward price $F(t, T)$.
+
+        The forward price is computed using the cost-of-carry model:
+        $$F(t, T) = S_t e^{(r - q)(T - t)}$$
+
+        Parameters
+        ----------
+        T : float
+            Maturity (terminal time).
+        t : float, default 0.0
+            Valuation time.
+
+        Returns
+        -------
+        float
+            The forward price at time $T$.
+        """
+        tau = float(T) - float(t)
+        if tau < 0:
+            raise ValueError("T must be >= t")
+        return self.spot * math.exp((self.rate - self.dividend_yield) * tau)
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,7 +174,7 @@ class PricingInputs:
 
     spec: OptionSpec
     market: MarketData
-    sigma: float
+    sigma: float | None = None
     t: float = 0.0
 
     @property
@@ -146,3 +203,11 @@ class PricingInputs:
         if tau <= 0.0:
             raise ValueError("Need expiry > t")
         return tau
+
+    @property
+    def df(self) -> float:
+        return self.market.df(self.T, self.t)
+
+    @property
+    def F(self) -> float:
+        return self.market.forward(self.T, self.t)
