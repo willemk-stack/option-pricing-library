@@ -1,15 +1,22 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
+import numpy as np
+
 from ..models import bs as bs_model
-from ..types import OptionType, PricingInputs
+from ..types import MarketData, OptionType, PricingInputs
 
 
+# -------------------------
+# BSM wrappers (scalar)
+# -------------------------
 def bs_price_call(p: PricingInputs) -> float:
     return bs_model.call_price(
         spot=p.S,
         strike=p.K,
         r=p.r,
-        q=p.market.dividend_yield,
+        q=p.q,
         sigma=p.sigma,
         tau=p.tau,
     )
@@ -20,41 +27,13 @@ def bs_price_put(p: PricingInputs) -> float:
         spot=p.S,
         strike=p.K,
         r=p.r,
-        q=p.market.dividend_yield,
+        q=p.q,
         sigma=p.sigma,
         tau=p.tau,
     )
 
 
 def bs_price(p: PricingInputs) -> float:
-    """
-    Compute the Black-Scholes(-Merton) price of a European vanilla option.
-
-    This convenience wrapper dispatches to the call/put implementation based on
-    ``p.spec.kind`` using the inputs in ``p`` (spot ``S``, strike ``K``, risk-free
-    rate ``r``, dividend yield ``q``, volatility ``sigma``, and time to maturity
-    ``tau``).
-
-    Parameters
-    ----------
-    p : PricingInputs
-        Pricing inputs for a European vanilla option, including ``spec.kind`` to
-        indicate call or put.
-
-    Returns
-    -------
-    float
-        Present value (price) of the option under the Black-Scholes-Merton model.
-
-    Raises
-    ------
-    ValueError
-        If ``p.spec.kind`` is not a supported vanilla type (call or put).
-
-    Notes
-    -----
-    Assumes European exercise and a continuous dividend yield ``q``.
-    """
     if p.spec.kind == OptionType.CALL:
         return bs_price_call(p)
     if p.spec.kind == OptionType.PUT:
@@ -67,7 +46,7 @@ def bs_call_greeks(p: PricingInputs) -> dict[str, float]:
         spot=p.S,
         strike=p.K,
         r=p.r,
-        q=p.market.dividend_yield,
+        q=p.q,
         sigma=p.sigma,
         tau=p.tau,
     )
@@ -78,49 +57,13 @@ def bs_put_greeks(p: PricingInputs) -> dict[str, float]:
         spot=p.S,
         strike=p.K,
         r=p.r,
-        q=p.market.dividend_yield,
+        q=p.q,
         sigma=p.sigma,
         tau=p.tau,
     )
 
 
 def bs_greeks(p: PricingInputs) -> dict[str, float]:
-    """
-    Compute Black–Scholes(-Merton) price and primary greeks for a vanilla European option.
-
-    This is a thin convenience wrapper that dispatches to the call/put implementation
-    based on ``p.spec.kind`` and returns a standardized dictionary of results.
-
-    Parameters
-    ----------
-    p : PricingInputs
-        Pricing inputs for a European vanilla option. Expected to provide (at least)
-        spot ``S``, strike ``K``, risk-free rate ``r``, dividend yield ``q``,
-        volatility ``sigma``, time to maturity ``tau``, and ``spec.kind`` indicating
-        call or put.
-
-    Returns
-    -------
-    greeks : dict[str, float]
-        Dictionary with the following keys:
-
-        - ``"price"`` : option present value
-        - ``"delta"`` : ∂price/∂S
-        - ``"gamma"`` : ∂²price/∂S²
-        - ``"vega"``  : ∂price/∂sigma (per 1.0 change in volatility, not per 1%)
-        - ``"theta"`` : ∂price/∂t (time decay; sign convention follows the underlying
-          call/put implementation)
-
-    Raises
-    ------
-    ValueError
-        If ``p.spec.kind`` is not a supported vanilla type (call or put).
-
-    Notes
-    -----
-    Uses the Black–Scholes-Merton framework (continuous dividend yield ``q``) and
-    assumes European exercise.
-    """
     if p.spec.kind == OptionType.CALL:
         return bs_call_greeks(p)
     if p.spec.kind == OptionType.PUT:
@@ -128,18 +71,99 @@ def bs_greeks(p: PricingInputs) -> dict[str, float]:
     raise ValueError(f"Unsupported option kind: {p.spec.kind}")
 
 
-# Backwards-compatible aliases (if you used these names in notebooks)
-def bs_call_from_inputs(p: PricingInputs) -> float:
-    return bs_price_call(p)
+# -------------------------
+# Black-76 wrappers (vectorized; used by surface checks)
+# -------------------------
+def black76_call_prices_vec_from_curves(
+    *,
+    strikes: np.ndarray,
+    sigma: float | np.ndarray,
+    tau: float,
+    forward_fn: Callable[[float], float],
+    df_fn: Callable[[float], float] | None = None,
+) -> np.ndarray:
+    """
+    Price discounted Black-76 calls for one maturity tau on a vector of strikes,
+    using curve-like callables forward_fn(tau) and df_fn(tau).
+
+    If df_fn is None, df is taken as 1.0 (useful for some sanity checks).
+    """
+    tau = float(tau)
+    F = float(forward_fn(tau))
+    df = float(df_fn(tau)) if df_fn is not None else 1.0
+
+    return bs_model.black76_call_price_vec(
+        forward=F,
+        strikes=np.asarray(strikes, dtype=np.float64),
+        sigma=sigma,
+        tau=tau,
+        df=df,
+    )
 
 
-def bs_put_from_inputs(p: PricingInputs) -> float:
-    return bs_price_put(p)
+def black76_put_prices_vec_from_curves(
+    *,
+    strikes: np.ndarray,
+    sigma: float | np.ndarray,
+    tau: float,
+    forward_fn: Callable[[float], float],
+    df_fn: Callable[[float], float] | None = None,
+) -> np.ndarray:
+    """Vectorized discounted Black-76 puts using forward/df callables."""
+    tau = float(tau)
+    F = float(forward_fn(tau))
+    df = float(df_fn(tau)) if df_fn is not None else 1.0
+
+    return bs_model.black76_put_price_vec(
+        forward=F,
+        strikes=np.asarray(strikes, dtype=np.float64),
+        sigma=sigma,
+        tau=tau,
+        df=df,
+    )
 
 
-def bs_call_greeks_analytic_from_inputs(p: PricingInputs) -> dict[str, float]:
-    return bs_call_greeks(p)
+def black76_call_prices_vec_from_market(
+    *,
+    market: MarketData,
+    strikes: np.ndarray,
+    sigma: float | np.ndarray,
+    tau: float,
+) -> np.ndarray:
+    """
+    Vectorized discounted Black-76 calls for one maturity tau using MarketData methods:
+      F = market.forward(T=tau)
+      df = market.df(T=tau)
+    """
+    tau = float(tau)
+    F = float(market.forward(T=tau))
+    df = float(market.df(T=tau))
+
+    return bs_model.black76_call_price_vec(
+        forward=F,
+        strikes=np.asarray(strikes, dtype=np.float64),
+        sigma=sigma,
+        tau=tau,
+        df=df,
+    )
 
 
-def bs_put_greeks_analytic_from_inputs(p: PricingInputs) -> dict[str, float]:
-    return bs_put_greeks(p)
+def black76_put_prices_vec_from_market(
+    *,
+    market: MarketData,
+    strikes: np.ndarray,
+    sigma: float | np.ndarray,
+    tau: float,
+) -> np.ndarray:
+    """Vectorized discounted Black-76 puts for one maturity tau using MarketData."""
+    tau = float(tau)
+    F = float(market.forward(T=tau))
+    df = float(market.df(T=tau))
+
+    return bs_model.black76_put_price_vec(
+        forward=F,
+        strikes=np.asarray(strikes, dtype=np.float64),
+        sigma=sigma,
+        tau=tau,
+        df=df,
+    )
