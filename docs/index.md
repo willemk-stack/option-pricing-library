@@ -38,7 +38,7 @@ binom = binom_price(p, n_steps=400)
 print(f"BS:    {bs:.4f}")
 print(f"MC:    {mc:.4f}  (SE={se:.4f})")
 print(f"CRR:   {binom:.4f}")
-````
+```
 
 Notes:
 
