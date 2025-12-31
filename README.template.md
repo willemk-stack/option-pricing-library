@@ -58,6 +58,7 @@ pip install -e ".[dev]"
 - `demos/02_monte_carlo_pricing_and_error.ipynb`
 - `demos/03_binomial_convergence.ipynb`
 - `demos/04_implied_volatility.ipynb`
+- `demos/05_vol_surface_and_noarb.ipynb`
 
 ---
 

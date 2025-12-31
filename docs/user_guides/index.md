@@ -14,6 +14,7 @@ This section shows how to use **option_pricing** in practical workflows, with ru
 - [Binomial CRR](binomial_crr.md) — lattice pricing and intuition around convergence.
 - [Diagnostics](diagnostics.md) — inspecting numerical behavior and debugging inputs.
 - [Implied volatility](implied_vol.md) — invert prices to implied vol and interpret results.
+- [Volatility surface](vol_surface.md) — build and query a simple volatility surface + applying no-arbitrage checks.
 
 ## Conventions used in the guides
 
