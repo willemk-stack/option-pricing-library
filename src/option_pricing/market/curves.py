@@ -45,7 +45,7 @@ class FlatCarryForwardCurve:
     r: float
     q: float = 0.0
 
-    def forward(self, T: float, t: float | None = 0.0) -> float:
+    def forward(self, T: float, t: float = 0.0) -> float:
         tau = float(T) - float(t)
         if tau < 0.0:
             raise ValueError("T must be >= t")

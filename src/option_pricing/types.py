@@ -174,7 +174,7 @@ class PricingInputs:
 
     spec: OptionSpec
     market: MarketData
-    sigma: float | None = None
+    sigma: float
     t: float = 0.0
 
     @property
