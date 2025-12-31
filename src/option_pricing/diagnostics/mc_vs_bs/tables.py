@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
 
-from option_pricing.types import PricingInputs  # type: ignore
+if TYPE_CHECKING:  # pragma: no cover
+    from option_pricing.types import PricingInputs
+else:  # pragma: no cover
+    PricingInputs = Any  # type: ignore
 
 
 def _default_bs_price():
@@ -33,25 +36,31 @@ def _default_mc_price():
     return mc_price
 
 
-def _extract(p: Any, name: str, default=np.nan) -> float:
-    v = getattr(p, name, default)
+def _to_float(v: Any, default: float = float("nan")) -> float:
+    """Best-effort float conversion used by demo tables."""
+    if v is None:
+        return float(default)
     try:
         return float(v)
     except Exception:
-        return default
+        return float(default)
+
+
+def _extract(p: Any, name: str, default: float = float("nan")) -> float:
+    return _to_float(getattr(p, name, default), default)
 
 
 def _get_q_compat(p: Any) -> float:
     """Best-effort dividend yield extraction for legacy demo tables."""
     if hasattr(p, "q"):
         try:
-            return float(p.q)
+            return _to_float(p.q, float("nan"))
         except Exception:
             pass
     m = getattr(p, "market", None)
     if m is not None and hasattr(m, "dividend_yield"):
         try:
-            return float(m.dividend_yield)
+            return _to_float(m.dividend_yield, float("nan"))
         except Exception:
             pass
     return float("nan")
@@ -86,14 +95,19 @@ def run_mc_vs_bs_cases(
 
         # allow different MC return conventions
         if isinstance(out, tuple) and len(out) >= 2:
-            mc_val, se_val = float(out[0]), float(out[1])
+            mc_val, se_val = _to_float(out[0]), _to_float(out[1])
         elif isinstance(out, dict) and "price" in out:
-            mc_val = float(out["price"])
-            se_val = float(out.get("std_err", out.get("se", np.nan)))
+            mc_val = _to_float(out.get("price"))
+            se_raw = out.get("std_err")
+            if se_raw is None:
+                se_raw = out.get("se")
+            if se_raw is None:
+                se_raw = out.get("stderr")
+            se_val = _to_float(se_raw)
         else:
-            mc_val, se_val = float(out), float("nan")
+            mc_val, se_val = _to_float(out), float("nan")
 
-        bs_val = float(bs_price_fn(p))
+        bs_val = _to_float(bs_price_fn(p))
         err = mc_val - bs_val
         z = err / se_val if np.isfinite(se_val) and se_val > 0 else np.nan
 
@@ -101,8 +115,8 @@ def run_mc_vs_bs_cases(
             {
                 "case": name,
                 "tau": _extract(p, "tau", np.nan),
-                "spot": _extract(p, "S", _extract(p, "spot", np.nan)),
-                "strike": _extract(p, "K", _extract(p, "strike", np.nan)),
+                "spot": _extract(p, "S", _extract(p, "spot")),
+                "strike": _extract(p, "K", _extract(p, "strike")),
                 "kind": getattr(
                     p, "kind", getattr(getattr(p, "spec", None), "kind", "")
                 ),
@@ -173,19 +187,21 @@ def convergence_table(
     """Run MC for a single PricingInputs across multiple path counts."""
     bs_fn = _default_bs_price()
     mc_fn = _default_mc_price()
-    bs = float(bs_fn(p))
+    bs = _to_float(bs_fn(p))
 
     rows = []
     for n in n_paths_list:
         out = mc_fn(p, n_paths=int(n), seed=seed)
         if isinstance(out, tuple) and len(out) >= 2:
-            mc, se = out[0], out[1]
+            mc_val, se_val = _to_float(out[0]), _to_float(out[1])
+        elif isinstance(out, dict) and "price" in out:
+            mc_val = _to_float(out.get("price"))
+            se_val = _to_float(out.get("std_err") or out.get("se") or out.get("stderr"))
         else:
-            # if mc returns only a price, SE unknown
-            mc, se = out, np.nan
-        err = float(mc - bs)
+            mc_val, se_val = _to_float(out), float("nan")
+        err = mc_val - bs
         rows.append(
-            {"n_paths": int(n), "mc": float(mc), "se": float(se), "bs": bs, "err": err}
+            {"n_paths": int(n), "mc": mc_val, "se": se_val, "bs": bs, "err": err}
         )
 
     df = pd.DataFrame(rows).sort_values("n_paths").reset_index(drop=True)

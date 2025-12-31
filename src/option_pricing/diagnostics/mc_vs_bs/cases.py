@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import TYPE_CHECKING, Any, cast
 
-from option_pricing.types import PricingInputs
+# For diagnostics modules we want *runtime* flexibility but also clean mypy.
+# Import the real type only during type-checking; at runtime treat as Any.
+if TYPE_CHECKING:  # pragma: no cover
+    from option_pricing.types import PricingInputs
+else:  # pragma: no cover
+    PricingInputs = Any  # type: ignore
 
 
 def _with_params(
@@ -25,60 +31,52 @@ def _with_params(
     If your PricingInputs differs, you can swap this helper out with something
     specific to your types.
     """
-    # Market
+    # Market (only if base has a market dataclass that exposes these fields)
     market = getattr(base, "market", None)
-    if market is None:
-        market = base  # best-effort fallback
+    market2 = market
+    if market is not None and hasattr(market, "__dataclass_fields__"):
+        market_changes: dict[str, Any] = {}
+        if S is not None and hasattr(market, "spot"):
+            market_changes["spot"] = float(S)
+        if r is not None and hasattr(market, "rate"):
+            market_changes["rate"] = float(r)
+        if q is not None and hasattr(market, "dividend_yield"):
+            market_changes["dividend_yield"] = float(q)
+        if market_changes:
+            market2 = replace(cast(Any, market), **market_changes)
 
-    if hasattr(market, "__dataclass_fields__"):
-        market2 = replace(
-            market,
-            spot=float(S) if S is not None else market.spot,
-            rate=float(r) if r is not None else market.rate,
-            dividend_yield=float(q) if q is not None else market.dividend_yield,
-        )
-    else:  # pragma: no cover
-        market2 = market
-
-    # Spec
+    # Spec (only if base has a spec dataclass that exposes strike/expiry)
     spec = getattr(base, "spec", None)
-    if spec is None:
-        spec = base  # best-effort fallback
-
-    if hasattr(spec, "__dataclass_fields__"):
-        # not all specs expose strike/expiry; best-effort
-        kwargs: dict[str, object] = {}
+    spec2 = spec
+    if spec is not None and hasattr(spec, "__dataclass_fields__"):
+        spec_changes: dict[str, Any] = {}
         if K is not None and hasattr(spec, "strike"):
-            kwargs["strike"] = float(K)
+            spec_changes["strike"] = float(K)
         if T is not None and hasattr(spec, "expiry"):
-            kwargs["expiry"] = float(T)
-        spec2 = replace(spec, **kwargs) if kwargs else spec
-    else:  # pragma: no cover
-        spec2 = spec
+            spec_changes["expiry"] = float(T)
+        if spec_changes:
+            spec2 = replace(cast(Any, spec), **spec_changes)
 
     out = base
     if hasattr(base, "__dataclass_fields__"):
-        # only set if these fields exist
-        kwargs: dict[str, object] = {}
-        if hasattr(base, "market"):
-            kwargs["market"] = market2
-        if hasattr(base, "spec"):
-            kwargs["spec"] = spec2
-        out = replace(base, **kwargs) if kwargs else base
-
-    if (
-        sigma is not None
-        and hasattr(out, "__dataclass_fields__")
-        and hasattr(out, "sigma")
-    ):
-        out = replace(out, sigma=float(sigma))
+        base_changes: dict[str, Any] = {}
+        if market2 is not None and hasattr(base, "market"):
+            base_changes["market"] = market2
+        if spec2 is not None and hasattr(base, "spec"):
+            base_changes["spec"] = spec2
+        if sigma is not None and hasattr(base, "sigma"):
+            base_changes["sigma"] = float(sigma)
+        if base_changes:
+            out = replace(cast(Any, base), **base_changes)
 
     return out
 
 
 def default_cases(base: PricingInputs) -> list[tuple[str, PricingInputs]]:
     """Curated regimes used in MC-vs-BS demo notebooks."""
-    t0 = float(getattr(base, "t", 0.0))
+    # Some projects store tau/expiry differently; this is only used to
+    # produce a "short" and "long" maturity variant.
+    t0 = float(getattr(base, "t", getattr(base, "tau", 0.0)))
     return [
         ("ATM base", base),
         ("ITM (S=120)", _with_params(base, S=120.0)),

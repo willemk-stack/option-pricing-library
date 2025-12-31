@@ -99,8 +99,8 @@ def plot_convergence(
     plt = get_plt()
     fig, ax = plt.subplots(1, 1, figsize=figsize, constrained_layout=True)
 
-    xs = []
-    ys = []
+    xs: list[float] = []
+    ys: list[float] = []
     for d in dfs:
         x = float(d[x_col].iloc[0])
         xs.append(x)
@@ -114,10 +114,10 @@ def plot_convergence(
         ys.append(y)
 
     order = np.argsort(xs)
-    xs = np.asarray(xs)[order]
-    ys = np.asarray(ys)[order]
+    xs_arr = np.asarray(xs, dtype=float)[order]
+    ys_arr = np.asarray(ys, dtype=float)[order]
 
-    ax.plot(xs, ys, marker="o", label=f"{agg}({y_col})")
+    ax.plot(xs_arr, ys_arr, marker="o", label=f"{agg}({y_col})")
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlabel("Number of paths")
