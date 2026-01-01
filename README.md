@@ -45,10 +45,10 @@ from option_pricing import (
     OptionSpec,
     OptionType,
     PricingInputs,
+    binom_price,
     bs_greeks,
     bs_price,
-    binom_price,
-    mc_price, 
+    mc_price,
 )
 
 market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.0)
@@ -95,6 +95,7 @@ print(f"f(root)={rr.f_at_root:.3e}  bracket={rr.bracket}  bounds={res.bounds}")
 - `demos/02_monte_carlo_pricing_and_error.ipynb`
 - `demos/03_binomial_convergence.ipynb`
 - `demos/04_implied_volatility.ipynb`
+- `demos/05_vol_surface_and_noarb.ipynb`
 
 ---
 
