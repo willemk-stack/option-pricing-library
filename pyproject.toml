@@ -7,7 +7,7 @@ name = "option_pricing"                     # this is the name you'll install wi
 version = "0.1.0"
 description = "Core option pricing library"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 
 authors = [{ name = "Willem Knibbe", email = "willemknibbe0@gmail.com" }]
 
