@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import replace
 
 import pytest
@@ -46,7 +48,6 @@ BENCHMARKS = [
         price_tol=5e-4,
         iv_tol=5e-4,
     ),
-    # If you keep rounded Hull prices, loosen tolerances or use more precise reference prices.
     dict(
         name="Hull-style call",
         kind=OptionType.CALL,
