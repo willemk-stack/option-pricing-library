@@ -15,3 +15,23 @@ class InvalidOptionPriceError(ValueError):
 
     where ``df = exp(-r*tau)`` and ``Fp = S*exp(-q*tau)`` is the prepaid forward.
     """
+
+
+class RootFindingError(Exception):
+    """Base class for root-finding failures."""
+
+
+class NotBracketedError(RootFindingError):
+    """Raised when a bracketing method is called without a valid sign change."""
+
+
+class NoConvergenceError(RootFindingError):
+    """Raised when the method fails to converge within max_iter."""
+
+
+class DerivativeTooSmallError(RootFindingError):
+    """Raised when Newton's method cannot proceed due to tiny derivative."""
+
+
+class NoBracketError(NotBracketedError):
+    """Raised by ensure_bracket when it cannot find a bracketing interval."""

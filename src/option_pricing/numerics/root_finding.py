@@ -4,8 +4,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from option_pricing.exceptions import (
+    DerivativeTooSmallError,
+    NoBracketError,
+    NoConvergenceError,
+    NotBracketedError,
+)
+
 # ---------------------------
-# Results + Exceptions
+# Results
 # ---------------------------
 
 
@@ -17,26 +24,6 @@ class RootResult:
     method: str
     f_at_root: float
     bracket: tuple[float, float] | None = None
-
-
-class RootFindingError(Exception):
-    """Base class for root-finding failures."""
-
-
-class NotBracketedError(RootFindingError):
-    """Raised when a bracketing method is called without a valid sign change."""
-
-
-class NoConvergenceError(RootFindingError):
-    """Raised when the method fails to converge within max_iter."""
-
-
-class DerivativeTooSmallError(RootFindingError):
-    """Raised when Newton's method cannot proceed due to tiny derivative."""
-
-
-class NoBracketError(NotBracketedError):
-    """Raised by ensure_bracket when it cannot find a bracketing interval."""
 
 
 def _clamp(x: float, domain: tuple[float, float] | None) -> float:
@@ -193,6 +180,70 @@ def newton_method(
     raise NoConvergenceError("Newton did not converge within max_iter.")
 
 
+def ensure_bracket(
+    Fn: Callable[[float], float],
+    lo: float,
+    hi: float,
+    *,
+    hi_max: float = 10.0,
+    grow: float = 2.0,
+    max_steps: int = 60,
+    domain: tuple[float, float] | None = None,
+) -> tuple[float, float]:
+    """
+    Expand `hi` geometrically until Fn(lo) and Fn(hi) have opposite signs (or hi hits hi_max).
+    - Designed to be IV-friendly (lo can be 0.0), but also usable generally.
+    - If domain is provided, lo/hi are clamped to it.
+
+    Returns (lo, hi) such that Fn(lo) == 0 or Fn(hi) == 0 or Fn(lo)*Fn(hi) < 0.
+    """
+    if hi <= lo:
+        raise ValueError("Require lo < hi.")
+    if grow <= 1.0:
+        raise ValueError("Require grow > 1.0.")
+    if hi_max <= hi:
+        # Still allow: user might have hi==hi_max; we just won't grow.
+        hi_max = hi
+
+    lo_c = _clamp(lo, domain)
+    hi_c = _clamp(hi, domain)
+    if hi_c <= lo_c:
+        raise ValueError("Clamped bounds invalid: require lo < hi within domain.")
+
+    f_lo = Fn(lo_c)
+    f_hi = Fn(hi_c)
+
+    if f_lo == 0.0 or f_hi == 0.0 or f_lo * f_hi < 0:
+        return lo_c, hi_c
+
+    steps = 0
+    while f_lo * f_hi > 0 and hi_c < hi_max and steps < max_steps:
+        hi_c = min(hi_c * grow, hi_max)
+        hi_c = _clamp(hi_c, domain)
+        f_hi = Fn(hi_c)
+        steps += 1
+
+        if f_hi == 0.0 or f_lo * f_hi < 0:
+            return lo_c, hi_c
+
+        if hi_c >= hi_max:
+            break
+
+    # Still no bracket: interpret common IV-like cases but keep generic info too.
+    if f_lo > 0 and f_hi > 0:
+        raise NoBracketError(
+            "No bracket found: Fn(lo) and Fn(hi) stayed positive while expanding hi. "
+            "For IV this often means market price is too low (below theoretical lower bound) "
+            "or model price is always above market over the searched range."
+        )
+    else:
+        raise NoBracketError(
+            "No bracket found: Fn(lo) and Fn(hi) stayed negative while expanding hi. "
+            "For IV this often means market price is too high (above theoretical upper bound) "
+            "or hi_max is too small for the needed root."
+        )
+
+
 def bracketed_newton(
     Fn: Callable[[float], float],
     lo: float,
@@ -233,9 +284,38 @@ def bracketed_newton(
         )
 
     if fa * fb > 0:
-        raise NotBracketedError(
-            "Root not bracketed: Fn(lo) and Fn(hi) must have opposite signs."
-        )
+        # Option A: auto-bracket attempt.
+        # If this fails, ensure_bracket raises NoBracketError (your correct error).
+        a, b = ensure_bracket(Fn, a, b, domain=domain)
+
+        fa = Fn(a)
+        if abs(fa) <= tol_f:
+            return RootResult(
+                root=a,
+                converged=True,
+                iterations=0,
+                method="bracketed_newton",
+                f_at_root=fa,
+                bracket=(a, b),
+            )
+
+        fb = Fn(b)
+        if abs(fb) <= tol_f:
+            return RootResult(
+                root=b,
+                converged=True,
+                iterations=0,
+                method="bracketed_newton",
+                f_at_root=fb,
+                bracket=(a, b),
+            )
+
+        # At this point, ensure_bracket guarantees a bracket unless it raised.
+        # Keep a defensive guard anyway:
+        if fa * fb > 0:
+            raise NotBracketedError(
+                "Root not bracketed even after ensure_bracket (unexpected)."
+            )
 
     x = x0 if (x0 is not None and a < x0 < b) else 0.5 * (a + b)
     x = _clamp(x, domain)
@@ -304,70 +384,6 @@ def bracketed_newton(
         x = x_new
 
     raise NoConvergenceError("Bracketed Newton did not converge within max_iter.")
-
-
-def ensure_bracket(
-    Fn: Callable[[float], float],
-    lo: float,
-    hi: float,
-    *,
-    hi_max: float = 10.0,
-    grow: float = 2.0,
-    max_steps: int = 60,
-    domain: tuple[float, float] | None = None,
-) -> tuple[float, float]:
-    """
-    Expand `hi` geometrically until Fn(lo) and Fn(hi) have opposite signs (or hi hits hi_max).
-    - Designed to be IV-friendly (lo can be 0.0), but also usable generally.
-    - If domain is provided, lo/hi are clamped to it.
-
-    Returns (lo, hi) such that Fn(lo) == 0 or Fn(hi) == 0 or Fn(lo)*Fn(hi) < 0.
-    """
-    if hi <= lo:
-        raise ValueError("Require lo < hi.")
-    if grow <= 1.0:
-        raise ValueError("Require grow > 1.0.")
-    if hi_max <= hi:
-        # Still allow: user might have hi==hi_max; we just won't grow.
-        hi_max = hi
-
-    lo_c = _clamp(lo, domain)
-    hi_c = _clamp(hi, domain)
-    if hi_c <= lo_c:
-        raise ValueError("Clamped bounds invalid: require lo < hi within domain.")
-
-    f_lo = Fn(lo_c)
-    f_hi = Fn(hi_c)
-
-    if f_lo == 0.0 or f_hi == 0.0 or f_lo * f_hi < 0:
-        return lo_c, hi_c
-
-    steps = 0
-    while f_lo * f_hi > 0 and hi_c < hi_max and steps < max_steps:
-        hi_c = min(hi_c * grow, hi_max)
-        hi_c = _clamp(hi_c, domain)
-        f_hi = Fn(hi_c)
-        steps += 1
-
-        if f_hi == 0.0 or f_lo * f_hi < 0:
-            return lo_c, hi_c
-
-        if hi_c >= hi_max:
-            break
-
-    # Still no bracket: interpret common IV-like cases but keep generic info too.
-    if f_lo > 0 and f_hi > 0:
-        raise NoBracketError(
-            "No bracket found: Fn(lo) and Fn(hi) stayed positive while expanding hi. "
-            "For IV this often means market price is too low (below theoretical lower bound) "
-            "or model price is always above market over the searched range."
-        )
-    else:
-        raise NoBracketError(
-            "No bracket found: Fn(lo) and Fn(hi) stayed negative while expanding hi. "
-            "For IV this often means market price is too high (above theoretical upper bound) "
-            "or hi_max is too small for the needed root."
-        )
 
 
 # ---------------------------
