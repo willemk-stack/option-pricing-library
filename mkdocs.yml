@@ -60,5 +60,6 @@ nav:
       - Brownian motion and Itô: notes/brownian_motion_and_Ito.md
       - Implied volatility: notes/IV.md
       - Risk neutral pricing: notes/risk_neutral_pricing.md
+      - Finite Differences: notes/finite_difference_pde.md
 
   - API: api.md
