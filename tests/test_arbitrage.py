@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from option_pricing.vol.arbitrage import (
+    check_smile_call_convexity,  # NEW
     check_smile_price_monotonicity,
     check_surface_noarb,
 )
@@ -113,6 +114,47 @@ def test_smile_monotonicity_raises_on_bad_forward_or_df():
 
 
 # -------------------------
+# Smile butterfly/convexity tests (NEW)
+# -------------------------
+def test_smile_convexity_ok_reasonable_smile():
+    """
+    Discrete convexity (proxy for butterfly no-arb) should hold for a sane smile.
+    """
+    T = 1.0
+    x = np.linspace(-0.5, 0.5, 41)
+    iv = 0.20 + 0.08 * (x**2)
+    smile = make_smile_from_iv(T, x, iv)
+
+    fwd = flat_forward(spot=100.0, r=0.01, q=0.0)
+    df = flat_df(r=0.01)
+
+    rep = check_smile_call_convexity(smile, forward=fwd, df=df, tol=1e-10)
+    assert rep.ok, rep.message
+    assert rep.bad_indices.size == 0
+    assert rep.max_violation == 0.0
+
+
+def test_smile_convexity_fails_for_spiky_iv_shape():
+    """
+    Deliberately create a 'vol spike' at the center which can make call prices
+    locally non-convex in strike (violating the discrete second-difference check).
+    """
+    T = 1.0
+    x = np.linspace(-0.2, 0.2, 9)
+    iv = 0.20 + 0.0 * x
+    iv[x.size // 2] = 3.00  # huge spike at ATM to force a violation
+    smile = make_smile_from_iv(T, x, iv)
+
+    fwd = flat_forward(spot=100.0, r=0.0, q=0.0)
+    df = flat_df(r=0.0)
+
+    rep = check_smile_call_convexity(smile, forward=fwd, df=df, tol=1e-12)
+    assert not rep.ok
+    assert rep.bad_indices.size > 0
+    assert rep.max_violation > 0.0
+
+
+# -------------------------
 # Surface calendar variance tests
 # -------------------------
 def test_surface_calendar_variance_ok():
@@ -129,7 +171,6 @@ def test_surface_calendar_variance_ok():
     iv2 = 0.22 + 0.05 * (x**2)  # slightly higher -> higher w as well
 
     rows = []
-    # Construct surface via from_grid so it matches your typical pipeline
     for T, iv in [(T1, iv1), (T2, iv2)]:
         F = fwd(T)
         K = F * np.exp(x)
@@ -139,10 +180,13 @@ def test_surface_calendar_variance_ok():
     surface = VolSurface.from_grid(rows, forward=fwd)
     df = flat_df(0.0)
 
-    rep = check_surface_noarb(surface, df=df, tol_calendar=1e-12)
+    rep = check_surface_noarb(surface, df=df, tol_calendar=1e-12, tol_butterfly=1e-10)
     assert rep.calendar_total_variance.performed
     assert rep.calendar_total_variance.ok, rep.calendar_total_variance.message
-    assert rep.ok  # includes smile monotonicity too
+
+    # NEW: rep.ok now includes monotonicity + convexity + calendar
+    assert rep.ok, rep.message
+    assert all(r.ok for _, r in rep.smile_convexity), "Unexpected butterfly violations"
 
 
 def test_surface_calendar_variance_fails_when_w_decreases():
@@ -167,7 +211,7 @@ def test_surface_calendar_variance_fails_when_w_decreases():
     surface = VolSurface.from_grid(rows, forward=fwd)
     df = flat_df(0.0)
 
-    rep = check_surface_noarb(surface, df=df, tol_calendar=1e-12)
+    rep = check_surface_noarb(surface, df=df, tol_calendar=1e-12, tol_butterfly=1e-10)
     assert rep.calendar_total_variance.performed
     assert not rep.calendar_total_variance.ok
     assert rep.calendar_total_variance.bad_pairs.size > 0
@@ -189,7 +233,7 @@ def test_surface_calendar_check_skipped_for_single_expiry():
         rows.append((T, float(Ki), float(ivi)))
 
     surface = VolSurface.from_grid(rows, forward=fwd)
-    rep = check_surface_noarb(surface, df=flat_df(0.0))
+    rep = check_surface_noarb(surface, df=flat_df(0.0), tol_butterfly=1e-10)
 
     assert rep.calendar_total_variance.performed is False
     assert rep.calendar_total_variance.ok is True
