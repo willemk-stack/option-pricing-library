@@ -128,6 +128,9 @@ Finally clamp into a safe domain:
 - Always keep a bracket \([\sigma_{\min},\sigma_{\max}]\) and ensure \(C(\sigma)\) brackets the market price.
 - Use forward/discounted variables to improve stability (especially for very long \(\tau\) or large \(r\)).
 
+## Interpolation notes
+
+
 ## Conceptual check questions
 
 - Why do desks quote implied vol instead of price?

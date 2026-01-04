@@ -27,10 +27,11 @@ Conventions:
 
 ```python
 from option_pricing import bs_price, binom_price, mc_price
+from option_pricing.config import MCConfig, RandomConfig
 
 bs = bs_price(p)
 binom = binom_price(p, n_steps=400)
-mc, se = mc_price(p, n_paths=50_000, seed=0)
+mc, se = mc_price(p, cfg=MCConfig(n_paths=50_000, random=RandomConfig(seed=0)))
 
 print(bs, binom, mc, se)
 ```

@@ -5,7 +5,7 @@ from typing import Literal
 
 import numpy as np
 
-from ..diagnostics.sweep_greeks import SweepResult
+from ..diagnostics.greeks.sweep import SweepResult
 from ..types import PricingInputs
 
 Style = Literal["pretty", "minimal"]

@@ -59,10 +59,10 @@ print(se1 / se2)  # should be around 2
 The library exposes a Monte Carlo put function too:
 
 ```python
-from option_pricing import mc_price_put
-from option_pricing.config import MCConfig
+from option_pricing import mc_price, MCConfig, RandomConfig
 
-put, se = mc_price_put(p, cfg=MCConfig(n_paths=100_000))
+cfg = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=123))
+price, err = mc_price(p, cfg=cfg) # Make sure to configure OptionType.PUT correctly in PricingInputs
 ```
 
 `mc_price_put` uses the same config-driven interface as `mc_price`.

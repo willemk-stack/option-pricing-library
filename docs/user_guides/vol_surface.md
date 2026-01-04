@@ -182,4 +182,4 @@ The calendar report includes:
 
 ## Demo notebook
 
-See: `demos/05_demo_vol_surface_and_noarb.ipynb` for a runnable example with plots and diagnostics.
+See: `demos/05_vol_surface_and_noarb.ipynb` for a runnable example with plots and diagnostics.

@@ -18,3 +18,17 @@
         - implied_vol_bs_result
         - VolSurface
         - Smile
+
+## Exceptions
+
+::: option_pricing.exceptions
+    options:
+      show_source: false
+      members:
+        - InvalidOptionPriceError
+        - RootFindingError
+        - NoConvergenceError
+        - NotBracketedError
+        - NoBracketError
+        - DerivativeTooSmallError
+

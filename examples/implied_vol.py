@@ -3,18 +3,23 @@ from __future__ import annotations
 
 def main() -> None:
     # [START README_IMPLIED_VOL]
-    from option_pricing import MarketData, OptionSpec, OptionType, implied_vol_bs_result
-    from option_pricing.numerics.root_finding import bracketed_newton
+    from option_pricing import (
+        ImpliedVolConfig,
+        MarketData,
+        OptionSpec,
+        OptionType,
+        RootMethod,
+        implied_vol_bs_result,
+    )
 
     market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.0)
     spec = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)
 
-    res = implied_vol_bs_result(
-        mkt_price=10.0,
-        spec=spec,
-        market=market,
-        root_method=bracketed_newton,
+    cfg = ImpliedVolConfig(
+        root_method=RootMethod.BRACKETED_NEWTON, sigma_lo=1e-8, sigma_hi=5.0
     )
+
+    res = implied_vol_bs_result(mkt_price=10.0, spec=spec, market=market, cfg=cfg)
 
     rr = res.root_result
     print(f"IV: {res.vol:.6f}")
