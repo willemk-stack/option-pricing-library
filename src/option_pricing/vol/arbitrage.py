@@ -282,24 +282,24 @@ def check_surface_noarb(
     # 1) Per-smile strike check (monotonicity)
     per_smile_mono: list[tuple[float, MonotonicityReport]] = []
     for s in surface.smiles:
-        rep = check_smile_price_monotonicity(
+        rep_mono = check_smile_price_monotonicity(
             s,
             forward=surface.forward,
             df=df,
             tol=tol_strike,
         )
-        per_smile_mono.append((float(s.T), rep))
+        per_smile_mono.append((float(s.T), rep_mono))
 
     # 2) Per-smile butterfly check (convexity)
     per_smile_conv: list[tuple[float, ConvexityReport]] = []
     for s in surface.smiles:
-        rep = check_smile_call_convexity(
+        rep_conv = check_smile_call_convexity(
             s,
             forward=surface.forward,
             df=df,
             tol=tol_butterfly,
         )
-        per_smile_conv.append((float(s.T), rep))
+        per_smile_conv.append((float(s.T), rep_conv))
 
     # 3) Calendar check in total variance
     cal = _check_calendar_total_variance(

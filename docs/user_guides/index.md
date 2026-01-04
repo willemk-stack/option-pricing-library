@@ -9,6 +9,7 @@ This section shows how to use **option_pricing** in practical workflows, with ru
 
 ## Guides
 
+- [Market APIs](market_api.md) — convenience (flat) vs curves-first market inputs.
 - [Black-Scholes](black_scholes.md) — vanilla European option pricing and Greeks.
 - [Monte Carlo](monte_carlo.md) — simulation-based pricing and estimators.
 - [Binomial CRR](binomial_crr.md) — lattice pricing and intuition around convergence.

@@ -23,9 +23,14 @@ from .market.curves import (
     PricingContext,
 )
 from .numerics.root_finding import RootMethod
-from .pricers.black_scholes import bs_greeks, bs_price
-from .pricers.mc import mc_price
-from .pricers.tree import binom_price
+from .pricers.black_scholes import (
+    bs_greeks,
+    bs_greeks_from_ctx,
+    bs_price,
+    bs_price_from_ctx,
+)
+from .pricers.mc import mc_price, mc_price_from_ctx
+from .pricers.tree import binom_price, binom_price_from_ctx
 from .types import MarketData, OptionSpec, OptionType, PricingInputs
 from .vol.implied_vol import implied_vol_bs, implied_vol_bs_result
 from .vol.surface import Smile, VolSurface
@@ -48,9 +53,13 @@ __all__ = [
     "RootMethod",
     # Pricers
     "bs_price",
+    "bs_price_from_ctx",
     "bs_greeks",
+    "bs_greeks_from_ctx",
     "mc_price",
+    "mc_price_from_ctx",
     "binom_price",
+    "binom_price_from_ctx",
     # Implied vol
     "implied_vol_bs",
     "implied_vol_bs_result",

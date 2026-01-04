@@ -229,3 +229,91 @@ def calendar_dW_from_report(
 
     xg_arr = np.asarray(xg, dtype=float)
     return xg_arr, calendar_dW(surface, x_grid=xg_arr)
+
+
+# ----------------------------
+# No-arbitrage report helpers
+# ----------------------------
+
+
+def noarb_smile_table(report: Any) -> pd.DataFrame:
+    """Return a compact table (per-expiry) from a surface no-arb report.
+
+    Designed for use with :func:`option_pricing.vol.arbitrage.check_surface_noarb`.
+
+    Columns include smile-level monotonicity and convexity checks.
+    """
+    mono = list(getattr(report, "smile_monotonicity", ()) or ())
+    conv = dict(getattr(report, "smile_convexity", ()) or ())
+
+    rows: list[dict[str, Any]] = []
+    for T, mrep in mono:
+        Trep = float(T)
+        crep = conv.get(T, conv.get(Trep))
+
+        rows.append(
+            {
+                "T": Trep,
+                "monotonic_ok": bool(getattr(mrep, "ok", False)),
+                "monotonic_bad_count": int(
+                    np.asarray(getattr(mrep, "bad_indices", [])).size
+                ),
+                "monotonic_max_violation": float(
+                    getattr(mrep, "max_violation", np.nan)
+                ),
+                "monotonic_message": str(getattr(mrep, "message", "")),
+                "convex_ok": (
+                    bool(getattr(crep, "ok", False)) if crep is not None else False
+                ),
+                "convex_bad_count": (
+                    int(np.asarray(getattr(crep, "bad_indices", [])).size)
+                    if crep is not None
+                    else 0
+                ),
+                "convex_max_violation": (
+                    float(getattr(crep, "max_violation", np.nan))
+                    if crep is not None
+                    else np.nan
+                ),
+                "convex_message": (
+                    str(getattr(crep, "message", "")) if crep is not None else ""
+                ),
+            }
+        )
+
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df = df.sort_values("T").reset_index(drop=True)
+    return df
+
+
+def calendar_summary(report: Any) -> dict[str, Any]:
+    """Summarize the calendar no-arbitrage portion of a surface report.
+
+    Returns a dict that is notebook-friendly, with at least:
+    ``performed``, ``ok``, ``message``, ``n_violations``, ``max_violation``.
+    """
+    cal = getattr(report, "calendar_total_variance", None)
+    if cal is None:
+        return {
+            "performed": False,
+            "ok": True,
+            "n_violations": 0,
+            "max_violation": 0.0,
+            "message": "Calendar check not present on report.",
+        }
+
+    performed = bool(getattr(cal, "performed", False))
+    ok = bool(getattr(cal, "ok", True))
+    bad_pairs = np.asarray(getattr(cal, "bad_pairs", np.empty((0, 2), dtype=int)))
+    n_viol = int(bad_pairs.shape[0]) if bad_pairs.ndim == 2 else int(bad_pairs.size)
+
+    return {
+        "performed": performed,
+        "ok": ok,
+        "n_violations": n_viol,
+        "max_violation": float(getattr(cal, "max_violation", 0.0)),
+        "message": str(getattr(cal, "message", "")),
+        "x_grid": getattr(cal, "x_grid", None),
+        "bad_pairs": bad_pairs,
+    }

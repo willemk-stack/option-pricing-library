@@ -16,7 +16,7 @@ Typed Python library for **European vanilla option pricing** (Black–Scholes, M
 - **CRR binomial tree** pricer (European)
 - **Implied volatility (BS inversion)** with robust bracketing/root-finding utilities
 - **Volatility objects**: Smile, VolSurface (surface/smile containers + interpolation)
-- Small public API: a `PricingInputs` bundle + top-level pricers
+- Two market APIs: `MarketData` + `PricingInputs` (flat convenience) and `PricingContext` + curves (curves-first).
 
 Docs: https://willemk-stack.github.io/option-pricing-library/  
 API:  https://willemk-stack.github.io/option-pricing-library/api/
@@ -42,6 +42,13 @@ pip install -e ".[dev]"
 ```python
 {{ QUICKSTART }}
 ```
+
+## Curves-first example (PricingContext)
+
+```python   
+{{ CURVES_FIRST }}
+```
+
 
 ---
 

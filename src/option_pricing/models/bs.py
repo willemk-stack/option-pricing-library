@@ -185,6 +185,110 @@ def put_greeks(
 
 
 # -------------------------
+
+
+# -------------------------
+# Black-76 (forward, df) — scalar helpers
+# -------------------------
+def _implied_rq_from_forward_df(
+    *, spot: float, forward: float, df: float, tau: float
+) -> tuple[float, float]:
+    """Infer flat r and q consistent with (spot, forward, df) over tau."""
+    tau = float(tau)
+    if tau <= 0.0:
+        return 0.0, 0.0
+    df = float(df)
+    if df <= 0.0:
+        raise ValueError("df must be > 0")
+    spot = float(spot)
+    forward = float(forward)
+    if spot <= 0.0 or forward <= 0.0:
+        raise ValueError("spot and forward must be > 0")
+    r = -math.log(df) / tau
+    b = math.log(forward / spot) / tau  # carry = r - q
+    q = r - b
+    return float(r), float(q)
+
+
+def black76_call_price(
+    *, forward: float, strike: float, sigma: float, tau: float, df: float = 1.0
+) -> float:
+    """Discounted Black-76 European call price."""
+    forward = float(forward)
+    strike = float(strike)
+    sigma = float(sigma)
+    tau = float(tau)
+    df = float(df)
+    if forward <= 0.0 or strike <= 0.0:
+        raise ValueError("forward and strike must be > 0")
+    if df <= 0.0:
+        raise ValueError("df must be > 0")
+    if tau <= 0.0:
+        return df * max(forward - strike, 0.0)
+    if sigma <= 0.0:
+        return df * max(forward - strike, 0.0)
+    vol_sqrt_t = sigma * math.sqrt(tau)
+    d1 = (math.log(forward / strike) + 0.5 * sigma * sigma * tau) / vol_sqrt_t
+    d2 = d1 - vol_sqrt_t
+    return df * (forward * float(norm.cdf(d1)) - strike * float(norm.cdf(d2)))
+
+
+def black76_put_price(
+    *, forward: float, strike: float, sigma: float, tau: float, df: float = 1.0
+) -> float:
+    """Discounted Black-76 European put price (via parity)."""
+    call = black76_call_price(
+        forward=forward, strike=strike, sigma=sigma, tau=tau, df=df
+    )
+    return call - float(df) * (float(forward) - float(strike))
+
+
+def black76_call_greeks_from_curves(
+    *,
+    spot: float,
+    forward: float,
+    strike: float,
+    sigma: float,
+    tau: float,
+    df: float = 1.0,
+) -> dict[str, float]:
+    """BSM call Greeks implied by (spot, forward, df)."""
+    r, q = _implied_rq_from_forward_df(
+        spot=float(spot), forward=float(forward), df=float(df), tau=float(tau)
+    )
+    return call_greeks(
+        spot=float(spot),
+        strike=float(strike),
+        r=r,
+        q=q,
+        sigma=float(sigma),
+        tau=float(tau),
+    )
+
+
+def black76_put_greeks_from_curves(
+    *,
+    spot: float,
+    forward: float,
+    strike: float,
+    sigma: float,
+    tau: float,
+    df: float = 1.0,
+) -> dict[str, float]:
+    """BSM put Greeks implied by (spot, forward, df)."""
+    r, q = _implied_rq_from_forward_df(
+        spot=float(spot), forward=float(forward), df=float(df), tau=float(tau)
+    )
+    return put_greeks(
+        spot=float(spot),
+        strike=float(strike),
+        r=r,
+        q=q,
+        sigma=float(sigma),
+        tau=float(tau),
+    )
+
+
 # Black-76 (forward, df) — vectorized (used for checks/surfaces)
 # -------------------------
 def black76_call_price_vec(

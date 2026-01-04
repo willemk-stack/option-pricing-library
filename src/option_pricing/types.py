@@ -49,6 +49,10 @@ class MarketData:
             raise ValueError("T must be >= t")
         return self.spot * math.exp((self.rate - self.dividend_yield) * tau)
 
+    def fwd(self, T: float, t: float = 0.0) -> float:
+        """Alias for :meth:`forward` (forward price)."""
+        return self.forward(T, t)
+
     def to_context(self) -> PricingContext:
         """Convert flat quotes (spot, r, q) into a curves-first pricing context."""
         discount = FlatDiscountCurve(self.rate)

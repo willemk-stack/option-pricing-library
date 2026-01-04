@@ -44,6 +44,7 @@ nav:
       - user_guides/index.md
       - Installation: installation.md
       - Quickstart: user_guides/quickstart.md
+      - Market APIs: user_guides/market_api.md
       - Black-Scholes: user_guides/black_scholes.md
       - Monte Carlo: user_guides/monte_carlo.md
       - Binomial CRR: user_guides/binomial_crr.md
