@@ -6,6 +6,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from option_pricing.config import ImpliedVolConfig
+
 
 def make_synthetic_smile(
     *,
@@ -107,9 +109,7 @@ def run_synthetic_iv_smile(
     n: int,
     true_vol_fn: Callable[[float], float],
     sigma_guess: float = 0.20,
-    root_method: Callable[..., Any] | None = None,
-    sigma_lo: float = 1e-8,
-    sigma_hi: float = 5.0,
+    cfg: ImpliedVolConfig | None = None,
     drop_failed: bool = True,
     t: float = 0.0,
 ) -> pd.DataFrame:
@@ -126,10 +126,7 @@ def run_synthetic_iv_smile(
     from option_pricing import MarketData, OptionSpec, PricingInputs, bs_price
     from option_pricing.vol.implied_vol import implied_vol_bs_result
 
-    if root_method is None:
-        from option_pricing.numerics.root_finding import bracketed_newton
-
-        root_method = bracketed_newton
+    cfg = ImpliedVolConfig() if cfg is None else cfg
 
     S = float(S)
     r = float(r)
@@ -156,11 +153,9 @@ def run_synthetic_iv_smile(
                 mkt_price=mkt_price,
                 spec=spec,
                 market=market,
-                root_method=root_method,
+                cfg=cfg,
                 t=t,
                 sigma0=float(sigma_guess),
-                sigma_lo=float(sigma_lo),
-                sigma_hi=float(sigma_hi),
             )
             iv = float(ivres.vol)
             converged = bool(getattr(ivres.root_result, "converged", True))
@@ -192,8 +187,7 @@ def run_bs_iv_benchmarks(
     *,
     price_tol: float = 5e-4,
     iv_tol: float = 5e-4,
-    sigma_lo: float = 1e-8,
-    sigma_hi: float = 5.0,
+    cfg: ImpliedVolConfig | None = None,
     strict: bool = False,
     save_csv_path: str | None = None,
 ) -> pd.DataFrame:
@@ -212,8 +206,9 @@ def run_bs_iv_benchmarks(
         PricingInputs,
         bs_price,
     )
-    from option_pricing.numerics.root_finding import bracketed_newton
     from option_pricing.vol.implied_vol import implied_vol_bs_result
+
+    cfg = ImpliedVolConfig() if cfg is None else cfg
 
     S = 100.0
     r = 0.03
@@ -242,11 +237,9 @@ def run_bs_iv_benchmarks(
                             mkt_price=price,
                             spec=spec,
                             market=market,
-                            root_method=bracketed_newton,
+                            cfg=cfg,
                             t=t0,
                             sigma0=0.20,
-                            sigma_lo=float(sigma_lo),
-                            sigma_hi=float(sigma_hi),
                         )
                         iv = float(ivres.vol)
                         converged = bool(getattr(ivres.root_result, "converged", True))
@@ -291,7 +284,7 @@ def run_bs_iv_benchmarks(
     # Optional assertions
     if strict:
         bad_price = df[df["converged"] & (df["abs_price_err"] > float(price_tol))]
-        bad_iv = df[df["converged"] == True & (df["abs_iv_err"] > float(iv_tol))]
+        bad_iv = df[df["converged"] & (df["abs_iv_err"] > float(iv_tol))]
         assert (
             bad_price.empty
         ), f"Price error tolerance exceeded in {len(bad_price)} cases."

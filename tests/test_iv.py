@@ -5,7 +5,7 @@ from dataclasses import replace
 import pytest
 
 from option_pricing import MarketData, OptionSpec, OptionType, PricingInputs, bs_price
-from option_pricing.numerics.root_finding import bracketed_newton
+from option_pricing.config import ImpliedVolConfig
 from option_pricing.vol.implied_vol import implied_vol_bs_result
 
 BENCHMARKS = [
@@ -104,17 +104,17 @@ def test_implied_vol_recovers_sigma_true(case):
     sigma_guess = 0.30 if abs(case["sigma_true"] - 0.30) > 1e-12 else 0.20
     p_guess = make_inputs(case, sigma_guess=sigma_guess)
 
+    # Config-driven API: tolerances and bounds are taken from cfg.
+    cfg = ImpliedVolConfig()
+    cfg = replace(cfg, numerics=replace(cfg.numerics, abs_tol=1e-10, rel_tol=1e-10))
+
     ivres = implied_vol_bs_result(
         mkt_price=float(case["mkt_price"]),
         spec=p_guess.spec,
         market=p_guess.market,
-        root_method=bracketed_newton,
+        cfg=cfg,
         t=float(p_guess.t),
         sigma0=float(p_guess.sigma),
-        sigma_lo=1e-8,
-        sigma_hi=5.0,
-        tol_f=1e-10,
-        tol_x=1e-10,
     )
 
     assert bool(ivres.root_result.converged) is True

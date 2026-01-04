@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import pytest
 
 from option_pricing import MarketData, OptionSpec, OptionType, PricingInputs, bs_price
+from option_pricing.config import ImpliedVolConfig
 from option_pricing.exceptions import InvalidOptionPriceError
-from option_pricing.numerics.root_finding import bracketed_newton
 from option_pricing.vol.implied_vol import implied_vol_bs_result
 
 
@@ -43,18 +44,22 @@ def iv_for(
     spec = OptionSpec(kind=kind, strike=K, expiry=tau)
     market = MarketData(spot=S, rate=r, dividend_yield=q)
 
+    # Config-driven API: bounds / tolerances belong in cfg.
+    cfg = ImpliedVolConfig()
+    cfg = replace(
+        cfg,
+        sigma_lo=1e-12,
+        sigma_hi=8.0,
+        numerics=replace(cfg.numerics, abs_tol=1e-12, rel_tol=1e-12, max_iter=200),
+    )
+
     res = implied_vol_bs_result(
         mkt_price=float(mkt_price),
         spec=spec,
         market=market,
-        root_method=bracketed_newton,
+        cfg=cfg,
         t=0.0,
         sigma0=float(sigma0),
-        sigma_lo=1e-12,
-        sigma_hi=8.0,
-        tol_f=1e-12,
-        tol_x=1e-12,
-        max_iter=200,
     )
     assert bool(res.root_result.converged) is True, getattr(
         res.root_result, "message", ""
@@ -135,7 +140,6 @@ def test_iv_raises_when_price_below_noarb_lower_bound(kind, S, K, r, q, tau):
             mkt_price=float(lb - 1e-6),
             spec=spec,
             market=market,
-            root_method=bracketed_newton,
             t=0.0,
             sigma0=0.20,
         )
@@ -165,7 +169,6 @@ def test_iv_raises_when_price_above_noarb_upper_bound(kind, S, K, r, q, tau):
             mkt_price=float(ub + 1e-6),
             spec=spec,
             market=market,
-            root_method=bracketed_newton,
             t=0.0,
             sigma0=0.20,
         )
@@ -180,7 +183,6 @@ def test_iv_raises_on_negative_price():
             mkt_price=-1e-6,
             spec=spec,
             market=market,
-            root_method=bracketed_newton,
             t=0.0,
             sigma0=0.20,
         )
@@ -199,18 +201,21 @@ def test_iv_tiny_time_value_just_above_intrinsic_atm_converges_to_tiny_vol():
     spec = OptionSpec(kind=kind, strike=K, expiry=tau)
     market = MarketData(spot=S, rate=r, dividend_yield=q)
 
+    cfg = ImpliedVolConfig()
+    cfg = replace(
+        cfg,
+        sigma_lo=1e-12,
+        sigma_hi=5.0,
+        numerics=replace(cfg.numerics, abs_tol=1e-12, rel_tol=1e-12, max_iter=200),
+    )
+
     res = implied_vol_bs_result(
         mkt_price=float(mkt_price),
         spec=spec,
         market=market,
-        root_method=bracketed_newton,
+        cfg=cfg,
         t=0.0,
         sigma0=None,  # exercise heuristic seed
-        sigma_lo=1e-12,
-        sigma_hi=5.0,
-        tol_f=1e-12,
-        tol_x=1e-12,
-        max_iter=200,
     )
 
     assert bool(res.root_result.converged) is True, getattr(

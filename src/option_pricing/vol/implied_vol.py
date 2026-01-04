@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, replace
 from math import exp, log, pi, sqrt
 
 from option_pricing import MarketData, OptionSpec, OptionType, PricingInputs, bs_greeks
-from option_pricing.numerics.root_finding import RootResult
+from option_pricing.config import ImpliedVolConfig, SeedStrategy
+from option_pricing.numerics.root_finding import RootResult, get_root_method
 
 from ..exceptions import InvalidOptionPriceError
 
@@ -290,15 +290,10 @@ def implied_vol_bs_result(
     mkt_price: float,
     spec: OptionSpec,
     market: MarketData,
-    root_method: Callable[..., RootResult],
     *,
+    cfg: ImpliedVolConfig | None = None,
     t: float = 0.0,
     sigma0: float | None = None,
-    sigma_lo: float = 1e-8,
-    sigma_hi: float = 5.0,
-    tol_f: float = 1e-10,
-    tol_x: float = 1e-10,
-    max_iter: int | None = None,
 ) -> ImpliedVolResult:
     """Compute Black-Scholes implied volatility and return diagnostics.
 
@@ -306,7 +301,7 @@ def implied_vol_bs_result(
 
     ``BS_price(sigma) - mkt_price = 0``
 
-    using a user-supplied root-finding routine.
+    using a root-finding method selected by ``cfg.root_method``.
 
     Parameters
     ----------
@@ -316,33 +311,34 @@ def implied_vol_bs_result(
         Option specification (kind, strike, expiry).
     market : MarketData
         Market observables (spot, rate, dividend yield).
-    root_method : Callable[..., RootResult]
-        Root-finder with signature compatible with::
+    cfg : ImpliedVolConfig or None, optional
+        Configuration for implied-vol inversion. If ``None``, ``ImpliedVolConfig()``
+        is used. Relevant fields:
 
-            root_method(Fn, x_lo, x_hi, *, x0=..., dFn=..., tol_f=..., tol_x=..., max_iter=...)
-
-        The solver is expected to return a :class:`~option_pricing.numerics.root_finding.RootResult`
-        containing at least ``root``.
+        - ``root_method`` : RootMethod
+            Internal solver selector (dispatched via :func:`get_root_method`).
+        - ``sigma_lo``, ``sigma_hi`` : float
+            Volatility search interval.
+        - ``bounds_eps`` : float
+            Tolerance for no-arbitrage bound checks.
+        - ``seed_strategy`` : SeedStrategy
+            How to select the initial guess when ``sigma0`` is not provided.
+        - ``numerics`` : NumericsConfig
+            Tolerances and iteration limits (``abs_tol``, ``rel_tol``, ``max_iter``),
+            plus safety clamps (``min_vega``).
     t : float, default 0.0
         Valuation time in the same units as ``spec.expiry``.
     sigma0 : float or None, default None
-        Initial volatility guess. If ``None``, a heuristic seed is computed via
-        :func:`_iv_seed_from_time_value`.
-    sigma_lo : float, default 1e-8
-        Lower bound of the volatility search interval.
-    sigma_hi : float, default 5.0
-        Upper bound of the volatility search interval.
-    tol_f : float, default 1e-10
-        Function tolerance passed to the root solver.
-    tol_x : float, default 1e-10
-        Parameter tolerance passed to the root solver.
-    max_iter : int or None, default None
-        Maximum iterations passed to the root solver (if provided).
+        Initial volatility guess. If ``None``, the seed is chosen according to
+        ``cfg.seed_strategy``:
+
+        - ``HEURISTIC``: compute a robust seed from time value.
+        - ``USE_GUESS`` or ``LAST_SOLUTION``: requires `sigma0` to be provided.
 
     Returns
     -------
     ImpliedVolResult
-        Container with the implied volatility and root-finder diagnostics.
+        Container with implied volatility and root-finder diagnostics.
 
     Raises
     ------
@@ -350,17 +346,45 @@ def implied_vol_bs_result(
         If the input price violates no-arbitrage bounds (see :func:`_validate_bounds`).
     ValueError
         If expiry is not strictly greater than ``t``.
+    ValueError
+        If ``sigma0`` is required by the configured seed strategy but not provided.
     Exception
-        Any exception raised by the provided `root_method` is propagated.
+        Any exception raised by the root solver is propagated.
 
     Notes
     -----
-    The objective uses :func:`option_pricing.bs_greeks` for both price and vega.
-    Vega is provided as the derivative ``dFn`` to accelerate Newton/secan hybrids.
-    """
-    lb, ub, tau = _validate_bounds(mkt_price, spec, market, t)
+    This function is intentionally "config-driven": bounds, tolerances, and the
+    solver method are taken from `cfg`.
 
+    One-off overrides should be done by creating a modified config, e.g.::
+
+        from dataclasses import replace
+        cfg2 = replace(cfg, sigma_hi=10.0)
+        iv  = implied_vol_bs_result(price, spec, market, cfg=cfg2)
+
+    The objective uses :func:`option_pricing.bs_greeks` for both price and vega.
+    Vega is clamped below by ``cfg.numerics.min_vega`` for robustness.
+    """
+    cfg = ImpliedVolConfig() if cfg is None else cfg
+    num = cfg.numerics
+
+    sigma_lo = float(cfg.sigma_lo)
+    sigma_hi = float(cfg.sigma_hi)
+
+    # Validate bounds with configured epsilon
+    lb, ub, tau = _validate_bounds(
+        mkt_price, spec, market, t, eps=float(cfg.bounds_eps)
+    )
+
+    # Resolve internal root solver from enum
+    solver = get_root_method(cfg.root_method)
+
+    # Seed logic
     if sigma0 is None:
+        if cfg.seed_strategy in (SeedStrategy.USE_GUESS, SeedStrategy.LAST_SOLUTION):
+            raise ValueError(
+                "sigma0 must be provided when seed_strategy is USE_GUESS or LAST_SOLUTION"
+            )
         sigma0 = _iv_seed_from_time_value(
             mkt_price=mkt_price,
             spec=spec,
@@ -369,22 +393,33 @@ def implied_vol_bs_result(
             sigma_lo=sigma_lo,
             sigma_hi=sigma_hi,
         )
+    else:
+        sigma0 = float(sigma0)
 
-    p0 = PricingInputs(spec=spec, market=market, sigma=float(sigma0), t=t)
+    # Clamp seed into solver domain
+    sigma0 = float(min(sigma_hi, max(sigma_lo, sigma0)))
+
+    p0 = PricingInputs(spec=spec, market=market, sigma=sigma0, t=t)
 
     def Fn(sigma: float) -> float:
         px = replace(p0, sigma=float(sigma))
-        return float(bs_greeks(px)["price"]) - mkt_price
+        return float(bs_greeks(px)["price"]) - float(mkt_price)
 
     def dFn(sigma: float) -> float:
         px = replace(p0, sigma=float(sigma))
-        return float(bs_greeks(px)["vega"])
+        vega = float(bs_greeks(px)["vega"])
+        return max(float(num.min_vega), vega)
 
-    kwargs: dict[str, object] = dict(x0=p0.sigma, dFn=dFn, tol_f=tol_f, tol_x=tol_x)
-    if max_iter is not None:
-        kwargs["max_iter"] = int(max_iter)
-
-    rr = root_method(Fn, float(sigma_lo), float(sigma_hi), **kwargs)
+    rr = solver(
+        Fn,
+        sigma_lo,
+        sigma_hi,
+        x0=sigma0,
+        dFn=dFn,
+        tol_f=float(num.abs_tol),
+        tol_x=float(num.rel_tol),
+        max_iter=int(num.max_iter),
+    )
 
     return ImpliedVolResult(
         vol=float(rr.root),
@@ -399,15 +434,10 @@ def implied_vol_bs(
     mkt_price: float,
     spec: OptionSpec,
     market: MarketData,
-    root_method: Callable[..., RootResult],
     *,
+    cfg: ImpliedVolConfig | None = None,
     t: float = 0.0,
     sigma0: float | None = None,
-    sigma_lo: float = 1e-8,
-    sigma_hi: float = 5.0,
-    tol_f: float = 1e-10,
-    tol_x: float = 1e-10,
-    max_iter: int | None = None,
 ) -> float:
     """Compute Black-Scholes implied volatility.
 
@@ -422,22 +452,14 @@ def implied_vol_bs(
         Option specification (kind, strike, expiry).
     market : MarketData
         Market observables (spot, rate, dividend yield).
-    root_method : Callable[..., RootResult]
-        Root-finder compatible with :func:`implied_vol_bs_result`.
+    cfg : ImpliedVolConfig or None, optional
+        Configuration for implied-vol inversion. If ``None``, ``ImpliedVolConfig()``
+        is used.
     t : float, default 0.0
         Valuation time in the same units as ``spec.expiry``.
     sigma0 : float or None, default None
-        Initial volatility guess. If ``None``, a heuristic seed is computed.
-    sigma_lo : float, default 1e-8
-        Lower bound of the volatility search interval.
-    sigma_hi : float, default 5.0
-        Upper bound of the volatility search interval.
-    tol_f : float, default 1e-10
-        Function tolerance passed to the root solver.
-    tol_x : float, default 1e-10
-        Parameter tolerance passed to the root solver.
-    max_iter : int or None, default None
-        Maximum iterations passed to the root solver (if provided).
+        Initial volatility guess. If ``None``, the seed is chosen according to
+        ``cfg.seed_strategy``.
 
     Returns
     -------
@@ -450,17 +472,14 @@ def implied_vol_bs(
         If the input price violates no-arbitrage bounds.
     ValueError
         If expiry is not strictly greater than ``t``.
+    ValueError
+        If ``sigma0`` is required by the configured seed strategy but not provided.
     """
     return implied_vol_bs_result(
         mkt_price=mkt_price,
         spec=spec,
         market=market,
-        root_method=root_method,
+        cfg=cfg,
         t=t,
         sigma0=sigma0,
-        sigma_lo=sigma_lo,
-        sigma_hi=sigma_hi,
-        tol_f=tol_f,
-        tol_x=tol_x,
-        max_iter=max_iter,
     ).vol
