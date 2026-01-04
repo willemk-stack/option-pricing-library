@@ -46,6 +46,6 @@ jobs:
           MPLBACKEND: Agg
         run: |
           python -m pip install nbmake
-          pytest -q .\demos --nbmake --nbmake-timeout=300
+          pytest -q ./demos --nbmake --nbmake-timeout=300
 
 
