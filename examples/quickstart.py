@@ -13,6 +13,7 @@ def main() -> None:
         bs_price,
         mc_price,
     )
+    from option_pricing.config import MCConfig, RandomConfig
 
     market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.0)
     spec = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)
@@ -21,7 +22,8 @@ def main() -> None:
     print("BS:", bs_price(p))
     print("Greeks:", bs_greeks(p))
 
-    price_mc, se = mc_price(p, n_paths=200_000, antithetic=True, seed=0)
+    cfg_mc = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=0))
+    price_mc, se = mc_price(p, cfg=cfg_mc)
     print("MC:", price_mc, "(SE=", se, ")")
 
     print("CRR:", binom_price(p, n_steps=500))

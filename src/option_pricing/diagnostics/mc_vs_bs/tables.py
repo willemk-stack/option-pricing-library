@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pandas as pd
 
+from option_pricing.config import MCConfig, RandomConfig
+
 if TYPE_CHECKING:  # pragma: no cover
     from option_pricing.types import PricingInputs
 else:  # pragma: no cover
@@ -91,7 +93,16 @@ def run_mc_vs_bs_cases(
         if seed is not None:
             seed_i = int(seed + i) if per_case_seed else int(seed)
 
-        out = mc_price_fn(p, n_paths=int(n_paths), seed=seed_i, rng=rng)
+        # mc_price is config-driven; keep legacy function signature here
+        # by adapting (n_paths, seed, rng) into an MCConfig.
+        if rng is not None:
+            cfg = MCConfig(n_paths=int(n_paths), rng=rng)
+        elif seed_i is None:
+            cfg = MCConfig(n_paths=int(n_paths), rng=np.random.default_rng())
+        else:
+            cfg = MCConfig(n_paths=int(n_paths), random=RandomConfig(seed=int(seed_i)))
+
+        out = mc_price_fn(p, cfg=cfg)
 
         # allow different MC return conventions
         if isinstance(out, tuple) and len(out) >= 2:
@@ -191,7 +202,12 @@ def convergence_table(
 
     rows = []
     for n in n_paths_list:
-        out = mc_fn(p, n_paths=int(n), seed=seed)
+        if seed is None:
+            cfg = MCConfig(n_paths=int(n), rng=np.random.default_rng())
+        else:
+            cfg = MCConfig(n_paths=int(n), random=RandomConfig(seed=int(seed)))
+
+        out = mc_fn(p, cfg=cfg)
         if isinstance(out, tuple) and len(out) >= 2:
             mc_val, se_val = _to_float(out[0]), _to_float(out[1])
         elif isinstance(out, dict) and "price" in out:

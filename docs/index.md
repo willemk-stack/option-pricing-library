@@ -26,13 +26,15 @@ from option_pricing import (
     binom_price,
     mc_price,
 )
+from option_pricing.config import MCConfig, RandomConfig
 
 market = MarketData(spot=100.0, rate=0.05)
 opt = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)  # expiry is an absolute time
 p = PricingInputs(spec=opt, market=market, sigma=0.20, t=0.0)
 
 bs = bs_price(p)
-mc, se = mc_price(p, n_paths=50_000, seed=0)
+cfg_mc = MCConfig(n_paths=50_000, random=RandomConfig(seed=0))
+mc, se = mc_price(p, cfg=cfg_mc)
 binom = binom_price(p, n_steps=400)
 
 print(f"BS:    {bs:.4f}")
