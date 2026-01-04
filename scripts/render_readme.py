@@ -12,15 +12,16 @@ def extract_block(path: Path, start_marker: str, end_marker: str) -> str:
     text = path.read_text(encoding="utf-8")
 
     start = text.find(start_marker)
-    end = text.find(end_marker)
-    if start == -1 or end == -1 or end <= start:
-        raise ValueError(
-            f"Could not find markers in {path}: {start_marker} / {end_marker}"
-        )
+    if start == -1:
+        raise ValueError(f"Could not find start marker in {path}: {start_marker}")
 
-    block = text[start + len(start_marker) : end]
+    start_content = start + len(start_marker)
+    end = text.find(end_marker, start_content)
+    if end == -1 or end <= start_content:
+        raise ValueError(f"Could not find end marker in {path}: {end_marker}")
+
+    block = text[start_content:end]
     block = block.strip("\n")
-    # If snippet lives inside a function, this removes indentation nicely.
     block = textwrap.dedent(block).strip("\n")
     return block
 
@@ -33,13 +34,24 @@ def render(template_path: Path, out_path: Path, *, check: bool) -> int:
         start_marker="# [START README_QUICKSTART]",
         end_marker="# [END README_QUICKSTART]",
     )
+
+    curves_first = extract_block(
+        ROOT / "examples" / "curves_first.py",
+        start_marker="# [START README_CURVES_FIRST]",
+        end_marker="# [END README_CURVES_FIRST]",
+    )
+
     iv = extract_block(
         ROOT / "examples" / "implied_vol.py",
         start_marker="# [START README_IMPLIED_VOL]",
         end_marker="# [END README_IMPLIED_VOL]",
     )
 
-    rendered = tpl.replace("{{ QUICKSTART }}", quick).replace("{{ IMPLIED_VOL }}", iv)
+    rendered = (
+        tpl.replace("{{ QUICKSTART }}", quick)
+        .replace("{{ CURVES_FIRST }}", curves_first)
+        .replace("{{ IMPLIED_VOL }}", iv)
+    )
 
     if check:
         current = out_path.read_text(encoding="utf-8") if out_path.exists() else ""

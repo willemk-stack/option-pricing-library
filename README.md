@@ -16,7 +16,7 @@ Typed Python library for **European vanilla option pricing** (Black–Scholes, M
 - **CRR binomial tree** pricer (European)
 - **Implied volatility (BS inversion)** with robust bracketing/root-finding utilities
 - **Volatility objects**: Smile, VolSurface (surface/smile containers + interpolation)
-- Small public API: a `PricingInputs` bundle + top-level pricers
+- Two market APIs: `MarketData` + `PricingInputs` (flat convenience) and `PricingContext` + curves (curves-first).
 
 Docs: https://willemk-stack.github.io/option-pricing-library/  
 API:  https://willemk-stack.github.io/option-pricing-library/api/
@@ -66,24 +66,82 @@ print("MC:", price_mc, "(SE=", se, ")")
 print("CRR:", binom_price(p, n_steps=500))
 ```
 
+## Curves-first example (PricingContext)
+
+```python   
+from option_pricing import (
+    FlatCarryForwardCurve,
+    FlatDiscountCurve,
+    OptionType,
+    PricingContext,
+    binom_price_from_ctx,
+    bs_greeks_from_ctx,
+    bs_price_from_ctx,
+    mc_price_from_ctx,
+)
+from option_pricing.config import MCConfig, RandomConfig
+
+spot = 100.0
+r = 0.05
+q = 0.00
+sigma = 0.20
+tau = 1.0
+K = 100.0
+
+discount = FlatDiscountCurve(r)
+forward = FlatCarryForwardCurve(spot=spot, r=r, q=q)
+ctx = PricingContext(spot=spot, discount=discount, forward=forward)
+
+print(
+    "BS:",
+    bs_price_from_ctx(
+        kind=OptionType.CALL, strike=K, sigma=sigma, tau=tau, ctx=ctx
+    ),
+)
+print(
+    "Greeks:",
+    bs_greeks_from_ctx(
+        kind=OptionType.CALL, strike=K, sigma=sigma, tau=tau, ctx=ctx
+    ),
+)
+
+cfg_mc = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=0))
+price_mc, se = mc_price_from_ctx(
+    kind=OptionType.CALL, strike=K, sigma=sigma, tau=tau, ctx=ctx, cfg=cfg_mc
+)
+print("MC:", price_mc, "(SE=", se, ")")
+
+print(
+    "CRR:",
+    binom_price_from_ctx(
+        kind=OptionType.CALL, strike=K, sigma=sigma, tau=tau, ctx=ctx, n_steps=500
+    ),
+)
+```
+
+
 ---
 
 ### Implied volatility (BS inversion)
 
 ```python
-from option_pricing import MarketData, OptionSpec, OptionType, implied_vol_bs_result
-from option_pricing.config import ImpliedVolConfig
-from option_pricing.numerics.root_finding import RootMethod
+from option_pricing import (
+    ImpliedVolConfig,
+    MarketData,
+    OptionSpec,
+    OptionType,
+    RootMethod,
+    implied_vol_bs_result,
+)
 
 market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.0)
 spec = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)
 
-res = implied_vol_bs_result(
-    mkt_price=10.0,
-    spec=spec,
-    market=market,
-    cfg=ImpliedVolConfig(root_method=RootMethod.BRACKETED_NEWTON),
+cfg = ImpliedVolConfig(
+    root_method=RootMethod.BRACKETED_NEWTON, sigma_lo=1e-8, sigma_hi=5.0
 )
+
+res = implied_vol_bs_result(mkt_price=10.0, spec=spec, market=market, cfg=cfg)
 
 rr = res.root_result
 print(f"IV: {res.vol:.6f}")
