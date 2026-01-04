@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Python **3.10+** (tested with 3.12)
+- Python **3.12+** (tested with 3.12)
 - Core dependencies: **numpy**, **scipy**
 
 Optional extras are available for plotting and notebook workflows.

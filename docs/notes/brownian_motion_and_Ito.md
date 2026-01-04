@@ -1,120 +1,153 @@
-# Brownian Motion
+# Brownian motion and Itô calculus
 
-## Goals
-- Explore properties of brownian motion
-    - Simulate sample paths
-    - Analyse mean and variance
-- Introduce a simple example of Ito math.
-- Build a foundation and intivituity of brownian motion for later more complex projects.
+Brownian motion is the canonical continuous-time “randomness” used in finance. Itô calculus is the extension of ordinary
+calculus that lets us differentiate and integrate functions of Brownian-driven processes.
 
-## Contents
-1. Definition and intuition
-2. Simulation of paths
-3. Mean and variance over time
-4. Independence of increments
-5. Ito example: W_t^2
+## Learning goals
 
-## **1: Definition and intuition**
-### Formal definition of Brownian motion
-In this Notebook, we will be working with a Brownian motion, which is a continuous-time stochastic process satisfying these properties:
-Let $(\Omega,\mathcal{F}, \mathbb{P})$ be a probability space. Then for a Brownian motion $W(t)$, $t \geq 0$
-1. $W_0 = 0$ Almost surely
-2. $0=t_0​<t_1​<\cdots<t_m$
-    $$
-    W_{t_{1}}-W_{t_{0}}, W_{t_{2}}-W_{t_{1}}, \cdots, W_{t_{m}}-W_{t_{m-1}}\quad
-    \text{are independent and normally distributed, satisfying:}
-    $$
-3. 
-    $
-    \mathbb{E}[W(t_{i+1})-W(t_i)] = 0, \quad \forall i 
-    $
-4. 
-    $
-    \text{Var}[W(t_{i+1})-W(t_i)] = t_{i+1} - t_i,\quad \forall i
-    $
+- Know the defining properties of Brownian motion and what they imply.
+- Simulate sample paths and verify mean/variance numerically.
+- Understand why increments are independent (and why that matters for modelling).
+- Apply Itô’s lemma in a simple example and see where the extra \(\tfrac12 f_{xx}\,dt\) term comes from.
 
-Source: Adapted from S. Shreve, *Stochastic Calculus for Finance II: Continuous-Time Models*, Definition 3.3.1.
+## 1. Definition and intuition
 
-### Intuition/Visualisation
-- Scaled limit of random walk
-- Continous but jagged.
-    - Though the function is continuous for every t, it is not differentiable as it is not a smooth function.
-- The brownian motion has no tendency to go up or down, see def 3, the Exp val of W(s) at time t = s is W(s). This is not to say that Brownian motion will always converge to 0 but if it attains W(s) the Exp val of W(s) at time t = s is W(s)
-- 
+### Formal definition
 
-### Relevance to Finance
+A process \((W_t)_{t\ge 0}\) is a **(standard) Brownian motion** if:
 
-Brownian motion is fundamental to quantitative finance. It is the canonical model for continuous-time randomness and is the process on which Itô calculus is first developed. Because Brownian motion is the continuous-time limit of random walks, it presents a natural way to model a stock's random price fluctuations.
+1. \(W_0=0\).
+2. \(W_t\) has **continuous** sample paths.
+3. For \(0\le s<t\), the increment \(W_t-W_s\) is normally distributed:
 
-In the Black–Scholes–Merton model, the (discounted) asset price is driven by Brownian motion:
-$$
-dS_t = \mu S_t dt + \sigma S_t dW_t
-$$
-Here the drift term ($\mu S_t dt$) represents the instantaneous expected growth, while the Brownian term $\sigma S_t dW_t$ models volatitly.
+\[
+W_t-W_s \sim \mathcal N(0,\,t-s).
+\]
 
-Under the **risk-neutral measure**, we adjust the drift so that the **discounted price** $e^{-rt}S_t$ becomes a martingale. Intuitively, this means that, once you remove the risk-free rate, there is no predictable way to make excess profit: the “fair” expected return of the asset is just the risk-free rate. Brownian motion is still the source of randomness, but the drift changes, and this is what ultimately leads to the Black–Scholes option pricing formula, which we will see in a later notebook _{insert notebook}_.
+4. Increments over disjoint intervals are **independent** (and the distribution depends only on the length, so increments are
+   stationary).
 
+Immediate consequences:
 
-## Ito example
-In this section I will give an example how Ito's calculus is used as a tool. We will return to more of the math heavy stuff in a later notebook to derive the BSM. For now let us give a simple example.
+- \(\mathbb{E}[W_t]=0\), \(\operatorname{Var}(W_t)=t\).
+- \(\operatorname{Cov}(W_s,W_t)=\min(s,t)\).
+- Scaling: \((W_{ct})_{t\ge 0}\) has the same law as \((\sqrt{c}\,W_t)_{t\ge 0}\).
 
-Given $f(t,X)$, where $X=X(t)$ is a random adapted (mb give def) process. Ito's lemma gives the following rule for the total derivative $d(f(t,x))$
-$$d(f(t,X)) = f_{x}(t,X)dX + f_t(t,X)dt + \frac{1}{2}f_{xx}(t,X)dXdX \quad(*)$$
+### Intuition
 
-For a Brownian motion $(W(t))_{t \geq 0}$ as defined previously, the following multiplication rules apply:
-$$
-dWdt = dtdW = dtdt = 0,\quad dWdW = dt
-$$
-Now, let us look at $f(t, W(t)) = (W(t))^2$ and find its total derivative using
-Itô's lemma.
+You can think of Brownian motion as the continuous-time limit of a random walk:
+many tiny independent shocks accumulate into a path that is continuous but extremely jagged
+(almost surely nowhere differentiable).
 
-For $f(t,x) = x^2$ xe have
-$$
-f_t(t,x) = 0, \qquad f_x(t,x) = 2x, \qquad f_{xx}(t,x) = 2.
-$$
+### Why finance cares
 
-Applying Itô's lemma with $X(t) = W(t)$ gives
-\begin{align*}
-d(W(t)^2)
-&= f_t\,dt + f_w\,dW(t) + \tfrac{1}{2} f_{ww}\,(dW(t))^2 \\
-&= 0\cdot dt + 2W(t)\,dW(t) + \tfrac{1}{2}\cdot 2\,(dW(t))^2.
-\end{align*}
-Using $(dW(t))^2 = dt$, this simplifies to
-$$
-d(W(t)^2) = 2W(t)\,dW(t) + dt.
-$$
+In the Black–Scholes–Merton model (and many extensions), the stock price is driven by Brownian motion:
 
-Integrating from $0$ to $t$ we obtain
-$$
-W(t)^2 - W(0)^2 = 2\int_0^t W(s)\,dW(s) + \int_0^t ds,
-$$
-so
-$$
-W(t)^2 = W(0)^2 + 2\int_0^t W(s)\,dW(s) + t.
-$$
+\[
+dS_t = \mu S_t\,dt + \sigma S_t\,dW_t.
+\]
 
-For a standard Brownian motion $W(0) = 0$, hence
-$$
-W(t)^2 = 2\int_0^t W(s)\,dW(s) + t.
-$$
+This captures the idea of many small, approximately independent sources of uncertainty aggregated over time.
 
-Let us analyze the expectation value of $W(t)^2$. Define
-$$
-I(t) := \int_0^t W(s)\,dW(s).
-$$
-Since $I(t)$ is an Itô integral with adapted integrand, it is a martingale and
-$I(0)=0$. Therefore
-$$
-\mathbb{E}[I(t)] = \mathbb{E}[I(0)] = 0.
-$$
+## 2. Simulating sample paths
 
-Taking expectations in the identity for $W(t)^2$ gives
-$$
-\mathbb{E}[W(t)^2]
-= 2\,\mathbb{E}[I(t)] + t
-= 2\cdot 0 + t
-= t.
-$$
-So we recover the familiar result $\mathbb{E}[W(t)^2] = t$.
+To simulate \(W_t\) on \([0,T]\), choose a grid \(0=t_0<t_1<\dots<t_n=T\) with \(\Delta t_k=t_k-t_{k-1}\).
+Generate i.i.d. increments
 
-Lets see if our theory holds up by simulating paths for $W(t)^2$, and computing the mean over time.
+\[
+\Delta W_k := W_{t_k}-W_{t_{k-1}} \sim \mathcal N(0,\,\Delta t_k),
+\]
+
+and set
+
+\[
+W_{t_k} = \sum_{j=1}^k \Delta W_j.
+\]
+
+**Pseudo-code**
+
+```text
+W = 0
+for k = 1..n:
+    dW ~ Normal(0, sqrt(dt))
+    W = W + dW
+    store W
+```
+
+This is also the building block for simulating GBM paths and Monte Carlo option pricing.
+
+## 3. Mean and variance over time
+
+From the definition,
+
+\[
+\mathbb{E}[W_t]=0,\qquad \operatorname{Var}(W_t)=t.
+\]
+
+A useful check when you simulate \(M\) independent paths is:
+
+- the sample mean of \(W_t\) should be close to 0,
+- the sample variance of \(W_t\) should be close to \(t\),
+- and the standard error of the sample mean scales like \(1/\sqrt{M}\).
+
+## 4. Independence of increments (and the Markov property)
+
+Independence means that, conditional on the present, the future increment is “fresh noise”:
+
+\[
+(W_t-W_s) \perp\!\!\!\perp\; \mathcal F_s.
+\]
+
+In particular, Brownian motion is a **Markov process**: given \(W_s\), the future depends on the past only through \(W_s\).
+
+For modelling, this is the simplest way to encode “no memory” at the noise level. Many models introduce memory by replacing
+Brownian motion with something richer (e.g., stochastic volatility, rough volatility), but Brownian motion is the baseline.
+
+## 5. Itô calculus: a first example
+
+### The Itô multiplication rules
+
+For Brownian motion increments we treat differentials according to:
+
+\[
+(dW_t)^2 = dt,\qquad dW_t\,dt = dt\,dW_t = (dt)^2 = 0.
+\]
+
+This encodes Brownian motion’s **quadratic variation**, which is the source of the extra Itô term.
+
+### Itô’s lemma
+
+If \(X_t\) follows
+
+\[
+dX_t = a(t,X_t)\,dt + b(t,X_t)\,dW_t,
+\]
+
+and \(f(t,x)\) is sufficiently smooth, then
+
+\[
+df(t,X_t)
+= f_t\,dt + f_x\,dX_t + \tfrac12 f_{xx}\,(dX_t)^2
+= \left(f_t + a f_x + \tfrac12 b^2 f_{xx}\right)dt + b f_x\,dW_t.
+\]
+
+### Example: \(f(W_t)=W_t^2\)
+
+Take \(X_t=W_t\) so \(a=0\), \(b=1\), and \(f(x)=x^2\). Then \(f_x=2x\), \(f_{xx}=2\), and Itô’s lemma gives
+
+\[
+d(W_t^2) = 2W_t\,dW_t + dt.
+\]
+
+Taking expectations and using \(\mathbb{E}[\int_0^t W_s\,dW_s]=0\),
+
+\[
+\mathbb{E}[W_t^2] = t,
+\]
+
+matching \(\operatorname{Var}(W_t)=t\).
+
+## Where to go next
+
+- Brownian-driven stock dynamics are solved in [GBM](gbm.md).
+- The Black–Scholes PDE and formula use Itô’s lemma implicitly; see [Black–Scholes pricing](bs_pricing.md).

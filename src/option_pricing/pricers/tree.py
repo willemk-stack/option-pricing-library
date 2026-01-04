@@ -6,8 +6,9 @@ from functools import partial
 from math import comb, exp
 from typing import Literal, overload
 
+from ..market.curves import avg_carry_from_forward, avg_rate_from_df
 from ..models.binomial_crr import BinomialModel
-from ..types import OptionType, PricingInputs
+from ..types import OptionType, PricingContext, PricingInputs
 
 # ----------------------------
 # Payoff helpers (ruff-friendly)
@@ -209,14 +210,79 @@ def price_european_closed_form(
 
 
 def _model_from_inputs(p: PricingInputs, n_steps: int) -> BinomialModel:
+    ctx = p.ctx
+    df = ctx.df(p.tau)
+    F = ctx.fwd(p.tau)
+    r = avg_rate_from_df(df, p.tau)
+    b = avg_carry_from_forward(ctx.spot, F, p.tau)
+    q = r - b
     return BinomialModel.from_crr(
-        S0=p.S,
-        r=p.r,
-        q=p.q,
+        S0=ctx.spot,
+        r=r,
+        q=q,
         sigma=p.sigma,
         T=p.tau,
         n_steps=n_steps,
     )
+
+
+def _model_from_ctx(
+    ctx: PricingContext, *, tau: float, sigma: float, n_steps: int
+) -> BinomialModel:
+    """Build a CRR binomial model from curves-first inputs."""
+    tau = float(tau)
+    if tau <= 0.0:
+        raise ValueError("tau must be > 0")
+    df = ctx.df(tau)
+    F = ctx.fwd(tau)
+    r = avg_rate_from_df(df, tau)
+    b = avg_carry_from_forward(ctx.spot, F, tau)
+    q = r - b
+    return BinomialModel.from_crr(
+        S0=ctx.spot,
+        r=r,
+        q=q,
+        sigma=float(sigma),
+        T=tau,
+        n_steps=int(n_steps),
+    )
+
+
+def binom_price_from_ctx(
+    *,
+    kind: OptionType,
+    strike: float,
+    sigma: float,
+    tau: float,
+    ctx: PricingContext,
+    n_steps: int,
+    american: bool = False,
+    method: Literal["tree", "closed_form"] = "tree",
+) -> float:
+    """Binomial (CRR) price from curves-first inputs.
+
+    Parameters are expressed in **time-to-expiry** ``tau``. Discounting and forward
+    information is supplied via ``ctx`` (discount and forward curves).
+    """
+    model = _model_from_ctx(
+        ctx, tau=float(tau), sigma=float(sigma), n_steps=int(n_steps)
+    )
+    payoff: Callable[[float], float]
+    if kind == OptionType.CALL:
+        payoff = partial(_call_payoff, K=float(strike))
+    elif kind == OptionType.PUT:
+        payoff = partial(_put_payoff, K=float(strike))
+    else:
+        raise ValueError("Unsupported option kind")
+
+    if american:
+        if method != "tree":
+            raise ValueError("American options require method='tree'.")
+        return price_american_tree(model, payoff)
+
+    if method == "tree":
+        return price_european_tree(model, payoff)
+    return price_european_closed_form(model, payoff)
 
 
 def binom_price(

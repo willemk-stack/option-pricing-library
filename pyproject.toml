@@ -7,16 +7,31 @@ name = "option_pricing"                     # this is the name you'll install wi
 version = "0.1.0"
 description = "Core option pricing library"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 
 authors = [{ name = "Willem Knibbe", email = "willemknibbe0@gmail.com" }]
 
 dependencies = ["numpy", "scipy"]
 
 [project.optional-dependencies]
-dev = ["pytest", "jupyter", "ruff", "black", "mypy", "matplotlib"]
+dev = [
+    "pandas",
+    "matplotlib",
+    "jupyter",
+    "nbmake",
+    "pytest",
+    "ruff",
+    "black",
+    "mypy",
+]
 notebooks = ["jupyter", "matplotlib", "pandas"]
 plot = ["matplotlib"]
+docs = [
+    "mkdocs",
+    "mkdocs-material",
+    "pymdown-extensions",
+    "mkdocstrings[python]",
+]
 
 [tool.black]
 line-length = 88

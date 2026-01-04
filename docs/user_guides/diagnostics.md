@@ -26,7 +26,8 @@ from dataclasses import replace
 import numpy as np
 
 from option_pricing import MarketData, OptionSpec, OptionType, PricingInputs
-from option_pricing.diagnostics.mc_vs_bs import compare_table
+from option_pricing.diagnostics.mc_vs_bs.tables import compare_table
+
 
 base = PricingInputs(
     spec=OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0),
@@ -49,7 +50,8 @@ display(df.head())
 ## Convergence table (SE scaling)
 
 ```python
-from option_pricing.diagnostics.mc_vs_bs import convergence_table
+from option_pricing.diagnostics.mc_vs_bs.tables import convergence_table
+
 
 df_conv = convergence_table(base, n_paths_list=[1_000, 5_000, 10_000, 50_000], seed=0)
 display(df_conv)
@@ -59,7 +61,7 @@ A quick “math-signal” check is that SE drops roughly like `1/sqrt(N)`.
 
 ## Plotting helpers
 
-- `option_pricing.plotting.core` contains generic histogram/curve utilities.
-- `option_pricing.diagnostics.mc_vs_bs_plots` contains plotting helpers for the comparison tables.
+- `option_pricing.viz.core` contains generic histogram/curve utilities.
+- `option_pricing.diagnostics.mc_vs_bs.plots` contains plotting helpers for the comparison tables.
 
 These require `matplotlib`.

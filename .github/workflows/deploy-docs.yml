@@ -20,22 +20,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           cache: "pip"
+          cache-dependency-path: |
+            pyproject.toml
+            requirements*.txt
+
+      - name: README is up to date
+        run: python scripts/render_readme.py --check
 
       - name: Install docs deps + package
         run: |
           python -m pip install -U pip
-          pip install mkdocs mkdocs-material mkdocstrings[python]
+          pip install -e ".[docs]"
           pip install -e .
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+      
+      - name: Build docs figures
+        run: python scripts/make_docs_figures.py
 
       - name: Build site
         run: mkdocs build --strict --site-dir site

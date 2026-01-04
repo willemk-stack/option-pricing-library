@@ -41,7 +41,7 @@ print(g["delta"], g["gamma"], g["vega"], g["theta"])
 The BS module includes an optional helper that plots price + Greeks across spot levels:
 
 ```python
-from option_pricing.models.bs import sweep_x
+from option_pricing.diagnostics.greeks.sweep.sweep_spot_greeks import sweep_x
 
 sweep_x(K=100, r=0.01, sigma=0.2, T=1.0, method="analytic")
 ```

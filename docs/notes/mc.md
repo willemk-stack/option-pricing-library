@@ -1,84 +1,134 @@
-**Objectives**
-- Shortly reflect on MC theory and risk-neutral pricing theory
-- Implement a MC pricer and use it for european calls
-- Compare to BS and demonstrate convergence and error
-- Apply variance reduction techniques
+# Monte Carlo option pricing
 
-In quantitative finance, \textbf{Monte Carlo (MC)} methods provide a way to price derivatives by approximating payoff expectations taken under a risk-neutral measure. The central idea is that, under standard no-arbitrage assumptions, the discounted value of an option equals the  expectation of its payoff.
+Monte Carlo (MC) methods price derivatives by simulating the underlying under the **risk-neutral measure**
+and averaging discounted payoffs. MC is flexible: it handles high dimensions and path-dependent payoffs naturally.
+Its trade-off is statistical noise (convergence is \(O(1/\sqrt{N})\)).
 
-### Risk-neutral pricing
+## Objectives
 
-Let $V_t$ denote the value at time $t$ of a claim that pays $g(\text{path})$ at maturity $T$, where the payoff may depend on the entire price path (e.g.\ Asian, barrier, lookback options) or only on the terminal value (e.g.\ European options). Then there exists an equivalent  risk-neutral measure (i.e they agree when probabilities are zero) $\mathbb{Q}$ such that
-$$
-V_t \;=\; \mathbb{E}^{\mathbb{Q}}\!\left[ D(t,T)\, g(\text{path}) \,\middle|\, \mathcal{F}_t \right],
-$$
-where $D(t,T)$ is the discount factor from $T$ back to $t$. If the instantaneous risk-free interest rate is constant and equal to $r$, then
-$$
-D(t,T) \;=\; e^{-r(T-t)}.
-$$
-In particular, at $t=0$,
-$$
-V_0 \;=\; \mathbb{E}^{\mathbb{Q}}\!\left[ e^{-rT}\, g(\text{path}) \right].
-$$
+- Connect Monte Carlo to [risk-neutral pricing](risk_neutral_pricing.md).
+- Build the basic MC estimator for European options under GBM.
+- Understand standard error / confidence intervals.
+- See the main variance-reduction ideas used in practice.
 
-**Example: European call under Black--Scholes**
+## 1. Risk-neutral pricing recap
 
-We will mostly focus on a \textbf{European call} with strike $K$ and maturity $T$, with payoff
-$$
-g(S_T) \;=\; (S_T-K)^+.
-$$
-Under the Black--Scholes assumptions (see `03_black_scholes_pricing.ipynb`), the stock price under the risk-neutral measure $\mathbb{Q}$ follows
-$$
-dS_t \;=\; r S_t\,dt \;+\; \sigma S_t\, dW_t^{\mathbb{Q}}.
-$$
-Risk-neutral valuation then gives the time-$0$ call price
-$$
-C_0 \;=\; \mathbb{E}^{\mathbb{Q}}\!\left[e^{-rT}(S_T-K)^+\right].
-$$
+Let \(V_t\) be the value at time \(t\) of a claim paying \(H_T\) at \(T\).
+Then
 
-In this setting, $C_0$ is also available in closed form via the Black--Scholes formula, which we will use as a benchmark for our Monte Carlo estimates.
+\[
+V_t = \mathbb{E}^{\mathbb{Q}}\!\left[\left.D(t,T)\,H_T\right|\mathcal{F}_t\right].
+\]
 
-### Monte Carlo estimator
-Define the discounted payoff random variable
-$$
-X \;:=\; e^{-rT}(S_T-K)^+,
-$$
-so that the call price can be written as the risk-neutral expectation
-$$
-C_0 \;=\; \mathbb{E}^{\mathbb{Q}}[X].
-$$
-By definition, an expectation is the average value of $X$ under $\mathbb{Q}$. Monte Carlo approximates this average by an empirical mean of $N$ i.i.d.\ samples $X^{(1)},\dots,X^{(N)}$:
-$$
-\widehat{C}_N \;:=\; \frac{1}{N}\sum_{i=1}^N X^{(i)} \;\approx\; \mathbb{E}^{\mathbb{Q}}[X] \;=\; C_0.
-$$
-Substituting $X^{(i)} = e^{-rT}(S_T^{(i)}-K)^+$ gives
-$$
-\widehat{C}_N \;=\; e^{-rT}\,\frac{1}{N}\sum_{i=1}^N (S_T^{(i)}-K)^+.
-$$
+In the basic constant-rate case, \(D(0,T)=e^{-rT}\) and
 
-In the Black--Scholes model, the terminal price admits the exact representation
-$$
-S_T \;=\; S_0 \exp\!\left(\left(r-\tfrac12\sigma^2\right)T + \sigma\sqrt{T}\,Z\right),
-\qquad Z \sim \mathcal{N}(0,1).
-$$
-Thus, the MC workflow for this example is:
-  - draw $Z^{(i)} \sim \mathcal{N}(0,1)$ for $i=1,\dots,N$,
-  - compute $S_T^{(i)} = S_0 \exp\!\left(\left(r-\tfrac12\sigma^2\right)T + \sigma\sqrt{T}\,Z^{(i)}\right)$,
-  - compute payoffs $\left(S_T^{(i)}-K\right)^+$,
-  - discount and average to obtain $\widehat{C}_N$.
+\[
+V_0 = e^{-rT}\,\mathbb{E}^{\mathbb{Q}}[H_T].
+\]
 
-Finally, Monte Carlo also provides a natural measure of statistical uncertainty. With sample variance
-$$
-s^2 \;=\; \frac{1}{N-1}\sum_{i=1}^N \left(X^{(i)} - \widehat{C}_N\right)^2,
-$$
-the standard error is approximately
-$$
-\mathrm{SE}(\widehat{C}_N) \;\approx\; \frac{s}{\sqrt{N}}.
-$$
+## 2. Monte Carlo estimator
 
+Suppose we can sample \(H_T^{(i)}\) under \(\mathbb{Q}\) for \(i=1,\dots,N\).
+The MC price estimator is
 
-(We will discuss convergence, error scaling, and confidence intervals in more detail in a dedicated section.)
+\[
+\widehat V_0 = e^{-rT}\,\frac{1}{N}\sum_{i=1}^N H_T^{(i)}.
+\]
 
-**Note**
-Implementation details
-“We use pseudo-random numbers (NumPy) and standard normals to simulate GBM increments, as in Glasserman 2.2–2.3.”
+### Error bars
+
+Let \(\sigma_H^2 = \operatorname{Var}^{\mathbb{Q}}(H_T)\).
+Then
+
+\[
+\operatorname{SE}(\widehat V_0) \approx e^{-rT}\,\frac{\widehat\sigma_H}{\sqrt{N}},
+\]
+
+and (approximately) a 95% confidence interval is
+
+\[
+\widehat V_0 \pm 1.96\,\operatorname{SE}(\widehat V_0).
+\]
+
+The slow \(1/\sqrt{N}\) rate is why variance reduction matters.
+
+## 3. Example: European call under Black–Scholes
+
+Payoff:
+
+\[
+H_T = (S_T-K)^+.
+\]
+
+Under \(\mathbb{Q}\) with no dividends,
+
+\[
+dS_t = rS_t\,dt + \sigma S_t\,dW_t^{\mathbb{Q}},
+\]
+
+so we can sample \(S_T\) exactly:
+
+\[
+S_T = S_0\exp\!\left((r-\tfrac12\sigma^2)T + \sigma\sqrt{T}\,Z\right),
+\qquad Z\sim\mathcal N(0,1).
+\]
+
+**Algorithm (exact sampling)**
+
+```text
+for i = 1..N:
+    Z ~ Normal(0,1)
+    ST = S0 * exp((r - 0.5*sigma^2)*T + sigma*sqrt(T)*Z)
+    payoff[i] = max(ST - K, 0)
+price = exp(-r*T) * mean(payoff)
+stderr = exp(-r*T) * std(payoff, ddof=1)/sqrt(N)
+```
+
+This is the cleanest baseline because there is **no time-discretization error** for European options under GBM.
+
+## 4. Variance reduction (what usually helps first)
+
+### Antithetic variates
+
+Use \(Z\) and \(-Z\) together:
+
+\[
+\widehat H = \tfrac12\big(g(Z)+g(-Z)\big).
+\]
+
+This often reduces variance for monotone payoffs with almost no extra complexity.
+
+### Control variates (often the biggest win)
+
+Pick a random variable \(Y\) with known expectation \(\mathbb{E}[Y]\), correlated with the payoff.
+For example, for a European call under GBM, the Black–Scholes price is known, so you can use the call payoff itself
+as a control via conditional expectations, or use \(S_T\) (whose expectation is known under \(\mathbb{Q}\)).
+
+A common control estimator is
+
+\[
+\widehat V^{\text{cv}} = \widehat V - \beta\,(\widehat Y - \mathbb{E}[Y]),
+\]
+
+with \(\beta\) chosen (empirically) to minimize variance.
+
+### Stratified / quasi-Monte Carlo (QMC)
+
+Replacing pseudo-random draws with low-discrepancy sequences can dramatically reduce error for smooth payoffs,
+especially in low/moderate dimension. QMC needs careful scrambling and diagnostics but is widely used.
+
+## 5. Path-dependent payoffs
+
+For payoffs depending on the full path (Asian, barrier, etc.), you typically discretize time and simulate increments:
+
+\[
+\Delta W_k \sim \mathcal N(0,\Delta t).
+\]
+
+Then you have both **statistical error** and **time-discretization error**. For GBM you can still sample exactly
+between grid points (lognormal bridges), but for more complex models you may need Euler / Milstein schemes.
+
+## Where to go next
+
+- Compare MC to the [Black–Scholes benchmark](bs_pricing.md) for European options.
+- For discrete-time intuition and early exercise, see [Binomial CRR](binomial_crr.md).

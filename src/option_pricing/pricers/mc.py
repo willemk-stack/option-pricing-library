@@ -7,8 +7,10 @@ from functools import partial
 import numpy as np
 from numpy.typing import NDArray
 
+from ..config import MCConfig, RandomConfig
+from ..market.curves import PricingContext, avg_carry_from_forward, avg_rate_from_df
 from ..models.stochastic_processes import sim_gbm_terminal
-from ..types import PricingInputs
+from ..types import OptionType, PricingInputs
 from ..vanilla import call_payoff, make_vanilla_payoff, put_payoff
 
 
@@ -222,21 +224,83 @@ class McGBMModel:
         return price, std_err
 
 
-def _make_rng(seed: int | None, rng: np.random.Generator | None) -> np.random.Generator:
-    if rng is not None:
-        return rng
-    if seed is not None:
-        return np.random.default_rng(int(seed))
-    return np.random.default_rng()
+def _rng_from_random_config(rc: RandomConfig) -> np.random.Generator:
+    """Construct a NumPy RNG from a :class:`~option_pricing.config.RandomConfig`.
+
+    Notes
+    -----
+    - ``pcg64`` uses :func:`numpy.random.default_rng`.
+    - ``mt19937`` uses :class:`numpy.random.MT19937`.
+    - ``sobol`` is not provided by NumPy; raise to make the limitation explicit.
+    """
+    seed = int(rc.seed)
+    if rc.rng_type == "pcg64":
+        return np.random.default_rng(seed)
+    if rc.rng_type == "mt19937":
+        return np.random.Generator(np.random.MT19937(seed))
+    if rc.rng_type == "sobol":
+        raise NotImplementedError(
+            "Sobol sequences are not available in NumPy. "
+            "Either pass an explicit rng=... in MCConfig, or choose rng_type='pcg64'/'mt19937'."
+        )
+    # Defensive: RandomConfig is type-restricted, but keep runtime robust.
+    raise ValueError(f"Unknown rng_type: {rc.rng_type!r}")
+
+
+def _make_mc_rng(cfg: MCConfig) -> np.random.Generator:
+    """Select the RNG for MC from MCConfig."""
+    return cfg.rng if cfg.rng is not None else _rng_from_random_config(cfg.random)
+
+
+def mc_price_from_ctx(
+    *,
+    ctx: PricingContext,
+    kind: OptionType,
+    strike: float,
+    sigma: float,
+    tau: float,
+    cfg: MCConfig | None = None,
+) -> tuple[float, float]:
+    """Monte Carlo GBM pricer using curves-first inputs.
+
+    Notes
+    -----
+    The internal GBM model still needs single-number (r, q) inputs. For a curves-first
+    context we use the *average* rates consistent with ``df(tau)`` and ``fwd(tau)``:
+
+    - ``r_avg = -log(df)/tau``
+    - ``(r-q)_avg = log(F/S)/tau``  -> ``q_avg = r_avg - (r-q)_avg``
+
+    This is exact for flat curves and provides a reasonable reduction for deterministic
+    term structures when using a terminal-only (European) GBM simulator.
+    """
+    cfg = MCConfig() if cfg is None else cfg
+    tau = float(tau)
+    df = ctx.df(tau)
+    F = ctx.fwd(tau)
+    r = avg_rate_from_df(df, tau)
+    b = avg_carry_from_forward(ctx.spot, F, tau)  # (r-q)_avg
+    q = r - b
+
+    model = McGBMModel(
+        S0=ctx.spot,
+        r=r,
+        q=q,
+        sigma=float(sigma),
+        tau=tau,
+        n_paths=int(cfg.n_paths),
+        antithetic=bool(cfg.antithetic),
+        rng=_make_mc_rng(cfg),
+    )
+
+    payoff = make_vanilla_payoff(kind, K=float(strike))
+    return model.price_european(payoff)
 
 
 def mc_price(
     p: PricingInputs,
     *,
-    n_paths: int,
-    antithetic: bool = False,
-    seed: int | None = None,
-    rng: np.random.Generator | None = None,
+    cfg: MCConfig | None = None,
 ) -> tuple[float, float]:
     """
     Price a European vanilla option using Monte Carlo simulation under a GBM model.
@@ -251,16 +315,9 @@ def mc_price(
         Pricing inputs containing (at least) the spot ``S``, risk-free rate ``r``,
         dividend yield ``q``, volatility ``sigma``, time to maturity ``tau``,
         strike ``K``, and option specification ``spec.kind`` (e.g. call/put).
-    n_paths : int
-        Number of Monte Carlo paths to simulate.
-    antithetic : bool, default False
-        If ``True``, use antithetic variates to reduce variance.
-    seed : int | None, default None
-        Seed used to initialize a new RNG when ``rng`` is not provided.
-        Ignored if ``rng`` is provided.
-    rng : np.random.Generator | None, default None
-        Optional NumPy random number generator to use. If provided, it takes
-        precedence over ``seed``.
+    cfg : MCConfig or None, optional
+        Monte Carlo configuration (path count, variance reduction, RNG policy).
+        If ``None``, ``MCConfig()`` is used.
 
     Returns
     -------
@@ -274,8 +331,8 @@ def mc_price(
     - The option is European and depends only on the terminal underlying price.
     - The simulation is performed under the risk-neutral measure with continuous
       dividend yield ``q``.
-    - Reproducibility: pass ``seed`` or an explicit ``rng``. If both are given,
-      ``rng`` is used.
+    - Reproducibility is controlled via ``cfg.random.seed`` (default 0) or by
+      passing an explicit ``cfg.rng``.
 
     See Also
     --------
@@ -284,19 +341,29 @@ def mc_price(
 
     Examples
     --------
-    >>> price, err = mc_price(p, n_paths=200_000, antithetic=True, seed=123)
+    >>> from option_pricing.config import MCConfig, RandomConfig
+    >>> cfg = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=123))
+    >>> price, err = mc_price(p, cfg=cfg)
     >>> price, err
     (10.42, 0.03)
     """
+    cfg = MCConfig() if cfg is None else cfg
+    ctx = p.ctx
+    df = ctx.df(p.tau)
+    F = ctx.fwd(p.tau)
+    r = avg_rate_from_df(df, p.tau)
+    b = avg_carry_from_forward(ctx.spot, F, p.tau)
+    q = r - b
+
     model = McGBMModel(
-        S0=p.S,
-        r=p.r,
-        q=p.q,
+        S0=ctx.spot,
+        r=r,
+        q=q,
         sigma=p.sigma,
         tau=p.tau,
-        n_paths=int(n_paths),
-        antithetic=bool(antithetic),
-        rng=_make_rng(seed, rng),
+        n_paths=int(cfg.n_paths),
+        antithetic=bool(cfg.antithetic),
+        rng=_make_mc_rng(cfg),
     )
 
     payoff = make_vanilla_payoff(p.spec.kind, K=p.K)
@@ -306,20 +373,25 @@ def mc_price(
 def mc_price_call(
     p: PricingInputs,
     *,
-    n_paths: int,
-    antithetic: bool = False,
-    seed: int | None = None,
-    rng: np.random.Generator | None = None,
+    cfg: MCConfig | None = None,
 ) -> tuple[float, float]:
+    cfg = MCConfig() if cfg is None else cfg
+    ctx = p.ctx
+    df = ctx.df(p.tau)
+    F = ctx.fwd(p.tau)
+    r = avg_rate_from_df(df, p.tau)
+    b = avg_carry_from_forward(ctx.spot, F, p.tau)
+    q = r - b
+
     model = McGBMModel(
-        S0=p.S,
-        r=p.r,
-        q=p.q,
+        S0=ctx.spot,
+        r=r,
+        q=q,
         sigma=p.sigma,
         tau=p.tau,
-        n_paths=int(n_paths),
-        antithetic=bool(antithetic),
-        rng=_make_rng(seed, rng),
+        n_paths=int(cfg.n_paths),
+        antithetic=bool(cfg.antithetic),
+        rng=_make_mc_rng(cfg),
     )
     payoff = partial(call_payoff, K=p.K)
     return model.price_european(payoff)
@@ -328,20 +400,25 @@ def mc_price_call(
 def mc_price_put(
     p: PricingInputs,
     *,
-    n_paths: int,
-    antithetic: bool = False,
-    seed: int | None = None,
-    rng: np.random.Generator | None = None,
+    cfg: MCConfig | None = None,
 ) -> tuple[float, float]:
+    cfg = MCConfig() if cfg is None else cfg
+    ctx = p.ctx
+    df = ctx.df(p.tau)
+    F = ctx.fwd(p.tau)
+    r = avg_rate_from_df(df, p.tau)
+    b = avg_carry_from_forward(ctx.spot, F, p.tau)
+    q = r - b
+
     model = McGBMModel(
-        S0=p.S,
-        r=p.r,
-        q=p.q,
+        S0=ctx.spot,
+        r=r,
+        q=q,
         sigma=p.sigma,
         tau=p.tau,
-        n_paths=int(n_paths),
-        antithetic=bool(antithetic),
-        rng=_make_rng(seed, rng),
+        n_paths=int(cfg.n_paths),
+        antithetic=bool(cfg.antithetic),
+        rng=_make_mc_rng(cfg),
     )
     payoff = partial(put_payoff, K=p.K)
     return model.price_european(payoff)

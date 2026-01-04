@@ -7,23 +7,60 @@ docs_dir: docs
 
 theme:
   name: material
+  features:
+    - content.code.copy
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
 
 plugins:
   - search
-  - mkdocstrings
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: numpy
+            show_source: false
+            separate_signature: true
+            show_signature_annotations: true
+
+markdown_extensions:
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.superfences
+  - admonition
+  - footnotes
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
 nav:
   - Home: index.md
-  - Installation: installation.md
-  - Quickstart: user_guides/quickstart.md
+
   - User guides:
-      - Black–Scholes: user_guides/black_scholes.md
+      - user_guides/index.md
+      - Installation: installation.md
+      - Quickstart: user_guides/quickstart.md
+      - Market APIs: user_guides/market_api.md
+      - Black-Scholes: user_guides/black_scholes.md
       - Monte Carlo: user_guides/monte_carlo.md
       - Binomial CRR: user_guides/binomial_crr.md
       - Diagnostics: user_guides/diagnostics.md
-  - API: api.md
+      - Implied volatility: user_guides/implied_vol.md
+      - Volatility surface: user_guides/vol_surface.md
+
   - Notes:
-      - Black–Scholes pricing: notes/bs_pricing.md
+      - notes/index.md
+      - Black-Scholes pricing: notes/bs_pricing.md
       - GBM: notes/gbm.md
       - Monte Carlo: notes/mc.md
       - Binomial CRR: notes/binomial_crr.md
       - Brownian motion and Itô: notes/brownian_motion_and_Ito.md
+      - Implied volatility: notes/IV.md
+      - Risk neutral pricing: notes/risk_neutral_pricing.md
+      - Finite Differences: notes/finite_difference_pde.md
+
+  - API: api.md
