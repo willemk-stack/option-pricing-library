@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Literal
 
+import numpy as np
+
 from option_pricing.numerics.root_finding import RootMethod
 
 
@@ -60,4 +62,17 @@ class ImpliedVolConfig:
             raise ValueError("bounds_eps must be >= 0")
 
 
-# Future: FiniteDiffGreeksConfig, MCConfig
+# Future: FiniteDiffGreeksConfig,
+# MCConfig
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class MCConfig:
+    n_paths: int = 100_000
+    antithetic: bool = False
+    random: RandomConfig = field(default_factory=RandomConfig)
+    rng: np.random.Generator | None = None
+
+    def __post_init__(self) -> None:
+        if self.n_paths <= 0:
+            raise ValueError("n_paths must be > 0")
