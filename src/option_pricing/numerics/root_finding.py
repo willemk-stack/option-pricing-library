@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any
 
 from option_pricing.exceptions import (
@@ -10,6 +11,22 @@ from option_pricing.exceptions import (
     NoConvergenceError,
     NotBracketedError,
 )
+
+
+class RootMethod(str, Enum):
+    """Supported root-finding methods.
+
+    Notes
+    -----
+    This enum is used to select a concrete solver from the internal registry
+    (:data:`ROOT_METHODS`). Using an enum avoids "magic strings" and makes
+    method selection type-safe.
+    """
+
+    BISECTION = "bisection"
+    NEWTON = "newton"
+    BRACKETED_NEWTON = "bracketed_newton"
+
 
 # ---------------------------
 # Results
@@ -386,22 +403,35 @@ def bracketed_newton(
     raise NoConvergenceError("Bracketed Newton did not converge within max_iter.")
 
 
-# ---------------------------
-# Convenience wrappers (optional): keep old "float return" style
-# ---------------------------
+ROOT_METHODS: dict[RootMethod, Callable[..., RootResult]] = {
+    RootMethod.BISECTION: bisection_method,
+    RootMethod.NEWTON: newton_method,
+    RootMethod.BRACKETED_NEWTON: bracketed_newton,
+}
 
 
-def root_as_float(result: RootResult) -> float:
-    return result.root
+def get_root_method(method: RootMethod) -> Callable[..., RootResult]:
+    """Return the concrete solver function associated with a :class:`RootMethod`.
 
+    Parameters
+    ----------
+    method : RootMethod
+        Enum selector for the solver to use.
 
-def bisection_root(*args: Any, **kwargs: Any) -> float:
-    return bisection_method(*args, **kwargs).root
+    Returns
+    -------
+    Callable[..., RootResult]
+        A root-finder function (e.g., :func:`bisection_method`, :func:`newton_method`,
+        :func:`bracketed_newton`) suitable for calling as::
 
+            solver(Fn, x_lo, x_hi, *, x0=..., dFn=..., tol_f=..., tol_x=..., max_iter=...)
 
-def newton_root(*args: Any, **kwargs: Any) -> float:
-    return newton_method(*args, **kwargs).root
-
-
-def bracketed_newton_root(*args: Any, **kwargs: Any) -> float:
-    return bracketed_newton(*args, **kwargs).root
+    Raises
+    ------
+    ValueError
+        If `method` is not present in the registry.
+    """
+    try:
+        return ROOT_METHODS[method]
+    except KeyError as e:  # pragma: no cover
+        raise ValueError(f"Unknown root method: {method!r}") from e
