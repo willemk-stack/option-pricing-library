@@ -2,6 +2,8 @@ import math
 from dataclasses import dataclass
 from enum import Enum
 
+from .market.curves import FlatCarryForwardCurve, FlatDiscountCurve, PricingContext
+
 
 class OptionType(str, Enum):
     """Option contract type.
@@ -22,30 +24,11 @@ class OptionType(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class MarketData:
-    """
-    Market observables needed for option pricing.
+    """Market observables for equity vanilla options.
 
-    Parameters
-    ----------
-    spot : float
-        Current spot price of the underlying, typically denoted :math:`S`.
-    rate : float
-        Continuously-compounded risk-free interest rate, typically denoted :math:`r`
-        (annualized).
-    dividend_yield : float, default 0.0
-        Continuously-compounded dividend yield (or foreign risk-free rate for FX),
-        typically denoted :math:`q` (annualized).
-
-    Notes
-    -----
-    This container assumes continuous compounding for both `rate` and `dividend_yield`.
-
-    Methods
-    -------
-    df(T, t=0.0)
-        Calculates the risk-free discount factor.
-    forward(T, t=0.0)
-        Calculates the forward price of the underlying asset.
+    This remains a *flat* convenience wrapper (spot, r, q) for tutorials/tests.
+    Internally, pricing functions can convert this to a curves-first
+    :class:`~option_pricing.market.curves.PricingContext` via :meth:`to_context`.
     """
 
     spot: float
@@ -53,52 +36,26 @@ class MarketData:
     dividend_yield: float = 0.0
 
     def df(self, T: float, t: float = 0.0) -> float:
-        """
-        Calculate the risk-free discount factor $P(t, T)$.
-
-        The discount factor is computed as:
-        $$P(t, T) = e^{-r(T - t)}$$
-
-        Parameters
-        ----------
-        T : float
-            Maturity (terminal time).
-        t : float, default 0.0
-            Valuation time.
-
-        Returns
-        -------
-        float
-            The discount factor for the period $[t, T]$.
-        """
+        """Risk-free discount factor ``P(t,T)`` under continuous compounding."""
         tau = float(T) - float(t)
         if tau < 0:
             raise ValueError("T must be >= t")
         return math.exp(-self.rate * tau)
 
     def forward(self, T: float, t: float = 0.0) -> float:
-        """
-        Calculate the forward price $F(t, T)$.
-
-        The forward price is computed using the cost-of-carry model:
-        $$F(t, T) = S_t e^{(r - q)(T - t)}$$
-
-        Parameters
-        ----------
-        T : float
-            Maturity (terminal time).
-        t : float, default 0.0
-            Valuation time.
-
-        Returns
-        -------
-        float
-            The forward price at time $T$.
-        """
+        """Forward price ``F(t,T)`` under a flat cost-of-carry model."""
         tau = float(T) - float(t)
         if tau < 0:
             raise ValueError("T must be >= t")
         return self.spot * math.exp((self.rate - self.dividend_yield) * tau)
+
+    def to_context(self) -> PricingContext:
+        """Convert flat quotes (spot, r, q) into a curves-first pricing context."""
+        discount = FlatDiscountCurve(self.rate)
+        forward = FlatCarryForwardCurve(
+            spot=self.spot, r=self.rate, q=self.dividend_yield
+        )
+        return PricingContext(spot=self.spot, discount=discount, forward=forward)
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,48 +85,16 @@ class OptionSpec:
 
 @dataclass(frozen=True, slots=True)
 class PricingInputs:
-    """Inputs for an option pricing routine.
+    """Pricing input bundle.
 
-    This class bundles an option specification, market data, and model parameters
-    (e.g., volatility) into a single immutable object. It also provides convenient
-    aliases for commonly-used symbols (:math:`S, K, r, q, T`) and computes time-to-expiry.
-
-    Parameters
-    ----------
-    spec : OptionSpec
-        Option contract specification.
-    market : MarketData
-        Market observables (spot, rates, yields).
-    sigma : float
-        Volatility parameter (annualized). Interpretation depends on the pricing model
-        but is typically Black-Scholes volatility.
-    t : float, default 0.0
-        Current valuation time in the same units as `spec.expiry`.
-
-    Attributes
-    ----------
-    S : float
-        Alias for ``market.spot``.
-    K : float
-        Alias for ``spec.strike``.
-    r : float
-        Alias for ``market.rate``.
-    q : float
-        Alias for ``market.dividend_yield``.
-    T : float
-        Alias for ``spec.expiry``.
-    tau : float
-        Time to expiry, computed as ``T - t``.
-
-    Raises
-    ------
-    ValueError
-        If ``T - t <= 0`` when accessing :attr:`tau`.
+    This object glues together the option contract, the market observables, and the
+    volatility parameter used by model pricers.
 
     Notes
     -----
-    - This object is frozen (immutable) and uses slots for reduced memory overhead.
-    - Time units are not enforced; ensure `t` and `T` share the same convention.
+    The public ``MarketData`` object remains flat (spot, r, q) for ergonomics, but
+    internally the library prices off *curves-first* inputs. Access :attr:`ctx` to
+    obtain a :class:`~option_pricing.market.curves.PricingContext`.
     """
 
     spec: OptionSpec
@@ -180,6 +105,11 @@ class PricingInputs:
     @property
     def S(self) -> float:
         return self.market.spot
+
+    @property
+    def ctx(self) -> PricingContext:
+        """Curves-first view of the market inputs at the pricing time."""
+        return self.market.to_context()
 
     @property
     def K(self) -> float:
@@ -199,15 +129,15 @@ class PricingInputs:
 
     @property
     def tau(self) -> float:
-        tau = self.T - self.t
+        tau = float(self.T - self.t)
         if tau <= 0.0:
             raise ValueError("Need expiry > t")
         return tau
 
     @property
     def df(self) -> float:
-        return self.market.df(self.T, self.t)
+        return self.ctx.df(self.tau)
 
     @property
     def F(self) -> float:
-        return self.market.forward(self.T, self.t)
+        return self.ctx.fwd(self.tau)

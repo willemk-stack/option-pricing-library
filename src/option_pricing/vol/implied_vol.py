@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from math import exp, log, pi, sqrt
 
-from option_pricing import MarketData, OptionSpec, OptionType, PricingInputs, bs_greeks
-from option_pricing.config import ImpliedVolConfig, SeedStrategy
-from option_pricing.numerics.root_finding import RootResult, get_root_method
-
+from ..config import ImpliedVolConfig, SeedStrategy
 from ..exceptions import InvalidOptionPriceError
+from ..market.curves import PricingContext
+from ..numerics.root_finding import RootResult, get_root_method
+from ..pricers.black_scholes import bs_greeks_from_ctx
+from ..types import MarketData, OptionSpec, OptionType
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +39,13 @@ class ImpliedVolResult:
     mkt_price: float
     bounds: tuple[float, float]  # (lb, ub)
     tau: float
+
+
+def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
+    """Normalize flat MarketData or an already-curves-first PricingContext to PricingContext."""
+    if isinstance(market, PricingContext):
+        return market
+    return market.to_context()
 
 
 def _df(r: float, tau: float) -> float:
@@ -85,7 +93,7 @@ def _prepaid_forward(spot: float, q: float, tau: float) -> float:
 
 def _bounds(
     spec: OptionSpec,
-    market: MarketData,
+    market: MarketData | PricingContext,
     t: float,
 ) -> tuple[float, float, float]:
     """Compute tight no-arbitrage bounds for a European option price.
@@ -131,8 +139,9 @@ def _bounds(
     if tau <= 0.0:
         raise ValueError("Need expiry > t")
 
-    df = _df(market.rate, tau)
-    fp = _prepaid_forward(market.spot, market.dividend_yield, tau)
+    ctx = _to_ctx(market)
+    df = ctx.df(tau)
+    fp = ctx.prepaid_forward(tau)
     K_df = spec.strike * df
 
     if spec.kind == OptionType.CALL:
@@ -150,7 +159,7 @@ def _bounds(
 def _validate_bounds(
     price: float,
     spec: OptionSpec,
-    market: MarketData,
+    market: MarketData | PricingContext,
     t: float,
     *,
     eps: float = 1e-12,
@@ -192,10 +201,11 @@ def _validate_bounds(
     volatility problem.
     """
     lb, ub, tau = _bounds(spec, market, t)
+    ctx = _to_ctx(market)
     if price < lb - eps or price > ub + eps:
         raise InvalidOptionPriceError(
             f"Option price out of bounds: price={price:.12g}, bounds=[{lb:.12g}, {ub:.12g}], "
-            f"S={market.spot:.12g}, K={spec.strike:.12g}, r={market.rate:.12g}, q={market.dividend_yield:.12g}, "
+            f"spot={ctx.spot:.12g}, K={spec.strike:.12g}, df={ctx.df(tau):.12g}, F={ctx.fwd(tau):.12g}, "
             f"tau={tau:.12g}"
         )
     return lb, ub, tau
@@ -204,7 +214,7 @@ def _validate_bounds(
 def _iv_seed_from_time_value(
     mkt_price: float,
     spec: OptionSpec,
-    market: MarketData,
+    market: MarketData | PricingContext,
     tau: float,
     *,
     sigma_lo: float,
@@ -246,12 +256,11 @@ def _iv_seed_from_time_value(
     remaining amount as time value. If the option is essentially pure intrinsic, it
     returns ``sigma_lo`` to avoid Newton steps in a near-zero-vega region.
     """
-    # discount factors
-    df = _df(market.rate, tau)
+    ctx = _to_ctx(market)
 
-    # prepaid forward and forward
-    fp = _prepaid_forward(market.spot, market.dividend_yield, tau)  # S*e^{-q tau}
-    F = fp / df  # = S*e^{(r-q)tau}
+    # market quantities
+    df = ctx.df(tau)
+    F = ctx.fwd(tau)
 
     # undiscounted option price
     u = mkt_price / df
@@ -289,7 +298,7 @@ def _iv_seed_from_time_value(
 def implied_vol_bs_result(
     mkt_price: float,
     spec: OptionSpec,
-    market: MarketData,
+    market: MarketData | PricingContext,
     *,
     cfg: ImpliedVolConfig | None = None,
     t: float = 0.0,
@@ -399,15 +408,27 @@ def implied_vol_bs_result(
     # Clamp seed into solver domain
     sigma0 = float(min(sigma_hi, max(sigma_lo, sigma0)))
 
-    p0 = PricingInputs(spec=spec, market=market, sigma=sigma0, t=t)
+    ctx = _to_ctx(market)
 
     def Fn(sigma: float) -> float:
-        px = replace(p0, sigma=float(sigma))
-        return float(bs_greeks(px)["price"]) - float(mkt_price)
+        g = bs_greeks_from_ctx(
+            kind=spec.kind,
+            strike=spec.strike,
+            sigma=float(sigma),
+            tau=float(tau),
+            ctx=ctx,
+        )
+        return float(g["price"]) - float(mkt_price)
 
     def dFn(sigma: float) -> float:
-        px = replace(p0, sigma=float(sigma))
-        vega = float(bs_greeks(px)["vega"])
+        g = bs_greeks_from_ctx(
+            kind=spec.kind,
+            strike=spec.strike,
+            sigma=float(sigma),
+            tau=float(tau),
+            ctx=ctx,
+        )
+        vega = float(g["vega"])
         return max(float(num.min_vega), vega)
 
     rr = solver(
@@ -433,7 +454,7 @@ def implied_vol_bs_result(
 def implied_vol_bs(
     mkt_price: float,
     spec: OptionSpec,
-    market: MarketData,
+    market: MarketData | PricingContext,
     *,
     cfg: ImpliedVolConfig | None = None,
     t: float = 0.0,

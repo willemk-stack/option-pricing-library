@@ -15,6 +15,13 @@ can write, for example:
 
 # Re-export pricing entrypoints (nice public names)
 from .config import ImpliedVolConfig, MCConfig, RandomConfig
+from .market.curves import (
+    DiscountCurve,
+    FlatCarryForwardCurve,
+    FlatDiscountCurve,
+    ForwardCurve,
+    PricingContext,
+)
 from .numerics.root_finding import RootMethod
 from .pricers.black_scholes import bs_greeks, bs_price
 from .pricers.mc import mc_price
@@ -23,13 +30,17 @@ from .types import MarketData, OptionSpec, OptionType, PricingInputs
 from .vol.implied_vol import implied_vol_bs, implied_vol_bs_result
 from .vol.surface import Smile, VolSurface
 
-# InvalidOptionPriceError (from option_pricing.exceptions)
 __all__ = [
     # Types
     "OptionType",
     "OptionSpec",
     "MarketData",
     "PricingInputs",
+    "PricingContext",
+    "DiscountCurve",
+    "ForwardCurve",
+    "FlatDiscountCurve",
+    "FlatCarryForwardCurve",
     # Configs
     "MCConfig",
     "RandomConfig",

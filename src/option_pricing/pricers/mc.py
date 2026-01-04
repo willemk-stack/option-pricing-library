@@ -8,8 +8,9 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..config import MCConfig, RandomConfig
+from ..market.curves import PricingContext, avg_carry_from_forward, avg_rate_from_df
 from ..models.stochastic_processes import sim_gbm_terminal
-from ..types import PricingInputs
+from ..types import OptionType, PricingInputs
 from ..vanilla import call_payoff, make_vanilla_payoff, put_payoff
 
 
@@ -251,6 +252,51 @@ def _make_mc_rng(cfg: MCConfig) -> np.random.Generator:
     return cfg.rng if cfg.rng is not None else _rng_from_random_config(cfg.random)
 
 
+def mc_price_from_ctx(
+    *,
+    ctx: PricingContext,
+    kind: OptionType,
+    strike: float,
+    sigma: float,
+    tau: float,
+    cfg: MCConfig | None = None,
+) -> tuple[float, float]:
+    """Monte Carlo GBM pricer using curves-first inputs.
+
+    Notes
+    -----
+    The internal GBM model still needs single-number (r, q) inputs. For a curves-first
+    context we use the *average* rates consistent with ``df(tau)`` and ``fwd(tau)``:
+
+    - ``r_avg = -log(df)/tau``
+    - ``(r-q)_avg = log(F/S)/tau``  -> ``q_avg = r_avg - (r-q)_avg``
+
+    This is exact for flat curves and provides a reasonable reduction for deterministic
+    term structures when using a terminal-only (European) GBM simulator.
+    """
+    cfg = MCConfig() if cfg is None else cfg
+    tau = float(tau)
+    df = ctx.df(tau)
+    F = ctx.fwd(tau)
+    r = avg_rate_from_df(df, tau)
+    b = avg_carry_from_forward(ctx.spot, F, tau)  # (r-q)_avg
+    q = r - b
+
+    model = McGBMModel(
+        S0=ctx.spot,
+        r=r,
+        q=q,
+        sigma=float(sigma),
+        tau=tau,
+        n_paths=int(cfg.n_paths),
+        antithetic=bool(cfg.antithetic),
+        rng=_make_mc_rng(cfg),
+    )
+
+    payoff = make_vanilla_payoff(kind, K=float(strike))
+    return model.price_european(payoff)
+
+
 def mc_price(
     p: PricingInputs,
     *,
@@ -302,10 +348,17 @@ def mc_price(
     (10.42, 0.03)
     """
     cfg = MCConfig() if cfg is None else cfg
+    ctx = p.ctx
+    df = ctx.df(p.tau)
+    F = ctx.fwd(p.tau)
+    r = avg_rate_from_df(df, p.tau)
+    b = avg_carry_from_forward(ctx.spot, F, p.tau)
+    q = r - b
+
     model = McGBMModel(
-        S0=p.S,
-        r=p.r,
-        q=p.q,
+        S0=ctx.spot,
+        r=r,
+        q=q,
         sigma=p.sigma,
         tau=p.tau,
         n_paths=int(cfg.n_paths),
@@ -323,10 +376,17 @@ def mc_price_call(
     cfg: MCConfig | None = None,
 ) -> tuple[float, float]:
     cfg = MCConfig() if cfg is None else cfg
+    ctx = p.ctx
+    df = ctx.df(p.tau)
+    F = ctx.fwd(p.tau)
+    r = avg_rate_from_df(df, p.tau)
+    b = avg_carry_from_forward(ctx.spot, F, p.tau)
+    q = r - b
+
     model = McGBMModel(
-        S0=p.S,
-        r=p.r,
-        q=p.q,
+        S0=ctx.spot,
+        r=r,
+        q=q,
         sigma=p.sigma,
         tau=p.tau,
         n_paths=int(cfg.n_paths),
@@ -343,10 +403,17 @@ def mc_price_put(
     cfg: MCConfig | None = None,
 ) -> tuple[float, float]:
     cfg = MCConfig() if cfg is None else cfg
+    ctx = p.ctx
+    df = ctx.df(p.tau)
+    F = ctx.fwd(p.tau)
+    r = avg_rate_from_df(df, p.tau)
+    b = avg_carry_from_forward(ctx.spot, F, p.tau)
+    q = r - b
+
     model = McGBMModel(
-        S0=p.S,
-        r=p.r,
-        q=p.q,
+        S0=ctx.spot,
+        r=r,
+        q=q,
         sigma=p.sigma,
         tau=p.tau,
         n_paths=int(cfg.n_paths),

@@ -6,6 +6,7 @@ from functools import partial
 from math import comb, exp
 from typing import Literal, overload
 
+from ..market.curves import avg_carry_from_forward, avg_rate_from_df
 from ..models.binomial_crr import BinomialModel
 from ..types import OptionType, PricingInputs
 
@@ -209,10 +210,16 @@ def price_european_closed_form(
 
 
 def _model_from_inputs(p: PricingInputs, n_steps: int) -> BinomialModel:
+    ctx = p.ctx
+    df = ctx.df(p.tau)
+    F = ctx.fwd(p.tau)
+    r = avg_rate_from_df(df, p.tau)
+    b = avg_carry_from_forward(ctx.spot, F, p.tau)
+    q = r - b
     return BinomialModel.from_crr(
-        S0=p.S,
-        r=p.r,
-        q=p.q,
+        S0=ctx.spot,
+        r=r,
+        q=q,
         sigma=p.sigma,
         T=p.tau,
         n_steps=n_steps,
