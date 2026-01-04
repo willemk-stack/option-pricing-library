@@ -34,16 +34,17 @@ jobs:
       - name: README is up to date
         run: python scripts/render_readme.py --check
 
-      - name: Install docs deps + package
+      - name: Install docs + plot deps + package
         run: |
           python -m pip install -U pip
-          pip install -e ".[docs]"
-          pip install -e .
+          pip install -e ".[docs,plot]"
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-      
+
       - name: Build docs figures
+        env:
+          MPLBACKEND: Agg
         run: python scripts/make_docs_figures.py
 
       - name: Build site
