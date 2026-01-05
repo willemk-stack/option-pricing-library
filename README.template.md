@@ -45,10 +45,9 @@ pip install -e ".[dev]"
 
 ## Curves-first example (PricingContext)
 
-```python   
+```python
 {{ CURVES_FIRST }}
 ```
-
 
 ---
 
@@ -69,6 +68,13 @@ pip install -e ".[dev]"
 
 ---
 
+## Roadmap
+
+- Published roadmap (MkDocs): `docs/roadmap.md`
+- Root pointer: `ROADMAP.md`
+
+---
+
 ## Development
 ```bash
 ruff check .
@@ -78,7 +84,6 @@ mypy
 ```
 
 ---
-
 
 ## License
 This project is licensed under the  Apache-2.0 — see the [LICENSE](./LICENSE) file for details.

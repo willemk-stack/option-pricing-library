@@ -104,7 +104,8 @@ extra_css:
 
 nav:
   - Home: index.md
-
+  - Roadmap: roadmap.md
+  
   - User guides:
       - Overview: user_guides/index.md
       - Installation: installation.md

@@ -54,3 +54,7 @@ Notes:
 * **Build something quickly:** [Quickstart](user_guides/quickstart.md)
 * **See everything available:** [API](api/index.md)
 * **Learn the theory background:** [Notes](notes/index.md)
+
+## Roadmap
+
+See `roadmap.md` for capstones and the working checklist.

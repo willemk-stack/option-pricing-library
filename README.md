@@ -68,7 +68,7 @@ print("CRR:", binom_price(p, n_steps=500))
 
 ## Curves-first example (PricingContext)
 
-```python   
+```python
 from option_pricing import (
     FlatCarryForwardCurve,
     FlatDiscountCurve,
@@ -119,7 +119,6 @@ print(
 )
 ```
 
-
 ---
 
 ### Implied volatility (BS inversion)
@@ -160,6 +159,13 @@ print(f"f(root)={rr.f_at_root:.3e}  bracket={rr.bracket}  bounds={res.bounds}")
 
 ---
 
+## Roadmap
+
+- Published roadmap (MkDocs): `docs/roadmap.md`
+- Root pointer: `ROADMAP.md`
+
+---
+
 ## Development
 ```bash
 ruff check .
@@ -169,7 +175,6 @@ mypy
 ```
 
 ---
-
 
 ## License
 This project is licensed under the  Apache-2.0 — see the [LICENSE](./LICENSE) file for details.

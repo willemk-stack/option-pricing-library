@@ -41,11 +41,10 @@ jobs:
       - name: Mypy
         run: mypy src/option_pricing
 
-      - name: Pytest (unit tests + notebooks)
+      - name: Pytest (unit tests)
+        run: pytest -q tests
+
+      - name: Pytest (notebooks)
         env:
           MPLBACKEND: Agg
-        run: |
-          python -m pip install nbmake
-          pytest -q ./demos --nbmake --nbmake-timeout=300
-
-
+        run: pytest -q demos --nbmake --nbmake-timeout=300
