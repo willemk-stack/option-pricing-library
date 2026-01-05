@@ -1,4 +1,3 @@
-````md
 # Implied Volatility user guide (`implied_vol`)
 
 This guide explains how to compute **Black–Scholes implied volatility (IV)** in this library using the **config-driven (`cfg`) API**, and how to keep solver diagnostics via the returned `RootResult`.
@@ -325,4 +324,3 @@ In diagnostics/benchmark code, it’s common to catch exceptions and record the 
   cfg = ImpliedVolConfig(root_method=RootMethod.BRACKETED_NEWTON, sigma_hi=8.0)
   ivres = implied_vol_bs_result(price, spec, market, cfg=cfg, sigma0=0.25)
   ```
-````
