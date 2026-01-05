@@ -1,0 +1,9 @@
+/* Slightly improve readability on wide screens */
+.md-grid {
+    max-width: 1200px;
+}
+
+/* Make API signatures a bit easier to scan */
+.doc-heading code {
+    font-size: 0.95em;
+}

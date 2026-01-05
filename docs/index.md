@@ -52,5 +52,5 @@ Notes:
 
 * **Get set up:** [Installation](installation.md)
 * **Build something quickly:** [Quickstart](user_guides/quickstart.md)
-* **See everything available:** [Public API](api.md)
+* **See everything available:** [API](api/index.md)
 * **Learn the theory background:** [Notes](notes/index.md)

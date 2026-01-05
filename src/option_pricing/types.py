@@ -89,7 +89,8 @@ class OptionSpec:
 
 @dataclass(frozen=True, slots=True)
 class PricingInputs:
-    """Pricing input bundle.
+    """
+    Pricing input bundle.
 
     This object glues together the option contract, the market observables, and the
     volatility parameter used by model pricers.
@@ -97,8 +98,10 @@ class PricingInputs:
     Notes
     -----
     The public ``MarketData`` object remains flat (spot, r, q) for ergonomics, but
-    internally the library prices off *curves-first* inputs. Access :attr:`ctx` to
-    obtain a :class:`~option_pricing.market.curves.PricingContext`.
+    internally the library prices from *curves-first* inputs.
+
+    Use the ``ctx`` attribute to obtain a pricing context
+    (``option_pricing.market.curves.PricingContext``).
     """
 
     spec: OptionSpec

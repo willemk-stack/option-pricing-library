@@ -7,12 +7,46 @@ docs_dir: docs
 
 theme:
   name: material
+  language: en
+  icon:
+    repo: fontawesome/brands/github
+
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
   features:
-    - content.code.copy
+    # Navigation / layout
+    - navigation.instant
+    - navigation.tracking
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.sections
     - navigation.indexes
+    - navigation.top
+
+    # TOC behavior (right sidebar)
+    - toc.follow
+
+    # Search UX
+    - search.suggest
+    - search.highlight
+    - search.share
+
+    # Content UX
+    - content.code.copy
+    - content.action.edit
+    - content.action.view
 
 plugins:
   - search
@@ -23,25 +57,56 @@ plugins:
           options:
             docstring_style: numpy
             show_source: false
-            separate_signature: true
+
+            # Prevent repeated "option_pricing" headings & TOC entries
+            show_root_heading: false
+            show_root_toc_entry: false
+
+            # Keep mkdocstrings headings below your Markdown headings
+            heading_level: 4  
+
+            # Nice defaults
+            members_order: source
             show_signature_annotations: true
+            separate_signature: true
 
 markdown_extensions:
+  # Better Markdown ergonomics for Material
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.highlight
+
+  # Lists/tables/images tweaks often needed in docs
+  - attr_list
+  - md_in_html
+
+  # Footnotes you already use
+  - footnotes
+
+  # Math support (works with your MathJax includes below)
   - pymdownx.arithmatex:
       generic: true
-  - pymdownx.superfences
-  - admonition
-  - footnotes
+
+  # TOC settings (reduces “weird indents” and excessive depth)
+  - toc:
+      permalink: true
+      toc_depth: 3
 
 extra_javascript:
   - javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
+# add custom tweaks from (docs/stylesheets/extra.css)
+extra_css:
+  - stylesheets/extra.css
+
 nav:
   - Home: index.md
 
   - User guides:
-      - user_guides/index.md
+      - Overview: user_guides/index.md
       - Installation: installation.md
       - Quickstart: user_guides/quickstart.md
       - Market APIs: user_guides/market_api.md
@@ -53,7 +118,7 @@ nav:
       - Volatility surface: user_guides/vol_surface.md
 
   - Notes:
-      - notes/index.md
+      - Overview: notes/index.md
       - Black-Scholes pricing: notes/bs_pricing.md
       - GBM: notes/gbm.md
       - Monte Carlo: notes/mc.md
@@ -63,4 +128,10 @@ nav:
       - Risk neutral pricing: notes/risk_neutral_pricing.md
       - Finite Differences: notes/finite_difference_pde.md
 
-  - API: api.md
+  - API:
+      - Overview: api/index.md
+      - Public: api/public.md
+      - Curves: api/curves.md
+      - Pricers: api/pricers.md
+      - Volatility: api/vol.md
+      - Exceptions: api/exceptions.md
