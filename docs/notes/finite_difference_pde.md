@@ -1,338 +1,416 @@
-# Temporary Engineering Notes
+# Finite Difference Methods for Black–Scholes (Duffy, 2006) — Sprint 1 Notes
 
-# Finite Difference Methods in Financial Engineering (Duffy, 2006) — Sprint 1 Notes
-*(PDE approach + 1D finite-difference scaffold for Black–Scholes European options)*
+*PDE framing + 1D finite-difference scaffold for European options*
 
 ---
 
-## 1) PDE framing: what problem are we solving?
+## 0) Notation (keep consistent everywhere)
 
-### Canonical parabolic PDE form
-A broad class of pricing PDEs (after suitable transforms) can be written as a **second-order parabolic PDE**:
+- Spatial grid: \(x_j = x_{\min} + jh,\; j=0,\dots,N\), with \(h=\Delta x\)
+- Time grid: \(t_n = nk,\; n=0,\dots,M\), with \(k=\Delta t\)
+- Grid function: \(u_j^n \approx u(x_j,t_n)\)
+- Interior nodes: \(j=1,\dots,N-1\); boundary nodes: \(j=0,N\)
 
-$$
-\frac{\partial u}{\partial t} = Lu
-$$
+> In option pricing you often solve **backward in calendar time** \(t\) with terminal payoff at \(T\). Many implementations use time-to-maturity \(\tau = T-t\) to turn the problem into a forward march in \(\tau\).
 
-with the (linear) spatial differential operator
+---
 
-$$
-Lu \equiv \sum_{i,j=1}^{n} a_{i,j}(x,t)\,\frac{\partial^2 u}{\partial x_i \partial x_j}
-\;+\;
-\sum_{j=1}^{n} b_j(x,t)\,\frac{\partial u}{\partial x_j}
-\;+\;
-c(x,t)\,u.
-$$
+## 1) PDE + IBVP framing (what problem are we solving?)
 
-Interpretation (in 1D):
+A broad class of pricing PDEs (after suitable transforms) can be written as a 1D linear parabolic PDE:
 
-- **Diffusion term** $a(x,t)u_{xx}$: smooths the solution.
-- **Convection/drift term** $b(x,t)u_x$: transports features.
-- **Reaction/discount term** $c(x,t)u$: growth/decay (often $-ru$ in finance).
+\[
+u_t = a(x,t)\,u_{xx} + b(x,t)\,u_x + c(x,t)\,u.
+\]
 
-### Initial/terminal + boundary conditions (IBVP mindset)
-A PDE problem is not “just the PDE”. You must also specify:
+Interpretation:
 
-- **Domain**: $x \in [x_{\min}, x_{\max}]$, $t \in [0, T]$
-- **Initial condition** (or **terminal condition** in finance and then solve backward in time)
-- **Boundary conditions** at $x_{\min}$ and $x_{\max}$
+- **Diffusion** \(a u_{xx}\): smooths gradients
+- **Drift/advection** \(b u_x\): transports features
+- **Reaction** \(c u\): growth/decay (often \(-ru\) in finance)
+
+A PDE problem is an **IBVP** (initial boundary value problem). You must specify:
+
+- Domain: \(x\in[x_{\min},x_{\max}],\; t\in[0,T]\)
+- Terminal/initial condition (in finance: terminal payoff)
+- Two boundary conditions (left and right)
 
 In option pricing:
 
-- “Initial condition” for a forward PDE becomes a **terminal payoff** for backward time stepping:
-
-$$
-V(S,T)=\text{payoff}(S).
-$$
+\[
+V(\cdot,T)=\text{payoff}(\cdot).
+\]
 
 ---
 
-## 2) What “well-posed” means (practical definition)
+## 2) “Well-posed” (practical definition)
 
-A PDE problem is **well-posed** if:
+A PDE setup is **well-posed** if:
 
-1. **Existence**: a solution exists  
-2. **Uniqueness**: the solution is unique  
-3. **Continuous dependence on data**: small changes in inputs/BC/IC cause small changes in the solution  
+1. a solution exists,
+2. it is unique,
+3. it depends continuously on the inputs (IC/BC/coefficients).
 
-Practical takeaway:
-
-- If boundary/initial conditions are missing, incompatible, or unstable numerically, you can get non-unique or exploding solutions (even if the PDE looks fine).
+Practical takeaway: bad or incompatible boundary/terminal data can produce non-unique or unstable numerics even when the PDE itself looks fine.
 
 ---
 
-## 3) Finite differences: operators, grids, truncation error
+## 3) Finite differences (1D stencils)
 
-### Grid + notation
-Use a uniform spatial grid and time grid:
+### First derivative \(u_x\)
 
-- $x_j = x_{\min} + jh$, for $j=0,\dots,N$, where $h=\Delta x$
-- $t_n = nk$, for $n=0,\dots,M$, where $k=\Delta t$
+Forward (1st order):
 
-Let $u_j^n \approx u(x_j,t_n)$.
-
-### First derivative approximations
-
-Forward difference (1st order):
-
-$$
+\[
 u_x(x_j,t_n) \approx \frac{u_{j+1}^n-u_j^n}{h} + O(h).
-$$
+\]
 
-Backward difference (1st order):
+Backward (1st order):
 
-$$
+\[
 u_x(x_j,t_n) \approx \frac{u_j^n-u_{j-1}^n}{h} + O(h).
-$$
+\]
 
-Central difference (2nd order):
+Central (2nd order):
 
-$$
+\[
 u_x(x_j,t_n) \approx \frac{u_{j+1}^n-u_{j-1}^n}{2h} + O(h^2).
-$$
+\]
 
-### Second derivative approximation
-Central difference (2nd order):
+### Second derivative \(u_{xx}\)
 
-$$
+Central (2nd order):
+
+\[
 u_{xx}(x_j,t_n) \approx \frac{u_{j+1}^n - 2u_j^n + u_{j-1}^n}{h^2} + O(h^2).
-$$
+\]
 
-### Time derivative approximation (common)
-Forward Euler time derivative (1st order):
+### Time derivative (baseline)
 
-$$
+Forward Euler (1st order):
+
+\[
 u_t(x_j,t_n) \approx \frac{u_j^{n+1}-u_j^n}{k} + O(k).
-$$
+\]
 
 ---
 
 ## 4) Truncation error, consistency, stability, convergence
 
-### Truncation error (TE)
-- Derived by Taylor expanding the exact solution and seeing what terms are discarded.
-- The **leading discarded term** determines the **order**.
+- **Truncation error (TE):** derived by Taylor expansion; leading discarded term sets the order.
+- **Consistency:** TE \(\to 0\) as \(h,k\to 0\).
+- **Stability:** perturbations (rounding, data noise) do not amplify uncontrollably.
+- **Convergence:** numerical solution \(\to\) true solution as \(h,k\to 0\).
 
-Example: central first derivative is $O(h^2)$ accurate; forward/backward is $O(h)$.
-
-### Richardson extrapolation (concept)
-If a method has error $E(h)=C h^p + o(h^p)$, then combining solutions at $h$ and $h/2$ can cancel the leading term and improve accuracy.
-
-### Consistency
-A scheme is **consistent** if the truncation error $\to 0$ as $h\to 0$ and $k\to 0$.
-
-### Stability
-A scheme is **stable** if errors (rounding + perturbations) do not amplify uncontrollably as steps proceed.
-
-- For many linear schemes, stability is analyzed via **amplification factors** (Fourier/von Neumann analysis).
-- For explicit schemes, stability often yields a **CFL-like restriction**, e.g.
-
-$$
-\text{(typical)}\quad \frac{a k}{h^2}\le \text{const}.
-$$
-
-(Exact constants depend on discretization and coefficients.)
-
-### Convergence
-A scheme **converges** if the numerical solution approaches the true solution as $h,k\to 0$.
-
-**Lax Equivalence Theorem (linear IVP setting)**:
-
-> For a properly-posed linear problem, **consistency + stability ⇒ convergence**.
+**Lax Equivalence (linear IVP):** consistency + stability ⇒ convergence.
 
 ---
 
-## 5) Explicit Euler baseline scheme (why it’s not your “production” choice)
+## 5) Time stepping: the \(\theta\)-scheme (explicit / implicit / CN)
 
-### Model convection–diffusion–reaction PDE (1D)
-A standard template:
+Let \(L_h\) denote the spatial discretization of the operator \(L\). The \(\theta\)-scheme is:
 
-$$
-u_t = \sigma(x,t)\,u_{xx} + \mu(x,t)\,u_x + b(x,t)\,u.
-$$
+\[
+\mathbf{u}^{n+1} = \mathbf{u}^n + k\Big((1-\theta)L_h\mathbf{u}^n + \theta L_h\mathbf{u}^{n+1}\Big).
+\]
 
-Using central differences in space and forward Euler in time gives (at node $j$, time level $n$):
+Rearrange to matrix form:
 
-$$
-u_j^{n+1}
+\[
+\underbrace{\left(I - k\theta L_h\right)}_{A}\mathbf{u}^{n+1}
 =
-\left( 1 + k b_j^n - \frac{2k\sigma_j^n}{h^2} \right) u_j^n
+\underbrace{\left(I + k(1-\theta)L_h\right)}_{B}\mathbf{u}^{n}
+\;+\;\mathbf{g}^{n,n+1},
+\]
+
+where \(\mathbf{g}^{n,n+1}\) collects boundary-condition contributions.
+
+Special cases:
+
+- \(\theta=0\): explicit Euler (cheap, conditionally stable)
+- \(\theta=1\): implicit Euler (damping, typically stable for diffusion)
+- \(\theta=\tfrac12\): **Crank–Nicolson** (2nd order in time for smooth solutions)
+
+In 1D, \(A\) and \(B\) are typically **tridiagonal** ⇒ solve with Thomas algorithm.
+
+---
+
+## 6) CN interior-only system + boundary contributions (implementation-ready)
+
+Define the full grid vector at time \(t_n\):
+
+\[
+\mathbf{u}^n = \big[u_0^n,\;u_1^n,\;\dots,\;u_{N-1}^n,\;u_N^n\big]^T.
+\]
+
+Assume Dirichlet boundaries (common in Black–Scholes truncation):
+
+\[
+u_0^n = \alpha(t_n),\qquad u_N^n=\beta(t_n).
+\]
+
+Split into boundary vs interior:
+
+- Boundary: \(\mathbf{u}_B^n = [u_0^n,\;u_N^n]^T\)
+- Interior: \(\mathbf{u}_I^n = [u_1^n,\dots,u_{N-1}^n]^T\)
+
+From \(A\mathbf{u}^{n+1}=B\mathbf{u}^n+\mathbf{g}\), restricting to interior rows:
+
+\[
+A_{II}\mathbf{u}_I^{n+1} + A_{IB}\mathbf{u}_B^{n+1}
+=
+B_{II}\mathbf{u}_I^n + B_{IB}\mathbf{u}_B^n + \mathbf{g}_I.
+\]
+
+Move known boundary terms to the RHS:
+
+\[
+A_{II}\mathbf{u}_I^{n+1}
+=
+B_{II}\mathbf{u}_I^n
 +
-k \left( \frac{\sigma_j^n}{h^2} + \frac{\mu_j^n}{2h} \right) u_{j+1}^n
+\big(B_{IB}\mathbf{u}_B^n - A_{IB}\mathbf{u}_B^{n+1}\big)
 +
-k \left( \frac{\sigma_j^n}{h^2} - \frac{\mu_j^n}{2h} \right) u_{j-1}^n.
-$$
+\mathbf{g}_I.
+\]
 
-### Why explicit Euler is conditionally stable
-- Stability requires constraints relating $k$ and $h$ (especially due to the diffusion term).
-- In practice for option pricing grids, explicit schemes often require **too many timesteps** to remain stable.
+**Key implementation fact (1D tridiagonal):** boundary coupling only modifies the **first and last** entries of the RHS vector.
 
-### Why you typically don’t use it for production pricing
-- **Computational cost**: tiny $k$ for stability.
-- **Oscillation sensitivity**: can oscillate near non-smooth payoffs and sharp gradients.
-- **Constraint handling** (e.g., no-arbitrage monotonicity) can be harder to maintain.
+### Diffusion-only template (intuition)
 
----
+For \(u_t = a u_{xx}\) with constant \(a\), define \(r=\dfrac{ak}{h^2}\). CN at an interior node:
 
-## 6) Implicit Euler + Crank–Nicolson (CN): the workhorses
-
-### $\theta$-scheme (unifies explicit / implicit / CN)
-Write the semi-discrete operator as $F(u,t)$ (i.e., the spatial discretization). Then:
-
-$$
-u^{n+1} = u^n + k\Big( (1-\theta)\,F(u^n,t_n) + \theta\,F(u^{n+1},t_{n+1}) \Big).
-$$
-
-- $\theta=0$: explicit Euler  
-- $\theta=1$: implicit Euler  
-- $\theta=\tfrac12$: **Crank–Nicolson**  
-
-### CN as “half explicit + half implicit”
-
-$$
-\mathbf{u}^{n+1} = \mathbf{u}^n + \frac{k}{2}\left(F(\mathbf{u}^n,t_n)+F(\mathbf{u}^{n+1},t_{n+1})\right).
-$$
-
-### Matrix form and tridiagonal structure (1D)
-After discretizing $u_{xx}$ and $u_x$ in 1D, each interior point $j$ couples only to $(j-1, j, j+1)$.
-That yields a linear system each time step:
-
-$$
-A\,\mathbf{u}^{n+1} = B\,\mathbf{u}^{n} + \mathbf{g}.
-$$
-
-- $A$ and $B$ are typically **tridiagonal**
-- $\mathbf{g}$ contains boundary condition contributions
-- Solve efficiently with the **Thomas algorithm** (direct tridiagonal solver)
+\[
+-\frac{r}{2}u_{j-1}^{n+1} + (1+r)u_j^{n+1} -\frac{r}{2}u_{j+1}^{n+1}
+=
+\frac{r}{2}u_{j-1}^{n} + (1-r)u_j^{n} +\frac{r}{2}u_{j+1}^{n}.
+\]
 
 ---
 
-## 7) Convection–diffusion discretization choices (drift matters!)
+## 7) Drift discretization choices (central vs upwind)
 
-### Drift term $u_x$: central vs upwind
-- **Central difference**: 2nd order accurate, but can produce oscillations in **advection-dominated** regimes.
-- **Upwind**: 1st order accurate, more diffusive, but often more stable/monotone for strong drift.
+For the drift/advection term \(b(x,t)u_x\):
 
-Rule of thumb:
-- If drift dominates diffusion (large “Péclet number” behavior), consider upwinding or stabilization.
+- **Central difference:** 2nd order, but can oscillate in advection-dominated regimes.
+- **Upwind:** 1st order, introduces numerical diffusion, often improves monotonicity.
 
-### Diffusion term $u_{xx}$: central difference
-- Central difference is standard and stable-friendly when used with implicit/CN time stepping.
-
-### Boundary conditions entering the discrete system
-Boundary values affect:
-
-- the first and last interior equations (through $u_0^n$, $u_N^n$), and/or
-- they define extra equations if using Neumann/Robin BCs (through “ghost nodes” or one-sided stencils)
+Rule of thumb: if drift dominates diffusion (high “Péclet-like” behavior), consider upwinding/stabilization.
 
 ---
 
-## 8) PDE essentials for your documentation (IBVP checklist + failure modes)
+## 8) Black–Scholes mapping (finance → PDE)
 
-### IBVP checklist (what to state in docs)
-- Domain: $x\in[x_{\min},x_{\max}]$, $t\in[0,T]$
-- PDE coefficients: diffusion/drift/reaction terms
-- Terminal/initial condition
-- Boundary conditions at both ends (type + formula)
-- Numerical scheme: stencil + time stepping + solver
-- Stability/convergence remarks (what you expect / monitor)
+### Black–Scholes PDE in spot \(S\)
 
-### Common failure modes
-- **Boundary bias**: poor far-field approximation contaminates interior values.
-- **Oscillations**: CN + non-smooth payoff (discontinuous derivative at strike) is a classic source.
-- **Grid misalignment**: if strike not on grid, Greeks near strike can degrade.
-- **Advection dominance**: central drift can create nonphysical oscillations.
+For a European option \(V(S,t)\):
 
----
-
-## 9) Moving to Black–Scholes (finance mapping)
-
-### Black–Scholes PDE (in spot $S$)
-For a European option $V(S,t)$:
-
-$$
+\[
 \frac{\partial V}{\partial t}
 + \frac12\sigma^2 S^2 \frac{\partial^2 V}{\partial S^2}
 + r S \frac{\partial V}{\partial S}
 - rV = 0,
-$$
+\qquad
+V(S,T)=\text{payoff}(S).
+\]
 
-with terminal condition $V(S,T)=\text{payoff}(S)$.
+### Far-field boundary conditions (typical asymptotics)
 
-### Far-field boundary conditions (typical)
-For a **call**:
-- As $S\to 0$: $V\to 0$
-- As $S\to\infty$: $V\sim S - K e^{-r(T-t)}$ (linear asymptotic)
+Call:
 
-For a **put**:
-- As $S\to 0$: $V\sim K e^{-r(T-t)}$
-- As $S\to\infty$: $V\to 0$
+- as \(S\to 0\): \(V\to 0\)
+- as \(S\to\infty\): \(V \sim S - K e^{-r(T-t)}\)
 
-In practice at a finite computational boundary, you choose:
-- **Truncation** (set a boundary far enough out + impose asymptotic)
-- **Linear extrapolation / asymptotic Dirichlet** using the known far-field behavior
+Put:
 
-### Why log-price coordinates help
-Let $x=\log S$. Then:
-- $S\in(0,\infty)$ maps to $x\in(-\infty,\infty)$
-- A **uniform grid in $x$** corresponds to **exponential spacing in $S=e^x$**, often giving better resolution near the strike/spot region.
-- Under BS, $\log S_T$ is normally distributed, so truncation can be set using “$m$ sigmas”:
+- as \(S\to 0\): \(V \sim K e^{-r(T-t)}\)
+- as \(S\to\infty\): \(V\to 0\)
 
-$$
+In practice: truncate to \([S_{\min},S_{\max}]\) (or \([x_{\min},x_{\max}]\)) and impose these as Dirichlet boundaries.
+
+### Why log-price \(x=\log S\) helps
+
+- \(S\in(0,\infty)\) maps to \(x\in(-\infty,\infty)\)
+- Uniform grid in \(x\) corresponds to exponential spacing in \(S=e^x\)
+- Truncation via “\(m\) sigmas” heuristic:
+
+\[
 x_{\min/\max} \approx \log(S_0) + \left(r-\tfrac12\sigma^2\right)T \pm m\,\sigma\sqrt{T}.
-$$
+\]
 
 ---
 
-## 10) Implementation notes: PDE finite-difference scaffolding (`pde_fd.py`)
-
-### What to parameterize (so the solver is reusable)
+## 9) Implementation scaffold (`pde_fd.py`) — what to parameterize
 
 **Grid**
-- Coordinate: `S` vs `logS`
-- Bounds policy: e.g. `m_sigmas` for domain width (derived from vol & $T$)
-- Node counts: `Nx` (and later `Ny`)
-- Spacing policy: uniform vs clustered (around strike/barrier/spot)
+
+- coordinate: `S` vs `logS`
+- bounds: explicit or `m_sigmas`
+- nodes: `Nx`
+- spacing: uniform vs clustered (around strike/spot/barrier)
 
 **Time stepping**
-- Scheme: $\theta$-scheme with `theta` (0.5 CN, 1.0 implicit Euler)
+
+- `theta` (\(0.5\) CN, \(1.0\) implicit Euler)
 - `Nt` or `dt_max`
-- Rannacher: `n_rannacher`
-- Event times list (dividends, Bermudan dates, barrier monitoring)
+- Rannacher smoothing: `n_rannacher`
+- event times (dividends, Bermudan dates, monitoring)
 
 **Boundary conditions**
-- Type per boundary: `DIRICHLET` / `NEUMANN` / `ROBIN`
-- Boundary value functions (callables of time-to-maturity)
-- “Far-field model” (call asymptotic vs put asymptotic)
+
+- per boundary: `DIRICHLET / NEUMANN / ROBIN`
+- boundary functions of time (or time-to-maturity)
+- far-field model: call vs put asymptotic
 
 **Payoff / constraints**
-- Payoff function (callable)
-- For American/Bermudan (later): exercise style enum + projection rule/penalty parameter
+
+- payoff callable
+- (later) American/Bermudan: exercise rule / projection / penalty
 
 **Linear solver**
-- Direct tridiagonal vs sparse solver; solver tolerances (in 2D/3D later)
+
+- 1D: Thomas algorithm
+- (later) 2D+: sparse solver + tolerances
 
 **Convergence runner**
-- Parameterized grid refinement schedule, error norm, reference price.
+
+- grid refinement schedule, error norms, reference price
 
 ---
 
-## 11) Crank–Nicolson: known shortcomings (Duffy-style cautions) + mitigations
+## 10) Crank–Nicolson issues (Duffy-style cautions) + mitigations
 
-Key issues to remember:
-- CN is **second-order** on **uniform** meshes only (order can degrade on nonuniform grids without care).
-- It can produce **spurious oscillations/spikes** for non-smooth initial/boundary conditions or incompatible BC/IC.
-- It can behave close to **neutrally stable** when diffusion is small (advection-dominated), making rounding/error propagation more visible.
-- It can give poor approximations to **delta/gamma near the strike** unless you treat the strike region carefully.
+Known issues in finance PDEs:
 
-Common mitigations (Sprint 2+):
-- **Rannacher smoothing**: a few initial implicit Euler steps before switching to CN
-- **Upwinding/stabilization** for strong drift
-- **Grid design**: place strike exactly on-grid; local refinement near strike
-- **Smoother payoff initialization** (use carefully—avoid price bias)
+- oscillations (“ringing”) near non-smooth payoff kinks (e.g., at strike)
+- noisy Greeks near strike unless grid is well-designed
+- near-neutral stability when diffusion is small (advection-dominated)
+
+Mitigations:
+
+- **Rannacher smoothing:** a few initial implicit Euler steps then switch to CN
+- drift stabilization: upwind / flux limiting when needed
+- grid design: place strike on-grid; local refinement near strike/spot
 
 ---
 
-## References
-- Duffy, Daniel J. (2006). *Finite Difference Methods in Financial Engineering: A Partial Differential Equation Approach.*
+## 11) X-grid clustering (sinh mapping around a center)
 
+This documents the clustered 1D grid construction used by `build_x_grid`.  
+Goal: build a **monotone grid** on \([x_{\min},x_{\max}]\) with **higher density near** a chosen center \(x_c\), while keeping endpoints fixed.
+
+### Inputs (`GridConfig`)
+
+- \(x_{\min} =\) `cfg.x_lb`, \(x_{\max}=\) `cfg.x_ub`
+- \(x_c=\) `cfg.x_center` with \(x_{\min}<x_c<x_{\max}\)
+- \(N_x=\) `cfg.Nx`
+- \(b=\) `cfg.cluster_strength` with \(b\ge 0\)
+- `cfg.spacing ∈ {UNIFORM, CLUSTERED}`
+
+### Uniform grid (baseline)
+
+If `spacing == UNIFORM`:
+
+\[
+x_j = x_{\min} + j\frac{x_{\max}-x_{\min}}{N_x-1},\qquad j=0,\dots,N_x-1.
+\]
+
+### Clustered grid: normalized sinh map
+
+![normalized sinh map](../assets/grid_clustering.png)
+
+Start from a uniform parameter grid \(u\in[-1,1]\):
+
+\[
+u_j = -1 + 2\frac{j}{N_x-1},\qquad j=0,\dots,N_x-1.
+\]
+
+Define the normalized transform:
+
+\[
+r(u)=\frac{\sinh(bu)}{\max_{v\in[-1,1]}|\sinh(bv)|}.
+\]
+
+Since \(\max_{v\in[-1,1]}|\sinh(bv)|=\sinh(b)\) for \(b>0\), this is:
+
+\[
+r(u)=\frac{\sinh(bu)}{\sinh(b)}\in[-1,1],\qquad (b>0).
+\]
+
+So:
+
+\[
+r_j = r(u_j)=\frac{\sinh(bu_j)}{\sinh(b)}.
+\]
+
+**Interpretation**
+
+- \(b\to 0\): \(r(u)\approx u\) (nearly uniform)
+- larger \(b\): stronger clustering near \(r=0\) (hence near \(x_c\))
+
+### Asymmetric physical mapping to \([x_{\min},x_{\max}]\)
+
+Because \(x_c\) may not be the midpoint, scale left and right sides separately:
+
+\[
+L=x_c-x_{\min},\qquad R=x_{\max}-x_c.
+\]
+
+Map:
+
+\[
+x_j=
+\begin{cases}
+x_c + r_j\,L, & r_j\le 0,\\[6pt]
+x_c + r_j\,R, & r_j>0.
+\end{cases}
+\]
+
+Enforce endpoints exactly:
+
+\[
+x_0 := x_{\min},\qquad x_{N_x-1}:=x_{\max}.
+\]
+
+**Properties**
+
+- \(x_j\in[x_{\min},x_{\max}]\) by construction
+- monotone increasing grid (since \(r(u)\) is monotone in \(u\))
+- smallest spacing near \(x_c\), growing smoothly toward boundaries (stronger as \(b\) increases)
+
+**Practical tips**
+
+- Pick \(x_c\) near the key region (often \(\log K\), \(\log S_0\), or between them).
+- Moderate \(b\) first (e.g., \(1\)–\(4\)); too large \(b\) can create extreme cell-size ratios.
+- If you want an exact node at the center, choose odd \(N_x\) so \(u_{(N_x-1)/2}=0 \Rightarrow x=x_c\).
+- On non-uniform grids, use spatial discretizations that account for variable spacing (uniform-grid central differences lose formal order if applied blindly).
+
+### Reference implementation
+
+```python
+def build_x_grid(cfg: GridConfig) -> np.ndarray:
+    cfg.validate()
+    if cfg.spacing == SpacingPolicy.UNIFORM:
+        return np.linspace(cfg.x_lb, cfg.x_ub, cfg.Nx)
+
+    # clustered: sinh map around center, but keep points within [x_lb, x_ub]
+    u = np.linspace(-1.0, 1.0, cfg.Nx)
+    b = cfg.cluster_strength
+
+    raw = np.sinh(b * u)
+    raw = raw / np.max(np.abs(raw))  # normalize to [-1, 1]
+
+    x = np.empty_like(raw, dtype=float)
+
+    left_scale = cfg.x_center - cfg.x_lb
+    right_scale = cfg.x_ub - cfg.x_center
+
+    neg = raw <= 0
+    pos = ~neg
+    x[neg] = cfg.x_center + raw[neg] * left_scale
+    x[pos] = cfg.x_center + raw[pos] * right_scale
+
+    x[0] = cfg.x_lb
+    x[-1] = cfg.x_ub
+    return x
+```
