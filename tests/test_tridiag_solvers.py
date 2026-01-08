@@ -2,17 +2,20 @@
 import numpy as np
 import pytest
 
-# CHANGE THIS import to match your file/module name
-from option_pricing.numerics.pde_fd import (
-    BoundaryCoupling,
+from option_pricing.numerics.grids import (
     GridConfig,
     SpacingPolicy,
-    Tridiag,
-    _tridiag_mv,
     build_grid,
+)
+from option_pricing.numerics.time_steppers import (
     crank_nicolson_linear_step,
+)
+from option_pricing.numerics.tridiag import (
+    BoundaryCoupling,
+    Tridiag,
     solve_tridiag_scipy,
     solve_tridiag_thomas,
+    tridiag_mv,
     tridiag_to_dense,
 )
 
@@ -119,7 +122,7 @@ def test_tridiag_mv_matches_dense(M):
         Bu = np.array([], dtype=float)
         u = rng.normal(size=1)
 
-        y = _tridiag_mv(Bl=Bl, Bd=Bd, Bu=Bu, u=u)
+        y = tridiag_mv(Bl=Bl, Bd=Bd, Bu=Bu, u=u)
         np.testing.assert_allclose(y, Bd * u)
         return
 
@@ -128,7 +131,7 @@ def test_tridiag_mv_matches_dense(M):
     Bu = rng.normal(size=M - 1)
     u = rng.normal(size=M)
 
-    y = _tridiag_mv(Bl=Bl, Bd=Bd, Bu=Bu, u=u)
+    y = tridiag_mv(Bl=Bl, Bd=Bd, Bu=Bu, u=u)
 
     T = tridiag_to_dense(Bl, Bd, Bu)
     y_dense = T @ u
