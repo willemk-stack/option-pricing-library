@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ..tridiag import BoundaryCoupling, Tridiag
 from .boundary import DirichletBC
 
 
@@ -25,11 +24,11 @@ class OperatorBuilder1D:
     def __init__(self, x: np.ndarray):
         self.x = x
 
-    def build_L(
-        self, t: float, *, a_fn, b_fn, c_fn
-    ) -> tuple[Tridiag, BoundaryCoupling]:
-        """
-        Returns L as tridiag on interior nodes: i=1..N-2
-        """
-        ...
-        return  # L_tridiag, boundary_coupling
+    # def build_L(
+    #     self, t: float, *, a_fn, b_fn, c_fn
+    # ) -> tuple[Tridiag, BoundaryCoupling]:
+    #     """
+    #     Returns L as tridiag on interior nodes: i=1..N-2
+    #     """
+    #     ...
+    #     return  Tridiag, BoundaryCoupling
