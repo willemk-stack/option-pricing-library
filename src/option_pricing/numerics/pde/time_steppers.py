@@ -6,8 +6,8 @@ from collections.abc import Callable
 import numpy as np
 from numpy.typing import NDArray
 
-from .grids import Grid
-from .tridiag import DEFAULT_BC, BoundaryCoupling, Tridiag, solve_tridiag_scipy
+from ..grids import Grid
+from ..tridiag import DEFAULT_BC, BoundaryCoupling, Tridiag, solve_tridiag_scipy
 
 __all__ = ["crank_nicolson_linear_step"]
 

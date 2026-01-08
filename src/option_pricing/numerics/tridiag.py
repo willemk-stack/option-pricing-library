@@ -25,14 +25,37 @@ class Tridiag:
     upper: NDArray[np.floating]
 
     def check(self) -> int:
-        M = int(self.diag.shape[0])
-        if self.diag.shape != (M,):
+        """
+        Validate internal shapes and return M (system size).
+
+        Supports M == 0 with empty diagonals:
+          diag.shape  == (0,)
+          lower.shape == (0,)
+          upper.shape == (0,)
+        """
+        diag = np.asarray(self.diag)
+        if diag.ndim != 1:
             raise ValueError("diag must be 1D")
-        if self.lower.shape != (M - 1,) or self.upper.shape != (M - 1,):
+
+        M = int(diag.shape[0])
+
+        lower = np.asarray(self.lower)
+        upper = np.asarray(self.upper)
+
+        if M == 0:
+            if lower.shape != (0,) or upper.shape != (0,):
+                raise ValueError("For M==0, lower/upper must be empty (shape (0,))")
+            return 0
+
+        if lower.shape != (M - 1,) or upper.shape != (M - 1,):
             raise ValueError(f"lower/upper must have shape {(M-1,)}")
         return M
 
     def mv(self, u: NDArray[np.floating]) -> NDArray[np.floating]:
+        M = self.check()  # ensure internal consistency
+        u = np.asarray(u)
+        if u.shape != (M,):
+            raise ValueError(f"u must have shape {(M,)} got {u.shape}")
         return tridiag_mv(Bl=self.lower, Bd=self.diag, Bu=self.upper, u=u)
 
 
@@ -54,28 +77,41 @@ DEFAULT_BC: BoundaryCoupling = BoundaryCoupling()
 
 
 def tridiag_mv(
-    Bl: NDArray[np.floating],  # (M-1,)
+    Bl: NDArray[np.floating],  # (M-1,) or (0,) if M==0
     Bd: NDArray[np.floating],  # (M,)
-    Bu: NDArray[np.floating],  # (M-1,)
+    Bu: NDArray[np.floating],  # (M-1,) or (0,) if M==0
     u: NDArray[np.floating],  # (M,)
 ) -> NDArray[np.floating]:
     """
     Compute y = T u where T is tridiagonal with diagonals (Bl,Bd,Bu),
-    acting on an interior vector of length M.
+    acting on a vector u of length M.
 
-    Convention:
+    Convention (for M>=2):
       y[0]   = Bd[0]*u[0] + Bu[0]*u[1]
       y[j]   = Bl[j-1]*u[j-1] + Bd[j]*u[j] + Bu[j]*u[j+1]   for 1<=j<=M-2
       y[M-1] = Bl[M-2]*u[M-2] + Bd[M-1]*u[M-1]
+
+    For M==0: returns empty array.
+    For M==1: y[0] = Bd[0]*u[0].
     """
     Bd = np.asarray(Bd)
     Bl = np.asarray(Bl)
     Bu = np.asarray(Bu)
     u = np.asarray(u)
 
-    M = Bd.shape[0]
+    if Bd.ndim != 1:
+        raise ValueError("Bd must be 1D")
+
+    M = int(Bd.shape[0])
+
     if u.shape != (M,):
         raise ValueError(f"u must have shape {(M,)} got {u.shape}")
+
+    if M == 0:
+        if Bl.shape != (0,) or Bu.shape != (0,):
+            raise ValueError("For M==0, Bl,Bu must be empty (shape (0,))")
+        return cast(NDArray[np.floating], Bd * u)  # empty
+
     if Bl.shape != (M - 1,) or Bu.shape != (M - 1,):
         raise ValueError(f"Bl,Bu must have shape {(M-1,)} got {Bl.shape}, {Bu.shape}")
 
@@ -86,36 +122,29 @@ def tridiag_mv(
 
 
 def solve_tridiag_thomas(
-    lower: NDArray[np.floating],
-    diag: NDArray[np.floating],
-    upper: NDArray[np.floating],
+    A: Tridiag,
     rhs: NDArray[np.floating],
     *,
     overwrite: bool = False,
 ) -> NDArray[np.floating]:
     """
-    Solve A x = rhs for tridiagonal A with diagonals:
-      lower: (M-1,) A[i, i-1] for i=1..M-1
-      diag:  (M,)   A[i, i]
-      upper: (M-1,) A[i, i+1] for i=0..M-2
+    Solve A x = rhs for tridiagonal A.
 
     Notes:
     - Uses a Thomas algorithm (no pivoting). Prefer diagonally-dominant systems.
     - Raises np.linalg.LinAlgError on (near-)zero pivots.
+    - If overwrite=True and dtypes already match, this may mutate A.lower/A.diag/A.upper
+      and rhs in-place (because it avoids copies).
     """
-    diag = np.asarray(diag)
-    M = int(diag.shape[0])
+    M = A.check()  # <-- uses internal check()
 
     rhs = np.asarray(rhs)
-    lower = np.asarray(lower)
-    upper = np.asarray(upper)
-
     if rhs.shape != (M,):
         raise ValueError(f"rhs must have shape {(M,)} got {rhs.shape}")
-    if lower.shape != (M - 1,) or upper.shape != (M - 1,):
-        raise ValueError(
-            f"lower/upper must have shape {(M-1,)} got {lower.shape}, {upper.shape}"
-        )
+
+    diag = np.asarray(A.diag)
+    lower = np.asarray(A.lower)
+    upper = np.asarray(A.upper)
 
     dtype = np.result_type(lower, diag, upper, rhs, np.float64)
     lower = lower.astype(dtype, copy=not overwrite)
@@ -125,14 +154,14 @@ def solve_tridiag_thomas(
 
     if M == 0:
         return rhs.copy()
+
+    tol = 100.0 * np.finfo(dtype).eps
+
     if M == 1:
         denom = diag[0]
-        tol = 100.0 * np.finfo(dtype).eps
         if abs(denom) < tol:
             raise np.linalg.LinAlgError("Near-zero pivot at row 0")
         return cast(NDArray[np.floating], rhs / denom)
-
-    tol = 100.0 * np.finfo(dtype).eps
 
     # Forward sweep (store modified upper and rhs)
     denom = diag[0]
@@ -169,28 +198,28 @@ def solve_tridiag_scipy(
 ) -> NDArray[np.floating]:
     """
     Solve using SciPy banded solver. SciPy is imported lazily.
+
+    This now validates (lower, diag, upper) via Tridiag.check().
     """
     from scipy.linalg import (
         solve_banded,  # local import to avoid import-time dependency
     )
 
-    diag = np.asarray(diag)
-    M = int(diag.shape[0])
-    rhs = np.asarray(rhs)
-    lower = np.asarray(lower)
-    upper = np.asarray(upper)
+    # Use internal check() by constructing a Tridiag
+    tri = Tridiag(np.asarray(lower), np.asarray(diag), np.asarray(upper))
+    M = tri.check()
 
+    rhs = np.asarray(rhs)
     if rhs.shape != (M,):
         raise ValueError(f"rhs must have shape {(M,)} got {rhs.shape}")
-    if lower.shape != (M - 1,) or upper.shape != (M - 1,):
-        raise ValueError(
-            f"lower/upper must have shape {(M-1,)} got {lower.shape}, {upper.shape}"
-        )
 
-    ab = np.zeros((3, M), dtype=np.result_type(lower, diag, upper, rhs))
-    ab[0, 1:] = upper
-    ab[1, :] = diag
-    ab[2, :-1] = lower
+    if M == 0:
+        return cast(NDArray[np.floating], rhs.copy())
+
+    ab = np.zeros((3, M), dtype=np.result_type(tri.lower, tri.diag, tri.upper, rhs))
+    ab[0, 1:] = np.asarray(tri.upper)
+    ab[1, :] = np.asarray(tri.diag)
+    ab[2, :-1] = np.asarray(tri.lower)
 
     res = solve_banded((1, 1), ab, rhs)
     # scipy stubs often return Any; cast back to an NDArray
@@ -208,17 +237,18 @@ def tridiag_to_dense(
     """
     if isinstance(lower, Tridiag):
         tri = lower
-        lower = tri.lower
-        diag = tri.diag
-        upper = tri.upper
-    if diag is None or upper is None:
-        raise ValueError("Must provide (lower, diag, upper) or a Tridiag")
+        M = tri.check()  # validate shapes early
+        lower = np.asarray(tri.lower)
+        diag = np.asarray(tri.diag)
+        upper = np.asarray(tri.upper)
+    else:
+        if diag is None or upper is None:
+            raise ValueError("Must provide (lower, diag, upper) or a Tridiag")
+        diag = np.asarray(diag)
+        lower = np.asarray(lower)
+        upper = np.asarray(upper)
+        M = int(diag.shape[0])
 
-    diag = np.asarray(diag)
-    lower = np.asarray(lower)
-    upper = np.asarray(upper)
-
-    M = int(diag.shape[0])
     A = np.zeros((M, M), dtype=np.result_type(lower, diag, upper))
     A[np.arange(M), np.arange(M)] = diag
     A[np.arange(1, M), np.arange(M - 1)] = lower

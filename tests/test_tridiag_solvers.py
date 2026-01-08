@@ -7,7 +7,7 @@ from option_pricing.numerics.grids import (
     SpacingPolicy,
     build_grid,
 )
-from option_pricing.numerics.time_steppers import (
+from option_pricing.numerics.pde.time_steppers import (
     crank_nicolson_linear_step,
 )
 from option_pricing.numerics.tridiag import (
@@ -20,7 +20,9 @@ from option_pricing.numerics.tridiag import (
 )
 
 
-def make_diag_dominant_tridiag(rng: np.random.Generator, M: int, scale: float = 1.0):
+def make_diag_dominant_tridiag(
+    rng: np.random.Generator, M: int, scale: float = 1.0
+) -> Tridiag:
     """
     Create a random *strictly diagonally dominant* tridiagonal system.
     This avoids near-zero pivots and makes comparisons stable.
@@ -32,7 +34,7 @@ def make_diag_dominant_tridiag(rng: np.random.Generator, M: int, scale: float = 
         lower = np.array([], dtype=float)
         upper = np.array([], dtype=float)
         diag = np.array([1.0 + abs(rng.normal())], dtype=float) * scale
-        return lower, diag, upper
+        return Tridiag(lower=lower, diag=diag, upper=upper)
 
     lower = rng.normal(size=M - 1) * scale
     upper = rng.normal(size=M - 1) * scale
@@ -43,17 +45,51 @@ def make_diag_dominant_tridiag(rng: np.random.Generator, M: int, scale: float = 
     if M > 2:
         diag[1:-1] += np.abs(lower[:-1]) + np.abs(upper[1:])
 
-    return lower, diag, upper
+    return Tridiag(lower=lower, diag=diag, upper=upper)
+
+
+# --- Adapters ---------------------------------------------------------------
+# These make the tests resilient whether crank_nicolson_linear_step calls
+# solve_tridiag as (A: Tridiag, rhs) or as (lower, diag, upper, rhs).
+
+
+def solve_thomas_adapter(*args):
+    if len(args) == 2 and isinstance(args[0], Tridiag):
+        A, rhs = args
+        return solve_tridiag_thomas(A, rhs)
+    if len(args) == 4:
+        lower, diag, upper, rhs = args
+        return solve_tridiag_thomas(
+            Tridiag(
+                lower=np.asarray(lower), diag=np.asarray(diag), upper=np.asarray(upper)
+            ),
+            np.asarray(rhs),
+        )
+    raise TypeError(f"Unexpected args for Thomas solver: {args!r}")
+
+
+def solve_scipy_adapter(*args):
+    # Your solve_tridiag_scipy currently takes (lower, diag, upper, rhs).
+    if len(args) == 2 and isinstance(args[0], Tridiag):
+        A, rhs = args
+        return solve_tridiag_scipy(A.lower, A.diag, A.upper, rhs)
+    if len(args) == 4:
+        lower, diag, upper, rhs = args
+        return solve_tridiag_scipy(lower, diag, upper, rhs)
+    raise TypeError(f"Unexpected args for SciPy solver: {args!r}")
+
+
+# --- Tests ------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("M", [1, 2, 3, 10, 50, 200])
 def test_thomas_matches_scipy_on_diag_dominant_random(M):
     rng = np.random.default_rng(12345 + M)
-    lower, diag, upper = make_diag_dominant_tridiag(rng, M, scale=1.0)
+    A = make_diag_dominant_tridiag(rng, M, scale=1.0)
     rhs = rng.normal(size=M)
 
-    x_thomas = solve_tridiag_thomas(lower, diag, upper, rhs)
-    x_scipy = solve_tridiag_scipy(lower, diag, upper, rhs)
+    x_thomas = solve_tridiag_thomas(A, rhs)
+    x_scipy = solve_tridiag_scipy(A.lower, A.diag, A.upper, rhs)
 
     np.testing.assert_allclose(x_thomas, x_scipy, rtol=1e-10, atol=1e-12)
 
@@ -61,14 +97,14 @@ def test_thomas_matches_scipy_on_diag_dominant_random(M):
 @pytest.mark.parametrize("M", [1, 2, 10, 80])
 def test_solutions_match_dense_solve(M):
     rng = np.random.default_rng(777 + M)
-    lower, diag, upper = make_diag_dominant_tridiag(rng, M, scale=2.0)
+    A_tri = make_diag_dominant_tridiag(rng, M, scale=2.0)
     rhs = rng.normal(size=M)
 
-    A = tridiag_to_dense(lower, diag, upper)
+    A = tridiag_to_dense(A_tri)
     x_dense = np.linalg.solve(A, rhs)
 
-    x_thomas = solve_tridiag_thomas(lower, diag, upper, rhs)
-    x_scipy = solve_tridiag_scipy(lower, diag, upper, rhs)
+    x_thomas = solve_tridiag_thomas(A_tri, rhs)
+    x_scipy = solve_tridiag_scipy(A_tri.lower, A_tri.diag, A_tri.upper, rhs)
 
     np.testing.assert_allclose(x_thomas, x_dense, rtol=1e-10, atol=1e-12)
     np.testing.assert_allclose(x_scipy, x_dense, rtol=1e-10, atol=1e-12)
@@ -77,39 +113,47 @@ def test_solutions_match_dense_solve(M):
 @pytest.mark.parametrize("M", [2, 5, 30])
 def test_inputs_not_modified(M):
     rng = np.random.default_rng(999 + M)
-    lower, diag, upper = make_diag_dominant_tridiag(rng, M, scale=1.0)
+    A = make_diag_dominant_tridiag(rng, M, scale=1.0)
     rhs = rng.normal(size=M)
 
-    lower0, diag0, upper0, rhs0 = lower.copy(), diag.copy(), upper.copy(), rhs.copy()
+    lower0 = A.lower.copy()
+    diag0 = A.diag.copy()
+    upper0 = A.upper.copy()
+    rhs0 = rhs.copy()
 
-    _ = solve_tridiag_thomas(lower, diag, upper, rhs)
-    np.testing.assert_array_equal(lower, lower0)
-    np.testing.assert_array_equal(diag, diag0)
-    np.testing.assert_array_equal(upper, upper0)
+    _ = solve_tridiag_thomas(A, rhs)
+    np.testing.assert_array_equal(A.lower, lower0)
+    np.testing.assert_array_equal(A.diag, diag0)
+    np.testing.assert_array_equal(A.upper, upper0)
     np.testing.assert_array_equal(rhs, rhs0)
 
-    _ = solve_tridiag_scipy(lower, diag, upper, rhs)
-    np.testing.assert_array_equal(lower, lower0)
-    np.testing.assert_array_equal(diag, diag0)
-    np.testing.assert_array_equal(upper, upper0)
+    _ = solve_tridiag_scipy(A.lower, A.diag, A.upper, rhs)
+    np.testing.assert_array_equal(A.lower, lower0)
+    np.testing.assert_array_equal(A.diag, diag0)
+    np.testing.assert_array_equal(A.upper, upper0)
     np.testing.assert_array_equal(rhs, rhs0)
 
 
 def test_shape_errors():
     rng = np.random.default_rng(0)
     M = 5
-    lower, diag, upper = make_diag_dominant_tridiag(rng, M)
+    A = make_diag_dominant_tridiag(rng, M)
     rhs = rng.normal(size=M)
 
+    # wrong lower shape: should be (M-1,)
+    A_bad_lower = Tridiag(lower=A.lower[:-1], diag=A.diag, upper=A.upper)
     with pytest.raises(ValueError):
-        solve_tridiag_thomas(lower[:-1], diag, upper, rhs)  # wrong lower shape
-    with pytest.raises(ValueError):
-        solve_tridiag_thomas(lower, diag, upper, rhs[:-1])  # wrong rhs shape
+        _ = solve_tridiag_thomas(A_bad_lower, rhs)
 
+    # wrong rhs shape
     with pytest.raises(ValueError):
-        solve_tridiag_scipy(lower[:-1], diag, upper, rhs)
+        _ = solve_tridiag_thomas(A, rhs[:-1])
+
+    # SciPy solver shape errors (arrays API)
     with pytest.raises(ValueError):
-        solve_tridiag_scipy(lower, diag, upper, rhs[:-1])
+        _ = solve_tridiag_scipy(A.lower[:-1], A.diag, A.upper, rhs)
+    with pytest.raises(ValueError):
+        _ = solve_tridiag_scipy(A.lower, A.diag, A.upper, rhs[:-1])
 
 
 @pytest.mark.parametrize("M", [1, 2, 10, 50])
@@ -143,6 +187,7 @@ def test_tridiag_mv_matches_dense(M):
 def test_crank_nicolson_step_thomas_matches_scipy(Nx):
     """
     Compares one CN step using Thomas vs SciPy solve_banded.
+
     Uses random diagonals for A and B (not a PDE-derived operator),
     but that's enough to validate wiring & boundary injection.
     """
@@ -163,11 +208,8 @@ def test_crank_nicolson_step_thomas_matches_scipy(Nx):
     assert M >= 3
 
     # Random but stable-ish diagonals for A and B; make A diagonally dominant
-    AlA, AdA, AuA = make_diag_dominant_tridiag(rng, M, scale=1.0)
-    AlB, AdB, AuB = make_diag_dominant_tridiag(rng, M, scale=0.5)
-
-    A = Tridiag(lower=AlA, diag=AdA, upper=AuA)
-    B = Tridiag(lower=AlB, diag=AdB, upper=AuB)
+    A = make_diag_dominant_tridiag(rng, M, scale=1.0)
+    B = make_diag_dominant_tridiag(rng, M, scale=0.5)
 
     # Full u at time n (includes boundaries)
     u_n = rng.normal(size=N)
@@ -192,7 +234,7 @@ def test_crank_nicolson_step_thomas_matches_scipy(Nx):
         BC_L=BC_L,
         BC_R=BC_R,
         bc=BoundaryCoupling(),  # no interior-boundary coupling in this synthetic test
-        solve_tridiag=solve_tridiag_thomas,
+        solve_tridiag=solve_thomas_adapter,
     )
 
     u_np1_scipy = crank_nicolson_linear_step(
@@ -205,7 +247,7 @@ def test_crank_nicolson_step_thomas_matches_scipy(Nx):
         BC_L=BC_L,
         BC_R=BC_R,
         bc=BoundaryCoupling(),
-        solve_tridiag=solve_tridiag_scipy,
+        solve_tridiag=solve_scipy_adapter,
     )
 
     np.testing.assert_allclose(u_np1_thomas, u_np1_scipy, rtol=1e-10, atol=1e-12)
