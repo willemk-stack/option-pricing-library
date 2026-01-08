@@ -38,34 +38,6 @@ class Tridiag:
 
 @dataclass(frozen=True, slots=True)
 class BoundaryCoupling:
-    A_L: float = 0.0
-    A_R: float = 0.0
-    B_L: float = 0.0
-    B_R: float = 0.0
-
-
-DEFAULT_BC: BoundaryCoupling = BoundaryCoupling()
-
-
-def tridiag_mv(Bl, Bd, Bu, u) -> NDArray[np.floating]:
-    Bd = np.asarray(Bd)
-    Bl = np.asarray(Bl)
-    Bu = np.asarray(Bu)
-    u = np.asarray(u)
-    M = Bd.shape[0]
-    if u.shape != (M,):
-        raise ValueError(f"u must have shape {(M,)} got {u.shape}")
-    if Bl.shape != (M - 1,) or Bu.shape != (M - 1,):
-        raise ValueError(f"Bl,Bu must have shape {(M-1,)} got {Bl.shape}, {Bu.shape}")
-    y = Bd * u
-    y[1:] += Bl * u[:-1]
-    y[:-1] += Bu * u[1:]
-    return y
-
-
-# ...paste your existing solve_tridiag_thomas/solve_tridiag_scipy/tridiag_to_dense here unchanged...
-@dataclass(frozen=True, slots=True)
-class BoundaryCoupling:
     """
     Boundary coupling coefficients for CN step, contributing to RHS of interior system:
       rhs[0]  += B_L*uL(t_n)   - A_L*uL(t_{n+1})
@@ -81,7 +53,7 @@ class BoundaryCoupling:
 DEFAULT_BC: BoundaryCoupling = BoundaryCoupling()
 
 
-def _tridiag_mv(
+def tridiag_mv(
     Bl: NDArray[np.floating],  # (M-1,)
     Bd: NDArray[np.floating],  # (M,)
     Bu: NDArray[np.floating],  # (M-1,)
@@ -110,7 +82,7 @@ def _tridiag_mv(
     y = Bd * u
     y[1:] += Bl * u[:-1]
     y[:-1] += Bu * u[1:]
-    return y
+    return cast(NDArray[np.floating], y)
 
 
 def solve_tridiag_thomas(
