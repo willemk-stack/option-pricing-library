@@ -8,10 +8,12 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..config import MCConfig, RandomConfig
+from ..instruments.base import ExerciseStyle, TerminalInstrument
+from ..instruments.factory import from_pricing_inputs
 from ..instruments.payoffs import call_payoff, make_vanilla_payoff, put_payoff
 from ..market.curves import PricingContext, avg_carry_from_forward, avg_rate_from_df
 from ..models.stochastic_processes import sim_gbm_terminal
-from ..types import OptionType, PricingInputs
+from ..types import MarketData, OptionType, PricingInputs
 
 
 def _apply_control_variate(X: np.ndarray, Y: np.ndarray, EY: float) -> np.ndarray:
@@ -297,6 +299,67 @@ def mc_price_from_ctx(
     return model.price_european(payoff)
 
 
+def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
+    """Normalize flat MarketData or an already-curves-first PricingContext."""
+    if isinstance(market, PricingContext):
+        return market
+    return market.to_context()
+
+
+def mc_price_instrument_from_ctx(
+    *,
+    ctx: PricingContext,
+    inst: TerminalInstrument,
+    sigma: float,
+    cfg: MCConfig | None = None,
+) -> tuple[float, float]:
+    """Monte Carlo GBM pricer for a terminal-payoff instrument.
+
+    This is the instrument-based equivalent of :func:`mc_price_from_ctx`.
+
+    Notes
+    -----
+    - ``inst.expiry`` is interpreted as time-to-expiry (tau).
+    - Only European exercise is supported by this terminal-only GBM simulator.
+    """
+    if inst.exercise != ExerciseStyle.EUROPEAN:
+        raise ValueError("mc_price_instrument_from_ctx supports European exercise only")
+
+    cfg = MCConfig() if cfg is None else cfg
+    tau = float(inst.expiry)
+    df = ctx.df(tau)
+    F = ctx.fwd(tau)
+    r = avg_rate_from_df(df, tau)
+    b = avg_carry_from_forward(ctx.spot, F, tau)
+    q = r - b
+
+    model = McGBMModel(
+        S0=ctx.spot,
+        r=r,
+        q=q,
+        sigma=float(sigma),
+        tau=tau,
+        n_paths=int(cfg.n_paths),
+        antithetic=bool(cfg.antithetic),
+        rng=_make_mc_rng(cfg),
+    )
+
+    return model.price_european(inst.payoff)
+
+
+def mc_price_instrument(
+    inst: TerminalInstrument,
+    *,
+    market: MarketData | PricingContext,
+    sigma: float,
+    cfg: MCConfig | None = None,
+) -> tuple[float, float]:
+    """Convenience wrapper accepting flat :class:`~option_pricing.types.MarketData`."""
+    return mc_price_instrument_from_ctx(
+        ctx=_to_ctx(market), inst=inst, sigma=sigma, cfg=cfg
+    )
+
+
 def mc_price(
     p: PricingInputs,
     *,
@@ -348,26 +411,8 @@ def mc_price(
     (10.42, 0.03)
     """
     cfg = MCConfig() if cfg is None else cfg
-    ctx = p.ctx
-    df = ctx.df(p.tau)
-    F = ctx.fwd(p.tau)
-    r = avg_rate_from_df(df, p.tau)
-    b = avg_carry_from_forward(ctx.spot, F, p.tau)
-    q = r - b
-
-    model = McGBMModel(
-        S0=ctx.spot,
-        r=r,
-        q=q,
-        sigma=p.sigma,
-        tau=p.tau,
-        n_paths=int(cfg.n_paths),
-        antithetic=bool(cfg.antithetic),
-        rng=_make_mc_rng(cfg),
-    )
-
-    payoff = make_vanilla_payoff(p.spec.kind, K=p.K)
-    return model.price_european(payoff)
+    inst = from_pricing_inputs(p, exercise=ExerciseStyle.EUROPEAN)
+    return mc_price_instrument_from_ctx(ctx=p.ctx, inst=inst, sigma=p.sigma, cfg=cfg)
 
 
 def mc_price_call(

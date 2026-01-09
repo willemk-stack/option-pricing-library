@@ -4,6 +4,8 @@ from collections.abc import Callable
 
 import numpy as np
 
+from ..instruments.base import ExerciseStyle
+from ..instruments.vanilla import VanillaOption
 from ..market.curves import PricingContext
 from ..models import bs as bs_model
 from ..types import MarketData, OptionType, PricingInputs
@@ -87,6 +89,63 @@ def bs_greeks_from_ctx(
     if kind == OptionType.PUT:
         return bs_put_greeks_from_ctx(strike=strike, sigma=sigma, tau=tau, ctx=ctx)
     raise ValueError(f"Unsupported option kind: {kind}")
+
+
+def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
+    """Normalize flat MarketData or an already-curves-first PricingContext."""
+    if isinstance(market, PricingContext):
+        return market
+    return market.to_context()
+
+
+def bs_price_instrument_from_ctx(
+    *, inst: VanillaOption, sigma: float, ctx: PricingContext
+) -> float:
+    """Black-76 price for a vanilla instrument using curves-first inputs.
+
+    Notes
+    -----
+    - ``inst.expiry`` is interpreted as time-to-expiry (tau).
+    - Only European exercise is supported by this closed-form pricer.
+    """
+    if inst.exercise != ExerciseStyle.EUROPEAN:
+        raise ValueError("Black-76 closed-form supports European exercise only")
+    return bs_price_from_ctx(
+        kind=inst.kind,
+        strike=inst.strike,
+        sigma=float(sigma),
+        tau=float(inst.expiry),
+        ctx=ctx,
+    )
+
+
+def bs_greeks_instrument_from_ctx(
+    *, inst: VanillaOption, sigma: float, ctx: PricingContext
+) -> dict[str, float]:
+    """Black-76 Greeks for a vanilla instrument using curves-first inputs."""
+    if inst.exercise != ExerciseStyle.EUROPEAN:
+        raise ValueError("Black-76 greeks support European exercise only")
+    return bs_greeks_from_ctx(
+        kind=inst.kind,
+        strike=inst.strike,
+        sigma=float(sigma),
+        tau=float(inst.expiry),
+        ctx=ctx,
+    )
+
+
+def bs_price_instrument(
+    inst: VanillaOption, *, market: MarketData | PricingContext, sigma: float
+) -> float:
+    """Convenience wrapper accepting flat :class:`~option_pricing.types.MarketData`."""
+    return bs_price_instrument_from_ctx(inst=inst, sigma=sigma, ctx=_to_ctx(market))
+
+
+def bs_greeks_instrument(
+    inst: VanillaOption, *, market: MarketData | PricingContext, sigma: float
+) -> dict[str, float]:
+    """Convenience wrapper accepting flat :class:`~option_pricing.types.MarketData`."""
+    return bs_greeks_instrument_from_ctx(inst=inst, sigma=sigma, ctx=_to_ctx(market))
 
 
 # -------------------------
