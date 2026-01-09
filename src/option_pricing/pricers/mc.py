@@ -8,10 +8,10 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..config import MCConfig, RandomConfig
+from ..instruments.payoffs import call_payoff, make_vanilla_payoff, put_payoff
 from ..market.curves import PricingContext, avg_carry_from_forward, avg_rate_from_df
 from ..models.stochastic_processes import sim_gbm_terminal
 from ..types import OptionType, PricingInputs
-from ..vanilla import call_payoff, make_vanilla_payoff, put_payoff
 
 
 def _apply_control_variate(X: np.ndarray, Y: np.ndarray, EY: float) -> np.ndarray:
