@@ -1,35 +1,34 @@
+"""Backwards-compatible payoff helpers.
+
+Historically the library exposed a small set of payoff functions in
+``instruments.payoffs`` and pricers imported them directly.
+
+With the move to an ``instruments/`` package, the canonical implementation of
+vanilla payoffs lives in :mod:`option_pricing.instruments.vanilla`.
+
+This module keeps the old names to avoid churn in pricers/notebooks.
+"""
+
 from __future__ import annotations
 
-from collections.abc import Callable
-
-import numpy as np
-
-from option_pricing.types import OptionType
+from ..types import OptionType
+from .base import TerminalPayoff
+from .vanilla import VanillaPayoff, call_payoff, put_payoff
 
 
-def call_payoff(ST: np.ndarray, *, K: float) -> np.ndarray:
-    return np.maximum(ST - K, 0.0)
+def make_vanilla_payoff(kind: OptionType, *, K: float) -> TerminalPayoff:
+    """Factory returning a vectorized vanilla payoff callable.
+
+    The returned object is a :class:`~option_pricing.instruments.vanilla.VanillaPayoff`
+    instance (which is still a callable), keeping the old API contract intact.
+    """
+
+    return VanillaPayoff(kind=kind, strike=float(K))
 
 
-def put_payoff(ST: np.ndarray, *, K: float) -> np.ndarray:
-    return np.maximum(K - ST, 0.0)
-
-
-def make_vanilla_payoff(
-    kind: OptionType, *, K: float
-) -> Callable[[np.ndarray], np.ndarray]:
-    if kind == OptionType.CALL:
-
-        def payoff(ST: np.ndarray) -> np.ndarray:
-            return call_payoff(ST, K=K)
-
-        return payoff
-
-    if kind == OptionType.PUT:
-
-        def payoff(ST: np.ndarray) -> np.ndarray:
-            return put_payoff(ST, K=K)
-
-        return payoff
-
-    raise ValueError(f"Unsupported option kind: {kind}")
+__all__ = [
+    "call_payoff",
+    "put_payoff",
+    "VanillaPayoff",
+    "make_vanilla_payoff",
+]

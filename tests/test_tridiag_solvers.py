@@ -2,16 +2,15 @@
 import numpy as np
 import pytest
 
-from option_pricing.numerics.grids import (
-    GridConfig,
-    SpacingPolicy,
-    build_grid,
+from option_pricing.numerics.grids import GridConfig, SpacingPolicy, build_grid
+from option_pricing.numerics.pde.boundary import DirichletBC
+from option_pricing.numerics.pde.operators import (
+    AdvectionScheme,
+    LinearParabolicPDE1D,
+    build_theta_system_1d,
 )
-from option_pricing.numerics.pde.time_steppers import (
-    crank_nicolson_linear_step,
-)
+from option_pricing.numerics.pde.time_steppers import crank_nicolson_linear_step
 from option_pricing.numerics.tridiag import (
-    BoundaryCoupling,
     Tridiag,
     solve_tridiag_scipy,
     solve_tridiag_thomas,
@@ -23,10 +22,7 @@ from option_pricing.numerics.tridiag import (
 def make_diag_dominant_tridiag(
     rng: np.random.Generator, M: int, scale: float = 1.0
 ) -> Tridiag:
-    """
-    Create a random *strictly diagonally dominant* tridiagonal system.
-    This avoids near-zero pivots and makes comparisons stable.
-    """
+    """Create a random *strictly diagonally dominant* tridiagonal system."""
     if M < 1:
         raise ValueError("M must be >= 1")
 
@@ -48,42 +44,23 @@ def make_diag_dominant_tridiag(
     return Tridiag(lower=lower, diag=diag, upper=upper)
 
 
-# --- Adapters ---------------------------------------------------------------
-# These make the tests resilient whether crank_nicolson_linear_step calls
-# solve_tridiag as (A: Tridiag, rhs) or as (lower, diag, upper, rhs).
+def solve_thomas_arrays(
+    lower: np.ndarray, diag: np.ndarray, upper: np.ndarray, rhs: np.ndarray
+) -> np.ndarray:
+    """Adapter: crank_nicolson_linear_step expects a (lower,diag,upper,rhs) solver."""
+    tri = Tridiag(
+        lower=np.asarray(lower, dtype=float),
+        diag=np.asarray(diag, dtype=float),
+        upper=np.asarray(upper, dtype=float),
+    )
+    return solve_tridiag_thomas(tri, np.asarray(rhs, dtype=float))
 
 
-def solve_thomas_adapter(*args):
-    if len(args) == 2 and isinstance(args[0], Tridiag):
-        A, rhs = args
-        return solve_tridiag_thomas(A, rhs)
-    if len(args) == 4:
-        lower, diag, upper, rhs = args
-        return solve_tridiag_thomas(
-            Tridiag(
-                lower=np.asarray(lower), diag=np.asarray(diag), upper=np.asarray(upper)
-            ),
-            np.asarray(rhs),
-        )
-    raise TypeError(f"Unexpected args for Thomas solver: {args!r}")
-
-
-def solve_scipy_adapter(*args):
-    # Your solve_tridiag_scipy currently takes (lower, diag, upper, rhs).
-    if len(args) == 2 and isinstance(args[0], Tridiag):
-        A, rhs = args
-        return solve_tridiag_scipy(A.lower, A.diag, A.upper, rhs)
-    if len(args) == 4:
-        lower, diag, upper, rhs = args
-        return solve_tridiag_scipy(lower, diag, upper, rhs)
-    raise TypeError(f"Unexpected args for SciPy solver: {args!r}")
-
-
-# --- Tests ------------------------------------------------------------------
+# --- Tests: tridiagonal algebra and solvers ---------------------------------
 
 
 @pytest.mark.parametrize("M", [1, 2, 3, 10, 50, 200])
-def test_thomas_matches_scipy_on_diag_dominant_random(M):
+def test_thomas_matches_scipy_on_diag_dominant_random(M: int) -> None:
     rng = np.random.default_rng(12345 + M)
     A = make_diag_dominant_tridiag(rng, M, scale=1.0)
     rhs = rng.normal(size=M)
@@ -95,7 +72,7 @@ def test_thomas_matches_scipy_on_diag_dominant_random(M):
 
 
 @pytest.mark.parametrize("M", [1, 2, 10, 80])
-def test_solutions_match_dense_solve(M):
+def test_solutions_match_dense_solve(M: int) -> None:
     rng = np.random.default_rng(777 + M)
     A_tri = make_diag_dominant_tridiag(rng, M, scale=2.0)
     rhs = rng.normal(size=M)
@@ -111,7 +88,7 @@ def test_solutions_match_dense_solve(M):
 
 
 @pytest.mark.parametrize("M", [2, 5, 30])
-def test_inputs_not_modified(M):
+def test_inputs_not_modified(M: int) -> None:
     rng = np.random.default_rng(999 + M)
     A = make_diag_dominant_tridiag(rng, M, scale=1.0)
     rhs = rng.normal(size=M)
@@ -134,7 +111,7 @@ def test_inputs_not_modified(M):
     np.testing.assert_array_equal(rhs, rhs0)
 
 
-def test_shape_errors():
+def test_shape_errors() -> None:
     rng = np.random.default_rng(0)
     M = 5
     A = make_diag_dominant_tridiag(rng, M)
@@ -157,7 +134,7 @@ def test_shape_errors():
 
 
 @pytest.mark.parametrize("M", [1, 2, 10, 50])
-def test_tridiag_mv_matches_dense(M):
+def test_tridiag_mv_matches_dense(M: int) -> None:
     rng = np.random.default_rng(2024 + M)
 
     if M == 1:
@@ -183,14 +160,12 @@ def test_tridiag_mv_matches_dense(M):
     np.testing.assert_allclose(y, y_dense, rtol=1e-12, atol=1e-12)
 
 
-@pytest.mark.parametrize("Nx", [5, 20, 80])
-def test_crank_nicolson_step_thomas_matches_scipy(Nx):
-    """
-    Compares one CN step using Thomas vs SciPy solve_banded.
+# --- Test: CN step built via PDE module -------------------------------------
 
-    Uses random diagonals for A and B (not a PDE-derived operator),
-    but that's enough to validate wiring & boundary injection.
-    """
+
+@pytest.mark.parametrize("Nx", [5, 20, 80])
+def test_cn_step_thomas_matches_scipy_using_pde_module(Nx: int) -> None:
+    """Compare one theta=0.5 step built from the PDE operator builder."""
     rng = np.random.default_rng(4242 + Nx)
 
     cfg = GridConfig(
@@ -203,38 +178,66 @@ def test_crank_nicolson_step_thomas_matches_scipy(Nx):
     )
     grid = build_grid(cfg)
 
-    N = Nx
-    M = N - 2
-    assert M >= 3
-
-    # Random but stable-ish diagonals for A and B; make A diagonally dominant
-    A = make_diag_dominant_tridiag(rng, M, scale=1.0)
-    B = make_diag_dominant_tridiag(rng, M, scale=0.5)
-
-    # Full u at time n (includes boundaries)
-    u_n = rng.normal(size=N)
-
-    # Boundary conditions
+    # Time-dependent Dirichlet boundaries
     def BC_L(t: float) -> float:
         return 0.3 + 0.1 * t
 
     def BC_R(t: float) -> float:
         return -0.2 + 0.05 * t
 
-    t_n = 0.0
-    t_np1 = 0.5
+    bc = DirichletBC(left=BC_L, right=BC_R)
+
+    # A stable linear parabolic PDE: u_t = a u_xx + b u_x + c u
+    # Choose diffusion-dominated coefficients to keep A well-conditioned.
+    def a(x, t):
+        return 0.5  # diffusion
+
+    def b(x, t):
+        return 0.1  # drift
+
+    def c(x, t):
+        return 0.05  # reaction
+
+    problem = LinearParabolicPDE1D(
+        a=a,
+        b=b,
+        c=c,
+        d=None,
+        bc=bc,
+        ic=lambda x: 0.0,  # not used directly in this single-step test
+    )
+
+    t_n = float(grid.t[0])
+    t_np1 = float(grid.t[1])
+
+    system, rhs_extra = build_theta_system_1d(
+        problem=problem,
+        grid=grid,
+        t_n=t_n,
+        t_np1=t_np1,
+        theta=0.5,  # Crank–Nicolson
+        advection=AdvectionScheme.CENTRAL,
+    )
+
+    N = int(grid.x.shape[0])
+    u_n = rng.normal(size=N)
+
+    # Enforce Dirichlet boundaries at t_n (consistent with the stepper contract)
+    u_n[0] = BC_L(t_n)
+    u_n[-1] = BC_R(t_n)
 
     u_np1_thomas = crank_nicolson_linear_step(
         grid=grid,
         u_n=u_n,
         t_n=t_n,
         t_np1=t_np1,
-        A=A,
-        B=B,
+        A=system.A,
+        B=system.B,
         BC_L=BC_L,
         BC_R=BC_R,
-        bc=BoundaryCoupling(),  # no interior-boundary coupling in this synthetic test
-        solve_tridiag=solve_thomas_adapter,
+        bc=system.bc,
+        rhs_extra=rhs_extra,
+        solve_tridiag=solve_thomas_arrays,
     )
 
     u_np1_scipy = crank_nicolson_linear_step(
@@ -242,12 +245,13 @@ def test_crank_nicolson_step_thomas_matches_scipy(Nx):
         u_n=u_n,
         t_n=t_n,
         t_np1=t_np1,
-        A=A,
-        B=B,
+        A=system.A,
+        B=system.B,
         BC_L=BC_L,
         BC_R=BC_R,
-        bc=BoundaryCoupling(),
-        solve_tridiag=solve_scipy_adapter,
+        bc=system.bc,
+        rhs_extra=rhs_extra,
+        solve_tridiag=solve_tridiag_scipy,
     )
 
     np.testing.assert_allclose(u_np1_thomas, u_np1_scipy, rtol=1e-10, atol=1e-12)

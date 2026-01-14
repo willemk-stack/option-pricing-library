@@ -26,6 +26,8 @@ def crank_nicolson_linear_step(
     BC_R: Callable[[float], float],
     # Boundary coupling coefficients (to add to RHS)
     bc: BoundaryCoupling = DEFAULT_BC,
+    # Optional inhomogeneous/source term contribution (already scaled by dt)
+    rhs_extra: NDArray[np.floating] | None = None,
     solve_tridiag: Callable[
         [
             NDArray[np.floating],
@@ -73,6 +75,12 @@ def crank_nicolson_linear_step(
 
     # rhs = B * u_n_int
     rhs = B.mv(u_n_int)
+
+    if rhs_extra is not None:
+        rhs_extra = np.asarray(rhs_extra, dtype=float)
+        if rhs_extra.shape != (M,):
+            raise ValueError(f"rhs_extra must have shape {(M,)} got {rhs_extra.shape}")
+        rhs = rhs + rhs_extra
 
     # Add boundary contributions (only first and last interior equations)
     rhs[0] += bc.B_L * uL_n - bc.A_L * uL_np1

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
+from typing import Any, cast
 
 from ..instruments.base import TerminalInstrument
 from ..pricers.black_scholes import (  # or bs_price_put, etc.
@@ -140,8 +141,8 @@ def finite_diff_greeks_instrument(
     vega = (V_up_sigma - V_down_sigma) / (2.0 * h_sigma)
 
     # --- theta_tau (bump tau)
-    inst_up = replace(inst, expiry=tau + h_tau)
-    inst_down = replace(inst, expiry=tau - h_tau)
+    inst_up = replace(cast(Any, inst), expiry=tau + h_tau)
+    inst_down = replace(cast(Any, inst), expiry=tau - h_tau)
     V_up_tau = price(inst_up, market, sigma)
     V_down_tau = price(inst_down, market, sigma)
     theta_tau = (V_up_tau - V_down_tau) / (2.0 * h_tau)

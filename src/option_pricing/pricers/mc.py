@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from functools import partial
+from typing import cast
 
 import numpy as np
-from numpy.typing import NDArray
 
 from ..config import MCConfig, RandomConfig
 from ..instruments.base import ExerciseStyle, TerminalInstrument
@@ -14,6 +13,7 @@ from ..instruments.payoffs import call_payoff, make_vanilla_payoff, put_payoff
 from ..market.curves import PricingContext, avg_carry_from_forward, avg_rate_from_df
 from ..models.stochastic_processes import sim_gbm_terminal
 from ..types import MarketData, OptionType, PricingInputs
+from ..typing import FloatArray, FloatDType
 
 
 def _apply_control_variate(X: np.ndarray, Y: np.ndarray, EY: float) -> np.ndarray:
@@ -46,7 +46,7 @@ class ControlVariate:
         i.e. ``E[Y]``.
     """
 
-    values: Callable[[NDArray[np.float64]], NDArray[np.float64]]
+    values: Callable[[FloatArray], FloatArray]
     mean: float
 
 
@@ -153,7 +153,7 @@ class McGBMModel:
         ST_neg = self.S0 * np.exp(drift - vol * Z)
 
         out = np.concatenate([ST_pos, ST_neg])
-        return np.asarray(out, dtype=np.float64)
+        return np.asarray(out, dtype=FloatDType)
 
     def price_european(
         self,
@@ -438,7 +438,10 @@ def mc_price_call(
         antithetic=bool(cfg.antithetic),
         rng=_make_mc_rng(cfg),
     )
-    payoff = partial(call_payoff, K=p.K)
+
+    def payoff(ST: FloatArray) -> FloatArray:
+        return cast(FloatArray, call_payoff(ST, K=p.K))
+
     return model.price_european(payoff)
 
 
@@ -465,5 +468,8 @@ def mc_price_put(
         antithetic=bool(cfg.antithetic),
         rng=_make_mc_rng(cfg),
     )
-    payoff = partial(put_payoff, K=p.K)
+
+    def payoff(ST: FloatArray) -> FloatArray:
+        return cast(FloatArray, put_payoff(ST, K=p.K))
+
     return model.price_european(payoff)
