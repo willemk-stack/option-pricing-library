@@ -6,7 +6,10 @@ import numpy as np
 from numpy.typing import NDArray
 
 # Use this everywhere
+# typing only
 type FloatArray = NDArray[np.floating]  # typing only
-type FloatDType = np.float64  # runtime dtype only
-type ScalarFn = Callable[[float], float]
 type ArrayLike = float | np.ndarray | np.floating
+type ScalarFn = Callable[[float], float]
+
+# Runtime types
+FloatDType = np.float64  # runtime dtype only
