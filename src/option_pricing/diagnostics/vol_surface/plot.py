@@ -12,8 +12,6 @@ from .compute import (
     surface_slices,
 )
 
-ArrayLike = float | np.ndarray
-
 
 def _get_plt():
     try:
@@ -118,7 +116,7 @@ def plot_calendar_heatmap(
     plt.yticks(
         np.arange(len(surface.smiles) - 1),
         [
-            f"{float(surface.smiles[i].T):g}→{float(surface.smiles[i+1].T):g}"
+            f"{float(surface.smiles[i].T):g}→{float(surface.smiles[i + 1].T):g}"
             for i in range(len(surface.smiles) - 1)
         ],
     )
