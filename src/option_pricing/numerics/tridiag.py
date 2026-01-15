@@ -48,7 +48,7 @@ class Tridiag:
             return 0
 
         if lower.shape != (M - 1,) or upper.shape != (M - 1,):
-            raise ValueError(f"lower/upper must have shape {(M-1,)}")
+            raise ValueError(f"lower/upper must have shape {(M - 1,)}")
         return M
 
     def mv(self, u: NDArray[np.floating]) -> NDArray[np.floating]:
@@ -113,7 +113,7 @@ def tridiag_mv(
         return cast(NDArray[np.floating], Bd * u)  # empty
 
     if Bl.shape != (M - 1,) or Bu.shape != (M - 1,):
-        raise ValueError(f"Bl,Bu must have shape {(M-1,)} got {Bl.shape}, {Bu.shape}")
+        raise ValueError(f"Bl,Bu must have shape {(M - 1,)} got {Bl.shape}, {Bu.shape}")
 
     y = Bd * u
     y[1:] += Bl * u[:-1]
@@ -179,7 +179,7 @@ def solve_tridiag_thomas(
 
     denom = diag[M - 1] - lower[M - 2] * upper[M - 2]
     if abs(denom) < tol:
-        raise np.linalg.LinAlgError(f"Near-zero pivot at row {M-1}")
+        raise np.linalg.LinAlgError(f"Near-zero pivot at row {M - 1}")
     rhs[M - 1] = (rhs[M - 1] - lower[M - 2] * rhs[M - 2]) / denom
 
     # Back substitution

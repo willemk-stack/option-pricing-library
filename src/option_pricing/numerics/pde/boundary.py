@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-ScalarFn = Callable[[float], float]  # f(tau) -> value
+from option_pricing.typing import ScalarFn
 
 
 class BoundaryCondition(Protocol):

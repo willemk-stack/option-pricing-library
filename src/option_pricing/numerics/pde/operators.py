@@ -8,6 +8,8 @@ from typing import cast
 import numpy as np
 from numpy.typing import NDArray
 
+from option_pricing.typing import ScalarFn
+
 from ..grids import Grid
 from ..tridiag import BoundaryCoupling, Tridiag
 from .boundary import DirichletBC
@@ -46,7 +48,7 @@ class LinearParabolicPDE1D:
     b: ScalarXT
     c: ScalarXT
     bc: DirichletBC
-    ic: Callable[[float], float]
+    ic: ScalarFn
     d: ScalarXT | None = None
 
 

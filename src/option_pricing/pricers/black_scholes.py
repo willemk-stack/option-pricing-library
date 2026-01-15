@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 import numpy as np
+
+from option_pricing.typing import ScalarFn
 
 from ..instruments.base import ExerciseStyle
 from ..instruments.vanilla import VanillaOption
@@ -191,8 +191,8 @@ def black76_call_prices_vec_from_curves(
     strikes: np.ndarray,
     sigma: float | np.ndarray,
     tau: float,
-    forward_fn: Callable[[float], float],
-    df_fn: Callable[[float], float] | None = None,
+    forward_fn: ScalarFn,
+    df_fn: ScalarFn | None = None,
 ) -> np.ndarray:
     """Price discounted Black-76 calls for one maturity tau on a vector of strikes,
     using curve-like callables forward_fn(tau) and df_fn(tau).
@@ -217,8 +217,8 @@ def black76_put_prices_vec_from_curves(
     strikes: np.ndarray,
     sigma: float | np.ndarray,
     tau: float,
-    forward_fn: Callable[[float], float],
-    df_fn: Callable[[float], float] | None = None,
+    forward_fn: ScalarFn,
+    df_fn: ScalarFn | None = None,
 ) -> np.ndarray:
     """Vectorized discounted Black-76 puts using forward/df callables."""
     tau = float(tau)

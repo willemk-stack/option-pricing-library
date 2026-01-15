@@ -6,6 +6,8 @@ from collections.abc import Callable
 import numpy as np
 from numpy.typing import NDArray
 
+from option_pricing.typing import ScalarFn
+
 from ..grids import Grid
 from ..tridiag import DEFAULT_BC, BoundaryCoupling, Tridiag, solve_tridiag_scipy
 
@@ -22,8 +24,8 @@ def crank_nicolson_linear_step(
     A: Tridiag,
     B: Tridiag,
     # Time-dependent Dirichlet boundaries
-    BC_L: Callable[[float], float],
-    BC_R: Callable[[float], float],
+    BC_L: ScalarFn,
+    BC_R: ScalarFn,
     # Boundary coupling coefficients (to add to RHS)
     bc: BoundaryCoupling = DEFAULT_BC,
     # Optional inhomogeneous/source term contribution (already scaled by dt)
