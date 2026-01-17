@@ -1,12 +1,13 @@
 # src/option_pricing/numerics/grids.py
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
 import numpy as np
 from numpy.typing import NDArray
+
+from option_pricing.typing import ScalarFn
 
 __all__ = [
     "SpacingPolicy",
@@ -111,6 +112,6 @@ def build_grid(cfg: GridConfig) -> Grid:
     return Grid(t=_build_time_grid_validated(cfg), x=_build_x_grid_validated(cfg))
 
 
-def const_bc(val: float) -> Callable[[float], float]:
+def const_bc(val: float) -> ScalarFn:
     v = float(val)
     return lambda _t: v

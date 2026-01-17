@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 import numpy as np
-from numpy.typing import NDArray
 
-type FloatArray = NDArray[np.float64]
-type ArrayLike = float | FloatArray
+from option_pricing.typing import ArrayLike, FloatArray, ScalarFn
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,7 +116,7 @@ class VolSurface:
         Sorted array of expiry times (years).
     smiles : tuple[Smile, ...]
         Smiles corresponding one-to-one with `expiries`.
-    forward : Callable[[float], float]
+    forward : ScalarFn
         Forward curve function. Must satisfy ``forward(T) > 0`` for all queried `T`.
 
     Notes
@@ -130,13 +128,13 @@ class VolSurface:
 
     expiries: FloatArray
     smiles: tuple[Smile, ...]
-    forward: Callable[[float], float]  # forward(T) -> float
+    forward: ScalarFn  # forward(T) -> float
 
     @classmethod
     def from_grid(
         cls,
         rows: Iterable[tuple[float, float, float]],  # (T, K, iv)
-        forward: Callable[[float], float],
+        forward: ScalarFn,
         *,
         expiry_round_decimals: int = 10,
     ) -> VolSurface:
@@ -155,7 +153,7 @@ class VolSurface:
             - `K` is strike (must be positive),
             - `iv` is Black-Scholes implied volatility (non-negative recommended).
 
-        forward : Callable[[float], float]
+        forward : ScalarFn
             Forward curve function ``F(T)``. Must return strictly positive values
             for the expiries present in `rows`.
         expiry_round_decimals : int, default 10

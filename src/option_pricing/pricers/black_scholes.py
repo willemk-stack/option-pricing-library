@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 import numpy as np
 
+from option_pricing.typing import ScalarFn
+
+from ..instruments.base import ExerciseStyle
+from ..instruments.vanilla import VanillaOption
 from ..market.curves import PricingContext
 from ..models import bs as bs_model
 from ..types import MarketData, OptionType, PricingInputs
@@ -89,6 +91,63 @@ def bs_greeks_from_ctx(
     raise ValueError(f"Unsupported option kind: {kind}")
 
 
+def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
+    """Normalize flat MarketData or an already-curves-first PricingContext."""
+    if isinstance(market, PricingContext):
+        return market
+    return market.to_context()
+
+
+def bs_price_instrument_from_ctx(
+    *, inst: VanillaOption, sigma: float, ctx: PricingContext
+) -> float:
+    """Black-76 price for a vanilla instrument using curves-first inputs.
+
+    Notes
+    -----
+    - ``inst.expiry`` is interpreted as time-to-expiry (tau).
+    - Only European exercise is supported by this closed-form pricer.
+    """
+    if inst.exercise != ExerciseStyle.EUROPEAN:
+        raise ValueError("Black-76 closed-form supports European exercise only")
+    return bs_price_from_ctx(
+        kind=inst.kind,
+        strike=inst.strike,
+        sigma=float(sigma),
+        tau=float(inst.expiry),
+        ctx=ctx,
+    )
+
+
+def bs_greeks_instrument_from_ctx(
+    *, inst: VanillaOption, sigma: float, ctx: PricingContext
+) -> dict[str, float]:
+    """Black-76 Greeks for a vanilla instrument using curves-first inputs."""
+    if inst.exercise != ExerciseStyle.EUROPEAN:
+        raise ValueError("Black-76 greeks support European exercise only")
+    return bs_greeks_from_ctx(
+        kind=inst.kind,
+        strike=inst.strike,
+        sigma=float(sigma),
+        tau=float(inst.expiry),
+        ctx=ctx,
+    )
+
+
+def bs_price_instrument(
+    inst: VanillaOption, *, market: MarketData | PricingContext, sigma: float
+) -> float:
+    """Convenience wrapper accepting flat :class:`~option_pricing.types.MarketData`."""
+    return bs_price_instrument_from_ctx(inst=inst, sigma=sigma, ctx=_to_ctx(market))
+
+
+def bs_greeks_instrument(
+    inst: VanillaOption, *, market: MarketData | PricingContext, sigma: float
+) -> dict[str, float]:
+    """Convenience wrapper accepting flat :class:`~option_pricing.types.MarketData`."""
+    return bs_greeks_instrument_from_ctx(inst=inst, sigma=sigma, ctx=_to_ctx(market))
+
+
 # -------------------------
 # Backwards-compatible wrappers (PricingInputs)
 # -------------------------
@@ -132,8 +191,8 @@ def black76_call_prices_vec_from_curves(
     strikes: np.ndarray,
     sigma: float | np.ndarray,
     tau: float,
-    forward_fn: Callable[[float], float],
-    df_fn: Callable[[float], float] | None = None,
+    forward_fn: ScalarFn,
+    df_fn: ScalarFn | None = None,
 ) -> np.ndarray:
     """Price discounted Black-76 calls for one maturity tau on a vector of strikes,
     using curve-like callables forward_fn(tau) and df_fn(tau).
@@ -158,8 +217,8 @@ def black76_put_prices_vec_from_curves(
     strikes: np.ndarray,
     sigma: float | np.ndarray,
     tau: float,
-    forward_fn: Callable[[float], float],
-    df_fn: Callable[[float], float] | None = None,
+    forward_fn: ScalarFn,
+    df_fn: ScalarFn | None = None,
 ) -> np.ndarray:
     """Vectorized discounted Black-76 puts using forward/df callables."""
     tau = float(tau)

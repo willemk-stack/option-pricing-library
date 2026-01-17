@@ -7,10 +7,7 @@ from typing import Any, Protocol, cast
 import numpy as np
 import pandas as pd
 
-ArrayLike = float | np.ndarray
-ForwardFn = Callable[[float], float]
-DiscountFn = Callable[[float], float]
-
+from option_pricing.typing import ArrayLike, ScalarFn
 
 # --- Protocols: minimal interfaces to make mypy happy ---
 
@@ -35,7 +32,7 @@ class VolSurfaceClass(Protocol):
         cls,
         rows: list[tuple[float, float, float]],
         *,
-        forward: ForwardFn,
+        forward: ScalarFn,
     ) -> VolSurfaceLike: ...
 
 
@@ -68,7 +65,7 @@ def build_surface_from_iv_function(
     expiries: Sequence[float],
     x_grid: np.ndarray,
     iv_fn: Callable[[float, np.ndarray], np.ndarray],
-    forward: ForwardFn,
+    forward: ScalarFn,
     VolSurface_cls: VolSurfaceClass | None = None,
 ) -> VolSurfaceLike:
     """Build a VolSurface from a synthetic iv(T, x) function."""
@@ -109,7 +106,7 @@ def build_surface_from_iv_function(
 def surface_slices(
     surface: VolSurfaceLike,
     *,
-    forward: ForwardFn,
+    forward: ScalarFn,
 ) -> tuple[SurfaceSlice, ...]:
     """Return all smiles as strike-space slices (K, iv, w) for plotting."""
     out: list[SurfaceSlice] = []
@@ -127,7 +124,7 @@ def surface_slices(
 def surface_points_df(
     surface: VolSurfaceLike,
     *,
-    forward: ForwardFn,
+    forward: ScalarFn,
 ) -> pd.DataFrame:
     """Flatten the surface into a tidy DataFrame (T, x, K, iv, w)."""
     rows: list[dict[str, float]] = []
@@ -168,8 +165,8 @@ def call_prices_from_smile(
     surface: VolSurfaceLike,
     *,
     T: float,
-    forward: ForwardFn,
-    df: DiscountFn,
+    forward: ScalarFn,
+    df: ScalarFn,
     bs_model: Black76Module | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute discounted Black-76 call prices on the smile grid for a given expiry."""

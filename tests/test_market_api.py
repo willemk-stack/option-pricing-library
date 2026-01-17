@@ -1,14 +1,12 @@
+# tests/test_public_api_consistency.py
 from __future__ import annotations
 
 import math
 
 from option_pricing import (
-    FlatCarryForwardCurve,
-    FlatDiscountCurve,
     MarketData,
     OptionSpec,
     OptionType,
-    PricingContext,
     PricingInputs,
     binom_price,
     binom_price_from_ctx,
@@ -43,16 +41,17 @@ def test_pricers_from_ctx_match_pricinginputs_wrappers() -> None:
     spec = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)
     p = PricingInputs(spec=spec, market=market, sigma=0.20, t=0.0)
 
-    ctx = PricingContext(
-        spot=100.0,
-        discount=FlatDiscountCurve(0.05),
-        forward=FlatCarryForwardCurve(spot=100.0, r=0.05, q=0.0),
-    )
+    # Use the canonical curves-first representation derived from the same market
+    ctx = market.to_context()
 
-    # Black-Scholes
+    # Black-Scholes / Black-76
     px_inputs = bs_price(p)
     px_ctx = bs_price_from_ctx(
-        kind=spec.kind, strike=spec.strike, sigma=p.sigma, tau=p.tau, ctx=ctx
+        kind=spec.kind,
+        strike=spec.strike,
+        sigma=p.sigma,
+        tau=p.tau,
+        ctx=ctx,
     )
     assert math.isclose(px_inputs, px_ctx, rel_tol=0.0, abs_tol=1e-12)
 
@@ -69,11 +68,16 @@ def test_pricers_from_ctx_match_pricinginputs_wrappers() -> None:
     )
     assert math.isclose(px_inputs, px_ctx, rel_tol=0.0, abs_tol=1e-12)
 
-    # Monte Carlo (use fixed RNG)
+    # Monte Carlo (fixed RNG -> exact equality between wrappers)
     cfg = MCConfig(n_paths=50_000, antithetic=True, random=RandomConfig(seed=123))
     px_inputs, se_inputs = mc_price(p, cfg=cfg)
     px_ctx, se_ctx = mc_price_from_ctx(
-        kind=spec.kind, strike=spec.strike, sigma=p.sigma, tau=p.tau, ctx=ctx, cfg=cfg
+        kind=spec.kind,
+        strike=spec.strike,
+        sigma=p.sigma,
+        tau=p.tau,
+        ctx=ctx,
+        cfg=cfg,
     )
     assert math.isclose(px_inputs, px_ctx, rel_tol=0.0, abs_tol=1e-12)
     assert math.isclose(se_inputs, se_ctx, rel_tol=0.0, abs_tol=1e-12)

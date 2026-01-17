@@ -110,6 +110,10 @@ class PricingInputs:
     t: float = 0.0
 
     @property
+    def kind(self) -> OptionType:
+        return self.spec.kind
+
+    @property
     def S(self) -> float:
         return self.market.spot
 

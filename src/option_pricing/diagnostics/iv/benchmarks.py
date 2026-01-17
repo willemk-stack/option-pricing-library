@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from option_pricing.config import ImpliedVolConfig
+from option_pricing.typing import ScalarFn
 
 
 def make_synthetic_smile(
@@ -55,7 +56,7 @@ def make_synthetic_smile(
 def iv_recovery_benchmark(
     *,
     Ks: Sequence[float],
-    sigma_true_fn: Callable[[float], float],
+    sigma_true_fn: ScalarFn,
     price_fn: Callable[[Any], float],
     implied_vol_fn: Callable[[Any, float], float],
     make_pricing_inputs: Callable[[float, float], Any],
@@ -107,7 +108,7 @@ def run_synthetic_iv_smile(
     K_min: float,
     K_max: float,
     n: int,
-    true_vol_fn: Callable[[float], float],
+    true_vol_fn: ScalarFn,
     sigma_guess: float = 0.20,
     cfg: ImpliedVolConfig | None = None,
     drop_failed: bool = True,

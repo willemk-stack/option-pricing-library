@@ -129,6 +129,7 @@ nav:
       - Implied volatility: notes/IV.md
       - Risk neutral pricing: notes/risk_neutral_pricing.md
       - Finite Differences: notes/finite_difference_pde.md
+      - PDE diagnostics notes: notes/diagnostics_notes.md
 
   - API:
       - Overview: api/index.md
