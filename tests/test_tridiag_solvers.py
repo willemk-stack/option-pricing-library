@@ -3,13 +3,13 @@ import numpy as np
 import pytest
 
 from option_pricing.numerics.grids import GridConfig, SpacingPolicy, build_grid
-from option_pricing.numerics.pde.boundary import DirichletBC
+from option_pricing.numerics.pde.boundary import RobinBC, RobinBCSide
 from option_pricing.numerics.pde.operators import (
     AdvectionScheme,
     LinearParabolicPDE1D,
     build_theta_system_1d,
 )
-from option_pricing.numerics.pde.time_steppers import crank_nicolson_linear_step
+from option_pricing.numerics.pde.time_steppers import crank_nicolson_linear_step_robin
 from option_pricing.numerics.tridiag import (
     Tridiag,
     solve_tridiag_scipy,
@@ -164,8 +164,8 @@ def test_tridiag_mv_matches_dense(M: int) -> None:
 
 
 @pytest.mark.parametrize("Nx", [5, 20, 80])
-def test_cn_step_thomas_matches_scipy_using_pde_module(Nx: int) -> None:
-    """Compare one theta=0.5 step built from the PDE operator builder."""
+def test_cn_step_thomas_matches_scipy_using_pde_module_robin(Nx: int) -> None:
+    """Compare one theta=0.5 step with Robin BCs; Thomas vs SciPy should match."""
     rng = np.random.default_rng(4242 + Nx)
 
     cfg = GridConfig(
@@ -178,25 +178,41 @@ def test_cn_step_thomas_matches_scipy_using_pde_module(Nx: int) -> None:
     )
     grid = build_grid(cfg)
 
-    # Time-dependent Dirichlet boundaries
-    def BC_L(t: float) -> float:
-        return 0.3 + 0.1 * t
+    # Time-dependent Robin boundaries: alpha*u + beta*u_x = gamma
+    # Choose alpha != 0 to avoid any nullspace/pathologies and keep things well-posed.
+    def alpha_L(t: float) -> float:
+        return 1.0
 
-    def BC_R(t: float) -> float:
-        return -0.2 + 0.05 * t
+    def beta_L(t: float) -> float:
+        return 0.3
 
-    bc = DirichletBC(left=BC_L, right=BC_R)
+    def gamma_L(t: float) -> float:
+        return 0.1 + 0.05 * t
 
-    # A stable linear parabolic PDE: u_t = a u_xx + b u_x + c u
-    # Choose diffusion-dominated coefficients to keep A well-conditioned.
+    def alpha_R(t: float) -> float:
+        return 1.0
+
+    def beta_R(t: float) -> float:
+        return -0.2
+
+    def gamma_R(t: float) -> float:
+        return -0.2 + 0.02 * t
+
+    bc = RobinBC(
+        left=RobinBCSide(alpha=alpha_L, beta=beta_L, gamma=gamma_L),
+        right=RobinBCSide(alpha=alpha_R, beta=beta_R, gamma=gamma_R),
+    )
+
+    # Stable linear parabolic PDE: u_t = a u_xx + b u_x + c u
+    # Pick diffusion-dominated coefficients.
     def a(x, t):
-        return 0.5  # diffusion
+        return 0.5
 
     def b(x, t):
-        return 0.1  # drift
+        return 0.1
 
     def c(x, t):
-        return 0.05  # reaction
+        return 0.05
 
     problem = LinearParabolicPDE1D(
         a=a,
@@ -204,7 +220,7 @@ def test_cn_step_thomas_matches_scipy_using_pde_module(Nx: int) -> None:
         c=c,
         d=None,
         bc=bc,
-        ic=lambda x: 0.0,  # not used directly in this single-step test
+        ic=lambda x: 0.0,
     )
 
     t_n = float(grid.t[0])
@@ -215,41 +231,36 @@ def test_cn_step_thomas_matches_scipy_using_pde_module(Nx: int) -> None:
         grid=grid,
         t_n=t_n,
         t_np1=t_np1,
-        theta=0.5,  # Crank–Nicolson
+        theta=0.5,
         advection=AdvectionScheme.CENTRAL,
     )
 
     N = int(grid.x.shape[0])
+
+    # Under elimination-style stepping, only u_n[1:-1] enters the interior solve.
+    # Boundaries in u_n are not directly used; they will be recovered consistently.
     u_n = rng.normal(size=N)
 
-    # Enforce Dirichlet boundaries at t_n (consistent with the stepper contract)
-    u_n[0] = BC_L(t_n)
-    u_n[-1] = BC_R(t_n)
-
-    u_np1_thomas = crank_nicolson_linear_step(
+    u_np1_thomas = crank_nicolson_linear_step_robin(
         grid=grid,
         u_n=u_n,
         t_n=t_n,
         t_np1=t_np1,
         A=system.A,
         B=system.B,
-        BC_L=BC_L,
-        BC_R=BC_R,
-        bc=system.bc,
+        bc=problem.bc,
         rhs_extra=rhs_extra,
         solve_tridiag=solve_thomas_arrays,
     )
 
-    u_np1_scipy = crank_nicolson_linear_step(
+    u_np1_scipy = crank_nicolson_linear_step_robin(
         grid=grid,
         u_n=u_n,
         t_n=t_n,
         t_np1=t_np1,
         A=system.A,
         B=system.B,
-        BC_L=BC_L,
-        BC_R=BC_R,
-        bc=system.bc,
+        bc=problem.bc,
         rhs_extra=rhs_extra,
         solve_tridiag=solve_tridiag_scipy,
     )

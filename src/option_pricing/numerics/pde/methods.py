@@ -23,7 +23,7 @@ from numpy.typing import NDArray
 
 from ..grids import Grid
 from .operators import AdvectionScheme, LinearParabolicPDE1D, build_theta_system_1d
-from .time_steppers import crank_nicolson_linear_step
+from .time_steppers import crank_nicolson_linear_step_robin
 
 
 @runtime_checkable
@@ -124,16 +124,14 @@ class ThetaScheme1D:
             advection=advection,
         )
 
-        return crank_nicolson_linear_step(
+        return crank_nicolson_linear_step_robin(
             grid=grid,
             u_n=u_n,
             t_n=float(t_n),
             t_np1=float(t_np1),
             A=system.A,
             B=system.B,
-            BC_L=problem.bc.left,
-            BC_R=problem.bc.right,
-            bc=system.bc,
+            bc=problem.bc,  # <-- pass the whole BC object (DirichletBC or RobinBC)
             rhs_extra=rhs_extra,
             solve_tridiag=solve_tridiag,
         )

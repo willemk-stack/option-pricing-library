@@ -10,7 +10,7 @@ Currently supported PDE form (1D):
 with Dirichlet boundary conditions.
 """
 
-from .boundary import DirichletBC
+from .boundary import RobinBC, dirichlet_side, neumann_side
 from .methods import (
     PDEMethod1D,
     ThetaMethod,
@@ -24,7 +24,9 @@ from .types import CNSystem
 
 __all__ = [
     # Boundary conditions
-    "DirichletBC",
+    "RobinBC",
+    "dirichlet_side",
+    "neumann_side",
     # Problems / operators
     "AdvectionScheme",
     "LinearParabolicPDE1D",

@@ -6,56 +6,48 @@ from collections.abc import Callable
 import numpy as np
 from numpy.typing import NDArray
 
-from option_pricing.typing import ScalarFn
-
 from ..grids import Grid
-from ..tridiag import DEFAULT_BC, BoundaryCoupling, Tridiag, solve_tridiag_scipy
+from ..tridiag import Tridiag, solve_tridiag_scipy
+from .boundary import RobinBC, recover_boundaries_second_order
 
-__all__ = ["crank_nicolson_linear_step"]
+__all__ = ["crank_nicolson_linear_step_robin"]
 
 
-def crank_nicolson_linear_step(
+# --- Robin BC types (Dirichlet/Neumann are special cases) ---
+
+BoundaryFn = Callable[[float], float]  # t -> scalar
+
+
+def crank_nicolson_linear_step_robin(
     *,
     grid: Grid,
-    u_n: NDArray[np.floating],  # (N,) includes boundaries
+    u_n: NDArray[
+        np.floating
+    ],  # (N,) includes boundaries; boundaries are ignored in the solve
     t_n: float,
     t_np1: float,
-    # Interior-interior operators
+    # Interior-interior operators (M=N-2)
     A: Tridiag,
     B: Tridiag,
-    # Time-dependent Dirichlet boundaries
-    BC_L: ScalarFn,
-    BC_R: ScalarFn,
-    # Boundary coupling coefficients (to add to RHS)
-    bc: BoundaryCoupling = DEFAULT_BC,
-    # Optional inhomogeneous/source term contribution (already scaled by dt)
+    # Robin/Neumann/Dirichlet BC (already eliminated in operator build; used here only to reconstruct u0,uN)
+    bc: RobinBC,
     rhs_extra: NDArray[np.floating] | None = None,
-    solve_tridiag: Callable[
-        [
-            NDArray[np.floating],
-            NDArray[np.floating],
-            NDArray[np.floating],
-            NDArray[np.floating],
-        ],
-        NDArray[np.floating],
-    ] = solve_tridiag_scipy,
+    solve_tridiag=solve_tridiag_scipy,
 ) -> NDArray[np.floating]:
     """
-    One CN step: solve interior unknowns and return full u_{n+1}.
+    One CN step (elimination-style BC handling):
 
-    We solve:
-        A * u_int^{n+1} = B * u_int^{n} + boundary_terms
+        A * u_int^{n+1} = B * u_int^{n} + rhs_extra
 
-    IMPORTANT:
-    - A and B are INTERIOR-INTERIOR tridiagonal operators only (length M = N-2).
-    - Boundary contributions from Dirichlet values uL(t), uR(t) are injected via `bc`.
+    Boundaries are recovered AFTER solving from Robin BC at t_{n+1} using a
+    2nd-order one-sided derivative discretization.
     """
     if t_np1 <= t_n:
         raise ValueError("Require t_np1 > t_n")
 
-    x = np.asarray(grid.x)
+    x = np.asarray(grid.x, dtype=float)
     N = int(x.shape[0])
-    u_n = np.asarray(u_n)
+    u_n = np.asarray(u_n, dtype=float)
     if u_n.shape != (N,):
         raise ValueError(f"u_n must have shape {(N,)} got {u_n.shape}")
 
@@ -63,19 +55,11 @@ def crank_nicolson_linear_step(
     if M < 2:
         raise ValueError("Need at least 4 spatial points so M=N-2 >= 2")
 
-    M_A = A.check()
-    M_B = B.check()
-    if M_A != M or M_B != M:
-        raise ValueError(f"A,B must be sized for M=N-2={M}; got {M_A} and {M_B}")
-
-    uL_n = float(BC_L(t_n))
-    uR_n = float(BC_R(t_n))
-    uL_np1 = float(BC_L(t_np1))
-    uR_np1 = float(BC_R(t_np1))
+    if A.check() != M or B.check() != M:
+        raise ValueError(f"A,B must be sized for M=N-2={M}")
 
     u_n_int = u_n[1:-1]
 
-    # rhs = B * u_n_int
     rhs = B.mv(u_n_int)
 
     if rhs_extra is not None:
@@ -84,18 +68,18 @@ def crank_nicolson_linear_step(
             raise ValueError(f"rhs_extra must have shape {(M,)} got {rhs_extra.shape}")
         rhs = rhs + rhs_extra
 
-    # Add boundary contributions (only first and last interior equations)
-    rhs[0] += bc.B_L * uL_n - bc.A_L * uL_np1
-    rhs[-1] += bc.B_R * uR_n - bc.A_R * uR_np1
-
     u_np1_int = solve_tridiag(A.lower, A.diag, A.upper, rhs)
     if u_np1_int.shape != (M,):
         raise ValueError(
             f"solve_tridiag must return shape {(M,)} got {u_np1_int.shape}"
         )
 
+    u0_np1, uN_np1 = recover_boundaries_second_order(
+        x=x, u_int=u_np1_int, bc=bc, t=t_np1
+    )
+
     u_np1 = u_n.copy()
-    u_np1[0] = uL_np1
-    u_np1[-1] = uR_np1
+    u_np1[0] = u0_np1
+    u_np1[-1] = uN_np1
     u_np1[1:-1] = u_np1_int
     return u_np1

@@ -8,6 +8,7 @@ from numpy.typing import NDArray
 
 from ..grids import Grid, GridConfig, build_grid
 from ..tridiag import Tridiag, solve_tridiag_thomas
+from .boundary import recover_boundaries_second_order
 from .methods import PDEMethod1D, ThetaMethod, resolve_method
 from .operators import AdvectionScheme, LinearParabolicPDE1D
 
@@ -46,31 +47,6 @@ def solve_pde_1d(
     store: Literal["all", "final"] = "all",
     solve_tridiag=_solve_tridiag_thomas_arrays,
 ) -> PDESolution1D:
-    """Solve a 1D linear parabolic PDE on a fixed grid.
-
-    Parameters
-    ----------
-    problem:
-        PDE coefficients + IC/BC.
-    grid, grid_cfg:
-        Provide either an explicit :class:`~option_pricing.numerics.grids.Grid`
-        or a :class:`~option_pricing.numerics.grids.GridConfig`.
-    method:
-        Either a string alias (e.g. "cn", "implicit", "explicit"), a
-        :class:`ThetaMethod`, or a custom object implementing
-        :class:`~option_pricing.numerics.pde.methods.PDEMethod1D`.
-    theta:
-        Optional override for the theta parameter. If provided, this wins over
-        `method`.
-    advection:
-        Spatial scheme for the b(x,t) u_x term.
-    store:
-        "all" stores the whole time history (Nt x Nx). "final" only stores the
-        final slice (1 x Nx) to save memory.
-    solve_tridiag:
-        Function used to solve the interior tridiagonal system.
-    """
-
     if (grid is None) == (grid_cfg is None):
         raise ValueError("Provide exactly one of grid or grid_cfg")
 
@@ -90,10 +66,22 @@ def solve_pde_1d(
     method_obj = resolve_method(method=method, theta=theta)
     method_name = method_obj.name
 
-    # Initial condition + enforce boundary at t0
+    def _apply_bc(u_full: NDArray[np.floating], tt: float) -> NDArray[np.floating]:
+        u_full = np.asarray(u_full, dtype=float)
+        if u_full.shape != (Nx,):
+            raise ValueError(f"u_full must have shape {(Nx,)} got {u_full.shape}")
+
+        u_int = cast(NDArray[np.floating], u_full[1:-1])
+        uL, uR = recover_boundaries_second_order(x=x, u_int=u_int, bc=problem.bc, t=tt)
+        u_full[0] = uL
+        u_full[-1] = uR
+        return cast(NDArray[np.floating], u_full)
+
+    # Initial condition on full grid
     u0 = np.array([float(problem.ic(float(xi))) for xi in x], dtype=float)
-    u0[0] = float(problem.bc.left(float(t[0])))
-    u0[-1] = float(problem.bc.right(float(t[0])))
+
+    # Enforce BC at t0 (Dirichlet or Robin/Neumann)
+    u0 = _apply_bc(u0, float(t[0]))
 
     if store == "all":
         U = np.empty((Nt, Nx), dtype=float)
@@ -116,6 +104,9 @@ def solve_pde_1d(
             advection=advection,
             solve_tridiag=solve_tridiag,
         )
+
+        # Enforce BC at t_{n+1} (important for Robin/Neumann; safe for Dirichlet)
+        u = _apply_bc(u, t_np1)
 
         if store == "all":
             U[n + 1] = u
