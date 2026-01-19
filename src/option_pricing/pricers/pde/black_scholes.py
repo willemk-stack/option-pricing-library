@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum
 from typing import cast
 
 import numpy as np
@@ -10,14 +9,10 @@ import numpy as np
 from option_pricing import OptionType, PricingInputs, VanillaOption
 from option_pricing.numerics.pde import LinearParabolicPDE1D
 from option_pricing.numerics.pde.boundary import RobinBC, RobinBCSide
+from option_pricing.pricers.pde.domain import Coord
 from option_pricing.typing import ArrayLike
 
 type CoordFn = Callable[[ArrayLike], ArrayLike]
-
-
-class Coord(str, Enum):
-    LOG_S = "logS"
-    S = "S"  # do NOT use auto() for str Enums unless you implement _generate_next_value_
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +75,9 @@ def bs_pde_wiring(
         to_S = cast(CoordFn, np.exp)
         x0 = float(np.log(float(p.S)))
 
+        if not np.isfinite(x_lb) or not np.isfinite(x_ub):
+            raise ValueError("LOG_S bounds must be finite.")
+
         def a(x, tau):
             x = np.asarray(x)
             return 0.5 * sigma**2 + 0.0 * x
@@ -109,6 +107,13 @@ def bs_pde_wiring(
 
     else:
         raise ValueError(f"Unsupported coord type: {coord}")
+
+    # Check in solver coordinates (x-space), not S-space.
+    if not (x_lb < x0 < x_ub):
+        raise ValueError(
+            f"Domain bounds must contain x0 strictly inside (solver coords): "
+            f"x_lb={x_lb}, x0={x0}, x_ub={x_ub}"
+        )
 
     S_min = float(to_S(x_lb))
     S_max = float(to_S(x_ub))
