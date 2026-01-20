@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
 from math import comb, exp
 from typing import Literal, overload
 
+import numpy as np
+
+from option_pricing.typing import ScalarFn
+
+from ..instruments.base import ExerciseStyle, TerminalInstrument
+from ..instruments.factory import from_pricing_inputs
 from ..market.curves import avg_carry_from_forward, avg_rate_from_df
 from ..models.binomial_crr import BinomialModel
-from ..types import OptionType, PricingContext, PricingInputs
+from ..types import MarketData, OptionType, PricingContext, PricingInputs
 
 # ----------------------------
 # Payoff helpers (ruff-friendly)
@@ -79,7 +84,7 @@ class BinomialTree:
 @overload
 def price_european_tree(
     model: BinomialModel,
-    payoff: Callable[[float], float],
+    payoff: ScalarFn,
     *,
     return_tree: Literal[False] = False,
 ) -> float: ...
@@ -88,7 +93,7 @@ def price_european_tree(
 @overload
 def price_european_tree(
     model: BinomialModel,
-    payoff: Callable[[float], float],
+    payoff: ScalarFn,
     *,
     return_tree: Literal[True],
 ) -> BinomialTree: ...
@@ -96,7 +101,7 @@ def price_european_tree(
 
 def price_european_tree(
     model: BinomialModel,
-    payoff: Callable[[float], float],
+    payoff: ScalarFn,
     *,
     return_tree: bool = False,
 ) -> float | BinomialTree:
@@ -133,7 +138,7 @@ def price_european_tree(
 @overload
 def price_american_tree(
     model: BinomialModel,
-    payoff: Callable[[float], float],
+    payoff: ScalarFn,
     *,
     return_tree: Literal[False] = False,
 ) -> float: ...
@@ -142,7 +147,7 @@ def price_american_tree(
 @overload
 def price_american_tree(
     model: BinomialModel,
-    payoff: Callable[[float], float],
+    payoff: ScalarFn,
     *,
     return_tree: Literal[True],
 ) -> BinomialTree: ...
@@ -150,7 +155,7 @@ def price_american_tree(
 
 def price_american_tree(
     model: BinomialModel,
-    payoff: Callable[[float], float],
+    payoff: ScalarFn,
     *,
     return_tree: bool = False,
 ) -> float | BinomialTree:
@@ -186,9 +191,7 @@ def price_american_tree(
     return float(tree.root.option_price)
 
 
-def price_european_closed_form(
-    model: BinomialModel, payoff: Callable[[float], float]
-) -> float:
+def price_european_closed_form(model: BinomialModel, payoff: ScalarFn) -> float:
     """
     European pricing via the binomial distribution (closed-form sum).
     """
@@ -267,7 +270,7 @@ def binom_price_from_ctx(
     model = _model_from_ctx(
         ctx, tau=float(tau), sigma=float(sigma), n_steps=int(n_steps)
     )
-    payoff: Callable[[float], float]
+    payoff: ScalarFn
     if kind == OptionType.CALL:
         payoff = partial(_call_payoff, K=float(strike))
     elif kind == OptionType.PUT:
@@ -285,6 +288,64 @@ def binom_price_from_ctx(
     return price_european_closed_form(model, payoff)
 
 
+def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
+    """Normalize flat MarketData or an already-curves-first PricingContext."""
+    if isinstance(market, PricingContext):
+        return market
+    return market.to_context()
+
+
+def binom_price_instrument_from_ctx(
+    *,
+    ctx: PricingContext,
+    inst: TerminalInstrument,
+    sigma: float,
+    n_steps: int,
+    method: Literal["tree", "closed_form"] = "tree",
+) -> float:
+    """Binomial (CRR) price for a terminal-payoff instrument.
+
+    Notes
+    -----
+    - ``inst.expiry`` is interpreted as time-to-expiry (tau).
+    - If ``inst.exercise`` is American, ``method`` must be "tree".
+    """
+
+    model = _model_from_ctx(
+        ctx, tau=float(inst.expiry), sigma=float(sigma), n_steps=int(n_steps)
+    )
+
+    # The tree engine expects a scalar payoff. Our instruments are vectorized, so
+    # we convert a scalar to a float robustly.
+    payoff_vec = inst.payoff
+
+    def payoff_scalar(S: float) -> float:
+        return float(np.asarray(payoff_vec(S), dtype=float))
+
+    if inst.exercise == ExerciseStyle.AMERICAN:
+        if method != "tree":
+            raise ValueError("American options require method='tree'.")
+        return price_american_tree(model, payoff_scalar)
+
+    if method == "tree":
+        return price_european_tree(model, payoff_scalar)
+    return price_european_closed_form(model, payoff_scalar)
+
+
+def binom_price_instrument(
+    inst: TerminalInstrument,
+    *,
+    market: MarketData | PricingContext,
+    sigma: float,
+    n_steps: int,
+    method: Literal["tree", "closed_form"] = "tree",
+) -> float:
+    """Convenience wrapper accepting flat :class:`~option_pricing.types.MarketData`."""
+    return binom_price_instrument_from_ctx(
+        ctx=_to_ctx(market), inst=inst, sigma=sigma, n_steps=n_steps, method=method
+    )
+
+
 def binom_price(
     p: PricingInputs,
     n_steps: int,
@@ -299,23 +360,18 @@ def binom_price(
       - "tree": backward induction (Euro or American)
       - "closed_form": Euro-only binomial sum (fast, no early exercise)
     """
-    model = _model_from_inputs(p, n_steps)
-
-    if p.spec.kind == OptionType.CALL:
-        payoff: Callable[[float], float] = partial(_call_payoff, K=p.K)
-    elif p.spec.kind == OptionType.PUT:
-        payoff = partial(_put_payoff, K=p.K)
-    else:
-        raise ValueError(f"Unsupported option kind: {p.spec.kind}")
-
-    if american:
-        if method != "tree":
-            raise ValueError("American options require method='tree'.")
-        return price_american_tree(model, payoff)
-
-    if method == "tree":
-        return price_european_tree(model, payoff)
-    return price_european_closed_form(model, payoff)
+    # Build an instrument (tau-based) and delegate to the instrument pricer.
+    inst = from_pricing_inputs(
+        p,
+        exercise=ExerciseStyle.AMERICAN if american else ExerciseStyle.EUROPEAN,
+    )
+    return binom_price_instrument_from_ctx(
+        ctx=p.ctx,
+        inst=inst,
+        sigma=p.sigma,
+        n_steps=n_steps,
+        method=method,
+    )
 
 
 def binom_price_call(
@@ -326,7 +382,7 @@ def binom_price_call(
     method: Literal["tree", "closed_form"] = "tree",
 ) -> float:
     model = _model_from_inputs(p, n_steps)
-    payoff: Callable[[float], float] = partial(_call_payoff, K=p.K)
+    payoff: ScalarFn = partial(_call_payoff, K=p.K)
 
     if american:
         if method != "tree":
@@ -346,7 +402,7 @@ def binom_price_put(
     method: Literal["tree", "closed_form"] = "tree",
 ) -> float:
     model = _model_from_inputs(p, n_steps)
-    payoff: Callable[[float], float] = partial(_put_payoff, K=p.K)
+    payoff: ScalarFn = partial(_put_payoff, K=p.K)
 
     if american:
         if method != "tree":

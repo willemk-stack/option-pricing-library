@@ -11,6 +11,7 @@ from option_pricing.exceptions import (
     NoConvergenceError,
     NotBracketedError,
 )
+from option_pricing.typing import ScalarFn
 
 
 class RootMethod(str, Enum):
@@ -63,12 +64,12 @@ def _clamp(x: float, domain: tuple[float, float] | None) -> float:
 
 
 def bisection_method(
-    Fn: Callable[[float], float],
+    Fn: ScalarFn,
     lo: float,
     hi: float,
     *,
     x0: float | None = None,  # ignored (kept for signature compatibility)
-    dFn: Callable[[float], float] | None = None,  # ignored
+    dFn: ScalarFn | None = None,  # ignored
     tol_f: float = 1e-8,
     tol_x: float = 1e-12,
     max_iter: int = 10_000,
@@ -145,12 +146,12 @@ def bisection_method(
 
 
 def newton_method(
-    Fn: Callable[[float], float],
+    Fn: ScalarFn,
     lo: float,
     hi: float,
     *,
     x0: float | None = None,
-    dFn: Callable[[float], float] | None = None,
+    dFn: ScalarFn | None = None,
     tol_f: float = 1e-10,
     tol_x: float = 1e-12,
     max_iter: int = 50,
@@ -198,7 +199,7 @@ def newton_method(
 
 
 def ensure_bracket(
-    Fn: Callable[[float], float],
+    Fn: ScalarFn,
     lo: float,
     hi: float,
     *,
@@ -262,12 +263,12 @@ def ensure_bracket(
 
 
 def bracketed_newton(
-    Fn: Callable[[float], float],
+    Fn: ScalarFn,
     lo: float,
     hi: float,
     *,
     x0: float | None = None,
-    dFn: Callable[[float], float] | None = None,
+    dFn: ScalarFn | None = None,
     tol_f: float = 1e-10,
     tol_x: float = 1e-12,
     max_iter: int = 100,

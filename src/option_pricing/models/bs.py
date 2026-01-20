@@ -5,6 +5,8 @@ import math
 import numpy as np
 from scipy.stats import norm
 
+from option_pricing.typing import FloatDType
+
 
 # -------------------------
 # Pure helpers (math-only)
@@ -307,7 +309,7 @@ def black76_call_price_vec(
     if F <= 0.0:
         raise ValueError("forward must be positive")
 
-    K = np.asarray(strikes, dtype=np.float64)
+    K = np.asarray(strikes, dtype=FloatDType)
     if np.any(K <= 0.0):
         raise ValueError("strikes must be positive")
 
@@ -319,7 +321,7 @@ def black76_call_price_vec(
     if df <= 0.0:
         raise ValueError("df must be positive")
 
-    sig = np.asarray(sigma, dtype=np.float64)
+    sig = np.asarray(sigma, dtype=FloatDType)
     if np.any(sig < 0.0):
         raise ValueError("sigma must be non-negative")
 
@@ -355,6 +357,6 @@ def black76_put_price_vec(
     df: float = 1.0,
 ) -> np.ndarray:
     """Vectorized discounted Black-76 put via parity: P = C - df*(F-K)."""
-    K = np.asarray(strikes, dtype=np.float64)
+    K = np.asarray(strikes, dtype=FloatDType)
     C = black76_call_price_vec(forward=forward, strikes=K, sigma=sigma, tau=tau, df=df)
     return C - df * (float(forward) - K)

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
+
+from option_pricing.typing import ScalarFn
 
 from ..models import bs as bs_model
 from .surface import Smile, VolSurface
@@ -49,8 +50,8 @@ class SurfaceNoArbReport:
 def check_smile_price_monotonicity(
     smile: Smile,
     *,
-    forward: Callable[[float], float],
-    df: Callable[[float], float],
+    forward: ScalarFn,
+    df: ScalarFn,
     tol: float = 1e-8,
 ) -> MonotonicityReport:
     """
@@ -108,8 +109,8 @@ def check_smile_price_monotonicity(
 def check_smile_call_convexity(
     smile: Smile,
     *,
-    forward: Callable[[float], float],
-    df: Callable[[float], float],
+    forward: ScalarFn,
+    df: ScalarFn,
     tol: float = 1e-10,
 ) -> ConvexityReport:
     """
@@ -265,7 +266,7 @@ def _check_calendar_total_variance(
 def check_surface_noarb(
     surface: VolSurface,
     *,
-    df: Callable[[float], float],
+    df: ScalarFn,
     tol_strike: float = 1e-8,
     tol_butterfly: float = 1e-10,
     tol_calendar: float = 1e-8,
