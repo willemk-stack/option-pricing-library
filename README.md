@@ -23,7 +23,7 @@ The library provides a **typed**, **composable**, and **test-backed** toolkit fo
 - **Monte Carlo under GBM** (with optional antithetic / control variates)
 - **CRR binomial tree** (European / American)
 - **Implied volatility (BS inversion)** with robust bracketing solvers
-- **Volatility structures**: `VolSmile`, `VolSurface` with interpolation and no-arbitrage checks
+- **Volatility structures**: `Smile`, `VolSurface` with interpolation and no-arbitrage checks
 - **Market abstractions**:  
   - `MarketData`, `PricingInputs` for a flat, convenient API  
   - `PricingContext` for curves-first workflows
