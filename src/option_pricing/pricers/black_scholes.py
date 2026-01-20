@@ -5,10 +5,12 @@ import numpy as np
 from option_pricing.typing import ScalarFn
 
 from ..instruments.base import ExerciseStyle
+from ..instruments.digital import DigitalOption
 from ..instruments.vanilla import VanillaOption
 from ..market.curves import PricingContext
 from ..models import bs as bs_model
 from ..types import MarketData, OptionType, PricingInputs
+from ..typing import ArrayLike
 
 # -------------------------
 # Curves-first BSM/Black-76 pricing
@@ -298,3 +300,21 @@ def black76_put_prices_vec_from_market(
         sigma=sigma,
         tau=tau,
     )
+
+
+###
+# Digital option calc
+###
+
+
+def digital_price(
+    instr: DigitalOption,
+    ctx: PricingContext,
+    sigma: float,
+) -> ArrayLike:
+    if instr.kind == OptionType.CALL:
+        priceFn = bs_model.digital_call_price
+    else:
+        priceFn = bs_model.digital_put_price
+
+    return priceFn(instr=instr, market=ctx, sigma=sigma)

@@ -5,7 +5,9 @@ import math
 import numpy as np
 from scipy.stats import norm
 
-from option_pricing.typing import FloatDType
+from ..instruments.digital import DigitalOption
+from ..types import PricingContext
+from ..typing import ArrayLike, FloatDType
 
 
 # -------------------------
@@ -360,3 +362,69 @@ def black76_put_price_vec(
     K = np.asarray(strikes, dtype=FloatDType)
     C = black76_call_price_vec(forward=forward, strikes=K, sigma=sigma, tau=tau, df=df)
     return C - df * (float(forward) - K)
+
+
+###
+# Digital option
+###
+
+
+def d1_d2_black_76(
+    *, forward: float, strike: float, tau: float, sigma: ArrayLike
+) -> tuple[ArrayLike, ArrayLike]:
+    """
+    Calculates d1 and d2 for Black-76 using Python 3.12 type hinting.
+    """
+    # Validation logic
+    if forward <= 0 or strike <= 0:
+        raise ValueError("Forward and strike prices must be positive")
+
+    # Using numpy to allow the function to handle scalar floats or arrays
+    # if the user wants to pass a volatility surface/vector
+    s = np.asanyarray(sigma)
+
+    if np.any(s <= 0) or tau <= 0:
+        raise ValueError("Sigma and tau must be positive")
+
+    vol_sqrt_tau = s * math.sqrt(tau)
+
+    # Black-76 numerator: ln(F/K) + (0.5 * sigma^2 * tau)
+    num = np.log(forward / strike) + (0.5 * s**2 * tau)
+
+    d1 = num / vol_sqrt_tau
+    d2 = d1 - vol_sqrt_tau
+
+    # Return as original type (float if scalar, ndarray if vector)
+    return (d1.item() if d1.size == 1 else d1, d2.item() if d2.size == 1 else d2)
+
+
+def digital_call_price(
+    instr: DigitalOption,
+    market: PricingContext,
+    sigma: float,
+) -> ArrayLike:
+    Q = instr.payout
+    T = instr.expiry
+    strike = instr.strike
+    fwd = market.fwd
+    df = market.df
+    _, d2 = d1_d2_black_76(forward=fwd, strike=strike, tau=T, sigma=sigma)
+
+    price = Q * df * norm.cdf(d2)
+    return price
+
+
+def digital_put_price(
+    instr: DigitalOption,
+    market: PricingContext,
+    sigma: float,
+) -> ArrayLike:
+    Q = instr.payout
+    T = instr.expiry
+    strike = instr.strike
+    fwd = market.fwd
+    df = market.df
+    _, d2 = d1_d2_black_76(forward=fwd, strike=strike, tau=T, sigma=sigma)
+
+    price = Q * df * norm.cdf(-d2)
+    return price

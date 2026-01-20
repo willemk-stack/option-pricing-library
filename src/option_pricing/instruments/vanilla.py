@@ -13,9 +13,8 @@ from typing import overload
 
 import numpy as np
 
-from option_pricing.typing import FloatArray
-
 from ..types import OptionType
+from ..typing import FloatArray
 from .base import ExerciseStyle
 
 
