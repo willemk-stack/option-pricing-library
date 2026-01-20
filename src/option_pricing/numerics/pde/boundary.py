@@ -42,7 +42,7 @@ def neumann_side(q: BoundaryFn) -> RobinBCSide:
 # --- 2nd-order one-sided derivative weights (nonuniform) ---
 
 
-def _left_dx_weights(h0: float, h1: float) -> tuple[float, float, float]:
+def left_dx_weights(h0: float, h1: float) -> tuple[float, float, float]:
     # derivative at x0 using nodes (x0,x1,x2)
     w0 = -(2.0 * h0 + h1) / (h0 * (h0 + h1))
     w1 = (h0 + h1) / (h0 * h1)
@@ -50,7 +50,7 @@ def _left_dx_weights(h0: float, h1: float) -> tuple[float, float, float]:
     return w0, w1, w2
 
 
-def _right_dx_weights(h0: float, h1: float) -> tuple[float, float, float]:
+def right_dx_weights(h0: float, h1: float) -> tuple[float, float, float]:
     # derivative at xN using nodes (x_{N-3},x_{N-2},x_{N-1})
     w_m3 = h0 / (h1 * (h0 + h1))
     w_m2 = -(h0 + h1) / (h0 * h1)
@@ -62,7 +62,7 @@ def _right_dx_weights(h0: float, h1: float) -> tuple[float, float, float]:
 
 
 def elim_left_second_order(
-    side: RobinBCSide, *, h0: float, h1: float, t: float
+    side: RobinBCSide, h0: float, h1: float, t: float
 ) -> tuple[float, float, float]:
     """
     Return (p1,p2,q) such that u0 = p1*u1 + p2*u2 + q
@@ -71,7 +71,7 @@ def elim_left_second_order(
     alpha = float(side.alpha(t))
     beta = float(side.beta(t))
     gamma = float(side.gamma(t))
-    w0, w1, w2 = _left_dx_weights(h0, h1)
+    w0, w1, w2 = left_dx_weights(h0, h1)
     denom = alpha + beta * w0
     if abs(denom) < 1e-14:
         raise ValueError("Left Robin BC is singular: alpha + beta*w0 ~ 0.")
@@ -82,7 +82,7 @@ def elim_left_second_order(
 
 
 def elim_right_second_order(
-    side: RobinBCSide, *, h0: float, h1: float, t: float
+    side: RobinBCSide, h0: float, h1: float, t: float
 ) -> tuple[float, float, float]:
     """
     Return (p1,p2,q) such that uN = p1*u_{N-2} + p2*u_{N-3} + q
@@ -91,7 +91,7 @@ def elim_right_second_order(
     alpha = float(side.alpha(t))
     beta = float(side.beta(t))
     gamma = float(side.gamma(t))
-    w_m3, w_m2, w_m1 = _right_dx_weights(h0, h1)
+    w_m3, w_m2, w_m1 = right_dx_weights(h0, h1)
     denom = alpha + beta * w_m1
     if abs(denom) < 1e-14:
         raise ValueError("Right Robin BC is singular: alpha + beta*w_m1 ~ 0.")

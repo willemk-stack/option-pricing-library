@@ -12,7 +12,7 @@ from option_pricing.typing import ScalarFn
 
 from ..grids import Grid
 from ..tridiag import Tridiag
-from .boundary import RobinBC
+from .boundary import RobinBC, elim_left_second_order, elim_right_second_order
 from .types import CNSystem
 
 XTInput = float | NDArray[np.floating]
@@ -137,59 +137,6 @@ def _second_derivative_coeffs(
     )
 
 
-# --- new: second-order one-sided derivative weights (nonuniform) ---
-
-
-def _left_dx_weights(h0: float, h1: float) -> tuple[float, float, float]:
-    # nodes: x0, x1=x0+h0, x2=x0+h0+h1; derivative at x0
-    w0 = -(2.0 * h0 + h1) / (h0 * (h0 + h1))
-    w1 = (h0 + h1) / (h0 * h1)
-    w2 = -h0 / (h1 * (h0 + h1))
-    return w0, w1, w2
-
-
-def _right_dx_weights(h0: float, h1: float) -> tuple[float, float, float]:
-    # nodes: x_{N-3}=x_{N-1}-(h0+h1), x_{N-2}=x_{N-1}-h0, x_{N-1}; derivative at x_{N-1}
-    w_m3 = h0 / (h1 * (h0 + h1))
-    w_m2 = -(h0 + h1) / (h0 * h1)
-    w_m1 = (2.0 * h0 + h1) / (h0 * (h0 + h1))
-    return w_m3, w_m2, w_m1
-
-
-def _elim_left_second_order(
-    side, h0: float, h1: float, t: float
-) -> tuple[float, float, float]:
-    # u0 = p1*u1 + p2*u2 + q
-    alpha = float(side.alpha(t))
-    beta = float(side.beta(t))
-    gamma = float(side.gamma(t))
-    w0, w1, w2 = _left_dx_weights(h0, h1)
-    denom = alpha + beta * w0
-    if abs(denom) < 1e-14:
-        raise ValueError("Left Robin BC is singular for given (alpha,beta,h0,h1).")
-    p1 = -(beta * w1) / denom
-    p2 = -(beta * w2) / denom
-    q = gamma / denom
-    return p1, p2, q
-
-
-def _elim_right_second_order(
-    side, h0: float, h1: float, t: float
-) -> tuple[float, float, float]:
-    # u_{N-1} = p1*u_{N-2} + p2*u_{N-3} + q
-    alpha = float(side.alpha(t))
-    beta = float(side.beta(t))
-    gamma = float(side.gamma(t))
-    w_m3, w_m2, w_m1 = _right_dx_weights(h0, h1)
-    denom = alpha + beta * w_m1
-    if abs(denom) < 1e-14:
-        raise ValueError("Right Robin BC is singular for given (alpha,beta,h0,h1).")
-    p1 = -(beta * w_m2) / denom  # multiplies u_{N-2}
-    p2 = -(beta * w_m3) / denom  # multiplies u_{N-3}
-    q = gamma / denom
-    return p1, p2, q
-
-
 @dataclass(frozen=True, slots=True)
 class _L1D:
     """Discrete L operator on interior nodes, plus boundary forcing in L."""
@@ -240,7 +187,7 @@ def build_L_1d(
     h1L = float(x[2] - x[1]) if N >= 3 else 0.0
     if N < 3:
         raise ValueError("Need at least 3 points for 2nd-order BC enforcement.")
-    p1L, p2L, qL = _elim_left_second_order(bc.left, h0L, h1L, t)
+    p1L, p2L, qL = elim_left_second_order(bc.left, h0L, h1L, t)
 
     # row for first interior node (global i=1): term L_lower_full[0]*u0
     # substitute u0 = p1L*u1 + p2L*u2 + qL
@@ -252,7 +199,7 @@ def build_L_1d(
     # --- Right boundary elimination using (u_{N-3},u_{N-2},u_{N-1}) ---
     h0R = float(x[-1] - x[-2])
     h1R = float(x[-2] - x[-3])
-    p1R, p2R, qR = _elim_right_second_order(bc.right, h0R, h1R, t)
+    p1R, p2R, qR = elim_right_second_order(bc.right, h0R, h1R, t)
 
     # row for last interior node (global i=N-2): term L_upper_full[-1]*u_{N-1}
     # substitute u_{N-1} = p1R*u_{N-2} + p2R*u_{N-3} + qR

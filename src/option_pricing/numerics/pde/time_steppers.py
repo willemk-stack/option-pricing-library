@@ -7,7 +7,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..grids import Grid
-from ..tridiag import Tridiag, solve_tridiag_scipy
+from ..tridiag import Tridiag, solve_tridiag_thomas
 from .boundary import RobinBC, recover_boundaries_second_order
 
 __all__ = ["crank_nicolson_linear_step_robin"]
@@ -32,7 +32,7 @@ def crank_nicolson_linear_step_robin(
     # Robin/Neumann/Dirichlet BC (already eliminated in operator build; used here only to reconstruct u0,uN)
     bc: RobinBC,
     rhs_extra: NDArray[np.floating] | None = None,
-    solve_tridiag=solve_tridiag_scipy,
+    solve_tridiag=solve_tridiag_thomas,
 ) -> NDArray[np.floating]:
     """
     One CN step (elimination-style BC handling):

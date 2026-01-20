@@ -7,7 +7,7 @@ Currently supported PDE form (1D):
 
     u_t = a(x,t) u_xx + b(x,t) u_x + c(x,t) u + d(x,t)
 
-with Dirichlet boundary conditions.
+Robin BC supported; Dirichlet/Neumann are special cases.
 """
 
 from .boundary import RobinBC, RobinBCSide, dirichlet_side, neumann_side
