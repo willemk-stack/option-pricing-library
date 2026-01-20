@@ -27,7 +27,6 @@ __all__ = [
     "ExerciseStyle",
     "TerminalPayoff",
     "PathPayoff",
-    "Instrument",
     "TerminalInstrument",
     "PathInstrument",
     "VanillaPayoff",
