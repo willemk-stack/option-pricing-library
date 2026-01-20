@@ -17,10 +17,9 @@ def digital_call_payoff(
 def digital_call_payoff(
     ST: float | FloatArray, K: float, payout: float = 1.0
 ) -> float | FloatArray:
-    if np.isscalar(ST):
-        return float(payout) if ST >= K else 0.0
     ST_arr = np.asarray(ST, dtype=float)
-    return np.where(ST_arr >= K, float(payout), 0.0)
+    out = np.where(ST_arr >= K, float(payout), 0.0)
+    return float(out) if np.ndim(out) == 0 else out
 
 
 @overload
@@ -30,10 +29,9 @@ def digital_put_payoff(ST: FloatArray, K: float, payout: float = 1.0) -> FloatAr
 def digital_put_payoff(
     ST: float | FloatArray, K: float, payout: float = 1.0
 ) -> float | FloatArray:
-    if np.isscalar(ST):
-        return float(payout) if ST <= K else 0.0
     ST_arr = np.asarray(ST, dtype=float)
-    return np.where(ST_arr <= K, float(payout), 0.0)
+    out = np.where(ST_arr <= K, float(payout), 0.0)
+    return float(out) if np.ndim(out) == 0 else out
 
 
 @dataclass(frozen=True, slots=True)

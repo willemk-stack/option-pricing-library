@@ -406,8 +406,8 @@ def digital_call_price(
     Q = instr.payout
     T = instr.expiry
     strike = instr.strike
-    fwd = market.fwd
-    df = market.df
+    fwd = market.fwd(T)
+    df = market.df(T)
     _, d2 = d1_d2_black_76(forward=fwd, strike=strike, tau=T, sigma=sigma)
 
     price = Q * df * norm.cdf(d2)
@@ -422,8 +422,8 @@ def digital_put_price(
     Q = instr.payout
     T = instr.expiry
     strike = instr.strike
-    fwd = market.fwd
-    df = market.df
+    fwd = market.fwd(T)
+    df = market.df(T)
     _, d2 = d1_d2_black_76(forward=fwd, strike=strike, tau=T, sigma=sigma)
 
     price = Q * df * norm.cdf(-d2)
