@@ -137,6 +137,83 @@ class ThetaScheme1D:
         )
 
 
+@dataclass(slots=True)
+class RannacherCN1D:
+    """Rannacher time stepping: two implicit half-steps, then Crank–Nicolson.
+
+    This damps the high-frequency error caused by non-smooth terminal payoffs
+    (digitals, barriers, etc.) that can make CN oscillatory or reduce convergence order.
+    """
+
+    startup_steps: int = 2  # standard Rannacher uses 2 half-steps
+    _started: bool = False  # internal flag; new instance per solve via registry
+
+    @property
+    def name(self) -> str:
+        return "rannacher"
+
+    def step(
+        self,
+        *,
+        problem: LinearParabolicPDE1D,
+        grid: Grid,
+        u_n: NDArray[np.floating],
+        t_n: float,
+        t_np1: float,
+        advection: AdvectionScheme,
+        solve_tridiag: Callable[
+            [
+                NDArray[np.floating],
+                NDArray[np.floating],
+                NDArray[np.floating],
+                NDArray[np.floating],
+            ],
+            NDArray[np.floating],
+        ],
+    ) -> NDArray[np.floating]:
+
+        # After startup, revert to standard CN
+        if self._started or self.startup_steps <= 0:
+            return ThetaScheme1D(theta=0.5).step(
+                problem=problem,
+                grid=grid,
+                u_n=u_n,
+                t_n=t_n,
+                t_np1=t_np1,
+                advection=advection,
+                solve_tridiag=solve_tridiag,
+            )
+
+        # Startup: replace the first full CN step with `startup_steps` implicit substeps
+        u = u_n
+        t0 = float(t_n)
+        t1 = float(t_np1)
+        dt = t1 - t0
+        if dt <= 0:
+            raise ValueError("Non-positive dt in Rannacher step")
+
+        implicit = ThetaScheme1D(theta=1.0)
+
+        # For classic Rannacher: two half-steps (startup_steps=2)
+        sub_dt = dt / float(self.startup_steps)
+        t = t0
+        for _ in range(self.startup_steps):
+            t_next = t + sub_dt
+            u = implicit.step(
+                problem=problem,
+                grid=grid,
+                u_n=u,
+                t_n=t,
+                t_np1=t_next,
+                advection=advection,
+                solve_tridiag=solve_tridiag,
+            )
+            t = t_next
+
+        self._started = True
+        return u
+
+
 # -----------------------------
 # Registry
 # -----------------------------
@@ -239,6 +316,13 @@ def _register_builtin_methods() -> None:
         lambda: ThetaScheme1D(theta=0.0),
         overwrite=True,
         aliases=("forward-euler", "forward", "fe", "explicit-euler"),
+    )
+
+    register_method(
+        "rannacher",
+        lambda: RannacherCN1D(startup_steps=2),
+        overwrite=True,
+        aliases=("rannacher-cn", "rannacher_cn", "ran", "r-cn"),
     )
 
 
