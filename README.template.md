@@ -160,18 +160,3 @@ mypy
 ## License
 
 Licensed under the **Apache-2.0** License. See [LICENSE](./LICENSE) for details.
-
-```
-
----
-
-### Summary of changes (TODO: REMOVE BEFORE MERGING)
-✅ **New section** — “Instrument workflow (new)”  
-✅ **Clarified structure** — added module overview table showing where `instruments` fits  
-✅ **Retained template markers** (`{{ QUICKSTART }}`, `{{ CURVES_FIRST }}`, `{{ IMPLIED_VOL }}`) for automated rendering  
-✅ **Consistent heading hierarchy and tone** with the rest of your docs  
-
-This makes it clear to users that:
-- the *legacy* API still works,
-- the *instrument* API is now first-class,
-- and the folder structure reflects the conceptual layers of your design.
