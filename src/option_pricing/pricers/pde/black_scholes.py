@@ -6,11 +6,12 @@ from typing import cast
 
 import numpy as np
 
-from option_pricing import OptionType, PricingInputs, VanillaOption
-from option_pricing.numerics.pde import LinearParabolicPDE1D
-from option_pricing.numerics.pde.boundary import RobinBC, RobinBCSide
-from option_pricing.pricers.pde.domain import Coord
-from option_pricing.typing import ArrayLike
+from ...instruments.vanilla import VanillaOption
+from ...numerics.pde import LinearParabolicPDE1D
+from ...numerics.pde.boundary import RobinBC, RobinBCSide
+from ...types import OptionType, PricingInputs
+from ...typing import ArrayLike
+from .domain import Coord
 
 type CoordFn = Callable[[ArrayLike], ArrayLike]
 

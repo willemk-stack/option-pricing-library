@@ -4,8 +4,8 @@ from typing import Literal
 
 import numpy as np
 
-from option_pricing import PricingInputs
-from option_pricing.numerics.grids import GridConfig, SpacingPolicy
+from ...numerics.grids import GridConfig, SpacingPolicy
+from ...types import PricingInputs
 
 
 class Coord(str, Enum):
