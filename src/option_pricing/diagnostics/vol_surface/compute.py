@@ -171,7 +171,9 @@ def call_prices_from_smile(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute discounted Black-76 call prices on the smile grid for a given expiry."""
     if bs_model is None:
-        from option_pricing.models import bs as _bs  # type: ignore[attr-defined]
+        from option_pricing.models.black_scholes import (
+            bs as _bs,  # type: ignore[attr-defined]
+        )
 
         bs_model = cast(Black76Module, _bs)
 

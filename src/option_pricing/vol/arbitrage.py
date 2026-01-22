@@ -6,7 +6,7 @@ import numpy as np
 
 from option_pricing.typing import ScalarFn
 
-from ..models import bs as bs_model
+from ..models.black_scholes import bs as bs_model
 from .surface import Smile, VolSurface
 
 

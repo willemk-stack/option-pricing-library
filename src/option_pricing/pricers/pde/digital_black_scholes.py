@@ -1,28 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
 from typing import cast
 
 import numpy as np
 
 from ...instruments.vanilla import VanillaOption
+from ...models.black_scholes.pde import BSPDEWiring, CoordFn
 from ...numerics.pde import LinearParabolicPDE1D
 from ...numerics.pde.boundary import RobinBC, RobinBCSide
+from ...numerics.pde.domain import Coord
 from ...types import OptionType, PricingInputs
-from ...typing import ArrayLike
-from .domain import Coord
-
-type CoordFn = Callable[[ArrayLike], ArrayLike]
-
-
-@dataclass(frozen=True, slots=True)
-class BSPDEWiring:
-    coord: Coord
-    to_x: CoordFn
-    to_S: CoordFn
-    x_0: float
-    problem: LinearParabolicPDE1D
 
 
 def _bc_constr(

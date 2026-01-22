@@ -5,9 +5,9 @@ import math
 import numpy as np
 from scipy.stats import norm
 
-from ..instruments.digital import DigitalOption
-from ..types import PricingContext
-from ..typing import ArrayLike, FloatDType
+from ...instruments.digital import DigitalOption
+from ...types import PricingContext
+from ...typing import ArrayLike, FloatDType
 
 
 # -------------------------

@@ -3,8 +3,8 @@ import numpy as np
 from option_pricing import PricingInputs
 from option_pricing.numerics.grids import GridConfig
 from option_pricing.numerics.pde import AdvectionScheme, PDESolution1D, solve_pde_1d
-from option_pricing.pricers.pde.black_scholes import bs_pde_wiring
-from option_pricing.pricers.pde.domain import Coord, DomainConfig, compute_bounds
+from option_pricing.numerics.pde.domain import Coord, DomainConfig, compute_bounds
+from option_pricing.pricers.pde.european_black_scholes import bs_pde_wiring
 
 
 def bs_price_pde(

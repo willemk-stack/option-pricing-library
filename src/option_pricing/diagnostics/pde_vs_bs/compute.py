@@ -8,7 +8,7 @@ import numpy as np
 
 from option_pricing import PricingInputs, bs_price
 from option_pricing.numerics.pde import AdvectionScheme, PDESolution1D
-from option_pricing.pricers.pde.domain import Coord, DomainConfig
+from option_pricing.numerics.pde.domain import Coord, DomainConfig
 from option_pricing.pricers.pde_pricer import bs_price_pde
 
 # ----------------------------

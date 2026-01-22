@@ -8,7 +8,7 @@ from ..instruments.base import ExerciseStyle
 from ..instruments.digital import DigitalOption
 from ..instruments.vanilla import VanillaOption
 from ..market.curves import PricingContext
-from ..models import bs as bs_model
+from ..models.black_scholes import bs as bs_model
 from ..types import MarketData, OptionType, PricingInputs
 from ..typing import ArrayLike
 
