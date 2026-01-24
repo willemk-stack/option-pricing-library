@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 
 import numpy as np
 
 from ..instruments.base import ExerciseStyle
 from ..instruments.digital import DigitalOption
 from ..market.curves import PricingContext
-from ..numerics.grids import GridConfig
+from ..numerics.grids import Grid, GridConfig
 from ..numerics.pde import AdvectionScheme, PDESolution1D, solve_pde_1d
 from ..numerics.pde.domain import Coord
+from ..numerics.pde.ic_remedies import ICRemedy, ic_cell_average, ic_l2_projection
 from ..types import DigitalSpec, MarketData, OptionSpec, PricingInputs
 from .pde.digital_black_scholes import bs_pde_wiring as digital_bs_pde_wiring
 
@@ -22,6 +24,7 @@ from .pde.european_black_scholes import bs_pde_wiring as european_bs_pde_wiring
 # Python 3.12 type aliases (optional)
 type VanillaInputs = PricingInputs[OptionSpec]
 type DigitalInputs = PricingInputs[DigitalSpec]
+type ICTransform = Callable[[Grid, Callable[[float], float]], np.ndarray]
 
 
 def bs_price_pde_european(
@@ -86,6 +89,8 @@ def bs_digital_price_pde_from_ctx(
     method: str = "rannacher",
     advection: AdvectionScheme = AdvectionScheme.CENTRAL,
     return_solution: bool = False,
+    ic_remedy: ICRemedy | str = ICRemedy.CELL_AVG,
+    ic_transformFn: ICTransform | None = None,
 ) -> float | tuple[float, PDESolution1D]:
     """
     Core digital PDE pricer using curves-first inputs.
@@ -126,6 +131,31 @@ def bs_digital_price_pde_from_ctx(
     bounds = bs_compute_bounds(p_eff, coord=coord, cfg=domain_cfg)
     wiring = digital_bs_pde_wiring(p_eff, coord, x_lb=bounds.x_lb, x_ub=bounds.x_ub)
 
+    # --- IC remedy selection (override wins) ---
+    ic_transform = ic_transformFn
+
+    if ic_transform is None:
+        remedy = ICRemedy(ic_remedy)  # allows passing "cell_avg" as a string
+
+        if remedy == ICRemedy.NONE:
+            ic_transform = None
+
+        elif remedy == ICRemedy.CELL_AVG:
+            # Discontinuity at strike in solver coordinates
+            xK = float(np.asarray(wiring.to_x(p_eff.spec.strike)).reshape(()))
+
+            def ic_transform(grid: Grid, ic: Callable[[float], float]) -> np.ndarray:
+                return ic_cell_average(grid, ic, breakpoints=(xK,))
+
+        elif remedy == ICRemedy.L2_PROJ:
+            xK = float(np.asarray(wiring.to_x(p_eff.spec.strike)).reshape(()))
+
+            def ic_transform(grid: Grid, ic: Callable[[float], float]) -> np.ndarray:
+                return ic_l2_projection(grid=grid, ic=ic, breakpoints=(xK,))
+
+        else:
+            raise ValueError(f"Unsupported IC remedy: {remedy}")
+
     if not (bounds.x_lb < wiring.x_0 < bounds.x_ub):
         raise ValueError("Computed bounds do not contain x0 (spot).")
 
@@ -146,6 +176,7 @@ def bs_digital_price_pde_from_ctx(
         method=method,
         advection=advection,
         store="final",
+        ic_transform=ic_transform,
     )
 
     x = np.asarray(sol.grid.x, dtype=float)
@@ -168,6 +199,8 @@ def bs_digital_price_pde(
     method: str = "rannacher",
     advection: AdvectionScheme = AdvectionScheme.CENTRAL,
     return_solution: bool = False,
+    ic_remedy: ICRemedy | str = ICRemedy.CELL_AVG,
+    ic_transformFn: ICTransform | None = None,
 ) -> float | tuple[float, PDESolution1D]:
     """
     PricingInputs wrapper (Option 1): DigitalSpec drives payout.
@@ -190,4 +223,6 @@ def bs_digital_price_pde(
         method=method,
         advection=advection,
         return_solution=return_solution,
+        ic_remedy=ic_remedy,
+        ic_transformFn=ic_transformFn,
     )

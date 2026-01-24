@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal, cast
 
@@ -11,6 +12,8 @@ from ..tridiag import Tridiag, solve_tridiag_thomas
 from .boundary import recover_boundaries_second_order
 from .methods import PDEMethod1D, ThetaMethod, resolve_method
 from .operators import AdvectionScheme, LinearParabolicPDE1D
+
+ICTransform = Callable[[Grid, Callable[[float], float]], np.ndarray]
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +49,7 @@ def solve_pde_1d(
     advection: AdvectionScheme = AdvectionScheme.CENTRAL,
     store: Literal["all", "final"] = "all",
     solve_tridiag=_solve_tridiag_thomas_arrays,
+    ic_transform: ICTransform | None = None,
 ) -> PDESolution1D:
     if (grid is None) == (grid_cfg is None):
         raise ValueError("Provide exactly one of grid or grid_cfg")
@@ -78,7 +82,19 @@ def solve_pde_1d(
         return cast(NDArray[np.floating], u_full)
 
     # Initial condition on full grid
-    u0 = np.array([float(problem.ic(float(xi))) for xi in x], dtype=float)
+    ic_fn = problem.ic
+    u0_raw = np.array([float(ic_fn(float(xi))) for xi in x], dtype=float)
+
+    # Apply Initial condition if given
+    if ic_transform is not None:
+        u0 = np.asarray(ic_transform(grid, ic_fn), dtype=float)
+        if u0.shape != u0_raw.shape:
+            raise ValueError("ic_transform must return shape (Nx,)")
+        if not np.all(np.isfinite(u0)):
+            raise ValueError("ic_transform produced non-finite values")
+
+    else:
+        u0 = u0_raw
 
     # Enforce BC at t0 (Dirichlet or Robin/Neumann)
     u0 = _apply_bc(u0, float(t[0]))
