@@ -67,20 +67,20 @@ def bs_coord_maps(coord: CoordLike) -> tuple[CoordFn, CoordFn]:
 
     if ck == "LOG_S":
 
-        def to_x(S: CoordFn):
+        def to_x(S: ArrayLike):
             return np.log(np.asarray(S, dtype=float))
 
-        def to_S(x: CoordFn):
+        def to_S(x: ArrayLike):
             return np.exp(np.asarray(x, dtype=float))
 
-        return to_x, to_S
-
     # ck == "S"
-    def to_x(S: CoordFn):
-        return np.asarray(S, dtype=float)
+    else:
 
-    def to_S(x: CoordFn):
-        return np.asarray(x, dtype=float)
+        def to_x(S: ArrayLike):
+            return np.asarray(S, dtype=float)
+
+        def to_S(x: ArrayLike):
+            return np.asarray(x, dtype=float)
 
     return to_x, to_S
 
