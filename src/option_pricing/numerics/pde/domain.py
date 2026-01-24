@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal
+from typing import Literal, Protocol
 
 import numpy as np
 
-from ...types import PricingInputs
 from ..grids import GridConfig, SpacingPolicy
 
 
@@ -16,7 +15,6 @@ class Coord(str, Enum):
 class DomainPolicy(str, Enum):
     MANUAL = "MANUAL"
     STRIKE_MULTIPLE = "STRIKE_MULTIPLE"
-    LOG_NSIGMA = "LOG_NSIGMA"
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,14 +28,11 @@ class DomainConfig:
     # STRIKE_MULTIPLE
     multiple: float = 6.0
 
-    # LOG_NSIGMA
-    n_sigma: float = 6.0
-
     # If using LOG_S, we must keep S_min > 0
     s_min_floor: float | None = None
 
-    # Optional: where to center clustered grids
-    center: Literal["strike", "spot", "drifted_spot"] = "strike"
+    # Optional: where to center clustered grids (geometry-only)
+    center: Literal["strike", "spot"] = "strike"
 
     # Grid preferences
     spacing: SpacingPolicy = SpacingPolicy.UNIFORM
@@ -53,8 +48,18 @@ class DomainBounds:
     S_max: float
 
 
+class DomainInputs(Protocol):
+    # minimal surface needed by this module
+    @property
+    def S(self) -> float: ...
+    @property
+    def K(self) -> float: ...
+    @property
+    def tau(self) -> float: ...
+
+
 def compute_bounds(
-    p: PricingInputs,
+    p: DomainInputs,
     *,
     coord: Coord,
     cfg: DomainConfig,
@@ -62,7 +67,6 @@ def compute_bounds(
     # --- basic validation
     S0 = float(p.S)
     K = float(p.K)
-    sigma = float(p.sigma)
     tau = float(p.tau)
 
     if S0 <= 0.0:
@@ -84,13 +88,7 @@ def compute_bounds(
 
     # --- pick x_center (optional)
     def _x_center_raw() -> float:
-        if cfg.center == "spot":
-            return xS
-        if cfg.center == "drifted_spot":
-            mu = float(np.log(S0) + (p.r - p.q - 0.5 * sigma**2) * tau)
-            return float(mu) if coord == Coord.LOG_S else float(np.exp(mu))
-        # default: "strike"
-        return xK
+        return xS if cfg.center == "spot" else xK  # default: strike
 
     # --- ensure positive S_min for LOG_S
     def _apply_floor(S_min: float) -> float:
@@ -113,7 +111,6 @@ def compute_bounds(
         lo = float(min(x_lb, xS, xK))
         hi = float(max(x_ub, xS, xK))
 
-        # Pad so strict inequalities (lo < x0 < hi) hold.
         width = hi - lo
         eps = 1e-9 * max(1.0, width)
 
@@ -126,14 +123,12 @@ def compute_bounds(
 
         if coord == Coord.LOG_S:
             S_min = _apply_floor(_to_S(x_lb))
-            # floor adjustment can move x_lb slightly upward
-            x_lb = _to_x(S_min)
+            x_lb = _to_x(S_min)  # floor adjustment can move x_lb upward
             S_max = _to_S(x_ub)
         else:
             S_min = float(x_lb)
             S_max = float(x_ub)
 
-        # If clustered spacing, keep x_center inside [x_lb, x_ub] to avoid odd clustering behavior
         if x_center is not None:
             x_center = float(np.clip(float(x_center), x_lb, x_ub))
 
@@ -153,13 +148,12 @@ def compute_bounds(
         x_lb = float(cfg.x_lb)
         x_ub = float(cfg.x_ub)
 
-        # Optional: for diagnostics you may want this ON; for now we keep manual strict.
-        # Uncomment if you want manual to be "always safe":
+        # Make manual "safe" by ensuring spot/strike inclusion
         x_lb, x_ub = _ensure_contains_spot_and_strike(x_lb, x_ub)
 
         return _finalize(x_lb, x_ub, _x_center_raw())
 
-    # --- STRIKE_MULTIPLE (already includes spot+strike in S-space by construction)
+    # --- STRIKE_MULTIPLE (geometry-only)
     if cfg.policy == DomainPolicy.STRIKE_MULTIPLE:
         m = float(cfg.multiple)
         if m <= 1.0:
@@ -171,7 +165,6 @@ def compute_bounds(
         S_max = m * S_ref_hi
         S_min = S_ref_lo / m
 
-        # apply floor if log-space
         if coord == Coord.LOG_S:
             S_min = _apply_floor(S_min)
             x_lb = _to_x(S_min)
@@ -179,40 +172,7 @@ def compute_bounds(
         else:
             x_lb, x_ub = float(S_min), float(S_max)
 
-        # still enforce inclusion defensively (harmless here)
-        x_lb, x_ub = _ensure_contains_spot_and_strike(x_lb, x_ub)
-
-        return _finalize(x_lb, x_ub, _x_center_raw())
-
-    # --- LOG_NSIGMA (robust: drift band + ensure contains spot+strike)
-    if cfg.policy == DomainPolicy.LOG_NSIGMA:
-        n = float(cfg.n_sigma)
-        if n <= 0.0:
-            raise ValueError("LOG_NSIGMA requires cfg.n_sigma > 0")
-        if sigma <= 0.0:
-            raise ValueError("LOG_NSIGMA requires sigma > 0")
-
-        # drifted log-spot mean (risk-neutral)
-        mu_log = float(np.log(S0) + (p.r - p.q - 0.5 * sigma**2) * tau)
-        width = float(n * sigma * np.sqrt(tau))
-
-        # band in log-space
-        x_lb_log = mu_log - width
-        x_ub_log = mu_log + width
-
-        # map to requested coordinate
-        if coord == Coord.LOG_S:
-            # apply floor to S_min, then re-log
-            S_min = _apply_floor(float(np.exp(x_lb_log)))
-            x_lb = _to_x(S_min)
-            x_ub = float(x_ub_log)  # log-space already
-        else:
-            # convert band to S, then use S as coordinate
-            S_min = float(np.exp(x_lb_log))
-            S_max = float(np.exp(x_ub_log))
-            x_lb, x_ub = float(S_min), float(S_max)
-
-        # crucial: ensure inclusion of spot and strike (prevents your x0-outside-domain error)
+        # Enforce inclusion defensively
         x_lb, x_ub = _ensure_contains_spot_and_strike(x_lb, x_ub)
 
         return _finalize(x_lb, x_ub, _x_center_raw())
@@ -221,7 +181,7 @@ def compute_bounds(
 
 
 def make_grid_config(
-    p: PricingInputs,
+    p: DomainInputs,
     *,
     coord: Coord | str,
     dom: DomainConfig,

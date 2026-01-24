@@ -21,8 +21,8 @@ def test_put_call_parity_with_dividends(make_inputs):
     p_put = make_inputs(
         S=p_call.S,
         K=p_call.K,
-        r=p_call.r,
-        q=p_call.q,
+        r=p_call.market.rate,
+        q=p_call.market.dividend_yield,
         sigma=p_call.sigma,
         T=p_call.T,
         t=p_call.t,
@@ -30,8 +30,8 @@ def test_put_call_parity_with_dividends(make_inputs):
     )
 
     tau = p_call.tau
-    df_r = math.exp(-p_call.r * tau)
-    df_q = math.exp(-p_call.q * tau)
+    df_r = math.exp(-p_call.market.rate * tau)
+    df_q = math.exp(-p_call.market.dividend_yield * tau)
 
     C = float(bs_price_call(p_call))
     P = float(bs_price_put(p_put))
@@ -45,8 +45,8 @@ def test_call_bounds(make_inputs):
         S=120.0, K=100.0, r=0.04, q=0.01, sigma=0.3, T=0.75, kind=OptionType.CALL
     )
     tau = p.tau
-    df_r = math.exp(-p.r * tau)
-    df_q = math.exp(-p.q * tau)
+    df_r = math.exp(-p.market.rate * tau)
+    df_q = math.exp(-p.market.dividend_yield * tau)
 
     C = float(bs_price_call(p))
     lower = max(p.S * df_q - p.K * df_r, 0.0)
@@ -61,8 +61,8 @@ def test_put_bounds(make_inputs):
         S=80.0, K=100.0, r=0.02, q=0.01, sigma=0.35, T=1.4, kind=OptionType.PUT
     )
     tau = p.tau
-    df_r = math.exp(-p.r * tau)
-    df_q = math.exp(-p.q * tau)
+    df_r = math.exp(-p.market.rate * tau)
+    df_q = math.exp(-p.market.dividend_yield * tau)
 
     P = float(bs_price_put(p))
     lower = max(p.K * df_r - p.S * df_q, 0.0)

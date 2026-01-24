@@ -8,8 +8,9 @@ import numpy as np
 
 from option_pricing import PricingInputs, bs_price
 from option_pricing.numerics.pde import AdvectionScheme, PDESolution1D
-from option_pricing.numerics.pde.domain import Coord, DomainConfig
-from option_pricing.pricers.pde_pricer import bs_price_pde
+from option_pricing.numerics.pde.domain import Coord
+from option_pricing.pricers.pde.domain import BSDomainConfig
+from option_pricing.pricers.pde_pricer import bs_price_pde_european
 
 # ----------------------------
 # Results dataclass
@@ -95,7 +96,7 @@ def _meta_from_inputs(p: PricingInputs) -> dict[str, object]:
 def run_once(
     p: PricingInputs,
     *,
-    domain_cfg: DomainConfig,
+    domain_cfg: BSDomainConfig,
     Nx: int = 401,
     Nt: int = 401,
     coord: Coord | str = Coord.LOG_S,
@@ -114,7 +115,7 @@ def run_once(
 
     # PDE solve (timed)
     t0 = perf_counter()
-    out = bs_price_pde(
+    out = bs_price_pde_european(
         p=p,
         coord=coord_enum,
         domain_cfg=domain_cfg,
@@ -155,7 +156,7 @@ def run_once(
     if return_solution:
         if sol is None:
             raise TypeError(
-                "return_solution=True but bs_price_pde did not return a PDESolution1D. "
+                "return_solution=True but bs_price_pde_european did not return a PDESolution1D. "
                 "Expected (price, PDESolution1D)."
             )
         return res, sol
@@ -172,7 +173,7 @@ def run_once(
 def run_cases(
     cases: Iterable[tuple[str, PricingInputs]],
     *,
-    domain_cfg: DomainConfig,
+    domain_cfg: BSDomainConfig,
     Nx: int = 401,
     Nt: int = 401,
     coord: Coord | str = Coord.LOG_S,
@@ -248,7 +249,7 @@ def run_cases(
 def sweep_nx(
     p: PricingInputs,
     *,
-    domain_cfg: DomainConfig,
+    domain_cfg: BSDomainConfig,
     Nx_list: Sequence[int] = (101, 201, 401, 801),
     Nt: int = 401,
     coord: Coord | str = Coord.LOG_S,
@@ -282,7 +283,7 @@ def sweep_nx(
 def sweep_nt(
     p: PricingInputs,
     *,
-    domain_cfg: DomainConfig,
+    domain_cfg: BSDomainConfig,
     Nt_list: Sequence[int] = (51, 101, 201, 401),
     Nx: int = 401,
     coord: Coord | str = Coord.LOG_S,
@@ -316,7 +317,7 @@ def sweep_nt(
 def sweep_nx_nt(
     p: PricingInputs,
     *,
-    domain_cfg: DomainConfig,
+    domain_cfg: BSDomainConfig,
     Nx_list: Sequence[int] = (101, 201, 401, 801),
     Nt_list: Sequence[int] = (51, 101, 201, 401),
     coord: Coord | str = Coord.LOG_S,

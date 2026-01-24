@@ -5,16 +5,22 @@ import pytest
 
 from option_pricing.numerics.grids import SpacingPolicy
 from option_pricing.numerics.pde import AdvectionScheme, PDESolution1D
+from option_pricing.numerics.pde.domain import Coord  # FIX: correct Coord import
 from option_pricing.pricers.black_scholes import bs_price
-from option_pricing.pricers.pde.domain import Coord, DomainConfig, DomainPolicy
-from option_pricing.pricers.pde_pricer import bs_price_pde
+from option_pricing.pricers.pde.domain import (  # FIX: BS domain config/policy
+    BSDomainConfig as DomainConfig,
+)
+from option_pricing.pricers.pde.domain import (
+    BSDomainPolicy as DomainPolicy,
+)
+from option_pricing.pricers.pde_pricer import bs_price_pde_european
 from option_pricing.types import OptionType
 
 
 def _default_domain_cfg(
     *, spacing: SpacingPolicy = SpacingPolicy.CLUSTERED
 ) -> DomainConfig:
-    """Conservative domain defaults that work well across typical test cases."""
+    """Conservative BS-specific domain defaults that work well across typical test cases."""
     return DomainConfig(
         policy=DomainPolicy.LOG_NSIGMA,
         n_sigma=6.0,
@@ -47,7 +53,7 @@ def test_bs_price_pde_matches_black_scholes(make_inputs, coord, rel_tol, kind):
     dom = _default_domain_cfg(spacing=SpacingPolicy.CLUSTERED)
 
     pde = float(
-        bs_price_pde(
+        bs_price_pde_european(
             p,
             coord=coord,
             domain_cfg=dom,
@@ -60,7 +66,6 @@ def test_bs_price_pde_matches_black_scholes(make_inputs, coord, rel_tol, kind):
     ref = float(bs_price(p))
 
     abs_err = abs(pde - ref)
-    # Guard against deep OTM cases where the reference may be near zero.
     assert abs_err <= max(2.0e-3, rel_tol * abs(ref))
 
 
@@ -78,7 +83,7 @@ def test_bs_price_pde_return_solution_is_consistent(make_inputs):
 
     dom = _default_domain_cfg(spacing=SpacingPolicy.UNIFORM)
 
-    price, sol = bs_price_pde(
+    price, sol = bs_price_pde_european(
         p,
         coord=Coord.LOG_S,
         domain_cfg=dom,
@@ -90,7 +95,6 @@ def test_bs_price_pde_return_solution_is_consistent(make_inputs):
     )
 
     assert isinstance(sol, PDESolution1D)
-    # bs_price_pde uses store="final"; solver stores a single time slice.
     assert sol.u.ndim == 2
     assert sol.u.shape[0] == 1
     assert sol.u.shape[1] == sol.grid.x.shape[0]
@@ -124,7 +128,7 @@ def test_bs_price_pde_rejects_too_small_grids(make_inputs, Nx, Nt, match):
     dom = _default_domain_cfg()
 
     with pytest.raises(ValueError, match=match):
-        bs_price_pde(
+        bs_price_pde_european(
             p,
             coord=Coord.LOG_S,
             domain_cfg=dom,
@@ -148,7 +152,7 @@ def test_bs_price_pde_unknown_method_raises(make_inputs):
     dom = _default_domain_cfg()
 
     with pytest.raises(ValueError, match=r"Unknown method"):
-        bs_price_pde(
+        bs_price_pde_european(
             p, coord=Coord.LOG_S, domain_cfg=dom, Nx=101, Nt=101, method="nope"
         )
 
@@ -167,7 +171,7 @@ def test_bs_price_pde_manual_domain_requires_bounds(make_inputs):
     dom = DomainConfig(policy=DomainPolicy.MANUAL)
 
     with pytest.raises(ValueError, match=r"MANUAL policy requires"):
-        bs_price_pde(p, coord=Coord.LOG_S, domain_cfg=dom, Nx=101, Nt=101)
+        bs_price_pde_european(p, coord=Coord.LOG_S, domain_cfg=dom, Nx=101, Nt=101)
 
 
 def test_bs_price_pde_accepts_coord_string(make_inputs):
@@ -184,10 +188,14 @@ def test_bs_price_pde_accepts_coord_string(make_inputs):
     dom = _default_domain_cfg()
 
     price_enum = float(
-        bs_price_pde(p, coord=Coord.LOG_S, domain_cfg=dom, Nx=121, Nt=121, method="cn")
+        bs_price_pde_european(
+            p, coord=Coord.LOG_S, domain_cfg=dom, Nx=121, Nt=121, method="cn"
+        )
     )
     price_str = float(
-        bs_price_pde(p, coord="logS", domain_cfg=dom, Nx=121, Nt=121, method="cn")
+        bs_price_pde_european(
+            p, coord="logS", domain_cfg=dom, Nx=121, Nt=121, method="cn"
+        )
     )
 
     assert abs(price_enum - price_str) <= 1e-12
@@ -209,7 +217,7 @@ def test_bs_price_pde_runs_for_supported_advection_schemes(make_inputs, advectio
     dom = _default_domain_cfg()
 
     price = float(
-        bs_price_pde(
+        bs_price_pde_european(
             p,
             coord=Coord.LOG_S,
             domain_cfg=dom,
@@ -241,7 +249,7 @@ def test_bs_price_pde_error_decreases_with_grid_refinement(make_inputs):
     ref = float(bs_price(p))
 
     pde_1 = float(
-        bs_price_pde(
+        bs_price_pde_european(
             p,
             coord=Coord.LOG_S,
             domain_cfg=dom,
@@ -252,7 +260,7 @@ def test_bs_price_pde_error_decreases_with_grid_refinement(make_inputs):
         )
     )
     pde_2 = float(
-        bs_price_pde(
+        bs_price_pde_european(
             p,
             coord=Coord.LOG_S,
             domain_cfg=dom,
@@ -266,5 +274,4 @@ def test_bs_price_pde_error_decreases_with_grid_refinement(make_inputs):
     err_1 = abs(pde_1 - ref)
     err_2 = abs(pde_2 - ref)
 
-    # Allow for mild non-monotonicity; we only expect a meaningful improvement.
     assert err_2 <= 0.85 * err_1 + 2e-4

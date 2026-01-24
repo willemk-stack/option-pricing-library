@@ -1,38 +1,41 @@
 from __future__ import annotations
 
-from typing import cast
-
 import numpy as np
 
-from ...instruments.vanilla import VanillaOption
-from ...models.black_scholes.pde import BSPDEWiring, CoordFn
+from ...instruments.digital import DigitalOption
+
+# update to your final location/name for BS PDE helpers
+from ...models.black_scholes.pde import bs_coord_maps, bs_pde_coeffs
 from ...numerics.pde import LinearParabolicPDE1D
 from ...numerics.pde.boundary import RobinBC, RobinBCSide
 from ...numerics.pde.domain import Coord
-from ...types import OptionType, PricingInputs
+from ...types import DigitalSpec, OptionType, PricingInputs
+from .pde_wiring import BSPDEWiring1D
 
 
-def _bc_constr(
-    *, kind: OptionType, K: float, r: float, q: float, S_min: float, S_max: float
-) -> RobinBC:
+def _bc_constr_digital(*, kind: OptionType, r: float, Q: float) -> RobinBC:
     """
-    Dirichlet boundary values expressed as Robin with beta=0:
-        u = gamma(tau)
-    i.e. alpha=1, beta=0, gamma=g(tau)
-    """
+    Digital option far-field Dirichlet boundaries (expressed as Robin with beta=0).
 
+    For large S:
+      - digital call tends to payout * df = Q * exp(-r*tau)
+      - digital put tends to 0
+    For small S:
+      - digital put tends to Q * exp(-r*tau)
+      - digital call tends to 0
+    """
     if kind == OptionType.CALL:
 
         def left_gamma(tau: float) -> float:
             return 0.0
 
         def right_gamma(tau: float) -> float:
-            return float(S_max * np.exp(-q * tau) - K * np.exp(-r * tau))
+            return float(Q * np.exp(-r * tau))
 
     elif kind == OptionType.PUT:
 
         def left_gamma(tau: float) -> float:
-            return float(K * np.exp(-r * tau) - S_min * np.exp(-q * tau))
+            return float(Q * np.exp(-r * tau))
 
         def right_gamma(tau: float) -> float:
             return 0.0
@@ -46,77 +49,43 @@ def _bc_constr(
 
 
 def bs_pde_wiring(
-    p: PricingInputs,
+    p: PricingInputs[DigitalSpec],
     coord: Coord | str,
     *,
     x_lb: float,
     x_ub: float,
-) -> BSPDEWiring:
+) -> BSPDEWiring1D:
     coord = Coord(coord)
 
     sigma = float(p.sigma)
-    r = float(p.r)
-    q = float(p.q)
+    r = float(p.market.rate)
+    q = float(p.market.dividend_yield)
 
-    if coord == Coord.LOG_S:
-        to_x = cast(CoordFn, np.log)
-        to_S = cast(CoordFn, np.exp)
-        x0 = float(np.log(float(p.S)))
+    to_x, to_S = bs_coord_maps(coord)
+    x0 = float(np.asarray(to_x(p.S)).reshape(()))
 
-        if not np.isfinite(x_lb) or not np.isfinite(x_ub):
-            raise ValueError("LOG_S bounds must be finite.")
+    coeffs = bs_pde_coeffs(coord=coord, sigma=sigma, r=r, q=q)
+    a, b, c = coeffs.a, coeffs.b, coeffs.c
 
-        def a(x, tau):
-            x = np.asarray(x)
-            return 0.5 * sigma**2 + 0.0 * x
-
-        def b(x, tau):
-            x = np.asarray(x)
-            return (r - q - 0.5 * sigma**2) + 0.0 * x
-
-        def c(x, tau):
-            x = np.asarray(x)
-            return (-r) + 0.0 * x
-
-    elif coord == Coord.S:
-        to_x = cast(CoordFn, lambda z: z)
-        to_S = cast(CoordFn, lambda z: z)
-        x0 = float(p.S)
-
-        def a(S, tau):
-            return 0.5 * sigma**2 * (np.asarray(S) ** 2)
-
-        def b(S, tau):
-            return (r - q) * np.asarray(S)
-
-        def c(S, tau):
-            S = np.asarray(S)
-            return (-r) + 0.0 * S
-
-    else:
-        raise ValueError(f"Unsupported coord type: {coord}")
-
-    # Check in solver coordinates (x-space), not S-space.
     if not (x_lb < x0 < x_ub):
         raise ValueError(
             f"Domain bounds must contain x0 strictly inside (solver coords): "
             f"x_lb={x_lb}, x0={x0}, x_ub={x_ub}"
         )
 
-    S_min = float(to_S(x_lb))
-    S_max = float(to_S(x_ub))
-
     kind = p.spec.kind
-    K = float(p.K)
+    K = float(p.spec.strike)
+    Q = float(p.spec.payout)
 
-    bc = _bc_constr(kind=kind, K=K, r=r, q=q, S_min=S_min, S_max=S_max)
+    # Digital far-field boundaries only need r and payout
+    bc = _bc_constr_digital(kind=kind, r=r, Q=Q)
 
-    opt = VanillaOption(expiry=p.tau, strike=p.K, kind=kind)
+    opt = DigitalOption(expiry=float(p.tau), strike=K, payout=Q, kind=kind)
     payoff = opt.payoff
 
-    def ic(x):
-        return payoff(to_S(x))
+    def ic(x: float) -> float:
+        return float(payoff(to_S(x)))
 
     problem = LinearParabolicPDE1D(a=a, b=b, c=c, bc=bc, ic=ic)
 
-    return BSPDEWiring(coord=coord, to_x=to_x, to_S=to_S, x_0=x0, problem=problem)
+    return BSPDEWiring1D(coord=coord, to_x=to_x, to_S=to_S, x_0=x0, problem=problem)

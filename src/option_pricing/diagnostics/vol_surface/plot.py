@@ -112,7 +112,7 @@ def plot_calendar_heatmap(
 
     plt.figure(figsize=figsize)
     plt.imshow(dW, aspect="auto", origin="lower")
-    plt.colorbar(label="Δw = w(T_{i+1},x) - w(T_i,x)")
+    plt.colorbar(label=r"Δw = w(T_{i+1},x) - w(T_i,x)")
     plt.yticks(
         np.arange(len(surface.smiles) - 1),
         [

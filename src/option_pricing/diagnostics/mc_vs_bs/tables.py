@@ -56,7 +56,7 @@ def _get_q_compat(p: Any) -> float:
     """Best-effort dividend yield extraction for legacy demo tables."""
     if hasattr(p, "q"):
         try:
-            return _to_float(p.q, float("nan"))
+            return _to_float(p.market.dividend_yield, float("nan"))
         except Exception:
             pass
     m = getattr(p, "market", None)

@@ -34,8 +34,8 @@ def test_binomial_put_call_parity_approximately(make_inputs):
     p_put = make_inputs(
         S=p_call.S,
         K=p_call.K,
-        r=p_call.r,
-        q=p_call.q,
+        r=p_call.market.rate,
+        q=p_call.market.dividend_yield,
         sigma=p_call.sigma,
         T=p_call.T,
         t=p_call.t,
@@ -47,8 +47,8 @@ def test_binomial_put_call_parity_approximately(make_inputs):
     P = float(binom_price_put(p_put, n_steps=n_steps))
 
     tau = p_call.tau
-    df_r = math.exp(-p_call.r * tau)
-    df_q = math.exp(-p_call.q * tau)
+    df_r = math.exp(-p_call.market.rate * tau)
+    df_q = math.exp(-p_call.market.dividend_yield * tau)
     rhs = p_call.S * df_q - p_call.K * df_r
 
     assert abs((C - P) - rhs) <= 5e-3
