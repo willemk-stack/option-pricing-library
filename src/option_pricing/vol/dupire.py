@@ -7,6 +7,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..market.curves import PricingContext
+from ..numerics.fd.diff import diff1_nonuniform, diff2_nonuniform
 from ..types import MarketData
 
 FloatArray = NDArray[np.float64]
@@ -21,47 +22,6 @@ class LocalVolResult:
 
 def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
     return market if isinstance(market, PricingContext) else market.to_context()
-
-
-def _fd_weights_3pt(
-    x0: float, x1: float, x2: float, x_eval: float, deriv: int
-) -> tuple[float, float, float]:
-    """
-    Quadratic Lagrange 3-point finite-difference weights for derivative at x_eval
-    using points x0, x1, x2.
-    deriv: 1 or 2
-    """
-    if deriv == 1:
-        w0 = (2.0 * x_eval - x1 - x2) / ((x0 - x1) * (x0 - x2))
-        w1 = (2.0 * x_eval - x0 - x2) / ((x1 - x0) * (x1 - x2))
-        w2 = (2.0 * x_eval - x0 - x1) / ((x2 - x0) * (x2 - x1))
-        return w0, w1, w2
-    if deriv == 2:
-        w0 = 2.0 / ((x0 - x1) * (x0 - x2))
-        w1 = 2.0 / ((x1 - x0) * (x1 - x2))
-        w2 = 2.0 / ((x2 - x0) * (x2 - x1))
-        return w0, w1, w2
-    raise ValueError("deriv must be 1 or 2")
-
-
-def _weights_first_derivative_nonuniform(
-    h_m: FloatArray, h_p: FloatArray
-) -> tuple[FloatArray, FloatArray, FloatArray]:
-    """Interior 3-point weights for first derivative on non-uniform grid."""
-    beta_m = -h_p / (h_m * (h_m + h_p))
-    beta = (h_p - h_m) / (h_m * h_p)
-    beta_p = h_m / (h_p * (h_m + h_p))
-    return beta_m, beta, beta_p
-
-
-def _weights_second_derivative_nonuniform(
-    h_m: FloatArray, h_p: FloatArray
-) -> tuple[FloatArray, FloatArray, FloatArray]:
-    """Interior 3-point weights for second derivative on non-uniform grid."""
-    alpha_m = 2.0 / (h_m * (h_m + h_p))
-    alpha = -2.0 / (h_m * h_p)
-    alpha_p = 2.0 / (h_p * (h_m + h_p))
-    return alpha_m, alpha, alpha_p
 
 
 def _fdm_comp(
@@ -95,53 +55,12 @@ def _fdm_comp(
     if np.any(K <= 0):
         raise ValueError("strikes must be > 0.")
 
-    C_T = np.empty_like(prices)
-    C_K = np.empty_like(prices)
-    C_KK = np.empty_like(prices)
-
     # ---- C_T along tau (axis 0) ----
-    h_m_T = T[1:-1] - T[:-2]
-    h_p_T = T[2:] - T[1:-1]
-    beta_m, beta, beta_p = _weights_first_derivative_nonuniform(h_m_T, h_p_T)
-
-    beta_m = beta_m[:, None]
-    beta = beta[:, None]
-    beta_p = beta_p[:, None]
-    C_T[1:-1, :] = (
-        beta_m * prices[:-2, :] + beta * prices[1:-1, :] + beta_p * prices[2:, :]
-    )
-
-    w0, w1, w2 = _fd_weights_3pt(T[0], T[1], T[2], T[0], deriv=1)
-    C_T[0, :] = w0 * prices[0, :] + w1 * prices[1, :] + w2 * prices[2, :]
-
-    w0, w1, w2 = _fd_weights_3pt(T[-3], T[-2], T[-1], T[-1], deriv=1)
-    C_T[-1, :] = w0 * prices[-3, :] + w1 * prices[-2, :] + w2 * prices[-1, :]
+    C_T = diff1_nonuniform(y=prices, x=taus, axis=0)
 
     # ---- along K (axis 1) ----
-    h_m_K = K[1:-1] - K[:-2]
-    h_p_K = K[2:] - K[1:-1]
-
-    gamma_m, gamma, gamma_p = _weights_first_derivative_nonuniform(h_m_K, h_p_K)
-    C_K[:, 1:-1] = (
-        gamma_m * prices[:, :-2] + gamma * prices[:, 1:-1] + gamma_p * prices[:, 2:]
-    )
-
-    w0, w1, w2 = _fd_weights_3pt(K[0], K[1], K[2], K[0], deriv=1)
-    C_K[:, 0] = w0 * prices[:, 0] + w1 * prices[:, 1] + w2 * prices[:, 2]
-
-    w0, w1, w2 = _fd_weights_3pt(K[-3], K[-2], K[-1], K[-1], deriv=1)
-    C_K[:, -1] = w0 * prices[:, -3] + w1 * prices[:, -2] + w2 * prices[:, -1]
-
-    alpha_m, alpha, alpha_p = _weights_second_derivative_nonuniform(h_m_K, h_p_K)
-    C_KK[:, 1:-1] = (
-        alpha_m * prices[:, :-2] + alpha * prices[:, 1:-1] + alpha_p * prices[:, 2:]
-    )
-
-    w0, w1, w2 = _fd_weights_3pt(K[0], K[1], K[2], K[0], deriv=2)
-    C_KK[:, 0] = w0 * prices[:, 0] + w1 * prices[:, 1] + w2 * prices[:, 2]
-
-    w0, w1, w2 = _fd_weights_3pt(K[-3], K[-2], K[-1], K[-1], deriv=2)
-    C_KK[:, -1] = w0 * prices[:, -3] + w1 * prices[:, -2] + w2 * prices[:, -1]
+    C_K = diff1_nonuniform(y=prices, x=strikes, axis=1)
+    C_KK = diff2_nonuniform(y=prices, x=strikes, axis=1)
 
     return C_T, C_K, C_KK
 
@@ -180,51 +99,12 @@ def _fdm_comp_logk(
         raise ValueError("taus and strikes must be strictly increasing.")
 
     # ---- time derivative same as in _fdm_comp ----
-    C_T = np.empty_like(prices)
-    h_m_T = T[1:-1] - T[:-2]
-    h_p_T = T[2:] - T[1:-1]
-    beta_m, beta, beta_p = _weights_first_derivative_nonuniform(h_m_T, h_p_T)
-    beta_m = beta_m[:, None]
-    beta = beta[:, None]
-    beta_p = beta_p[:, None]
-    C_T[1:-1, :] = (
-        beta_m * prices[:-2, :] + beta * prices[1:-1, :] + beta_p * prices[2:, :]
-    )
+    # ---- C_T along tau (axis 0) ----
+    C_T = diff1_nonuniform(y=prices, x=taus, axis=0)
 
-    w0, w1, w2 = _fd_weights_3pt(T[0], T[1], T[2], T[0], deriv=1)
-    C_T[0, :] = w0 * prices[0, :] + w1 * prices[1, :] + w2 * prices[2, :]
-
-    w0, w1, w2 = _fd_weights_3pt(T[-3], T[-2], T[-1], T[-1], deriv=1)
-    C_T[-1, :] = w0 * prices[-3, :] + w1 * prices[-2, :] + w2 * prices[-1, :]
-
-    # ---- strike derivatives along x=logK ----
-    C_x = np.empty_like(prices)
-    C_xx = np.empty_like(prices)
-
-    h_m_x = x[1:-1] - x[:-2]
-    h_p_x = x[2:] - x[1:-1]
-
-    gamma_m, gamma, gamma_p = _weights_first_derivative_nonuniform(h_m_x, h_p_x)
-    C_x[:, 1:-1] = (
-        gamma_m * prices[:, :-2] + gamma * prices[:, 1:-1] + gamma_p * prices[:, 2:]
-    )
-
-    w0, w1, w2 = _fd_weights_3pt(x[0], x[1], x[2], x[0], deriv=1)
-    C_x[:, 0] = w0 * prices[:, 0] + w1 * prices[:, 1] + w2 * prices[:, 2]
-
-    w0, w1, w2 = _fd_weights_3pt(x[-3], x[-2], x[-1], x[-1], deriv=1)
-    C_x[:, -1] = w0 * prices[:, -3] + w1 * prices[:, -2] + w2 * prices[:, -1]
-
-    alpha_m, alpha, alpha_p = _weights_second_derivative_nonuniform(h_m_x, h_p_x)
-    C_xx[:, 1:-1] = (
-        alpha_m * prices[:, :-2] + alpha * prices[:, 1:-1] + alpha_p * prices[:, 2:]
-    )
-
-    w0, w1, w2 = _fd_weights_3pt(x[0], x[1], x[2], x[0], deriv=2)
-    C_xx[:, 0] = w0 * prices[:, 0] + w1 * prices[:, 1] + w2 * prices[:, 2]
-
-    w0, w1, w2 = _fd_weights_3pt(x[-3], x[-2], x[-1], x[-1], deriv=2)
-    C_xx[:, -1] = w0 * prices[:, -3] + w1 * prices[:, -2] + w2 * prices[:, -1]
+    # ---- along K (axis 1) ----
+    C_x = diff1_nonuniform(y=prices, x=x, axis=1)
+    C_xx = diff2_nonuniform(y=prices, x=x, axis=1)
 
     return C_T, C_x, C_xx
 

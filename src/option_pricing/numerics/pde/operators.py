@@ -10,6 +10,12 @@ from numpy.typing import NDArray
 
 from option_pricing.typing import ScalarFn
 
+from ...numerics.fd.stencils import (
+    d1_backward_coeffs,
+    d1_central_nonuniform_coeffs,
+    d1_forward_coeffs,
+    d2_central_nonuniform_coeffs,
+)
 from ..grids import Grid
 from ..tridiag import Tridiag
 from .boundary import RobinBC, elim_left_second_order, elim_right_second_order
@@ -73,68 +79,44 @@ def _eval_xt(fn: ScalarXT, x: NDArray[np.floating], t: float) -> NDArray[np.floa
     return cast(NDArray[np.floating], out)
 
 
-def _first_derivative_coeffs(
-    hm: NDArray[np.floating],
-    hp: NDArray[np.floating],
-    b: NDArray[np.floating],
-    scheme: AdvectionScheme,
-) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
-    """Return (dl, dd, du) for the u_x stencil at interior points.
-
-    hm = x_i - x_{i-1}, hp = x_{i+1} - x_i
-
-    CENTRAL:
-      u_x(x_i) ≈ dl*u_{i-1} + dd*u_i + du*u_{i+1}
-      (2nd order on nonuniform grids).
-
-    UPWIND:
-      if b_i >= 0: backward difference
-      if b_i <  0: forward difference
+def _first_derivative_coeffs(hm, hp, b, scheme):
     """
-
+    Computes first derivative coefficients using Upwind or Central schemes.
+    """
     if scheme == AdvectionScheme.CENTRAL:
-        denom = hm * hp * (hm + hp)
-        dl = -hp * hp / denom
-        dd = (hp * hp - hm * hm) / denom
-        du = hm * hm / denom
-        return dl, dd, du
+        return d1_central_nonuniform_coeffs(hm, hp)
 
-    # Upwind (1st order)
+    # Initialize tridiagonal components
     dl = np.zeros_like(hm, dtype=float)
     dd = np.zeros_like(hm, dtype=float)
     du = np.zeros_like(hm, dtype=float)
 
+    # Masks for flow direction
     pos = b >= 0.0
     neg = ~pos
 
-    # backward: (u_i - u_{i-1}) / hm
-    dl[pos] = -1.0 / hm[pos]
-    dd[pos] = 1.0 / hm[pos]
+    # 1. Handle Backward coefficients (where b >= 0)
+    # We only compute these for the indices where 'pos' is True
+    bw_l, bw_d, bw_u = d1_backward_coeffs(hm[pos])
+    dl[pos] = bw_l
+    dd[pos] = bw_d
+    du[pos] = bw_u
 
-    # forward: (u_{i+1} - u_i) / hp
-    dd[neg] = -1.0 / hp[neg]
-    du[neg] = 1.0 / hp[neg]
+    # 2. Handle Forward coefficients (where b < 0)
+    # We only compute these for the indices where 'neg' is True
+    fw_l, fw_d, fw_u = d1_forward_coeffs(hp[neg])
+    dl[neg] = fw_l
+    dd[neg] = fw_d
+    du[neg] = fw_u
 
-    return (
-        cast(NDArray[np.floating], dl),
-        cast(NDArray[np.floating], dd),
-        cast(NDArray[np.floating], du),
-    )
+    return dl, dd, du
 
 
-def _second_derivative_coeffs(
-    hm: NDArray[np.floating], hp: NDArray[np.floating]
-) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.floating]]:
-    """Return (dl, dd, du) for the u_xx stencil at interior points (2nd order)."""
-
-    dl = 2.0 / (hm * (hm + hp))
-    dd = -2.0 / (hm * hp)
-    du = 2.0 / (hp * (hm + hp))
-    return (
-        cast(NDArray[np.floating], dl),
-        cast(NDArray[np.floating], dd),
-        cast(NDArray[np.floating], du),
-    )
+def _second_derivative_coeffs(hm, hp):
+    """
+    Wrapper for _d2_central_nonuniform_coeffs
+    """
+    return d2_central_nonuniform_coeffs(hm, hp)
 
 
 @dataclass(frozen=True, slots=True)
