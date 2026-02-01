@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
+from typing import Literal, SupportsFloat, SupportsInt, TypedDict, cast, overload
 
 from option_pricing import PricingInputs, bs_price
 from option_pricing.numerics.pde import AdvectionScheme, PDESolution1D
@@ -33,6 +34,53 @@ class PDEvsBSRun:
     abs_err: float
     rel_err: float
     runtime_ms: float
+
+
+class _EngineRunOnceRec(TypedDict):
+    method: str
+    coord: str
+    spacing: str
+    advection: str
+    Nx: SupportsInt
+    Nt: SupportsInt
+    x0: SupportsFloat
+    analytic: SupportsFloat
+    pde: SupportsFloat
+    abs_err: SupportsFloat
+    rel_err: SupportsFloat
+    runtime_ms: SupportsFloat
+
+
+@overload
+def run_once(
+    p: PricingInputs,
+    *,
+    domain_cfg: BSDomainConfig,
+    Nx: int = 401,
+    Nt: int = 401,
+    coord: Coord | str = Coord.LOG_S,
+    method: str = "cn",
+    advection: str | AdvectionScheme = "central",
+    spacing: str = "clustered",
+    bs_price_fn: Callable[[PricingInputs], float] | None = None,
+    return_solution: Literal[False] = False,
+) -> PDEvsBSRun: ...
+
+
+@overload
+def run_once(
+    p: PricingInputs,
+    *,
+    domain_cfg: BSDomainConfig,
+    Nx: int = 401,
+    Nt: int = 401,
+    coord: Coord | str = Coord.LOG_S,
+    method: str = "cn",
+    advection: str | AdvectionScheme = "central",
+    spacing: str = "clustered",
+    bs_price_fn: Callable[[PricingInputs], float] | None = None,
+    return_solution: Literal[True],
+) -> tuple[PDEvsBSRun, PDESolution1D]: ...
 
 
 def run_once(
@@ -72,27 +120,30 @@ def run_once(
     )
 
     rec: dict[str, object]
-    sol: PDESolution1D | None = None
+    sol: PDESolution1D | None
     if return_solution:
-        rec, sol = out  # type: ignore[misc]
+        rec, sol = cast(tuple[dict[str, object], PDESolution1D], out)
     else:
-        rec = out  # type: ignore[assignment]
+        rec = cast(dict[str, object], out)
+        sol = None
 
-    adv = AdvectionScheme(str(rec["advection"]))
+    r = cast(_EngineRunOnceRec, rec)
+
+    adv = AdvectionScheme(str(r["advection"]))
 
     res = PDEvsBSRun(
-        method=str(rec["method"]),
-        coord=str(rec["coord"]),
-        spacing=str(rec["spacing"]),
+        method=str(r["method"]),
+        coord=str(r["coord"]),
+        spacing=str(r["spacing"]),
         advection=adv,
-        Nx=int(rec["Nx"]),
-        Nt=int(rec["Nt"]),
-        x0=float(rec["x0"]),
-        bs=float(rec["analytic"]),
-        pde=float(rec["pde"]),
-        abs_err=float(rec["abs_err"]),
-        rel_err=float(rec["rel_err"]),
-        runtime_ms=float(rec["runtime_ms"]),
+        Nx=int(r["Nx"]),
+        Nt=int(r["Nt"]),
+        x0=float(r["x0"]),
+        bs=float(r["analytic"]),
+        pde=float(r["pde"]),
+        abs_err=float(r["abs_err"]),
+        rel_err=float(r["rel_err"]),
+        runtime_ms=float(r["runtime_ms"]),
     )
 
     if return_solution:
