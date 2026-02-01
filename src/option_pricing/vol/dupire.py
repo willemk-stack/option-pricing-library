@@ -18,6 +18,7 @@ class LocalVolResult:
     sigma: FloatArray  # (nT, nK)
     local_var: FloatArray  # (nT, nK)
     invalid: NDArray[np.bool_]  # (nT, nK)
+    invalid_count: NDArray
 
 
 def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
@@ -231,7 +232,11 @@ def _local_vol_from_call_grid_ctx(
     with np.errstate(invalid="ignore"):
         sigma = np.sqrt(local_var)
 
-    return LocalVolResult(sigma=sigma, local_var=local_var, invalid=invalid)
+    invalid_count = np.sum(invalid)
+
+    return LocalVolResult(
+        sigma=sigma, local_var=local_var, invalid=invalid, invalid_count=invalid_count
+    )
 
 
 def local_vol_from_call_grid(
