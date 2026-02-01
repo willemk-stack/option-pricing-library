@@ -29,6 +29,27 @@ from .stencils import (
 )
 
 
+def _validate_inputs(y: NDArray, x: NDArray, axis: int) -> int:
+    if x.ndim != 1:
+        raise ValueError("x must be 1D.")
+    if x.size < 3:
+        raise ValueError("x must have at least 3 points.")
+    dx = np.diff(x)
+    if np.any(dx <= 0):
+        raise ValueError("x must be strictly increasing.")
+
+    # Normalize axis
+    if axis < 0:
+        axis = y.ndim + axis
+    if axis < 0 or axis >= y.ndim:
+        raise ValueError(f"axis {axis} out of bounds for y.ndim={y.ndim}.")
+
+    if y.shape[axis] != x.size:
+        raise ValueError(f"y.shape[{axis}] must match len(x) ({x.size}).")
+
+    return axis
+
+
 def diff1_nonuniform(y: NDArray, x: NDArray, axis: int = -1) -> NDArray:
     """Compute the first derivative dy/dx on a nonuniform 1D grid.
 
@@ -67,39 +88,28 @@ def diff1_nonuniform(y: NDArray, x: NDArray, axis: int = -1) -> NDArray:
     ValueError
         If `x` is not 1D, not strictly increasing, or if `y.shape[axis] != len(x)`.
     """
-    # 1. Validation
-    if x.ndim != 1:
-        raise ValueError("x must be 1D.")
-    if y.shape[axis] != len(x):
-        raise ValueError(f"y.shape[{axis}] must match len(x) ({len(x)}).")
+    axis = _validate_inputs(y, x, axis)
 
-    # 2. Move target axis to the last position for easy slicing
-    y_moved = np.moveaxis(y, axis, -1)
-    y_x = np.empty_like(y_moved)
-    y_x = np.empty_like(y[axis])
+    y_moved = np.moveaxis(y, axis, -1)  # (..., N)
+    out = np.empty_like(y_moved, dtype=float)
 
-    # Grid spacings
     hm = x[1:-1] - x[:-2]
     hp = x[2:] - x[1:-1]
-    # 3. Interior Points
-    dl, dd, du = d1_central_nonuniform_coeffs(hm=hm, hp=hp)
 
-    # dl, dd, du are 1D; y_moved is (..., N)
-    # Using [..., 1:-1] ensures we target the last axis regardless of batch size
-    y_x[..., 1:-1] = (
+    # interior: central 3pt, 2nd order on nonuniform grids
+    dl, dd, du = d1_central_nonuniform_coeffs(hm, hp)
+    out[..., 1:-1] = (
         dl * y_moved[..., :-2] + dd * y_moved[..., 1:-1] + du * y_moved[..., 2:]
     )
 
-    # 4. Boundary Points (Left)
-    l0, l1, l2 = lagrange_3pt_weights(x[0], x[1], x[2], x[0], deriv=1)
-    y_x[..., 0] = l0 * y_moved[..., 0] + l1 * y_moved[..., 1] + l2 * y_moved[..., 2]
+    # boundaries: one-sided 3pt Lagrange at x[0] and x[-1]
+    w0, w1, w2 = lagrange_3pt_weights(x[0], x[1], x[2], x[0], deriv=1)
+    out[..., 0] = w0 * y_moved[..., 0] + w1 * y_moved[..., 1] + w2 * y_moved[..., 2]
 
-    # 5. Boundary Points (Right)
-    r0, r1, r2 = lagrange_3pt_weights(x[-3], x[-2], x[-1], x[-1], deriv=1)
-    y_x[..., -1] = r0 * y_moved[..., -3] + r1 * y_moved[..., -2] + r2 * y_moved[..., -1]
+    w0, w1, w2 = lagrange_3pt_weights(x[-3], x[-2], x[-1], x[-1], deriv=1)
+    out[..., -1] = w0 * y_moved[..., -3] + w1 * y_moved[..., -2] + w2 * y_moved[..., -1]
 
-    # 6. Move axis back to original position
-    return np.moveaxis(y_x, -1, axis)
+    return np.moveaxis(out, -1, axis)
 
 
 def diff2_nonuniform(y: NDArray, x: NDArray, axis: int = -1) -> NDArray:
@@ -140,36 +150,25 @@ def diff2_nonuniform(y: NDArray, x: NDArray, axis: int = -1) -> NDArray:
     ValueError
         If `x` is not 1D, not strictly increasing, or if `y.shape[axis] != len(x)`.
     """
-    # 1. Validation
-    if x.ndim != 1:
-        raise ValueError("x must be 1D.")
-    if y.shape[axis] != len(x):
-        raise ValueError(f"y.shape[{axis}] must match len(x) ({len(x)}).")
+    axis = _validate_inputs(y, x, axis)
 
-    # 2. Move target axis to the last position for easy slicing
-    y_moved = np.moveaxis(y, axis, -1)
-    y_x = np.empty_like(y_moved)
-    y_x = np.empty_like(y[axis])
+    y_moved = np.moveaxis(y, axis, -1)  # (..., N)
+    out = np.empty_like(y_moved, dtype=float)
 
-    # Grid spacings
     hm = x[1:-1] - x[:-2]
     hp = x[2:] - x[1:-1]
-    # 3. Interior Points
-    dl, dd, du = d2_central_nonuniform_coeffs(hm=hm, hp=hp)
 
-    # dl, dd, du are 1D; y_moved is (..., N)
-    # Using [..., 1:-1] ensures we target the last axis regardless of batch size
-    y_x[..., 1:-1] = (
+    # interior: central 3pt, 2nd order on nonuniform grids
+    dl, dd, du = d2_central_nonuniform_coeffs(hm, hp)
+    out[..., 1:-1] = (
         dl * y_moved[..., :-2] + dd * y_moved[..., 1:-1] + du * y_moved[..., 2:]
     )
 
-    # 4. Boundary Points (Left)
-    l0, l1, l2 = lagrange_3pt_weights(x[0], x[1], x[2], x[0], deriv=2)
-    y_x[..., 0] = l0 * y_moved[..., 0] + l1 * y_moved[..., 1] + l2 * y_moved[..., 2]
+    # boundaries: one-sided 3pt Lagrange at x[0] and x[-1]
+    w0, w1, w2 = lagrange_3pt_weights(x[0], x[1], x[2], x[0], deriv=2)
+    out[..., 0] = w0 * y_moved[..., 0] + w1 * y_moved[..., 1] + w2 * y_moved[..., 2]
 
-    # 5. Boundary Points (Right)
-    r0, r1, r2 = lagrange_3pt_weights(x[-3], x[-2], x[-1], x[-1], deriv=2)
-    y_x[..., -1] = r0 * y_moved[..., -3] + r1 * y_moved[..., -2] + r2 * y_moved[..., -1]
+    w0, w1, w2 = lagrange_3pt_weights(x[-3], x[-2], x[-1], x[-1], deriv=2)
+    out[..., -1] = w0 * y_moved[..., -3] + w1 * y_moved[..., -2] + w2 * y_moved[..., -1]
 
-    # 6. Move axis back to original position
-    return np.moveaxis(y_x, -1, axis)
+    return np.moveaxis(out, -1, axis)
