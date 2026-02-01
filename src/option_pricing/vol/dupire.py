@@ -18,7 +18,7 @@ class LocalVolResult:
     sigma: FloatArray  # (nT, nK)
     local_var: FloatArray  # (nT, nK)
     invalid: NDArray[np.bool_]  # (nT, nK)
-    invalid_count: NDArray
+    invalid_count: int
 
 
 def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
