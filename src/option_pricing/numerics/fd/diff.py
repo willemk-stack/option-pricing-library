@@ -27,27 +27,7 @@ from .stencils import (
     d2_central_nonuniform_coeffs,
     lagrange_3pt_weights,
 )
-
-
-def _validate_inputs(y: NDArray, x: NDArray, axis: int) -> int:
-    if x.ndim != 1:
-        raise ValueError("x must be 1D.")
-    if x.size < 3:
-        raise ValueError("x must have at least 3 points.")
-    dx = np.diff(x)
-    if np.any(dx <= 0):
-        raise ValueError("x must be strictly increasing.")
-
-    # Normalize axis
-    if axis < 0:
-        axis = y.ndim + axis
-    if axis < 0 or axis >= y.ndim:
-        raise ValueError(f"axis {axis} out of bounds for y.ndim={y.ndim}.")
-
-    if y.shape[axis] != x.size:
-        raise ValueError(f"y.shape[{axis}] must match len(x) ({x.size}).")
-
-    return axis
+from .validate import validate_inputs
 
 
 def diff1_nonuniform(y: NDArray, x: NDArray, axis: int = -1) -> NDArray:
@@ -88,7 +68,7 @@ def diff1_nonuniform(y: NDArray, x: NDArray, axis: int = -1) -> NDArray:
     ValueError
         If `x` is not 1D, not strictly increasing, or if `y.shape[axis] != len(x)`.
     """
-    axis = _validate_inputs(y, x, axis)
+    axis = validate_inputs(y, x, axis)
 
     y_moved = np.moveaxis(y, axis, -1)  # (..., N)
     out = np.empty_like(y_moved, dtype=float)
@@ -150,7 +130,7 @@ def diff2_nonuniform(y: NDArray, x: NDArray, axis: int = -1) -> NDArray:
     ValueError
         If `x` is not 1D, not strictly increasing, or if `y.shape[axis] != len(x)`.
     """
-    axis = _validate_inputs(y, x, axis)
+    axis = validate_inputs(y, x, axis)
 
     y_moved = np.moveaxis(y, axis, -1)  # (..., N)
     out = np.empty_like(y_moved, dtype=float)
