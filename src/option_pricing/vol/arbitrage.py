@@ -7,7 +7,8 @@ import numpy as np
 from option_pricing.typing import ScalarFn
 
 from ..models.black_scholes import bs as bs_model
-from .surface import Smile, VolSurface
+from .surface import VolSurface
+from .types import GridSmileSlice, SmileSlice
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,8 +48,19 @@ class SurfaceNoArbReport:
     message: str
 
 
+def _smile_grid(smile: SmileSlice, *, n: int = 81) -> tuple[np.ndarray, np.ndarray]:
+    if isinstance(smile, GridSmileSlice):
+        x = np.asarray(smile.x, dtype=np.float64)
+        w = np.asarray(smile.w, dtype=np.float64)
+        return x, w
+
+    x = np.linspace(float(smile.x_min), float(smile.x_max), int(n), dtype=np.float64)
+    w = np.asarray(smile.w_at(x), dtype=np.float64)
+    return x, w
+
+
 def check_smile_price_monotonicity(
-    smile: Smile,
+    smile: SmileSlice,
     *,
     forward: ScalarFn,
     df: ScalarFn,
@@ -76,8 +88,7 @@ def check_smile_price_monotonicity(
         raise ValueError("df(T) must be > 0")
 
     # reconstruct strike grid and vols
-    x = np.asarray(smile.x, dtype=np.float64)
-    w = np.asarray(smile.w, dtype=np.float64)
+    x, w = _smile_grid(smile)
 
     K = F * np.exp(x)
     iv = np.sqrt(np.maximum(w / np.float64(T), np.float64(0.0)))
@@ -107,7 +118,7 @@ def check_smile_price_monotonicity(
 
 
 def check_smile_call_convexity(
-    smile: Smile,
+    smile: SmileSlice,
     *,
     forward: ScalarFn,
     df: ScalarFn,
@@ -135,8 +146,7 @@ def check_smile_call_convexity(
     if dfT <= 0.0:
         raise ValueError("df(T) must be > 0")
 
-    x = np.asarray(smile.x, dtype=np.float64)
-    w = np.asarray(smile.w, dtype=np.float64)
+    x, w = _smile_grid(smile)
 
     if x.size < 3:
         return ConvexityReport(
@@ -219,8 +229,8 @@ def _check_calendar_total_variance(
 
     if x_grid is None:
         # overlap in x among all smiles
-        x_lo = max(float(s.x[0]) for s in smiles)
-        x_hi = min(float(s.x[-1]) for s in smiles)
+        x_lo = max(float(s.x_min) for s in smiles)
+        x_hi = min(float(s.x_max) for s in smiles)
         if not (x_lo < x_hi):
             return CalendarVarianceReport(
                 performed=False,

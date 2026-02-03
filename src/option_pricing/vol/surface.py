@@ -8,6 +8,7 @@ import numpy as np
 from option_pricing.typing import ArrayLike, FloatArray, ScalarFn
 
 from ..numerics.interpolation import FritschCarlson
+from .types import SmileSlice
 
 
 def _is_monotone(y: np.ndarray) -> bool:
@@ -139,7 +140,7 @@ class Smile:
         x = ln(K / F(T)).
 
     Interpolation:
-      - Uses Fritsch–Carlson monotone cubic interpolation when `w(x)` is monotone
+      - Uses Fritsch-Carlson monotone cubic interpolation when `w(x)` is monotone
         or can be split into two monotone pieces (common U-shape).
       - Falls back to linear interpolation with flat extrapolation otherwise.
     """
@@ -172,19 +173,27 @@ class Smile:
         out = np.sqrt(np.maximum(wq / np.float64(self.T), np.float64(0.0)))
         return np.asarray(out, dtype=np.float64)
 
+    @property
+    def x_min(self) -> float:
+        return float(self.x[0])
+
+    @property
+    def x_max(self) -> float:
+        return float(self.x[-1])
+
 
 @dataclass(frozen=True, slots=True)
 class VolSurface:
     """Total-variance volatility surface over expiry.
 
     Within each expiry slice (Smile), total variance is interpolated using:
-      - Fritsch–Carlson on monotone (or split-monotone) data, else linear fallback.
+      - Fritsch-Carlson on monotone (or split-monotone) data, else linear fallback.
 
     Across expiry, total variance is linearly interpolated in time between smiles.
     """
 
     expiries: FloatArray
-    smiles: tuple[Smile, ...]
+    smiles: tuple[SmileSlice, ...]
     forward: ScalarFn  # forward(T) -> float
 
     @classmethod
@@ -202,7 +211,7 @@ class VolSurface:
             buckets.setdefault(T_key, []).append((float(K_raw), float(iv_raw)))
 
         expiries = np.asarray(sorted(buckets.keys()), dtype=np.float64)
-        smiles: list[Smile] = []
+        smiles: list[SmileSlice] = []
 
         for T_np in expiries:
             pts = buckets[float(T_np)]
