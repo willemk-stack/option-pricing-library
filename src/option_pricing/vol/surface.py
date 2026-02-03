@@ -1,11 +1,129 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
 
 import numpy as np
 
 from option_pricing.typing import ArrayLike, FloatArray, ScalarFn
+
+from ..numerics.interpolation import FritschCarlson
+
+
+def _is_monotone(y: np.ndarray) -> bool:
+    dy = np.diff(y)
+    return bool(np.all(dy >= 0.0) or np.all(dy <= 0.0))
+
+
+def _u_split_index(w: np.ndarray, *, eps: float | None = None) -> int | None:
+    """Heuristic U-shape split index.
+
+    Returns k such that left piece is w[:k+1], right piece is w[k:].
+    Uses a tolerance to reduce sensitivity to small numerical noise / plateaus.
+    """
+    if w.size < 3:
+        return None
+
+    dw = np.diff(w)
+
+    if eps is None:
+        scale = float(max(1.0, np.max(np.abs(w))))
+        eps = 1e-12 * scale
+
+    neg = dw < -eps
+    pos = dw > eps
+    if not np.any(neg) or not np.any(pos):
+        return None
+
+    # first index where slope becomes meaningfully positive
+    k = int(np.argmax(pos)) + 1
+    if 0 < k < w.size - 1:
+        return k
+    return None
+
+
+def _linear_interp_factory(
+    x: np.ndarray, y: np.ndarray
+) -> Callable[[np.ndarray], np.ndarray]:
+    """1D linear interpolation with flat extrapolation."""
+    y0 = float(y[0])
+    y1 = float(y[-1])
+
+    def plin(xq: np.ndarray) -> np.ndarray:
+        xq_in = np.asarray(xq, dtype=np.float64)
+        out = np.interp(xq_in, x, y, left=y0, right=y1)
+        return np.asarray(out, dtype=np.float64)
+
+    return plin
+
+
+def _stitch_two(
+    xk: float,
+    left_interp: Callable[[np.ndarray], np.ndarray],
+    right_interp: Callable[[np.ndarray], np.ndarray],
+) -> Callable[[np.ndarray], np.ndarray]:
+    """Stitch two array-capable interpolators at xk, handling scalar xq safely."""
+
+    def pw(xq: np.ndarray) -> np.ndarray:
+        xq_in = np.asarray(xq, dtype=np.float64)
+        xq_1d = np.atleast_1d(xq_in)
+
+        out = np.empty_like(xq_1d, dtype=np.float64)
+        left = xq_1d <= xk
+        if np.any(left):
+            out[left] = left_interp(xq_1d[left])
+        if np.any(~left):
+            out[~left] = right_interp(xq_1d[~left])
+
+        if xq_in.ndim == 0:
+            return np.asarray(out[0], dtype=np.float64)
+        return out.reshape(xq_in.shape)
+
+    return pw
+
+
+def _make_w_interpolator(
+    x: np.ndarray, w: np.ndarray
+) -> Callable[[np.ndarray], np.ndarray]:
+    """Pick an interpolator for total variance w(x).
+
+    Priority:
+      1) If w is globally monotone: FC on full grid.
+      2) Else try split into two monotone pieces (U-shape):
+         - robust sign-change split
+         - fallback: split at argmin
+      3) Else linear with flat extrapolation.
+    """
+    # Fail-safe: if non-finite, fallback to linear
+    if not (np.all(np.isfinite(x)) and np.all(np.isfinite(w))):
+        return _linear_interp_factory(x, w)
+
+    # Case 1: monotone overall -> single FC
+    if _is_monotone(w):
+        return FritschCarlson(x, w)
+
+    # Case 2a: robust U-shape split
+    k = _u_split_index(w)
+    if k is not None:
+        xL, wL = x[: k + 1], w[: k + 1]
+        xR, wR = x[k:], w[k:]
+        if _is_monotone(wL) and _is_monotone(wR):
+            pL = FritschCarlson(xL, wL)
+            pR = FritschCarlson(xR, wR)
+            return _stitch_two(float(x[k]), pL, pR)
+
+    # Case 2b: fallback split at global minimum
+    k2 = int(np.argmin(w))
+    if 0 < k2 < len(w) - 1:
+        xL, wL = x[: k2 + 1], w[: k2 + 1]
+        xR, wR = x[k2:], w[k2:]
+        if _is_monotone(wL) and _is_monotone(wR):
+            pL = FritschCarlson(xL, wL)
+            pR = FritschCarlson(xR, wR)
+            return _stitch_two(float(x[k2]), pL, pR)
+
+    # Fallback: linear interp with flat extrapolation
+    return _linear_interp_factory(x, w)
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,84 +132,42 @@ class Smile:
 
     The smile is represented in terms of total variance:
 
-    ``w(x) = T * iv(x)^2``
+        w(x) = T * iv(x)^2
 
-    on a grid of log-moneyness values:
+    on a strictly increasing log-moneyness grid:
 
-    ``x = ln(K / F(T))``.
+        x = ln(K / F(T)).
 
-    Parameters
-    ----------
-    T : float
-        Expiry in years.
-    x : FloatArray
-        Strictly increasing log-moneyness grid ``ln(K/F(T))``.
-    w : FloatArray
-        Total variance values on the grid, ``w = T * iv^2``.
-
-    Notes
-    -----
-    Interpolation is performed in total variance space using 1D linear interpolation
-    with flat extrapolation beyond the endpoints.
+    Interpolation:
+      - Uses Fritsch–Carlson monotone cubic interpolation when `w(x)` is monotone
+        or can be split into two monotone pieces (common U-shape).
+      - Falls back to linear interpolation with flat extrapolation otherwise.
     """
 
-    T: float  # years
-    x: FloatArray  # log-moneyness grid: ln(K/F(T))
-    w: FloatArray  # total variance: T * iv^2
+    T: float
+    x: FloatArray
+    w: FloatArray
+    _w_interp: Callable[[np.ndarray], np.ndarray] = field(init=False, repr=False)
+
+    def __post_init__(self):
+        x = np.asarray(self.x, dtype=np.float64)
+        w = np.asarray(self.w, dtype=np.float64)
+
+        if x.shape != w.shape:
+            raise ValueError("Smile.x and Smile.w must have the same shape")
+        if x.size < 2:
+            raise ValueError("Smile requires at least 2 points")
+        if np.any(np.diff(x) <= 0.0):
+            raise ValueError("Smile.x must be strictly increasing")
+
+        object.__setattr__(self, "_w_interp", _make_w_interpolator(x, w))
 
     def w_at(self, xq: ArrayLike) -> FloatArray:
-        """Interpolate total variance at queried log-moneyness.
-
-        Parameters
-        ----------
-        xq : ArrayLike
-            Query point(s) in log-moneyness space. May be a scalar float or a NumPy
-            array of floats.
-
-        Returns
-        -------
-        FloatArray
-            Interpolated total variance values. If `xq` is scalar, a 0-d array is
-            returned; if `xq` is an array, the output matches its shape.
-
-        Notes
-        -----
-        Uses :func:`numpy.interp` with flat extrapolation:
-        values left/right of the grid are clamped to ``w[0]`` / ``w[-1]``.
-        """
         xq_arr = np.asarray(xq, dtype=np.float64)
-
-        # np.interp is often typed as returning Any -> wrap with np.asarray to satisfy mypy
-        out = np.interp(
-            xq_arr,
-            self.x,
-            self.w,
-            left=float(self.w[0]),
-            right=float(self.w[-1]),
-        )
+        out = self._w_interp(xq_arr)
         return np.asarray(out, dtype=np.float64)
 
     def iv_at(self, xq: ArrayLike) -> FloatArray:
-        """Interpolate implied volatility at queried log-moneyness.
-
-        Parameters
-        ----------
-        xq : ArrayLike
-            Query point(s) in log-moneyness space ``ln(K/F(T))``.
-
-        Returns
-        -------
-        FloatArray
-            Implied volatility values ``sqrt(max(w/T, 0))`` evaluated at `xq`.
-
-        Notes
-        -----
-        Implied volatility is computed from interpolated total variance as::
-
-            iv(x) = sqrt(max(w(x) / T, 0))
-
-        where the ``max`` guards against small negative values from interpolation.
-        """
         wq = self.w_at(xq)
         out = np.sqrt(np.maximum(wq / np.float64(self.T), np.float64(0.0)))
         return np.asarray(out, dtype=np.float64)
@@ -99,31 +175,12 @@ class Smile:
 
 @dataclass(frozen=True, slots=True)
 class VolSurface:
-    """Piecewise-linear total-variance volatility surface over expiry.
+    """Total-variance volatility surface over expiry.
 
-    The surface is defined by a collection of :class:`Smile` objects at discrete
-    expiries and a forward curve ``F(T)``. For a given expiry `T` and strike `K`,
-    the surface:
+    Within each expiry slice (Smile), total variance is interpolated using:
+      - Fritsch–Carlson on monotone (or split-monotone) data, else linear fallback.
 
-    1. Converts strike to log-moneyness ``x = ln(K / F(T))``.
-    2. Interpolates total variance ``w(x)`` within each bracketing smile.
-    3. Linearly interpolates total variance in time between expiries.
-    4. Converts back to implied volatility via ``iv = sqrt(max(w/T, 0))``.
-
-    Parameters
-    ----------
-    expiries : FloatArray
-        Sorted array of expiry times (years).
-    smiles : tuple[Smile, ...]
-        Smiles corresponding one-to-one with `expiries`.
-    forward : ScalarFn
-        Forward curve function. Must satisfy ``forward(T) > 0`` for all queried `T`.
-
-    Notes
-    -----
-    - Extrapolation in expiry is clamped: for `T` outside the known range, the
-      nearest smile is used (still evaluated at the query `x` for that `T`).
-    - Extrapolation in log-moneyness inside each smile is flat (endpoint clamping).
+    Across expiry, total variance is linearly interpolated in time between smiles.
     """
 
     expiries: FloatArray
@@ -138,47 +195,6 @@ class VolSurface:
         *,
         expiry_round_decimals: int = 10,
     ) -> VolSurface:
-        """Construct a surface from scattered (T, K, iv) points.
-
-        Points are bucketed by expiry (after rounding), then each bucket is converted
-        into a :class:`Smile` defined on a strike-sorted log-moneyness grid with
-        total variance values.
-
-        Parameters
-        ----------
-        rows : Iterable[tuple[float, float, float]]
-            Iterable of ``(T, K, iv)`` points where:
-
-            - `T` is expiry in years (or consistent units),
-            - `K` is strike (must be positive),
-            - `iv` is Black-Scholes implied volatility (non-negative recommended).
-
-        forward : ScalarFn
-            Forward curve function ``F(T)``. Must return strictly positive values
-            for the expiries present in `rows`.
-        expiry_round_decimals : int, default 10
-            Number of decimals used when bucketing expiries. Useful when input data
-            contains floating-point noise in `T`.
-
-        Returns
-        -------
-        VolSurface
-            Volatility surface built from the provided grid.
-
-        Raises
-        ------
-        ValueError
-            If any ``forward(T) <= 0`` for an expiry in the grid.
-        ValueError
-            If any strike ``K <= 0`` (log-moneyness undefined).
-        ValueError
-            If the resulting log-moneyness grid is not strictly increasing for an
-            expiry bucket (e.g., duplicate strikes that map to duplicate `x`).
-
-        Notes
-        -----
-        Total variance is computed as ``w = T * iv^2`` for each point.
-        """
         buckets: dict[float, list[tuple[float, float]]] = {}
 
         for T_raw, K_raw, iv_raw in rows:
@@ -197,64 +213,23 @@ class VolSurface:
 
             F = float(forward(float(T_np)))
             if F <= 0.0:
-                raise ValueError(
-                    f"forward(T) must be > 0, got {F} at T_np={float(T_np)}"
-                )
+                raise ValueError(f"forward(T) must be > 0, got {F} at T={float(T_np)}")
             if np.any(K <= 0.0):
-                raise ValueError(
-                    f"All strikes must be > 0 for log-moneyness at T={float(T_np)}"
-                )
+                raise ValueError(f"All strikes must be > 0 at T={float(T_np)}")
 
             x = np.log(K / np.float64(F)).astype(np.float64, copy=False)
             w = (np.float64(T_np) * (iv**2)).astype(np.float64, copy=False)
 
-            if np.any(np.diff(x) <= 0):
-                raise ValueError(
-                    f"x grid not strictly increasing at T_np={float(T_np)}"
-                )
+            if np.any(np.diff(x) <= 0.0):
+                raise ValueError(f"x grid not strictly increasing at T={float(T_np)}")
 
             smiles.append(Smile(T=float(T_np), x=x, w=w))
 
         return cls(expiries=expiries, smiles=tuple(smiles), forward=forward)
 
     def iv(self, K: ArrayLike, T: float) -> FloatArray:
-        """Evaluate implied volatility for strike(s) at a given expiry.
-
-        Parameters
-        ----------
-        K : ArrayLike
-            Strike(s) at which to evaluate volatility. May be a scalar float or an
-            array of floats. All strikes must be strictly positive.
-        T : float
-            Expiry at which to evaluate volatility. Must be strictly positive.
-
-        Returns
-        -------
-        FloatArray
-            Implied volatility at the requested strike(s) and expiry. If `K` is
-            scalar, a 0-d array is returned; otherwise the output shape matches `K`.
-
-        Raises
-        ------
-        ValueError
-            If ``T <= 0``.
-        ValueError
-            If any strike in `K` is ``<= 0``.
-        ValueError
-            If ``forward(T) <= 0`` (indirectly, because log-moneyness is undefined).
-
-        Notes
-        -----
-        The evaluation proceeds as:
-
-        1. Compute ``x = ln(K / forward(T))``.
-        2. If `T` lies outside the surface expiries, clamp to the nearest smile.
-        3. Otherwise, linearly interpolate total variance between bracketing expiries:
-           ``w(T) = (1-a)*w0 + a*w1`` where ``a = (T-T0)/(T1-T0)``.
-        4. Convert to implied volatility: ``iv = sqrt(max(w/T, 0))``.
-        """
         T = float(T)
-        if T <= 0:
+        if T <= 0.0:
             raise ValueError("T must be > 0")
 
         K_arr = np.asarray(K, dtype=np.float64)
@@ -284,5 +259,6 @@ class VolSurface:
 
         a = (T - T0) / (T1 - T0)
         w = np.float64(1.0 - a) * w0 + np.float64(a) * w1
+
         out = np.sqrt(np.maximum(w / np.float64(T), np.float64(0.0)))
         return np.asarray(out, dtype=np.float64)
