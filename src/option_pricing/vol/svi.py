@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -63,14 +63,16 @@ class SVISmile:
 def svi_total_variance(y: ArrayLike, p: SVIParams) -> FloatArray:
     y_arr = np.asarray(y, dtype=float)
     z = y_arr - p.m
-    return p.a + p.b * (p.rho * z + np.sqrt(z**2 + p.sigma**2))
+    out = p.a + p.b * (p.rho * z + np.sqrt(z**2 + p.sigma**2))
+    return cast(FloatArray, out)
 
 
 def svi_dw_dy(y: ArrayLike, p: SVIParams) -> FloatArray:
     """First derivative: b * (rho + (y-m)/sqrt((y-m)^2 + sigma^2))"""
     y_arr = np.asarray(y, dtype=float)
     z = y_arr - p.m
-    return p.b * (p.rho + z / np.sqrt(z**2 + p.sigma**2))
+    out = p.b * (p.rho + z / np.sqrt(z**2 + p.sigma**2))
+    return cast(FloatArray, out)
 
 
 def svi_d2w_dy2(y: ArrayLike, p: SVIParams) -> FloatArray:
@@ -78,7 +80,8 @@ def svi_d2w_dy2(y: ArrayLike, p: SVIParams) -> FloatArray:
     y_arr = np.asarray(y, dtype=float)
     z = y_arr - p.m
     hypot_sq = z**2 + p.sigma**2
-    return p.b * (p.sigma**2 / np.power(hypot_sq, 1.5))
+    out = p.b * (p.sigma**2 / np.power(hypot_sq, 1.5))
+    return cast(FloatArray, out)
 
 
 # def svi_jac(y: ArrayLike, p: SVIParams) -> ArrayLike:
@@ -192,7 +195,7 @@ def calibrate_svi(
 
         w_model = svi_total_variance(y=y_arr, p=p)
 
-        r_data: NDArray[np.float64] = weights_arr * (w_model - w_obs_arr)  # mb scaling?
+        r_data: NDArray[np.float64] = weights_arr * (w_model - w_obs_arr)
 
         r_reg: list[float] = []
 
