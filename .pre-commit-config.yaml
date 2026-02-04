@@ -18,8 +18,13 @@ repos:
     rev: v1.19.1
     hooks:
       - id: mypy
-        stages: [pre-push]
+        stages: [pre-commit, pre-push]
         args: [--config-file=pyproject.toml]
         pass_filenames: false
-        additional_dependencies: [numpy==2.3.5, scipy==1.15.3, scipy-stubs==1.15.3.0]
+        # .pre-commit-config.yaml
+        additional_dependencies:
+          - numpy==2.3.5
+          - scipy==1.15.3
+          - scipy-stubs==1.15.3.0
+          - pandas-stubs
 

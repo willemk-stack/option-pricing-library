@@ -43,12 +43,11 @@ def _default_bs_price():
 
 def _default_fd_greeks():
     try:
-        from option_pricing.numerics.finite_diff import (
-            finite_diff_greeks,  # type: ignore
-        )
+        from option_pricing.pricers.finite_diff import finite_diff_greeks
+
     except Exception as e:  # pragma: no cover
         raise ImportError(
-            "Could not import finite_diff_greeks at option_pricing.numerics.finite_diff.finite_diff_greeks. "
+            "Could not import finite_diff_greeks at option_pricing.pricers.finite_diff. "
             "Pass fd_greeks_fn=... explicitly."
         ) from e
     return finite_diff_greeks

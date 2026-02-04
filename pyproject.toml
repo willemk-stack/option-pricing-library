@@ -24,6 +24,7 @@ dev = [
     "black",
     "mypy",
     "scipy-stubs",
+    "pandas-stubs",
 ]
 notebooks = ["jupyter", "matplotlib", "pandas"]
 plot = ["matplotlib"]
@@ -56,14 +57,13 @@ known-first-party = ["option_pricing"]
 python_version = "3.12"
 mypy_path = "src"
 files = ["src/option_pricing"]
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
 module = ["matplotlib.*", "nbmake.*"]
 ignore_missing_imports = true
-
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = false
 
 [tool.setuptools]
 package-dir = { "" = "src" }

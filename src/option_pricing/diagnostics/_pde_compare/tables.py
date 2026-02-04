@@ -95,7 +95,6 @@ def pareto_frontier(
     y = d[y_col].astype(float).to_numpy()
 
     order = np.argsort(x)
-    idx = d.index.to_numpy()[order]
     y_sorted = y[order]
 
     best_y = np.inf
@@ -105,7 +104,8 @@ def pareto_frontier(
             keep[i] = True
             best_y = yi
 
-    return d.loc[idx[keep]].copy()
+    pos = order[keep].tolist()
+    return d.take(pos).copy()
 
 
 def order_columns(df: pd.DataFrame) -> pd.DataFrame:

@@ -139,7 +139,7 @@ def plot_se_scaling(
     require_columns(df, [x_col, se_col])
 
     d = df.copy()
-    d = d.groupby(x_col, as_index=False)[se_col].mean(numeric_only=True)
+    d = d.groupby(x_col, as_index=False)[[se_col]].mean(numeric_only=True)
 
     plt = get_plt()
     fig, ax = plt.subplots(1, 1, figsize=figsize, constrained_layout=True)

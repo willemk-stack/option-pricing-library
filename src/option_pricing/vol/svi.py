@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.optimize import least_squares
+from scipy.optimize import least_squares as _least_squares
 
 from .types import ArrayLike, FloatArray
+
+least_squares: Callable[..., Any] = cast(Callable[..., Any], _least_squares)
 
 
 @dataclass(frozen=True, slots=True)
