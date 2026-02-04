@@ -133,11 +133,11 @@ class Smile:
 
     The smile is represented in terms of total variance:
 
-        w(x) = T * iv(x)^2
+        w(y) = T * iv(y)^2
 
     on a strictly increasing log-moneyness grid:
 
-        x = ln(K / F(T)).
+        y = ln(K / F(T)).
 
     Interpolation:
       - Uses Fritsch-Carlson monotone cubic interpolation when `w(x)` is monotone
@@ -146,22 +146,22 @@ class Smile:
     """
 
     T: float
-    x: FloatArray
+    y: FloatArray
     w: FloatArray
     _w_interp: Callable[[np.ndarray], np.ndarray] = field(init=False, repr=False)
 
     def __post_init__(self):
-        x = np.asarray(self.x, dtype=np.float64)
+        y = np.asarray(self.y, dtype=np.float64)
         w = np.asarray(self.w, dtype=np.float64)
 
-        if x.shape != w.shape:
-            raise ValueError("Smile.x and Smile.w must have the same shape")
-        if x.size < 2:
+        if y.shape != w.shape:
+            raise ValueError("Smile.y and Smile.w must have the same shape")
+        if y.size < 2:
             raise ValueError("Smile requires at least 2 points")
-        if np.any(np.diff(x) <= 0.0):
-            raise ValueError("Smile.x must be strictly increasing")
+        if np.any(np.diff(y) <= 0.0):
+            raise ValueError("Smile.y must be strictly increasing")
 
-        object.__setattr__(self, "_w_interp", _make_w_interpolator(x, w))
+        object.__setattr__(self, "_w_interp", _make_w_interpolator(y, w))
 
     def w_at(self, xq: ArrayLike) -> FloatArray:
         xq_arr = np.asarray(xq, dtype=np.float64)
@@ -174,12 +174,12 @@ class Smile:
         return np.asarray(out, dtype=np.float64)
 
     @property
-    def x_min(self) -> float:
-        return float(self.x[0])
+    def y_min(self) -> float:
+        return float(self.y[0])
 
     @property
-    def x_max(self) -> float:
-        return float(self.x[-1])
+    def y_max(self) -> float:
+        return float(self.y[-1])
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,13 +226,13 @@ class VolSurface:
             if np.any(K <= 0.0):
                 raise ValueError(f"All strikes must be > 0 at T={float(T_np)}")
 
-            x = np.log(K / np.float64(F)).astype(np.float64, copy=False)
+            y = np.log(K / np.float64(F)).astype(np.float64, copy=False)
             w = (np.float64(T_np) * (iv**2)).astype(np.float64, copy=False)
 
-            if np.any(np.diff(x) <= 0.0):
+            if np.any(np.diff(y) <= 0.0):
                 raise ValueError(f"x grid not strictly increasing at T={float(T_np)}")
 
-            smiles.append(Smile(T=float(T_np), x=x, w=w))
+            smiles.append(Smile(T=float(T_np), y=y, w=w))
 
         return cls(expiries=expiries, smiles=tuple(smiles), forward=forward)
 

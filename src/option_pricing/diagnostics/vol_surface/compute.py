@@ -14,7 +14,7 @@ from option_pricing.typing import ArrayLike, ScalarFn
 
 class SmileLike(Protocol):
     T: float
-    x: np.ndarray
+    y: np.ndarray
     w: np.ndarray
 
     def w_at(self, xq: np.ndarray) -> np.ndarray: ...
@@ -113,7 +113,7 @@ def surface_slices(
     for s in surface.smiles:
         T = float(s.T)
         F = float(forward(T))
-        x = np.asarray(s.x, dtype=float)
+        x = np.asarray(s.y, dtype=float)
         w = np.asarray(s.w, dtype=float)
         K = F * np.exp(x)
         iv = np.sqrt(np.maximum(w / T, 0.0))
@@ -182,7 +182,7 @@ def call_prices_from_smile(
     F = float(forward(T))
     dfT = float(df(T))
 
-    x = np.asarray(s.x, dtype=float)
+    x = np.asarray(s.y, dtype=float)
     w = np.asarray(s.w, dtype=float)
     K = F * np.exp(x)
     iv = np.sqrt(np.maximum(w / T, 0.0))

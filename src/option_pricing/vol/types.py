@@ -7,6 +7,20 @@ from option_pricing.typing import ArrayLike, FloatArray
 
 
 class SmileSlice(Protocol):
+    """
+    A single-expiry smile slice represented in total variance space.
+
+    Coordinate:
+        y = ln(K / F(T))   (log-moneyness)
+
+    Required:
+        - T: expiry
+        - w_at(y): total variance
+        - iv_at(y): implied vol
+        - y_min: lowerbound
+        - y_max:
+    """
+
     @property
     def T(self) -> float: ...
 
@@ -15,16 +29,16 @@ class SmileSlice(Protocol):
 
     # domain so we can sample slices that don't have a native grid (e.g. SVI)
     @property
-    def x_min(self) -> float: ...
+    def y_min(self) -> float: ...
 
     @property
-    def x_max(self) -> float: ...
+    def y_max(self) -> float: ...
 
 
 @runtime_checkable
 class GridSmileSlice(SmileSlice, Protocol):
     @property
-    def x(self) -> FloatArray: ...
+    def y(self) -> FloatArray: ...
 
     @property
     def w(self) -> FloatArray: ...

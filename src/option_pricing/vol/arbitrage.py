@@ -50,13 +50,13 @@ class SurfaceNoArbReport:
 
 def _smile_grid(smile: SmileSlice, *, n: int = 81) -> tuple[np.ndarray, np.ndarray]:
     if isinstance(smile, GridSmileSlice):
-        x = np.asarray(smile.x, dtype=np.float64)
+        y = np.asarray(smile.y, dtype=np.float64)
         w = np.asarray(smile.w, dtype=np.float64)
-        return x, w
+        return y, w
 
-    x = np.linspace(float(smile.x_min), float(smile.x_max), int(n), dtype=np.float64)
-    w = np.asarray(smile.w_at(x), dtype=np.float64)
-    return x, w
+    y = np.linspace(float(smile.y_min), float(smile.y_max), int(n), dtype=np.float64)
+    w = np.asarray(smile.w_at(y), dtype=np.float64)
+    return y, w
 
 
 def check_smile_price_monotonicity(
@@ -229,8 +229,8 @@ def _check_calendar_total_variance(
 
     if x_grid is None:
         # overlap in x among all smiles
-        x_lo = max(float(s.x_min) for s in smiles)
-        x_hi = min(float(s.x_max) for s in smiles)
+        x_lo = max(float(s.y_min) for s in smiles)
+        x_hi = min(float(s.y_max) for s in smiles)
         if not (x_lo < x_hi):
             return CalendarVarianceReport(
                 performed=False,
