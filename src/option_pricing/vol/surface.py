@@ -8,7 +8,7 @@ import numpy as np
 from option_pricing.typing import ArrayLike, FloatArray, ScalarFn
 
 from ..numerics.interpolation import FritschCarlson
-from .types import SmileSlice
+from .vol_types import SmileSlice
 
 
 def _is_monotone(y: np.ndarray) -> bool:

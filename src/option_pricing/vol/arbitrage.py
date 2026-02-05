@@ -8,7 +8,7 @@ from option_pricing.typing import ScalarFn
 
 from ..models.black_scholes import bs as bs_model
 from .surface import VolSurface
-from .types import GridSmileSlice, SmileSlice
+from .vol_types import GridSmileSlice, SmileSlice
 
 
 @dataclass(frozen=True, slots=True)

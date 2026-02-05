@@ -23,7 +23,7 @@ repos:
         pass_filenames: false
         # .pre-commit-config.yaml
         additional_dependencies:
-          - numpy==2.3.5
+          - numpy==2.4.0
           - scipy==1.15.3
           - scipy-stubs==1.15.3.0
           - pandas-stubs
