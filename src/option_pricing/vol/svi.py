@@ -12,6 +12,84 @@ RHO_MAX = 0.999
 EPS = 1e-12
 LOG2 = float(np.log(2.0))
 
+EPS = 1e-12  # keep your existing EPS
+
+DomainMode = Literal["fixed_logmoneyness", "quantile_pad", "explicit"]
+
+
+@dataclass(frozen=True, slots=True)
+class DomainCheckConfig:
+    """
+    Defines the y-domain used for post-fit safety checks (and diagnostic reporting).
+
+    Modes:
+      - "fixed_logmoneyness": use [y_min, y_max] (stable, recommended default if y=log(K/F)).
+      - "quantile_pad": robust range from data quantiles + padding (adaptive fallback).
+      - "explicit": use [y_min, y_max] as an explicit domain (same as fixed, but semantically “user chose this”).
+
+    w_floor:
+      Minimum allowed total variance over the domain. Use 0.0 for strict nonnegativity.
+      Use a small positive floor (e.g. 1e-10) if downstream does logs/sqrts and you want a buffer.
+
+    tol:
+      Numerical tolerance for violations: consider w < w_floor - tol a violation.
+    """
+
+    mode: DomainMode = "fixed_logmoneyness"
+
+    # For fixed/explicit
+    y_min: float = -1.25
+    y_max: float = 1.25
+
+    # For quantile_pad
+    q_lo: float = 0.01
+    q_hi: float = 0.99
+    pad_frac: float = 0.15
+    pad_abs: float = 0.05
+
+    # Sampling density
+    n_grid: int = 41
+
+    # Acceptance threshold
+    w_floor: float = 0.0
+    tol: float = 1e-12
+
+
+def build_domain_grid(
+    y: NDArray[np.float64], cfg: DomainCheckConfig
+) -> tuple[tuple[float, float], NDArray[np.float64]]:
+    y = np.asarray(y, dtype=np.float64).reshape(-1)
+    n = int(max(cfg.n_grid, 5))
+
+    if cfg.mode in ("fixed_logmoneyness", "explicit"):
+        y_lo = float(min(cfg.y_min, cfg.y_max))
+        y_hi = float(max(cfg.y_min, cfg.y_max))
+        y_chk = np.linspace(y_lo, y_hi, n, dtype=np.float64)
+        return (y_lo, y_hi), y_chk
+
+    if cfg.mode == "quantile_pad":
+        if y.size == 0:
+            y_lo, y_hi = 0.0, 0.0
+            return (y_lo, y_hi), np.linspace(y_lo, y_hi, n, dtype=np.float64)
+
+        # robust domain from quantiles
+        if y.size >= 20:
+            q_lo = float(np.clip(cfg.q_lo, 0.0, 0.49))
+            q_hi = float(np.clip(cfg.q_hi, 0.51, 1.0))
+            q1, q2 = np.quantile(y, [q_lo, q_hi])
+        else:
+            q1, q2 = float(np.min(y)), float(np.max(y))
+
+        span = float(max(q2 - q1, 1e-6))
+        pad = float(cfg.pad_frac) * span + float(cfg.pad_abs)
+
+        y_lo = float(q1 - pad)
+        y_hi = float(q2 + pad)
+        y_chk = np.linspace(y_lo, y_hi, n, dtype=np.float64)
+        return (y_lo, y_hi), y_chk
+
+    raise ValueError(f"Unknown DomainCheckConfig.mode: {cfg.mode}")
+
 
 def _robust_rhoprime(z: NDArray[np.float64], loss: str) -> NDArray[np.float64]:
     """
@@ -599,19 +677,122 @@ class SVIObjective:
         return J
 
 
+def _safe_entropy_normalized(weights: NDArray[np.float64]) -> float:
+    w = np.asarray(weights, dtype=np.float64).reshape(-1)
+    w = w[np.isfinite(w) & (w > 0.0)]
+    if w.size <= 1:
+        return 0.0 if w.size == 1 else float("nan")
+    s = float(w.sum())
+    if s <= 0.0:
+        return float("nan")
+    p = w / s
+    H = -float(np.sum(p * np.log(p)))
+    return float(H / np.log(float(p.size)))
+
+
+def _domain_check_grid(
+    y: NDArray[np.float64], n: int = 25
+) -> tuple[tuple[float, float], NDArray[np.float64]]:
+    y = np.asarray(y, dtype=np.float64).reshape(-1)
+    if y.size == 0:
+        return (0.0, 0.0), np.zeros(0, dtype=np.float64)
+
+    # robust-ish domain: [q01, q99] + pad
+    q01, q99 = (
+        np.quantile(y, [0.01, 0.99])
+        if y.size >= 20
+        else (float(y.min()), float(y.max()))
+    )
+    span = float(max(q99 - q01, 1e-6))
+    pad = 0.15 * span + 0.05
+    y_lo = float(q01 - pad)
+    y_hi = float(q99 + pad)
+    y_chk = np.linspace(y_lo, y_hi, int(max(n, 5)), dtype=np.float64)
+    return (y_lo, y_hi), y_chk
+
+
 @dataclass(frozen=True, slots=True)
 class SVIFitDiagnostics:
-    success: bool
-    cost: float
+    # Overall outcome
+    ok: bool
+    failure_reason: str | None
+
+    # SciPy termination info (from the last inner solve)
+    termination: str
     nfev: int
+    cost: float
+    optimality: float
+    step_norm: float
+
+    # Sizes
+    n_obs: int
+    n_reg: int
+
+    # Overall residual stats (data+reg residual vector returned by obj.residual)
     RMSE: float
     max_abs: float
     residual: float
 
-    # warn flags
+    # Data-only fit (computed on final params)
+    rmse_w: float
+    rmse_unw: float
+    mae_w: float
+    max_abs_werr: float
+    cost_data: float
+    cost_reg: float
+
+    # Domain safety checks (computed on a widened domain grid)
+    y_domain: tuple[float, float]
+    w_floor: float
+    min_w_domain: float
+    argmin_y_domain: float
+    n_violations: int
+
+    # Wing / Lee cap diagnostics
+    sR: float
+    sL: float
+    lee_cap: float
+    lee_slack_R: float
+    lee_slack_L: float
+    sR_target: float | None
+    sL_target: float | None
+    sR_target_used: bool
+    sL_target_used: bool
+    sR_target_err: float
+    sL_target_err: float
+
+    # Parameter diagnostics
+    a: float
+    b: float
+    rho: float
+    m: float
+    sigma: float
+    alpha: float
+    sigma_vs_floor: float
+
+    # Warn flags
     rho_near_pm1: bool
     sigma_tiny: bool
     b_blown_up: bool
+    b_large: bool
+    m_outside_data: bool
+
+    # IRLS diagnostics (0/NaN if not IRLS)
+    irls_outer_iters: int
+    robust_weights_min: float
+    robust_weights_median: float
+    robust_weights_max: float
+    robust_weights_frac_floored: float
+    robust_weights_entropy: float
+
+    # One-line logging
+    summary: str
+
+
+@dataclass(frozen=True, slots=True)
+class SVIFitResult:
+    params: SVIParams
+    diag: SVIFitDiagnostics
 
 
 def calibrate_svi(
@@ -623,18 +804,25 @@ def calibrate_svi(
     loss: Literal["linear", "soft_l1", "huber", "cauchy", "arctan"] = "soft_l1",
     f_scale: float = 1.0,
     *,
+    domain_check: DomainCheckConfig | None = None,
     robust_data_only: bool = True,
     irls_max_outer: int = 8,
     irls_w_floor: float = 1e-4,
-    irls_damp: float = 0.0,  # 0 = no damping, 0.5 = moderate damping
+    irls_damp: float = 0.0,
     irls_tol: float = 1e-8,
-) -> SVIParams:
+) -> SVIFitResult:
     y = np.asarray(y, dtype=np.float64).reshape(-1)
     w_obs = np.asarray(w_obs, dtype=np.float64).reshape(-1)
     if y.shape != w_obs.shape:
         raise ValueError("y and w_obs must have same shape")
     if not (np.all(np.isfinite(y)) and np.all(np.isfinite(w_obs))):
         raise ValueError("y and w_obs must be finite")
+
+    # --- domain check grid: build ONCE, reuse everywhere ---
+    dom_cfg = DomainCheckConfig() if domain_check is None else domain_check
+    y_domain, y_chk = build_domain_grid(y, dom_cfg)
+    w_floor = float(dom_cfg.w_floor)
+    tol = float(dom_cfg.tol)
 
     base_sqrt_w = (
         np.ones_like(w_obs)
@@ -664,19 +852,19 @@ def calibrate_svi(
     transform = SVITransformLeeCap(slope_cap=reg.slope_cap)
     u = transform.encode(x0)
 
-    # slope targets from *base* weights (do NOT robustify these)
+    # slope targets from base weights
     sL_obs, sR_obs = estimate_wing_slopes_one_sided(
         y=y, w=w_obs, sqrt_weights=base_sqrt_w
     )
 
     abs_slopes = [abs(s) for s in (sL_obs, sR_obs) if s is not None]
     s_norm = max(
-        reg.slope_floor, float(np.mean(abs_slopes)) if abs_slopes else reg.slope_floor
+        reg.slope_floor,
+        float(np.mean(abs_slopes)) if abs_slopes else reg.slope_floor,
     )
     slope_denom = max(s_norm, reg.slope_floor)
     reg = replace(reg, slope_denom=slope_denom)
 
-    # objective (we will overwrite obj.sqrt_w during IRLS)
     obj = SVIObjective(
         y=y,
         w_obs=w_obs,
@@ -687,8 +875,193 @@ def calibrate_svi(
         sR_obs=sR_obs,
     )
 
-    # --- standard behavior: let SciPy robustify *everything* (data + reg) ---
-    # if base_sqrt_w is something like vega-based weights, you’re essentially saying “a high-vega point being off is more of an outlier”. Sometimes you want the opposite (detect outliers in raw error). If you see weird IRLS behavior, try robustifying on the unweighted residual and only apply base weights in the inner solve.
+    # ---- helpers to build diagnostics at the end ----
+    def _build_diag(
+        *,
+        u_final: NDArray[np.float64],
+        res_final,
+        eff_sqrt_w: NDArray[np.float64],
+        robust_w: NDArray[np.float64] | None,
+        irls_iters: int,
+        step_norm: float,
+    ) -> SVIFitDiagnostics:
+        p = transform.decode(u_final)
+        w_model = svi_total_variance(y, p)
+
+        # data-only
+        err = w_model - w_obs
+        r_w = eff_sqrt_w * err  # weighted data residual
+
+        rmse_w = float(np.sqrt(np.mean(r_w * r_w))) if r_w.size else float("nan")
+        rmse_unw = float(np.sqrt(np.mean(err * err))) if err.size else float("nan")
+        mae_w = float(np.mean(np.abs(r_w))) if r_w.size else float("nan")
+        max_abs_werr = float(np.max(np.abs(r_w))) if r_w.size else float("nan")
+        cost_data = 0.5 * float(np.sum(r_w * r_w)) if r_w.size else 0.0
+
+        # total residual vector (data + reg) and its split
+        r_total = obj.residual(u_final)
+        n_obs = int(y.size)
+        n_reg = int(max(r_total.size - n_obs, 0))
+        r_reg = r_total[n_obs:] if n_reg > 0 else np.zeros(0, dtype=np.float64)
+        cost_reg = 0.5 * float(np.sum(r_reg * r_reg)) if r_reg.size else 0.0
+
+        RMSE_total = (
+            float(np.sqrt(np.mean(r_total * r_total))) if r_total.size else float("nan")
+        )
+        max_abs_total = float(np.max(np.abs(r_total))) if r_total.size else float("nan")
+        residual_norm = float(np.linalg.norm(r_total)) if r_total.size else float("nan")
+
+        # --- domain safety check (REUSE prebuilt y_chk/y_domain/w_floor/tol) ---
+        w_chk = svi_total_variance(y_chk, p)
+        min_w_domain = float(np.min(w_chk)) if w_chk.size else float("nan")
+        imin = int(np.argmin(w_chk)) if w_chk.size else 0
+        argmin_y_domain = float(y_chk[imin]) if y_chk.size else float("nan")
+        n_viol = int(np.sum(w_chk < (w_floor - tol))) if w_chk.size else 0
+
+        # wing diagnostics
+        sR = float(p.b * (1.0 + p.rho))
+        sL = float(p.b * (p.rho - 1.0))  # negative
+        lee_cap = float(reg.slope_cap)
+        lee_slack_R = float(lee_cap - sR)
+        lee_slack_L = float(lee_cap - abs(sL))
+
+        sL_use, sR_use = obj._usable_obs_slopes()
+        sR_used = bool(reg.lambda_slope_R > 0.0 and sR_use is not None)
+        sL_used = bool(reg.lambda_slope_L > 0.0 and sL_use is not None)
+
+        denom = float(reg.slope_denom)
+        sR_target_err = float("nan")
+        sL_target_err = float("nan")
+
+        if reg.lambda_slope_R > 0.0 and sR_use is not None:
+            sR_target_err = (sR - sR_use) / denom
+
+        if reg.lambda_slope_L > 0.0 and sL_use is not None:
+            sL_target_err = (sL - sL_use) / denom
+
+        # parameter diagnostics + flags
+        rho = float(p.rho)
+        sigma = float(p.sigma)
+        b = float(p.b)
+        a = float(p.a)
+        m = float(p.m)
+        alpha = float(a + b * sigma * np.sqrt(max(1.0 - rho * rho, 0.0)))
+
+        rho_near_pm1 = bool(abs(rho) > 0.995)
+        sigma_vs_floor = float(sigma / max(reg.sigma_floor, EPS))
+        sigma_tiny = bool(sigma_vs_floor < 0.5)
+        b_blown_up = bool((not np.isfinite(b)) or (b > 1.01 * lee_cap) or (b <= 0.0))
+        b_large = bool(b > 0.90 * lee_cap)
+
+        y_min, y_max = float(np.min(y)), float(np.max(y))
+        y_span = float(max(y_max - y_min, 1e-6))
+        m_outside_data = bool(
+            (m < y_min - 0.10 * y_span) or (m > y_max + 0.10 * y_span)
+        )
+
+        # robust weights diagnostics
+        if robust_w is None:
+            robust_weights_min = float("nan")
+            robust_weights_median = float("nan")
+            robust_weights_max = float("nan")
+            robust_weights_frac_floored = float("nan")
+            robust_weights_entropy = float("nan")
+        else:
+            rw = np.asarray(robust_w, dtype=np.float64).reshape(-1)
+            robust_weights_min = float(np.min(rw)) if rw.size else float("nan")
+            robust_weights_median = float(np.median(rw)) if rw.size else float("nan")
+            robust_weights_max = float(np.max(rw)) if rw.size else float("nan")
+            robust_weights_frac_floored = (
+                float(np.mean(rw <= float(irls_w_floor) * (1.0 + 1e-12)))
+                if rw.size
+                else float("nan")
+            )
+
+            # concentration on effective weights (base + robust)
+            eff_w = (eff_sqrt_w * eff_sqrt_w).astype(np.float64, copy=False)
+            robust_weights_entropy = _safe_entropy_normalized(eff_w)
+
+        # ok / failure_reason (solver failure still raises earlier)
+        ok = True
+        reasons: list[str] = []
+        if n_viol > 0:
+            ok = False
+            reasons.append(f"domain_negative_w (n={n_viol}, min_w={min_w_domain:.3g})")
+        if rho_near_pm1:
+            reasons.append("rho_near_pm1")
+        if sigma_tiny:
+            reasons.append("sigma_tiny")
+        if b_blown_up:
+            ok = False
+            reasons.append("b_invalid_or_exceeds_cap")
+
+        failure_reason = "; ".join(reasons) if (not ok or reasons) else None
+
+        summary = (
+            f"ok={ok} rmse_w={rmse_w:.3g} rmse_unw={rmse_unw:.3g} "
+            f"min_w_dom={min_w_domain:.3g} sR={sR:.3g} sL={sL:.3g} "
+            f"sigma/floor={sigma_vs_floor:.3g} irls={irls_iters}"
+        )
+
+        return SVIFitDiagnostics(
+            ok=ok,
+            failure_reason=failure_reason,
+            termination=str(getattr(res_final, "message", "")),
+            nfev=int(getattr(res_final, "nfev", 0)),
+            cost=float(getattr(res_final, "cost", float("nan"))),
+            optimality=float(getattr(res_final, "optimality", float("nan"))),
+            step_norm=float(step_norm),
+            n_obs=n_obs,
+            n_reg=n_reg,
+            RMSE=RMSE_total,
+            max_abs=max_abs_total,
+            residual=residual_norm,
+            rmse_w=rmse_w,
+            rmse_unw=rmse_unw,
+            mae_w=mae_w,
+            max_abs_werr=max_abs_werr,
+            cost_data=cost_data,
+            cost_reg=cost_reg,
+            y_domain=y_domain,
+            w_floor=w_floor,
+            min_w_domain=min_w_domain,
+            argmin_y_domain=argmin_y_domain,
+            n_violations=n_viol,
+            sR=sR,
+            sL=sL,
+            lee_cap=lee_cap,
+            lee_slack_R=lee_slack_R,
+            lee_slack_L=lee_slack_L,
+            sR_target=sR_obs,
+            sL_target=sL_obs,
+            sR_target_used=sR_used,
+            sL_target_used=sL_used,
+            sR_target_err=sR_target_err,
+            sL_target_err=sL_target_err,
+            a=a,
+            b=b,
+            rho=rho,
+            m=m,
+            sigma=sigma,
+            alpha=alpha,
+            sigma_vs_floor=sigma_vs_floor,
+            rho_near_pm1=rho_near_pm1,
+            sigma_tiny=sigma_tiny,
+            b_blown_up=b_blown_up,
+            b_large=b_large,
+            m_outside_data=m_outside_data,
+            irls_outer_iters=int(irls_iters),
+            robust_weights_min=robust_weights_min,
+            robust_weights_median=robust_weights_median,
+            robust_weights_max=robust_weights_max,
+            robust_weights_frac_floored=robust_weights_frac_floored,
+            robust_weights_entropy=robust_weights_entropy,
+            summary=summary,
+        )
+
+    # ==========================
+    # Branch A: robustify everything (SciPy loss)
+    # ==========================
     if not robust_data_only:
         res = least_squares(
             fun=obj.residual,
@@ -701,11 +1074,33 @@ def calibrate_svi(
         )
         if not res.success or not np.all(np.isfinite(res.x)):
             raise ValueError(f"SVI calibration failed: {res.message}")
-        return transform.decode(res.x)
 
-    # --- IRLS behavior: robustify DATA only, keep REG terms "hard" ---
+        u_final = np.asarray(res.x, dtype=np.float64)
+        p_final = transform.decode(u_final)
+
+        err = svi_total_variance(y, p_final) - w_obs
+        r_data = base_sqrt_w * err
+        z = (r_data / max(float(f_scale), EPS)) ** 2
+        robust_w = (
+            np.maximum(_robust_rhoprime(z, loss), float(irls_w_floor))
+            if loss != "linear"
+            else np.ones_like(y)
+        )
+
+        diag = _build_diag(
+            u_final=u_final,
+            res_final=res,
+            eff_sqrt_w=base_sqrt_w,
+            robust_w=robust_w,
+            irls_iters=0,
+            step_norm=float(np.linalg.norm(u_final - u)),  # changed from nan
+        )
+        return SVIFitResult(params=p_final, diag=diag)
+
+    # ==========================
+    # Branch B: linear (no robust)
+    # ==========================
     if loss == "linear":
-        # nothing to do: IRLS would be identical to one linear solve
         res = least_squares(
             fun=obj.residual,
             x0=u,
@@ -716,30 +1111,49 @@ def calibrate_svi(
         )
         if not res.success or not np.all(np.isfinite(res.x)):
             raise ValueError(f"SVI calibration failed: {res.message}")
-        return transform.decode(res.x)
+
+        u_final = np.asarray(res.x, dtype=np.float64)
+        p_final = transform.decode(u_final)
+
+        robust_w = np.ones_like(y)
+        diag = _build_diag(
+            u_final=u_final,
+            res_final=res,
+            eff_sqrt_w=base_sqrt_w,
+            robust_w=robust_w,
+            irls_iters=0,
+            step_norm=float(np.linalg.norm(u_final - u)),
+        )
+        return SVIFitResult(params=p_final, diag=diag)
+
+    # ==========================
+    # Branch C: IRLS (robustify data only)
+    # ==========================
+    res_final = None
+    robust_w_final: NDArray[np.float64] | None = None
+    step_norm_final = float("nan")
+    irls_iters = 0
 
     w_prev: NDArray[np.float64] | None = None
 
-    for _ in range(int(irls_max_outer)):
-        # 1) compute DATA residuals only under current u (no reg)
+    for k in range(int(irls_max_outer)):
+        irls_iters = k + 1
+
         p = transform.decode(u)
         r_data = base_sqrt_w * (svi_total_variance(y, p) - w_obs)
 
-        # 2) compute robust weights from z = (r/f_scale)^2
         z = (r_data / max(float(f_scale), EPS)) ** 2
         w = _robust_rhoprime(z, loss)
         w = np.maximum(w, float(irls_w_floor))
 
-        # optional damping to prevent oscillations
         if (w_prev is not None) and (irls_damp > 0.0):
-            a = float(np.clip(irls_damp, 0.0, 0.99))
-            w = (1.0 - a) * w + a * w_prev
+            a_d = float(np.clip(irls_damp, 0.0, 0.99))
+            w = (1.0 - a_d) * w + a_d * w_prev
         w_prev = w
 
-        # 3) update objective's sqrt_w for DATA term only
         obj.sqrt_w = base_sqrt_w * np.sqrt(w)
+        robust_w_final = w
 
-        # 4) solve plain least squares (linear loss) so REG is not robustified
         res = least_squares(
             fun=obj.residual,
             x0=u,
@@ -751,11 +1165,29 @@ def calibrate_svi(
         if not res.success or not np.all(np.isfinite(res.x)):
             raise ValueError(f"SVI calibration failed (IRLS): {res.message}")
 
-        # 5) convergence check
-        du = res.x - u
-        if np.linalg.norm(du) <= float(irls_tol) * (1.0 + np.linalg.norm(u)):
-            u = res.x
-            break
-        u = res.x
+        res_final = res
+        u_new = np.asarray(res.x, dtype=np.float64)
+        du = u_new - u
+        step_norm_final = float(np.linalg.norm(du))
 
-    return transform.decode(u)
+        if step_norm_final <= float(irls_tol) * (1.0 + float(np.linalg.norm(u))):
+            u = u_new
+            break
+
+        u = u_new
+
+    if res_final is None:
+        raise ValueError("SVI calibration failed: IRLS produced no result")
+
+    u_final = np.asarray(u, dtype=np.float64)
+    p_final = transform.decode(u_final)
+
+    diag = _build_diag(
+        u_final=u_final,
+        res_final=res_final,
+        eff_sqrt_w=obj.sqrt_w,  # includes base * sqrt(robust_w)
+        robust_w=robust_w_final,
+        irls_iters=irls_iters,
+        step_norm=step_norm_final,
+    )
+    return SVIFitResult(params=p_final, diag=diag)
