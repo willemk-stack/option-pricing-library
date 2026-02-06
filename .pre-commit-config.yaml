@@ -24,7 +24,8 @@ repos:
         # .pre-commit-config.yaml
         additional_dependencies:
           - numpy==2.4.0
-          - scipy==1.15.3
-          - scipy-stubs==1.15.3.0
+          - scipy==1.16.3
+          - scipy-stubs==1.16.3.3
+          - optype[numpy]==0.15.0
           - pandas-stubs
 
