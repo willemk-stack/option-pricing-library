@@ -284,6 +284,27 @@ def svi_total_variance(y: NDArray[np.float64], p: SVIParams) -> NDArray[np.float
     return p.a + p.b * (p.rho * z + s)
 
 
+def svi_total_variance_dy(y: NDArray[np.float64], p: SVIParams) -> NDArray[np.float64]:
+    """First derivative d/dy of SVI total variance w(y)."""
+    z = y - p.m
+    s = np.hypot(z, p.sigma)
+    # Avoid divide-by-zero if sigma is ~0 (should be prevented by calibration rails)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        frac = np.where(s > 0.0, z / s, 0.0)
+    return p.b * (p.rho + frac)
+
+
+def svi_total_variance_dyy(y: NDArray[np.float64], p: SVIParams) -> NDArray[np.float64]:
+    """Second derivative d^2/dy^2 of SVI total variance w(y)."""
+    z = y - p.m
+    s = np.hypot(z, p.sigma)
+    s3 = s * s * s
+    sig2 = p.sigma * p.sigma
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out = np.where(s3 > 0.0, p.b * sig2 / s3, 0.0)
+    return out
+
+
 @dataclass(frozen=True, slots=True)
 class SVIRegConfig:
     lambda_m: float = 0.5
@@ -837,6 +858,27 @@ class SVISmile(SmileSlice):
         wq = self.w_at(xq)
         out = np.sqrt(np.maximum(wq / np.float64(self.T), np.float64(0.0)))
         return np.asarray(out, dtype=np.float64)
+
+    # ---- analytic derivatives in y (log-moneyness) ----
+    def dw_dy(self, xq: ArrayLike) -> FloatArray:
+        """d/dy of total variance w(y)."""
+        xq_arr = np.asarray(xq, dtype=np.float64)
+        xq_1d = np.atleast_1d(xq_arr)
+        out = svi_total_variance_dy(xq_1d.astype(np.float64, copy=False), self.params)
+        out = np.asarray(out, dtype=np.float64)
+        if xq_arr.ndim == 0:
+            return np.asarray(out[0], dtype=np.float64)
+        return out.reshape(xq_arr.shape)
+
+    def d2w_dy2(self, xq: ArrayLike) -> FloatArray:
+        """d^2/dy^2 of total variance w(y)."""
+        xq_arr = np.asarray(xq, dtype=np.float64)
+        xq_1d = np.atleast_1d(xq_arr)
+        out = svi_total_variance_dyy(xq_1d.astype(np.float64, copy=False), self.params)
+        out = np.asarray(out, dtype=np.float64)
+        if xq_arr.ndim == 0:
+            return np.asarray(out[0], dtype=np.float64)
+        return out.reshape(xq_arr.shape)
 
 
 def calibrate_svi(
