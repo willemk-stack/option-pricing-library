@@ -10,8 +10,6 @@ from scipy.optimize import least_squares
 
 from option_pricing.typing import ArrayLike, FloatArray
 
-from .vol_types import SmileSlice
-
 RHO_MAX = 0.999
 EPS = 1e-12
 LOG2 = float(np.log(2.0))
@@ -821,7 +819,7 @@ class SVIFitResult:
 
 
 @dataclass(frozen=True, slots=True)
-class SVISmile(SmileSlice):
+class SVISmile:
     """Analytic SVI smile slice in total-variance space.
 
     Implements :class:`~option_pricing.vol.vol_types.SmileSlice` so it can be
