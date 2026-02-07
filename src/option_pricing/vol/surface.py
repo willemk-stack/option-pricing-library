@@ -183,6 +183,50 @@ class Smile:
 
 
 @dataclass(frozen=True, slots=True)
+class InterpolatedSmileSlice:
+    """A synthetic smile slice formed by linear interpolation in total variance.
+
+        w(y, T) = (1-a) * w0(y) + a * w1(y)
+
+    where (T0, w0) and (T1, w1) are the bracketing slices.
+    """
+
+    T: float
+    s0: SmileSlice
+    s1: SmileSlice
+    a: float  # in [0, 1]
+
+    def w_at(self, xq: ArrayLike) -> FloatArray:
+        xq_arr = np.asarray(xq, dtype=np.float64)
+        w0 = self.s0.w_at(xq_arr)
+        w1 = self.s1.w_at(xq_arr)
+        w = np.float64(1.0 - self.a) * w0 + np.float64(self.a) * w1
+        return np.asarray(w, dtype=np.float64)
+
+    def iv_at(self, xq: ArrayLike) -> FloatArray:
+        wq = self.w_at(xq)
+        out = np.sqrt(np.maximum(wq / np.float64(self.T), np.float64(0.0)))
+        return np.asarray(out, dtype=np.float64)
+
+    @property
+    def y_min(self) -> float:
+        # conservative sampling domain: overlap if possible, else union
+        lo = max(float(self.s0.y_min), float(self.s1.y_min))
+        hi = min(float(self.s0.y_max), float(self.s1.y_max))
+        if lo < hi:
+            return lo
+        return min(float(self.s0.y_min), float(self.s1.y_min))
+
+    @property
+    def y_max(self) -> float:
+        lo = max(float(self.s0.y_min), float(self.s1.y_min))
+        hi = min(float(self.s0.y_max), float(self.s1.y_max))
+        if lo < hi:
+            return hi
+        return max(float(self.s0.y_max), float(self.s1.y_max))
+
+
+@dataclass(frozen=True, slots=True)
 class VolSurface:
     """Total-variance volatility surface over expiry.
 
@@ -318,6 +362,39 @@ class VolSurface:
 
         return cls(expiries=expiries, smiles=tuple(smiles), forward=forward)
 
+    def slice(self, T: float) -> SmileSlice:
+        """Return a callable single-expiry smile slice at maturity T.
+
+        - Node expiry: returns the stored slice (grid or SVI).
+        - Off-node: returns InterpolatedSmileSlice, linear in total variance.
+        """
+        T = float(T)
+        if T <= 0.0:
+            raise ValueError("T must be > 0")
+
+        # Clamp outside known range
+        if T <= float(self.expiries[0]):
+            return self.smiles[0]
+        if T >= float(self.expiries[-1]):
+            return self.smiles[-1]
+
+        j = int(np.searchsorted(self.expiries, np.float64(T), side="left"))
+
+        # Exact node hit (tolerant to tiny float noise)
+        if j < len(self.expiries) and bool(
+            np.isclose(self.expiries[j], np.float64(T), rtol=0.0, atol=1e-12)
+        ):
+            return self.smiles[j]
+
+        i = j - 1
+        T0 = float(self.expiries[i])
+        T1 = float(self.expiries[j])
+
+        a = (T - T0) / (T1 - T0)
+        return InterpolatedSmileSlice(
+            T=T, s0=self.smiles[i], s1=self.smiles[j], a=float(a)
+        )
+
     def iv(self, K: ArrayLike, T: float) -> FloatArray:
         T = float(T)
         if T <= 0.0:
@@ -353,3 +430,46 @@ class VolSurface:
 
         out = np.sqrt(np.maximum(w / np.float64(T), np.float64(0.0)))
         return np.asarray(out, dtype=np.float64)
+
+    def w(self, y: ArrayLike, T: float):
+        T = float(T)
+        if T <= 0.0:
+            raise ValueError("T must be > 0")
+
+        y_arr = np.asarray(y, dtype=np.float64)
+
+        # Clamp outside known range
+        if T <= float(self.expiries[0]):
+            return self.smiles[0].w_at(y_arr)
+        if T >= float(self.expiries[-1]):
+            return self.smiles[-1].w_at(y_arr)
+
+        # Find bracketing expiries
+        j = int(np.searchsorted(self.expiries, np.float64(T)))
+        i = j - 1
+
+        T0 = float(self.expiries[i])
+        T1 = float(self.expiries[j])
+
+        s0 = self.smiles[i]
+        s1 = self.smiles[j]
+
+        w0 = s0.w_at(y_arr)
+        w1 = s1.w_at(y_arr)
+
+        a = (T - T0) / (T1 - T0)
+        w = np.float64(1.0 - a) * w0 + np.float64(a) * w1
+
+        out = np.sqrt(np.maximum(w / np.float64(T), np.float64(0.0)))
+        return np.asarray(out, dtype=np.float64)
+
+
+@dataclass(frozen=True, slots=True)
+class LocalVolSurface:
+    implied: VolSurface
+    forward: ScalarFn
+    discount: ScalarFn
+
+    # num settings?
+
+    def local_vol(self, K, T): ...
