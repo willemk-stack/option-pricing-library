@@ -8,16 +8,34 @@ import numpy as np
 import pandas as pd
 
 from option_pricing.typing import ArrayLike, ScalarFn
+from option_pricing.vol.vol_types import GridSmileSlice, SmileSlice
 
 # --- Protocols: minimal interfaces to make mypy happy ---
 
 
-class SmileLike(Protocol):
-    T: float
-    y: np.ndarray
-    w: np.ndarray
+class SmileLike(SmileSlice, Protocol):
+    """Compatibility protocol.
 
-    def w_at(self, xq: np.ndarray) -> np.ndarray: ...
+    In this package, a smile slice may be grid-based (has y/w arrays) or analytic
+    (e.g. SVI) and only exposes w_at/iv_at plus a recommended y-domain.
+    """
+
+
+def _smile_grid(smile: SmileLike, *, n: int = 81) -> tuple[np.ndarray, np.ndarray]:
+    """Return a (y, w) grid for a smile.
+
+    * If the smile is grid-based, use its native grid.
+    * Otherwise sample it over [y_min, y_max].
+    """
+
+    if isinstance(smile, GridSmileSlice):
+        y = np.asarray(smile.y, dtype=float)
+        w = np.asarray(smile.w, dtype=float)
+        return y, w
+
+    y = np.linspace(float(smile.y_min), float(smile.y_max), int(n), dtype=float)
+    w = np.asarray(smile.w_at(y), dtype=float)
+    return y, w
 
 
 class VolSurfaceLike(Protocol):
@@ -55,7 +73,7 @@ class SurfaceSlice:
     T: float
     F: float
     K: np.ndarray
-    x: np.ndarray
+    y: np.ndarray
     iv: np.ndarray
     w: np.ndarray
 
@@ -68,7 +86,7 @@ def build_surface_from_iv_function(
     forward: ScalarFn,
     VolSurface_cls: VolSurfaceClass | None = None,
 ) -> VolSurfaceLike:
-    """Build a VolSurface from a synthetic iv(T, x) function."""
+    """Build a VolSurface from a synthetic iv(T, y) function."""
     if VolSurface_cls is None:
         # Import from your real module path if needed; the key is to cast it.
         from option_pricing import (
@@ -113,11 +131,10 @@ def surface_slices(
     for s in surface.smiles:
         T = float(s.T)
         F = float(forward(T))
-        x = np.asarray(s.y, dtype=float)
-        w = np.asarray(s.w, dtype=float)
-        K = F * np.exp(x)
+        y, w = _smile_grid(s)
+        K = F * np.exp(y)
         iv = np.sqrt(np.maximum(w / T, 0.0))
-        out.append(SurfaceSlice(T=T, F=F, K=K, x=x, iv=iv, w=w))
+        out.append(SurfaceSlice(T=T, F=F, K=K, y=y, iv=iv, w=w))
     return tuple(out)
 
 
@@ -126,14 +143,14 @@ def surface_points_df(
     *,
     forward: ScalarFn,
 ) -> pd.DataFrame:
-    """Flatten the surface into a tidy DataFrame (T, x, K, iv, w)."""
+    """Flatten the surface into a tidy DataFrame (T, y, K, iv, w)."""
     rows: list[dict[str, float]] = []
     for sl in surface_slices(surface, forward=forward):
-        for x, K, iv, w in zip(sl.x, sl.K, sl.iv, sl.w, strict=True):
+        for y, K, iv, w in zip(sl.y, sl.K, sl.iv, sl.w, strict=True):
             rows.append(
                 {
                     "T": sl.T,
-                    "x": float(x),
+                    "y": float(y),
                     "K": float(K),
                     "iv": float(iv),
                     "w": float(w),
@@ -182,9 +199,8 @@ def call_prices_from_smile(
     F = float(forward(T))
     dfT = float(df(T))
 
-    x = np.asarray(s.y, dtype=float)
-    w = np.asarray(s.w, dtype=float)
-    K = F * np.exp(x)
+    y, w = _smile_grid(s)
+    K = F * np.exp(y)
     iv = np.sqrt(np.maximum(w / T, 0.0))
 
     C = bs_model.black76_call_price_vec(forward=F, strikes=K, sigma=iv, tau=T, df=dfT)

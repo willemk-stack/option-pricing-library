@@ -236,6 +236,88 @@ class VolSurface:
 
         return cls(expiries=expiries, smiles=tuple(smiles), forward=forward)
 
+    @classmethod
+    def from_svi(
+        cls,
+        rows: Iterable[tuple[float, float, float]],  # (T, K, iv)
+        forward: ScalarFn,
+        *,
+        expiry_round_decimals: int = 10,
+        calibrate_kwargs: dict | None = None,
+    ) -> VolSurface:
+        """Build a surface by calibrating an SVI smile per expiry.
+
+        Parameters
+        ----------
+        rows:
+            Iterable of (T, K, iv) market points.
+        forward:
+            forward(T) -> float.
+        expiry_round_decimals:
+            Bucketing tolerance for float maturities.
+        calibrate_kwargs:
+            Optional kwargs forwarded to :func:`option_pricing.vol.svi.calibrate_svi`.
+
+        Returns
+        -------
+        VolSurface
+            A surface whose slices are analytic SVI smiles.
+
+        Notes
+        -----
+        This keeps ``VolSurface`` itself dependency-light: SciPy is only imported
+        if you call this method.
+        """
+
+        # Local import to keep base surface usage free of SciPy requirements.
+        from .svi import SVISmile, calibrate_svi
+
+        buckets: dict[float, list[tuple[float, float]]] = {}
+
+        for T_raw, K_raw, iv_raw in rows:
+            T_key = round(float(T_raw), expiry_round_decimals)
+            buckets.setdefault(T_key, []).append((float(K_raw), float(iv_raw)))
+
+        expiries = np.asarray(sorted(buckets.keys()), dtype=np.float64)
+        smiles: list[SmileSlice] = []
+
+        ck = {} if calibrate_kwargs is None else dict(calibrate_kwargs)
+
+        for T_np in expiries:
+            pts = buckets[float(T_np)]
+            pts.sort(key=lambda p: p[0])
+
+            K = np.asarray([p[0] for p in pts], dtype=np.float64)
+            iv = np.asarray([p[1] for p in pts], dtype=np.float64)
+
+            F = float(forward(float(T_np)))
+            if F <= 0.0:
+                raise ValueError(f"forward(T) must be > 0, got {F} at T={float(T_np)}")
+            if np.any(K <= 0.0):
+                raise ValueError(f"All strikes must be > 0 at T={float(T_np)}")
+
+            y = np.log(K / np.float64(F)).astype(np.float64, copy=False)
+            w = (np.float64(T_np) * (iv**2)).astype(np.float64, copy=False)
+
+            if np.any(np.diff(y) <= 0.0):
+                raise ValueError(f"x grid not strictly increasing at T={float(T_np)}")
+
+            fit = calibrate_svi(y=y, w_obs=w, **ck)
+
+            # Use the diagnostic domain as the recommended sampling range.
+            y_lo, y_hi = fit.diag.y_domain
+            smiles.append(
+                SVISmile(
+                    T=float(T_np),
+                    params=fit.params,
+                    y_min=float(y_lo),
+                    y_max=float(y_hi),
+                    diagnostics=fit.diag,
+                )
+            )
+
+        return cls(expiries=expiries, smiles=tuple(smiles), forward=forward)
+
     def iv(self, K: ArrayLike, T: float) -> FloatArray:
         T = float(T)
         if T <= 0.0:

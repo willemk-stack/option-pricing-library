@@ -8,6 +8,10 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import least_squares
 
+from option_pricing.typing import ArrayLike, FloatArray
+
+from .vol_types import SmileSlice
+
 RHO_MAX = 0.999
 EPS = 1e-12
 LOG2 = float(np.log(2.0))
@@ -793,6 +797,46 @@ class SVIFitDiagnostics:
 class SVIFitResult:
     params: SVIParams
     diag: SVIFitDiagnostics
+
+
+@dataclass(frozen=True, slots=True)
+class SVISmile(SmileSlice):
+    """Analytic SVI smile slice in total-variance space.
+
+    Implements :class:`~option_pricing.vol.vol_types.SmileSlice` so it can be
+    plugged directly into :class:`~option_pricing.vol.surface.VolSurface`.
+
+    Coordinate:
+        y = ln(K / F(T))  (log-moneyness)
+
+    Notes
+    -----
+    * The SVI functional form is defined for all real ``y``.
+    * ``y_min`` / ``y_max`` are treated as the *recommended* domain for sampling
+      (diagnostics, plots, calendar checks), not hard limits.
+    """
+
+    T: float
+    params: SVIParams
+    y_min: float = -1.25
+    y_max: float = 1.25
+    diagnostics: SVIFitDiagnostics | None = None
+
+    def w_at(self, xq: ArrayLike) -> FloatArray:
+        xq_arr = np.asarray(xq, dtype=np.float64)
+        xq_1d = np.atleast_1d(xq_arr)
+
+        out = svi_total_variance(xq_1d.astype(np.float64, copy=False), self.params)
+        out = np.asarray(out, dtype=np.float64)
+
+        if xq_arr.ndim == 0:
+            return np.asarray(out[0], dtype=np.float64)
+        return out.reshape(xq_arr.shape)
+
+    def iv_at(self, xq: ArrayLike) -> FloatArray:
+        wq = self.w_at(xq)
+        out = np.sqrt(np.maximum(wq / np.float64(self.T), np.float64(0.0)))
+        return np.asarray(out, dtype=np.float64)
 
 
 def calibrate_svi(
