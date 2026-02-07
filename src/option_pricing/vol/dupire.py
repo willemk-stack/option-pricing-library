@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -10,7 +10,7 @@ from ..market.curves import PricingContext
 from ..numerics.fd.diff import diff1_nonuniform, diff2_nonuniform
 from ..types import MarketData
 
-FloatArray = NDArray[np.float64]
+FloatArray = NDArray[np.floating[Any]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,3 +268,61 @@ def local_vol_from_call_grid(
         eps_rel=eps_rel,
         eps_gamma_rel=eps_gamma_rel,
     )
+
+
+def _gatheral_local_var_from_w(
+    *,
+    y: FloatArray,
+    w: FloatArray,
+    w_y: FloatArray,
+    w_yy: FloatArray,
+    w_T: FloatArray,
+    eps_w: float = 1e-12,
+    eps_denom: float = 1e-12,
+) -> tuple[FloatArray, np.ndarray]:
+    """Compute local variance using the (Gatheral) formula in total variance.
+
+    Uses y = ln(K/F(T)) and w(y,T) = T * sigma_imp(y,T)^2.
+
+    Returns (local_var, invalid_mask).
+
+    Notes
+    -----
+    This is a *pointwise* formula. In practice, stability depends heavily on the
+    smoothness/consistency of the implied surface (especially in T).
+    """
+
+    y = np.asarray(y, dtype=np.float64)
+    w = np.asarray(w, dtype=np.float64)
+    w_y = np.asarray(w_y, dtype=np.float64)
+    w_yy = np.asarray(w_yy, dtype=np.float64)
+    w_T = np.asarray(w_T, dtype=np.float64)
+
+    invalid = (
+        (~np.isfinite(y))
+        | (~np.isfinite(w))
+        | (~np.isfinite(w_y))
+        | (~np.isfinite(w_yy))
+        | (~np.isfinite(w_T))
+        | (w <= eps_w)
+    )
+
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        inv_w = 1.0 / w
+        y_over_w = y * inv_w
+        wy2 = w_y * w_y
+        term = -0.25 - inv_w + (y * y) * (inv_w * inv_w)
+        denom = 1.0 - y_over_w * w_y + 0.25 * term * wy2 + 0.5 * w_yy
+        local_var = w_T / denom
+
+    invalid = (
+        invalid
+        | (~np.isfinite(denom))
+        | (np.abs(denom) <= eps_denom)
+        | (denom <= 0.0)
+        | (~np.isfinite(local_var))
+        | (local_var < 0.0)
+    )
+
+    local_var = np.where(invalid, np.nan, local_var)
+    return np.asarray(local_var, dtype=np.float64), np.asarray(invalid, dtype=bool)

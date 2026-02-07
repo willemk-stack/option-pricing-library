@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
 import numpy as np
 
-from option_pricing.typing import ArrayLike, FloatArray, ScalarFn
-
 from ..numerics.interpolation import FritschCarlson
+from ..typing import ArrayLike, FloatArray, ScalarFn
+from .dupire import _gatheral_local_var_from_w
 from .vol_types import SmileSlice
 
 
@@ -189,6 +190,12 @@ class InterpolatedSmileSlice:
         w(y, T) = (1-a) * w0(y) + a * w1(y)
 
     where (T0, w0) and (T1, w1) are the bracketing slices.
+
+    Notes
+    -----
+    This is primarily useful for implied-vol interpolation. If the underlying
+    slices provide analytic derivatives in y (e.g. SVI), this class exposes
+    dw_dy and d2w_dy2 as the same linear blend.
     """
 
     T: float
@@ -207,6 +214,25 @@ class InterpolatedSmileSlice:
         wq = self.w_at(xq)
         out = np.sqrt(np.maximum(wq / np.float64(self.T), np.float64(0.0)))
         return np.asarray(out, dtype=np.float64)
+
+    # ---- optional derivatives in y (log-moneyness) ----
+    def dw_dy(self, xq: ArrayLike) -> FloatArray:
+        if not (hasattr(self.s0, "dw_dy") and hasattr(self.s1, "dw_dy")):
+            raise AttributeError("Underlying slices do not provide dw_dy.")
+        xq_arr = np.asarray(xq, dtype=np.float64)
+        wy0 = self.s0.dw_dy(xq_arr)  # type: ignore[attr-defined]
+        wy1 = self.s1.dw_dy(xq_arr)  # type: ignore[attr-defined]
+        wy = np.float64(1.0 - self.a) * wy0 + np.float64(self.a) * wy1
+        return np.asarray(wy, dtype=np.float64)
+
+    def d2w_dy2(self, xq: ArrayLike) -> FloatArray:
+        if not (hasattr(self.s0, "d2w_dy2") and hasattr(self.s1, "d2w_dy2")):
+            raise AttributeError("Underlying slices do not provide d2w_dy2.")
+        xq_arr = np.asarray(xq, dtype=np.float64)
+        wyy0 = self.s0.d2w_dy2(xq_arr)  # type: ignore[attr-defined]
+        wyy1 = self.s1.d2w_dy2(xq_arr)  # type: ignore[attr-defined]
+        wyy = np.float64(1.0 - self.a) * wyy0 + np.float64(self.a) * wyy1
+        return np.asarray(wyy, dtype=np.float64)
 
     @property
     def y_min(self) -> float:
@@ -366,7 +392,12 @@ class VolSurface:
         """Return a callable single-expiry smile slice at maturity T.
 
         - Node expiry: returns the stored slice (grid or SVI).
-        - Off-node: returns InterpolatedSmileSlice, linear in total variance.
+        - Off-node: returns :class:`InterpolatedSmileSlice`, linear in total variance.
+
+        Notes
+        -----
+        The surface is defined in log-moneyness y = ln(K/F(T)). Interpolating in y
+        between expiries corresponds to *constant log-moneyness* interpolation.
         """
         T = float(T)
         if T <= 0.0:
@@ -389,7 +420,6 @@ class VolSurface:
         i = j - 1
         T0 = float(self.expiries[i])
         T1 = float(self.expiries[j])
-
         a = (T - T0) / (T1 - T0)
         return InterpolatedSmileSlice(
             T=T, s0=self.smiles[i], s1=self.smiles[j], a=float(a)
@@ -404,72 +434,191 @@ class VolSurface:
         if np.any(K_arr <= 0.0):
             raise ValueError("Strikes must be > 0 for log-moneyness.")
 
-        xq = np.log(K_arr / np.float64(self.forward(T))).astype(np.float64, copy=False)
+        F = float(self.forward(T))
+        if F <= 0.0:
+            raise ValueError(f"forward(T) must be > 0, got {F} at T={T}")
 
-        # Clamp outside known range
-        if T <= float(self.expiries[0]):
-            return self.smiles[0].iv_at(xq)
-        if T >= float(self.expiries[-1]):
-            return self.smiles[-1].iv_at(xq)
+        y = np.log(K_arr / np.float64(F)).astype(np.float64, copy=False)
+        return self.slice(T).iv_at(y)
 
-        # Find bracketing expiries
-        j = int(np.searchsorted(self.expiries, np.float64(T)))
-        i = j - 1
-
-        T0 = float(self.expiries[i])
-        T1 = float(self.expiries[j])
-
-        s0 = self.smiles[i]
-        s1 = self.smiles[j]
-
-        w0 = s0.w_at(xq)
-        w1 = s1.w_at(xq)
-
-        a = (T - T0) / (T1 - T0)
-        w = np.float64(1.0 - a) * w0 + np.float64(a) * w1
-
-        out = np.sqrt(np.maximum(w / np.float64(T), np.float64(0.0)))
-        return np.asarray(out, dtype=np.float64)
-
-    def w(self, y: ArrayLike, T: float):
+    def w(self, y: ArrayLike, T: float) -> FloatArray:
+        """Return total variance w(y, T) at log-moneyness y."""
         T = float(T)
         if T <= 0.0:
             raise ValueError("T must be > 0")
-
         y_arr = np.asarray(y, dtype=np.float64)
+        return np.asarray(self.slice(T).w_at(y_arr), dtype=np.float64)
 
-        # Clamp outside known range
-        if T <= float(self.expiries[0]):
-            return self.smiles[0].w_at(y_arr)
-        if T >= float(self.expiries[-1]):
-            return self.smiles[-1].w_at(y_arr)
 
-        # Find bracketing expiries
-        j = int(np.searchsorted(self.expiries, np.float64(T)))
-        i = j - 1
-
-        T0 = float(self.expiries[i])
-        T1 = float(self.expiries[j])
-
-        s0 = self.smiles[i]
-        s1 = self.smiles[j]
-
-        w0 = s0.w_at(y_arr)
-        w1 = s1.w_at(y_arr)
-
-        a = (T - T0) / (T1 - T0)
-        w = np.float64(1.0 - a) * w0 + np.float64(a) * w1
-
-        out = np.sqrt(np.maximum(w / np.float64(T), np.float64(0.0)))
-        return np.asarray(out, dtype=np.float64)
+###
+# TEMP SVI LocalVolSurface before SSVI is implemented
+###
 
 
 @dataclass(frozen=True, slots=True)
 class LocalVolSurface:
+    """Local-vol surface computed from an implied surface in total variance.
+
+    This is a *minimal* implementation intended for demos while I work on a
+    time-consistent parameterization (e.g. SSVI/eSSVI).
+
+    Requirements
+    ------------
+    The underlying implied surface must provide, per expiry slice:
+      - w_at(y)
+      - dw_dy(y)
+      - d2w_dy2(y)
+
+    i.e. analytic (or otherwise smooth) derivatives in log-moneyness.
+
+    Time derivative w_T
+    -------------------
+    w_T is approximated by the same piecewise-linear interpolation you use for
+    implied vols:
+        w_T(y,T) \approx (w(y,T1) - w(y,T0)) / (T1 - T0)
+
+    which is piecewise-constant in T between expiries and can create visible
+    "bands" in local vol.
+    """
+
     implied: VolSurface
     forward: ScalarFn
     discount: ScalarFn
 
-    # num settings?
+    def __post_init__(self) -> None:
+        # Heuristic: if all slices have SVI derivative methods, this is the “SVI-derived” LV path.
+        smiles = getattr(self.implied, "smiles", ())
+        is_svi_like = bool(smiles) and all(
+            hasattr(s, "dw_dy") and hasattr(s, "d2w_dy2") for s in smiles
+        )
 
-    def local_vol(self, K, T): ...
+        if is_svi_like:
+            warnings.warn(
+                "LocalVolSurface is currently derived from per-expiry SVI slices with piecewise-linear "
+                "time interpolation in total variance. This is demo-grade and can be numerically unstable "
+                "(e.g., banding from discontinuous w_T). It will be replaced by a time-consistent SSVI/eSSVI "
+                "implementation in a future version.",
+                category=FutureWarning,  # or UserWarning
+                stacklevel=2,
+            )
+
+    @classmethod
+    def from_implied(
+        cls,
+        implied: VolSurface,
+        *,
+        forward: ScalarFn | None = None,
+        discount: ScalarFn | None = None,
+    ) -> LocalVolSurface:
+        """Convenience constructor.
+
+        If forward/discount are omitted, uses implied.forward and a flat df=1.
+        """
+        fwd = implied.forward if forward is None else forward
+        df = (lambda T: 1.0) if discount is None else discount
+        return cls(implied=implied, forward=fwd, discount=df)
+
+    def _require_derivs(self) -> None:
+        for s in self.implied.smiles:
+            if not (hasattr(s, "dw_dy") and hasattr(s, "d2w_dy2")):
+                raise TypeError(
+                    "LocalVolSurface requires implied slices with dw_dy and d2w_dy2 "
+                    "(e.g. SVISmile)."
+                )
+
+    def _bracket(self, T: float) -> tuple[int, int, float]:
+        """Return (i, j, a) such that T in [Ti,Tj], a in [0,1]."""
+        T = float(T)
+        exp = np.asarray(self.implied.expiries, dtype=np.float64)
+        if exp.size < 2:
+            raise ValueError("Need at least 2 expiries to compute w_T.")
+
+        if T <= float(exp[0]):
+            return 0, 1, 0.0
+        if T >= float(exp[-1]):
+            n = int(exp.size)
+            return n - 2, n - 1, 1.0
+
+        j = int(np.searchsorted(exp, np.float64(T)))
+        i = j - 1
+        T0 = float(exp[i])
+        T1 = float(exp[j])
+        a = (T - T0) / (T1 - T0)
+        return i, j, float(a)
+
+    def _w_and_derivs(
+        self, y: FloatArray, T: float
+    ) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
+        """Compute (w, w_y, w_yy, w_T) at fixed y for maturity T."""
+        self._require_derivs()
+
+        y_arr = np.asarray(y, dtype=np.float64)
+        i, j, a = self._bracket(T)
+
+        exp = np.asarray(self.implied.expiries, dtype=np.float64)
+        T0 = float(exp[i])
+        T1 = float(exp[j])
+        s0 = self.implied.smiles[i]
+        s1 = self.implied.smiles[j]
+
+        w0 = np.asarray(s0.w_at(y_arr), dtype=np.float64)
+        w1 = np.asarray(s1.w_at(y_arr), dtype=np.float64)
+        wy0 = np.asarray(s0.dw_dy(y_arr), dtype=np.float64)  # type: ignore[attr-defined]
+        wy1 = np.asarray(s1.dw_dy(y_arr), dtype=np.float64)  # type: ignore[attr-defined]
+        wyy0 = np.asarray(s0.d2w_dy2(y_arr), dtype=np.float64)  # type: ignore[attr-defined]
+        wyy1 = np.asarray(s1.d2w_dy2(y_arr), dtype=np.float64)  # type: ignore[attr-defined]
+
+        w = (1.0 - a) * w0 + a * w1
+        w_y = (1.0 - a) * wy0 + a * wy1
+        w_yy = (1.0 - a) * wyy0 + a * wyy1
+        w_T = (w1 - w0) / (T1 - T0)
+
+        return (
+            np.asarray(w, dtype=np.float64),
+            np.asarray(w_y, dtype=np.float64),
+            np.asarray(w_yy, dtype=np.float64),
+            np.asarray(w_T, dtype=np.float64),
+        )
+
+    def local_var(
+        self,
+        K: ArrayLike,
+        T: float,
+        *,
+        eps_w: float = 1e-12,
+        eps_denom: float = 1e-12,
+    ) -> FloatArray:
+        """Return local variance sigma_loc^2 at strike K and maturity T."""
+        T = float(T)
+        if T <= 0.0:
+            raise ValueError("T must be > 0")
+
+        K_arr = np.asarray(K, dtype=np.float64)
+        if np.any(K_arr <= 0.0):
+            raise ValueError("K must be > 0")
+
+        F = float(self.forward(T))
+        if F <= 0.0:
+            raise ValueError(f"forward(T) must be > 0, got {F} at T={T}")
+
+        y = np.log(K_arr / np.float64(F)).astype(np.float64, copy=False)
+        w, w_y, w_yy, w_T = self._w_and_derivs(y, T)
+
+        lv, _ = _gatheral_local_var_from_w(
+            y=y, w=w, w_y=w_y, w_yy=w_yy, w_T=w_T, eps_w=eps_w, eps_denom=eps_denom
+        )
+        return np.asarray(lv, dtype=np.float64)
+
+    def local_vol(
+        self,
+        K: ArrayLike,
+        T: float,
+        *,
+        eps_w: float = 1e-12,
+        eps_denom: float = 1e-12,
+    ) -> FloatArray:
+        """Return local volatility sigma_loc at strike K and maturity T."""
+        lv = self.local_var(K, T, eps_w=eps_w, eps_denom=eps_denom)
+        with np.errstate(invalid="ignore"):
+            out = np.sqrt(lv)
+        return np.asarray(out, dtype=np.float64)
