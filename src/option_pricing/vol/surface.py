@@ -100,6 +100,11 @@ def _make_w_interpolator(
     if not (np.all(np.isfinite(x)) and np.all(np.isfinite(w))):
         return _linear_interp_factory(x, w)
 
+    # Fritsch-Carlson needs at least 3 points (finite-diff stencil). For
+    # 2-point smiles we still want a sensible interpolator.
+    if x.size < 3:
+        return _linear_interp_factory(x, w)
+
     # Case 1: monotone overall -> single FC
     if _is_monotone(w):
         return FritschCarlson(x, w)
@@ -110,8 +115,16 @@ def _make_w_interpolator(
         xL, wL = x[: k + 1], w[: k + 1]
         xR, wR = x[k:], w[k:]
         if _is_monotone(wL) and _is_monotone(wR):
-            pL = FritschCarlson(xL, wL)
-            pR = FritschCarlson(xR, wR)
+            pL = (
+                FritschCarlson(xL, wL)
+                if xL.size >= 3
+                else _linear_interp_factory(xL, wL)
+            )
+            pR = (
+                FritschCarlson(xR, wR)
+                if xR.size >= 3
+                else _linear_interp_factory(xR, wR)
+            )
             return _stitch_two(float(x[k]), pL, pR)
 
     # Case 2b: fallback split at global minimum
@@ -120,8 +133,16 @@ def _make_w_interpolator(
         xL, wL = x[: k2 + 1], w[: k2 + 1]
         xR, wR = x[k2:], w[k2:]
         if _is_monotone(wL) and _is_monotone(wR):
-            pL = FritschCarlson(xL, wL)
-            pR = FritschCarlson(xR, wR)
+            pL = (
+                FritschCarlson(xL, wL)
+                if xL.size >= 3
+                else _linear_interp_factory(xL, wL)
+            )
+            pR = (
+                FritschCarlson(xR, wR)
+                if xR.size >= 3
+                else _linear_interp_factory(xR, wR)
+            )
             return _stitch_two(float(x[k2]), pL, pR)
 
     # Fallback: linear interp with flat extrapolation

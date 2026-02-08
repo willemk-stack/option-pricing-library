@@ -38,7 +38,7 @@ def make_smile_from_iv(T: float, x: np.ndarray, iv: np.ndarray) -> Smile:
     x = np.asarray(x, dtype=np.float64)
     iv = np.asarray(iv, dtype=np.float64)
     w = np.float64(T) * (iv**2)
-    return Smile(T=float(T), x=x, w=w.astype(np.float64, copy=False))
+    return Smile(T=float(T), y=x, w=w.astype(np.float64, copy=False))
 
 
 # -------------------------
@@ -79,7 +79,7 @@ def test_smile_monotonicity_fails_when_vol_increases_strongly_with_strike() -> N
 def test_smile_monotonicity_raises_on_non_positive_T() -> None:
     x = np.array([-0.1, 0.0, 0.1], dtype=np.float64)
     w = np.array([0.01, 0.01, 0.01], dtype=np.float64)
-    smile = Smile(T=0.0, x=x, w=w)
+    smile = Smile(T=0.0, y=x, w=w)
 
     with pytest.raises(ValueError):
         check_smile_price_monotonicity(
