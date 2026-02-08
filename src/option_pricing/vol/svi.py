@@ -400,17 +400,25 @@ class SVITransformLeeCap:
     """
     u = [ua, uR, uL, um, usig]
 
-    sR    = cap * sigmoid(uR)      in (0, cap)
-    sLmag = cap * sigmoid(uL)      in (0, cap)
+    Slopes (Lee-capped) with a strictly-positive floor:
+      s(u) = s_min + (cap - s_min) * sigmoid(u)   in (s_min, cap)
 
-    b   = 0.5*(sR + sLmag)
-    rho = (sR - sLmag)/(sR + sLmag + eps)
+      sR    = s(uR)
+      sLmag = s(uL)
+
+    Then:
+      b   = 0.5*(sR + sLmag) + eps
+      rho = (sR - sLmag)/(sR + sLmag + eps)
 
     a is encoded via alpha >= 0:
       a = alpha - b*sigma*sqrt(1-rho^2)
+      alpha = softplus(ua) + eps
+      sigma = softplus(usig) + eps
+      m = um
     """
 
     slope_cap: float = 1.999
+    slope_min: float = 1e-4
     eps: float = EPS
 
     def decode(self, u: NDArray[np.float64]) -> SVIParams:
@@ -421,13 +429,17 @@ class SVITransformLeeCap:
         m = float(um)
 
         cap = float(self.slope_cap)
-        s_min = 1e-4
-        sR = s_min + (cap - s_min) * sigmoid(uR)
-        sLmag = s_min + (cap - s_min) * sigmoid(uL)
+        s_min = float(self.slope_min)
+        span = cap - s_min
+        if span <= 0.0:
+            raise ValueError("slope_cap must be > slope_min")
+
+        sR = s_min + span * float(sigmoid(uR))
+        sLmag = s_min + span * float(sigmoid(uL))
 
         b = 0.5 * (sR + sLmag) + self.eps
         denom = (sR + sLmag) + self.eps
-        rho = (sR - sLmag) / denom  # automatically in (-1, 1)
+        rho = (sR - sLmag) / denom  # in (-1, 1)
 
         k2 = max(1.0 - rho * rho, 0.0)
         a = alpha - b * sigma * float(np.sqrt(k2))
@@ -439,19 +451,27 @@ class SVITransformLeeCap:
             raise ValueError("encode expects b>0 and sigma>0")
 
         cap = float(self.slope_cap)
+        s_min = float(self.slope_min)
+        span = cap - s_min
+        if span <= 0.0:
+            raise ValueError("slope_cap must be > slope_min")
 
         # convert (b,rho) -> slopes
         sR = float(p.b) * (1.0 + float(p.rho))
         sLmag = float(p.b) * (1.0 - float(p.rho))
 
-        # clip into (0, cap) so logit is valid
-        sR = float(np.clip(sR, 1e-10, cap - 1e-10))
-        sLmag = float(np.clip(sLmag, 1e-10, cap - 1e-10))
+        # clip into (s_min, cap) so inverse is valid
+        tiny = 1e-10
+        sR = float(np.clip(sR, s_min + tiny, cap - tiny))
+        sLmag = float(np.clip(sLmag, s_min + tiny, cap - tiny))
 
-        uR = logit(sR / cap)
-        uL = logit(sLmag / cap)
+        # invert s = s_min + span*sigmoid(u)  =>  sigmoid(u) = (s - s_min)/span
+        sigR = float(np.clip((sR - s_min) / span, 1e-12, 1.0 - 1e-12))
+        sigL = float(np.clip((sLmag - s_min) / span, 1e-12, 1.0 - 1e-12))
 
-        # alpha (same idea you already use)
+        uR = logit(sigR)
+        uL = logit(sigL)
+
         alpha = float(p.a + p.b * p.sigma * np.sqrt(max(1.0 - p.rho * p.rho, 0.0)))
         alpha = max(alpha, self.eps)
         ua = float(softplus_inv(alpha))
@@ -468,32 +488,36 @@ class SVITransformLeeCap:
         ua, uR, uL, um, usig = map(float, u)
 
         cap = float(self.slope_cap)
+        s_min = float(self.slope_min)
+        span = cap - s_min
+        if span <= 0.0:
+            raise ValueError("slope_cap must be > slope_min")
 
         sigR = float(sigmoid(uR))
         sigL = float(sigmoid(uL))
-        sR = cap * sigR
-        sLmag = cap * sigL
 
-        dsR_duR = cap * sigR * (1.0 - sigR)
-        dsL_duL = cap * sigL * (1.0 - sigL)
+        # s = s_min + span*sigmoid(u)
+        sR = s_min + span * sigR
+        sLmag = s_min + span * sigL
+
+        dsR_duR = span * sigR * (1.0 - sigR)
+        dsL_duL = span * sigL * (1.0 - sigL)
 
         D = float(sR + sLmag + self.eps)
 
-        # b = 0.5*(sR+sLmag)
+        # b = 0.5*(sR+sLmag) + eps
         db_duR = 0.5 * dsR_duR
         db_duL = 0.5 * dsL_duL
 
         # rho = (sR - sLmag)/D
-        # drho/dsR = (2*sLmag + eps)/D^2
-        # drho/dsL = (-2*sR - eps)/D^2
         drho_dsR = (2.0 * sLmag + self.eps) / (D * D)
         drho_dsL = (-2.0 * sR - self.eps) / (D * D)
         drho_duR = drho_dsR * dsR_duR
         drho_duL = drho_dsL * dsL_duL
 
         # alpha, sigma
-        dalpha_dua = float(sigmoid(ua))
-        dsig_dusig = float(sigmoid(usig))
+        dalpha_dua = float(sigmoid(ua))  # d softplus / d ua
+        dsig_dusig = float(sigmoid(usig))  # d softplus / d usig
 
         rho = float(p.rho)
         b = float(p.b)
@@ -504,16 +528,14 @@ class SVITransformLeeCap:
         k_safe = max(k, 1e-12)
 
         # a = alpha - b*sigma*k, dk/drho = -rho/k
-        common_rho = (
-            b * sigma * (rho / k_safe)
-        )  # = -b*sigma*dk/drho with sign handled below
+        common_rho = b * sigma * (rho / k_safe)
 
         da_dua = dalpha_dua
         da_duR = -(db_duR * sigma * k) + common_rho * drho_duR
         da_duL = -(db_duL * sigma * k) + common_rho * drho_duL
         da_dusig = -(b * dsig_dusig * k)
 
-        dp_du = np.array(
+        return np.array(
             [
                 [da_dua, da_duR, da_duL, 0.0, da_dusig],  # a
                 [0.0, db_duR, db_duL, 0.0, 0.0],  # b
@@ -523,7 +545,6 @@ class SVITransformLeeCap:
             ],
             dtype=np.float64,
         )
-        return dp_du
 
 
 def logit(x: float) -> float:
@@ -612,10 +633,12 @@ class SVIObjective:
         # --- slope matching (only if observed slope is usable) ---
         sL_use, sR_use = self._usable_obs_slopes()
         cap = float(self.reg.slope_cap)
+        s_min = float(self.transform.slope_min)
+        span = cap - s_min
 
         if self.reg.lambda_slope_R > 0.0 and sR_use is not None:
-            uR = float(u[1])  # <- THIS is “uR”
-            sR_model = cap * float(sigmoid(uR))  # in (0, cap)
+            uR = float(u[1])
+            sR_model = s_min + span * float(sigmoid(uR))  # in (s_min, cap)
             reg_terms.append(
                 np.sqrt(self.reg.lambda_slope_R)
                 * (sR_model - sR_use)
@@ -623,8 +646,10 @@ class SVIObjective:
             )
 
         if self.reg.lambda_slope_L > 0.0 and sL_use is not None:
-            uL = float(u[2])  # <- THIS is “uL”
-            sL_model = -cap * float(sigmoid(uL))  # negative left slope
+            uL = float(u[2])
+            sL_model = -(
+                s_min + span * float(sigmoid(uL))
+            )  # negative left slope in (-cap, -s_min)
             reg_terms.append(
                 np.sqrt(self.reg.lambda_slope_L)
                 * (sL_model - sL_use)
@@ -677,22 +702,27 @@ class SVIObjective:
         sL_use, sR_use = self._usable_obs_slopes()
         cap = float(self.reg.slope_cap)
 
+        s_min = float(self.transform.slope_min)
+        span = cap - s_min
+
         if self.reg.lambda_slope_R > 0.0 and sR_use is not None:
             uR = float(u[1])
             sigR = float(sigmoid(uR))
-            dsR_duR = cap * sigR * (1.0 - sigR)
+            dsR_duR = span * sigR * (1.0 - sigR)
 
             row = np.zeros(5, dtype=np.float64)
-            row[1] = np.sqrt(self.reg.lambda_slope_R) * dsR_duR / denom  # column uR
+            row[1] = np.sqrt(self.reg.lambda_slope_R) * dsR_duR / denom
             rows.append(row)
 
         if self.reg.lambda_slope_L > 0.0 and sL_use is not None:
             uL = float(u[2])
             sigL = float(sigmoid(uL))
-            dsL_duL = -cap * sigL * (1.0 - sigL)  # because sL = -cap*sigmoid(uL)
+            dsL_duL = (
+                -span * sigL * (1.0 - sigL)
+            )  # because sL = -(s_min + span*sigmoid(uL))
 
             row = np.zeros(5, dtype=np.float64)
-            row[2] = np.sqrt(self.reg.lambda_slope_L) * dsL_duL / denom  # column uL
+            row[2] = np.sqrt(self.reg.lambda_slope_L) * dsL_duL / denom
             rows.append(row)
 
         if rows:
