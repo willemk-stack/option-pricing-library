@@ -88,9 +88,9 @@ def check_smile_price_monotonicity(
         raise ValueError("df(T) must be > 0")
 
     # reconstruct strike grid and vols
-    x, w = _smile_grid(smile)
+    y, w = _smile_grid(smile)
 
-    K = F * np.exp(x)
+    K = F * np.exp(y)
     iv = np.sqrt(np.maximum(w / np.float64(T), np.float64(0.0)))
 
     # price calls (Black-76 on forwards)
