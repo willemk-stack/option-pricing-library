@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Literal
@@ -279,8 +280,10 @@ def logit(x: float) -> float:
 
 
 # ==========================
-# Raw SVI: params + w(y) + derivatives
+# SVI: params + w(y) + derivatives
 # ==========================
+
+
 @dataclass(frozen=True, slots=True)
 class SVIParams:
     a: float
@@ -288,6 +291,162 @@ class SVIParams:
     rho: float
     m: float
     sigma: float
+
+    def to_jw(self, T: float) -> JWParams:
+        return raw_to_jw(self, T)
+
+
+@dataclass(frozen=True, slots=True)
+class JWParams:
+    v: float
+    psi: float
+    p: float
+    c: float
+    v_tilde: float
+
+    def to_raw(self, T: float) -> SVIParams:
+        return jw_to_raw(self, T)
+
+
+def raw_to_jw(p_raw: SVIParams, T: float) -> JWParams:
+    """
+    Raw SVI (a,b,rho,m,sigma) -> SVI-JW (v,psi,p,c,ve) exactly per
+    Gatheral–Jacquier (2013), Eq. (3.5).
+    """
+    if T <= 0:
+        raise ValueError("T must be > 0")
+
+    a, b, rho, m, sigma = p_raw.a, p_raw.b, p_raw.rho, p_raw.m, p_raw.sigma
+    if b < 0:
+        raise ValueError("Raw SVI requires b >= 0")
+    if not (-1.0 < rho < 1.0):
+        raise ValueError("Raw SVI requires |rho| < 1")
+    if sigma <= 0:
+        raise ValueError("Raw SVI requires sigma > 0")
+
+    # sqrt(m^2 + sigma^2) -- stable
+    sqrt_m2_sigma2 = math.hypot(m, sigma)
+
+    # w_t := w(0) = a + b(-rho*m + sqrt(m^2+sigma^2))
+    w_t = a + b * (-rho * m + sqrt_m2_sigma2)
+    if w_t <= 0:
+        raise ValueError(f"ATM total variance w_t must be > 0, got {w_t}")
+
+    sqrt_wt = math.sqrt(w_t)
+    one_over_sqrt_wt = 1.0 / sqrt_wt
+
+    v_t = w_t / T
+
+    psi_t = one_over_sqrt_wt * (b * 0.5) * (rho - m / sqrt_m2_sigma2)
+
+    p_t = one_over_sqrt_wt * b * (1.0 - rho)
+    c_t = one_over_sqrt_wt * b * (1.0 + rho)
+
+    ve_t = (a + b * sigma * math.sqrt(1.0 - rho * rho)) / T
+
+    return JWParams(v=v_t, psi=psi_t, p=p_t, c=c_t, v_tilde=ve_t)
+
+
+def jw_to_raw(jw: JWParams, T: float) -> SVIParams:
+    """
+    SVI-JW (v,psi,p,c,ve) -> Raw SVI (a,b,rho,m,sigma) exactly per
+    Gatheral–Jacquier (2013), Lemma 3.2.
+
+    Notes:
+    - Closed-form inversion assumes m != 0. We implement GJ's m=0 branch too.
+    - In the degenerate case m=0 and rho≈0, JW does not uniquely identify sigma/a.
+    """
+    if T <= 0:
+        raise ValueError("T must be > 0")
+
+    v_t, psi_t, p_t, c_t, ve_t = jw.v, jw.psi, jw.p, jw.c, jw.v_tilde
+
+    _validate_jw(jw=jw, T=T)
+
+    w_t = v_t * T
+    if w_t <= 0:
+        raise ValueError("ATM total variance w_t must be > 0")
+
+    sqrt_wt = math.sqrt(w_t)
+
+    # Lemma 3.2: b = sqrt(w_t)/2 * (c_t + p_t)
+    b = 0.5 * sqrt_wt * (c_t + p_t)
+    if b <= 0:
+        raise ValueError("Computed b must be > 0")
+
+    # Lemma 3.2: rho = 1 - p_t*sqrt(w_t)/b  (equivalent to (c-p)/(c+p))
+    rho = (c_t - p_t) / (c_t + p_t)
+    # keep inside (-1,1) numerically
+    rho = max(-1.0 + 1e-15, min(1.0 - 1e-15, rho))
+
+    sqrt_1mr2 = math.sqrt(max(0.0, 1.0 - rho * rho))
+
+    # Lemma 3.2: beta := rho - 2*psi_t*sqrt(w_t)/b
+    beta = rho - (2.0 * psi_t * sqrt_wt / b)
+
+    # Numerically clamp beta to [-1,1] (GJ assume beta in [-1,1])
+    beta = max(-1.0 + 1e-15, min(1.0 - 1e-15, beta))
+
+    # beta = m / sqrt(m^2 + sigma^2); so beta==0 corresponds to m==0
+    if abs(beta) < 1e-10:
+        # m = 0 branch.
+        # With m=0: w_t = a + b*sigma,  ve_t*T = a + b*sigma*sqrt(1-rho^2)
+        # => (v_t - ve_t)*T = b*sigma*(1 - sqrt(1-rho^2))
+        denom = b * (1.0 - sqrt_1mr2)
+
+        if abs(denom) < 1e-12:
+            # This is the degenerate limit rho -> 0, where ve_t == v_t and sigma is not identified by JW.
+            raise ValueError(
+                "Degenerate JW->Raw case: m≈0 and rho≈0 implies ve≈v; "
+                "sigma (and a) are not uniquely identified from JW alone."
+            )
+
+        sigma = ((v_t - ve_t) * T) / denom
+        if sigma <= 0:
+            # numerical safety
+            sigma = abs(sigma)
+
+        a = w_t - b * sigma
+        m = 0.0
+
+        return SVIParams(a=a, b=b, rho=rho, m=m, sigma=sigma)
+
+    # Lemma 3.2: alpha := sign(beta)*sqrt(1/beta^2 - 1)
+    alpha = math.copysign(math.sqrt(1.0 / (beta * beta) - 1.0), beta)
+    sign_alpha = 1.0 if alpha >= 0.0 else -1.0
+
+    # (v_t - ve_t)*T = b*m * {-rho + sign(alpha)*sqrt(1+alpha^2) - alpha*sqrt(1-rho^2)}
+    bracket = -rho + sign_alpha * math.sqrt(1.0 + alpha * alpha) - alpha * sqrt_1mr2
+    if abs(bracket) < EPS:
+        raise ValueError("Numerical issue: inversion bracket too close to 0")
+
+    m = ((v_t - ve_t) * T) / (b * bracket)
+    sigma = alpha * m
+    if sigma <= 0:
+        # enforce raw convention sigma > 0 (can be tiny negative due to rounding)
+        sigma = abs(sigma)
+
+    # Lemma 3.2: a = ve_t*T - b*sigma*sqrt(1-rho^2)
+    a = ve_t * T - b * sigma * sqrt_1mr2
+
+    return SVIParams(a=a, b=b, rho=rho, m=m, sigma=sigma)
+
+
+def _validate_jw(jw: JWParams, T: float, *, tol: float = 1e-12) -> None:
+    if T <= 0:
+        raise ValueError("T must be > 0")
+    if jw.v <= 0:
+        raise ValueError("JW v must be > 0")
+    if jw.p < 0 or jw.c < 0:
+        raise ValueError("JW p,c must be >= 0")
+    if jw.p + jw.c <= tol:
+        raise ValueError("JW requires p + c > 0")
+    if jw.v_tilde < 0:
+        raise ValueError("JW v_tilde must be >= 0")
+    if jw.v_tilde > jw.v + tol:
+        raise ValueError("Invalid JW: v_tilde must be <= v")
+    if (2.0 * jw.psi) < (-jw.p - tol) or (2.0 * jw.psi) > (jw.c + tol):
+        raise ValueError("Invalid JW: must satisfy -p <= 2*psi <= c")
 
 
 def svi_total_variance(y: NDArray[np.float64], p: SVIParams) -> NDArray[np.float64]:
@@ -990,31 +1149,132 @@ def check_butterfly_arbitrage(
 
 
 # ==========================
-# Fit outputs
+# Fit outputs and Diagnostics
 # ==========================
-@dataclass(frozen=True, slots=True)
-class SVIFitDiagnostics:
-    # Overall outcome
-    ok: bool
-    failure_reason: str | None
+# ==========================
+# Pure helpers (no self / no closure)
+# ==========================
 
-    # SciPy termination info (from the last inner solve)
+
+def usable_obs_slopes(
+    sL_obs: float | None,
+    sR_obs: float | None,
+    *,
+    slope_cap: float,
+) -> tuple[float | None, float | None]:
+    """Apply sign sanity and Lee-cap clipping to observed slope targets."""
+    cap = float(slope_cap)
+    cap_eff = cap * 0.995
+
+    sL = sL_obs
+    sR = sR_obs
+
+    if sR is not None:
+        sR = float(sR)
+        if not np.isfinite(sR) or sR < 0.0:
+            sR = None
+        else:
+            sR = float(np.clip(sR, 0.0, cap_eff))
+
+    if sL is not None:
+        sL = float(sL)
+        if not np.isfinite(sL) or sL > 0.0:
+            sL = None
+        else:
+            mag = float(np.clip(-sL, 0.0, cap_eff))
+            sL = -mag
+
+    return sL, sR
+
+
+def svi_residual_vector(
+    u: NDArray[np.float64],
+    *,
+    y: NDArray[np.float64],
+    w_obs: NDArray[np.float64],
+    sqrt_w: NDArray[np.float64],
+    transform: SVITransformLeeCap,
+    reg: SVIRegConfig,
+    sL_obs: float | None,
+    sR_obs: float | None,
+) -> NDArray[np.float64]:
+    """
+    Residual vector used by the optimizer:
+      [ sqrt_w*(w_model - w_obs) , reg_terms... ]
+    This is NOT the same as `err = w_model - w_obs` because:
+      - it is weighted by sqrt_w
+      - it appends regularization residuals
+    """
+    u = np.asarray(u, dtype=np.float64).reshape(5)
+    p = transform.decode(u)
+
+    y = np.asarray(y, dtype=np.float64).reshape(-1)
+    w_obs = np.asarray(w_obs, dtype=np.float64).reshape(-1)
+    sqrt_w = np.asarray(sqrt_w, dtype=np.float64).reshape(-1)
+
+    w_model = svi_total_variance(y, p)
+    r = sqrt_w * (w_model - w_obs)
+
+    reg_terms: list[float] = []
+
+    if reg.lambda_m > 0.0:
+        reg_terms.append(np.sqrt(reg.lambda_m) * (p.m - reg.m_prior) / reg.m_scale)
+
+    if reg.lambda_inv_sigma > 0.0:
+        ratio = reg.sigma_floor / max(p.sigma, EPS)
+        reg_terms.append(np.sqrt(reg.lambda_inv_sigma) * soft_hinge_log_ratio(ratio))
+
+    sL_use, sR_use = usable_obs_slopes(sL_obs, sR_obs, slope_cap=reg.slope_cap)
+    cap = float(reg.slope_cap)
+    s_min = float(transform.slope_min)
+    span = cap - s_min
+
+    if reg.lambda_slope_R > 0.0 and sR_use is not None:
+        uR = float(u[1])
+        sR_model = s_min + span * float(sigmoid(uR))
+        reg_terms.append(
+            np.sqrt(reg.lambda_slope_R) * (sR_model - sR_use) / reg.slope_denom
+        )
+
+    if reg.lambda_slope_L > 0.0 and sL_use is not None:
+        uL = float(u[2])
+        sL_model = -(s_min + span * float(sigmoid(uL)))
+        reg_terms.append(
+            np.sqrt(reg.lambda_slope_L) * (sL_model - sL_use) / reg.slope_denom
+        )
+
+    if reg_terms:
+        return np.concatenate([r, np.asarray(reg_terms, dtype=np.float64)])
+    return r
+
+
+# ==========================
+# Diagnostics data model (split)
+# ==========================
+
+
+@dataclass(frozen=True, slots=True)
+class SVISolverInfo:
     termination: str
     nfev: int
     cost: float
     optimality: float
     step_norm: float
+    irls_outer_iters: int
 
+
+@dataclass(frozen=True, slots=True)
+class SVIModelChecks:
     # Sizes
     n_obs: int
     n_reg: int
 
-    # Overall residual stats (data+reg residual vector returned by obj.residual)
+    # Overall residual stats (data+reg)
     RMSE: float
     max_abs: float
     residual: float
 
-    # Data-only fit (computed on final params)
+    # Data-only fit
     rmse_w: float
     rmse_unw: float
     mae_w: float
@@ -1022,14 +1282,14 @@ class SVIFitDiagnostics:
     cost_data: float
     cost_reg: float
 
-    # Domain safety checks (computed on a widened domain grid)
+    # Domain safety
     y_domain: tuple[float, float]
     w_floor: float
     min_w_domain: float
     argmin_y_domain: float
     n_violations: int
 
-    # Butterfly (Gatheral g) checks
+    # Butterfly checks
     butterfly_ok: bool
     min_g: float
     argmin_g_y: float
@@ -1038,7 +1298,7 @@ class SVIFitDiagnostics:
     n_stationary_g: int
     butterfly_reason: str | None
 
-    # Wing / Lee cap diagnostics
+    # Wing / Lee
     sR: float
     sL: float
     lee_cap: float
@@ -1051,7 +1311,7 @@ class SVIFitDiagnostics:
     sR_target_err: float
     sL_target_err: float
 
-    # Parameter diagnostics
+    # Params + flags
     a: float
     b: float
     rho: float
@@ -1060,23 +1320,297 @@ class SVIFitDiagnostics:
     alpha: float
     sigma_vs_floor: float
 
-    # Warn flags
     rho_near_pm1: bool
     sigma_tiny: bool
     b_blown_up: bool
     b_large: bool
     m_outside_data: bool
 
-    # IRLS diagnostics (0/NaN if not IRLS)
-    irls_outer_iters: int
+    # Robust weights diagnostics
     robust_weights_min: float
     robust_weights_median: float
     robust_weights_max: float
     robust_weights_frac_floored: float
     robust_weights_entropy: float
 
-    # One-line logging
+
+@dataclass(frozen=True, slots=True)
+class SVIFitDiagnostics:
+    ok: bool
+    failure_reason: str | None
+    solver: SVISolverInfo
+    checks: SVIModelChecks
     summary: str
+
+
+# ==========================
+# Context object
+# ==========================
+
+
+@dataclass(frozen=True, slots=True)
+class SVIDiagnosticsContext:
+    y: NDArray[np.float64]
+    w_obs: NDArray[np.float64]
+    base_sqrt_w: NDArray[np.float64]
+
+    dom_cfg: DomainCheckConfig
+    y_domain: tuple[float, float]
+    y_chk: NDArray[np.float64]
+
+    reg: SVIRegConfig
+    transform: SVITransformLeeCap
+
+    sL_obs: float | None
+    sR_obs: float | None
+
+    # to compute "fraction floored" in robust weights diagnostics
+    irls_w_floor: float
+
+
+def build_svi_diagnostics(
+    *,
+    ctx: SVIDiagnosticsContext,
+    u_final: NDArray[np.float64] | None = None,
+    p_final: SVIParams | None = None,
+    res_final=None,
+    eff_sqrt_w: NDArray[np.float64] | None = None,
+    robust_w: NDArray[np.float64] | None = None,
+    irls_iters: int = 0,
+    step_norm: float = float("nan"),
+) -> SVIFitDiagnostics:
+    # 1) choose params + u
+    if p_final is None:
+        if u_final is None:
+            raise ValueError("Need u_final or p_final")
+        u_use = np.asarray(u_final, dtype=np.float64).reshape(5)
+        p = ctx.transform.decode(u_use)
+    else:
+        p = p_final
+        u_use = (
+            np.asarray(u_final, dtype=np.float64).reshape(5)
+            if u_final is not None
+            else ctx.transform.encode(p_final)
+        )
+
+    # 2) weights for data-only stats
+    if eff_sqrt_w is None:
+        eff_sqrt_w = ctx.base_sqrt_w
+    eff_sqrt_w = np.asarray(eff_sqrt_w, dtype=np.float64).reshape(-1)
+
+    # 3) data-only stats
+    w_model = svi_total_variance(ctx.y, p)
+    err = w_model - ctx.w_obs
+    r_w = eff_sqrt_w * err
+
+    rmse_w = float(np.sqrt(np.mean(r_w * r_w))) if r_w.size else float("nan")
+    rmse_unw = float(np.sqrt(np.mean(err * err))) if err.size else float("nan")
+    mae_w = float(np.mean(np.abs(r_w))) if r_w.size else float("nan")
+    max_abs_werr = float(np.max(np.abs(r_w))) if r_w.size else float("nan")
+    cost_data = 0.5 * float(np.sum(r_w * r_w)) if r_w.size else 0.0
+
+    # 4) full residual vector (data + reg) and split
+    r_total = svi_residual_vector(
+        u_use,
+        y=ctx.y,
+        w_obs=ctx.w_obs,
+        sqrt_w=eff_sqrt_w,
+        transform=ctx.transform,
+        reg=ctx.reg,
+        sL_obs=ctx.sL_obs,
+        sR_obs=ctx.sR_obs,
+    )
+
+    n_obs = int(ctx.y.size)
+    n_reg = int(max(r_total.size - n_obs, 0))
+    r_reg = r_total[n_obs:] if n_reg > 0 else np.zeros(0, dtype=np.float64)
+    cost_reg = 0.5 * float(np.sum(r_reg * r_reg)) if r_reg.size else 0.0
+
+    RMSE_total = (
+        float(np.sqrt(np.mean(r_total * r_total))) if r_total.size else float("nan")
+    )
+    max_abs_total = float(np.max(np.abs(r_total))) if r_total.size else float("nan")
+    residual_norm = float(np.linalg.norm(r_total)) if r_total.size else float("nan")
+
+    # 5) domain safety check
+    w_floor = float(ctx.dom_cfg.w_floor)
+    tol = float(ctx.dom_cfg.tol)
+
+    w_chk = svi_total_variance(ctx.y_chk, p)
+    min_w_domain = float(np.min(w_chk)) if w_chk.size else float("nan")
+    imin = int(np.argmin(w_chk)) if w_chk.size else 0
+    argmin_y_domain = float(ctx.y_chk[imin]) if ctx.y_chk.size else float("nan")
+    n_viol = int(np.sum(w_chk < (w_floor - tol))) if w_chk.size else 0
+
+    # 6) butterfly check
+    bfly = check_butterfly_arbitrage(
+        p,
+        y_domain_hint=ctx.y_domain,
+        w_floor=w_floor,
+        g_floor=0.0,
+        tol=1e-10,
+        n_scan=max(1201, 40 * int(ctx.dom_cfg.n_grid)),
+    )
+
+    # 7) wing + Lee diagnostics
+    sR = float(p.b * (1.0 + p.rho))
+    sL = float(p.b * (p.rho - 1.0))  # negative
+    lee_cap = float(ctx.reg.slope_cap)
+    lee_slack_R = float(lee_cap - sR)
+    lee_slack_L = float(lee_cap - abs(sL))
+
+    sL_use, sR_use = usable_obs_slopes(
+        ctx.sL_obs, ctx.sR_obs, slope_cap=ctx.reg.slope_cap
+    )
+    sR_used = bool(ctx.reg.lambda_slope_R > 0.0 and sR_use is not None)
+    sL_used = bool(ctx.reg.lambda_slope_L > 0.0 and sL_use is not None)
+
+    denom = float(ctx.reg.slope_denom)
+    sR_target_err = float("nan")
+    sL_target_err = float("nan")
+    if sR_use is not None and denom > 0:
+        sR_target_err = float((sR - sR_use) / denom)
+    if sL_use is not None and denom > 0:
+        sL_target_err = float((sL - sL_use) / denom)
+
+    # 8) params + warn flags
+    rho = float(p.rho)
+    sigma = float(p.sigma)
+    b = float(p.b)
+    a = float(p.a)
+    m = float(p.m)
+    alpha = float(a + b * sigma * np.sqrt(max(1.0 - rho * rho, 0.0)))
+
+    rho_near_pm1 = bool(abs(rho) > 0.995)
+    sigma_vs_floor = float(sigma / max(ctx.reg.sigma_floor, EPS))
+    sigma_tiny = bool(sigma_vs_floor < 0.5)
+    b_blown_up = bool((not np.isfinite(b)) or (b > 1.01 * lee_cap) or (b <= 0.0))
+    b_large = bool(b > 0.90 * lee_cap)
+
+    y_min, y_max = float(np.min(ctx.y)), float(np.max(ctx.y))
+    y_span = float(max(y_max - y_min, 1e-6))
+    m_outside_data = bool((m < y_min - 0.10 * y_span) or (m > y_max + 0.10 * y_span))
+
+    # 9) robust weight diagnostics
+    if robust_w is None:
+        robust_weights_min = float("nan")
+        robust_weights_median = float("nan")
+        robust_weights_max = float("nan")
+        robust_weights_frac_floored = float("nan")
+        robust_weights_entropy = float("nan")
+    else:
+        rw = np.asarray(robust_w, dtype=np.float64).reshape(-1)
+        robust_weights_min = float(np.min(rw)) if rw.size else float("nan")
+        robust_weights_median = float(np.median(rw)) if rw.size else float("nan")
+        robust_weights_max = float(np.max(rw)) if rw.size else float("nan")
+        robust_weights_frac_floored = (
+            float(np.mean(rw <= float(ctx.irls_w_floor) * (1.0 + 1e-12)))
+            if rw.size
+            else float("nan")
+        )
+
+        eff_w = (eff_sqrt_w * eff_sqrt_w).astype(np.float64, copy=False)
+        robust_weights_entropy = _safe_entropy_normalized(eff_w)
+
+    # 10) overall ok/failure_reason
+    ok = True
+    reasons: list[str] = []
+
+    if n_viol > 0:
+        ok = False
+        reasons.append(f"domain_negative_w (n={n_viol}, min_w={min_w_domain:.3g})")
+
+    if not bfly.ok:
+        ok = False
+        reasons.append(bfly.failure_reason or "butterfly_arbitrage")
+
+    if rho_near_pm1:
+        reasons.append("rho_near_pm1")
+    if sigma_tiny:
+        reasons.append("sigma_tiny")
+    if b_blown_up:
+        ok = False
+        reasons.append("b_invalid_or_exceeds_cap")
+
+    failure_reason = "; ".join(reasons) if (not ok or reasons) else None
+
+    # 11) solver info
+    solver = SVISolverInfo(
+        termination=str(getattr(res_final, "message", "")),
+        nfev=int(getattr(res_final, "nfev", 0)),
+        cost=float(getattr(res_final, "cost", float("nan"))),
+        optimality=float(getattr(res_final, "optimality", float("nan"))),
+        step_norm=float(step_norm),
+        irls_outer_iters=int(irls_iters),
+    )
+
+    checks = SVIModelChecks(
+        n_obs=n_obs,
+        n_reg=n_reg,
+        RMSE=RMSE_total,
+        max_abs=max_abs_total,
+        residual=residual_norm,
+        rmse_w=rmse_w,
+        rmse_unw=rmse_unw,
+        mae_w=mae_w,
+        max_abs_werr=max_abs_werr,
+        cost_data=cost_data,
+        cost_reg=cost_reg,
+        y_domain=ctx.y_domain,
+        w_floor=w_floor,
+        min_w_domain=min_w_domain,
+        argmin_y_domain=argmin_y_domain,
+        n_violations=n_viol,
+        butterfly_ok=bool(bfly.ok),
+        min_g=float(bfly.min_g),
+        argmin_g_y=float(bfly.argmin_y),
+        g_left_inf=float(bfly.g_left_inf),
+        g_right_inf=float(bfly.g_right_inf),
+        n_stationary_g=int(bfly.n_stationary),
+        butterfly_reason=bfly.failure_reason,
+        sR=sR,
+        sL=sL,
+        lee_cap=lee_cap,
+        lee_slack_R=lee_slack_R,
+        lee_slack_L=lee_slack_L,
+        sR_target=ctx.sR_obs,
+        sL_target=ctx.sL_obs,
+        sR_target_used=sR_used,
+        sL_target_used=sL_used,
+        sR_target_err=sR_target_err,
+        sL_target_err=sL_target_err,
+        a=a,
+        b=b,
+        rho=rho,
+        m=m,
+        sigma=sigma,
+        alpha=alpha,
+        sigma_vs_floor=sigma_vs_floor,
+        rho_near_pm1=rho_near_pm1,
+        sigma_tiny=sigma_tiny,
+        b_blown_up=b_blown_up,
+        b_large=b_large,
+        m_outside_data=m_outside_data,
+        robust_weights_min=robust_weights_min,
+        robust_weights_median=robust_weights_median,
+        robust_weights_max=robust_weights_max,
+        robust_weights_frac_floored=robust_weights_frac_floored,
+        robust_weights_entropy=robust_weights_entropy,
+    )
+
+    summary = (
+        f"ok={ok} rmse_w={rmse_w:.3g} rmse_unw={rmse_unw:.3g} "
+        f"min_w_dom={min_w_domain:.3g} min_g={bfly.min_g:.3g} "
+        f"sR={sR:.3g} sL={sL:.3g} sigma/floor={sigma_vs_floor:.3g} irls={irls_iters}"
+    )
+
+    return SVIFitDiagnostics(
+        ok=ok,
+        failure_reason=failure_reason,
+        solver=solver,
+        checks=checks,
+        summary=summary,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1172,8 +1706,6 @@ def calibrate_svi(
 
     dom_cfg = DomainCheckConfig() if domain_check is None else domain_check
     y_domain, y_chk = build_domain_grid(y, dom_cfg)
-    w_floor = float(dom_cfg.w_floor)
-    tol = float(dom_cfg.tol)
 
     base_sqrt_w = (
         np.ones_like(w_obs)
@@ -1224,207 +1756,19 @@ def calibrate_svi(
         sR_obs=sR_obs,
     )
 
-    def _build_diag(
-        *,
-        u_final: NDArray[np.float64],
-        res_final,
-        eff_sqrt_w: NDArray[np.float64],
-        robust_w: NDArray[np.float64] | None,
-        irls_iters: int,
-        step_norm: float,
-    ) -> SVIFitDiagnostics:
-        p = transform.decode(u_final)
-        w_model = svi_total_variance(y, p)
-
-        # data-only
-        err = w_model - w_obs
-        r_w = eff_sqrt_w * err
-
-        rmse_w = float(np.sqrt(np.mean(r_w * r_w))) if r_w.size else float("nan")
-        rmse_unw = float(np.sqrt(np.mean(err * err))) if err.size else float("nan")
-        mae_w = float(np.mean(np.abs(r_w))) if r_w.size else float("nan")
-        max_abs_werr = float(np.max(np.abs(r_w))) if r_w.size else float("nan")
-        cost_data = 0.5 * float(np.sum(r_w * r_w)) if r_w.size else 0.0
-
-        # total residual vector (data + reg) and its split
-        r_total = obj.residual(u_final)
-        n_obs = int(y.size)
-        n_reg = int(max(r_total.size - n_obs, 0))
-        r_reg = r_total[n_obs:] if n_reg > 0 else np.zeros(0, dtype=np.float64)
-        cost_reg = 0.5 * float(np.sum(r_reg * r_reg)) if r_reg.size else 0.0
-
-        RMSE_total = (
-            float(np.sqrt(np.mean(r_total * r_total))) if r_total.size else float("nan")
-        )
-        max_abs_total = float(np.max(np.abs(r_total))) if r_total.size else float("nan")
-        residual_norm = float(np.linalg.norm(r_total)) if r_total.size else float("nan")
-
-        # domain safety check
-        w_chk = svi_total_variance(y_chk, p)
-        min_w_domain = float(np.min(w_chk)) if w_chk.size else float("nan")
-        imin = int(np.argmin(w_chk)) if w_chk.size else 0
-        argmin_y_domain = float(y_chk[imin]) if y_chk.size else float("nan")
-        n_viol = int(np.sum(w_chk < (w_floor - tol))) if w_chk.size else 0
-
-        # butterfly check (Gatheral g)
-        bfly = check_butterfly_arbitrage(
-            p,
-            y_domain_hint=y_domain,
-            w_floor=w_floor,
-            g_floor=0.0,
-            tol=1e-10,
-            n_scan=max(1201, 40 * int(dom_cfg.n_grid)),
-        )
-
-        # wing diagnostics
-        sR = float(p.b * (1.0 + p.rho))
-        sL = float(p.b * (p.rho - 1.0))  # negative
-        lee_cap = float(reg.slope_cap)
-        lee_slack_R = float(lee_cap - sR)
-        lee_slack_L = float(lee_cap - abs(sL))
-
-        sL_use, sR_use = obj._usable_obs_slopes()
-        sR_used = bool(reg.lambda_slope_R > 0.0 and sR_use is not None)
-        sL_used = bool(reg.lambda_slope_L > 0.0 and sL_use is not None)
-
-        denom = float(reg.slope_denom)
-        sR_target_err = float("nan")
-        sL_target_err = float("nan")
-        if reg.lambda_slope_R > 0.0 and sR_use is not None:
-            sR_target_err = (sR - sR_use) / denom
-        if reg.lambda_slope_L > 0.0 and sL_use is not None:
-            sL_target_err = (sL - sL_use) / denom
-
-        # parameter diagnostics + flags
-        rho = float(p.rho)
-        sigma = float(p.sigma)
-        b = float(p.b)
-        a = float(p.a)
-        m = float(p.m)
-        alpha = float(a + b * sigma * np.sqrt(max(1.0 - rho * rho, 0.0)))
-
-        rho_near_pm1 = bool(abs(rho) > 0.995)
-        sigma_vs_floor = float(sigma / max(reg.sigma_floor, EPS))
-        sigma_tiny = bool(sigma_vs_floor < 0.5)
-        b_blown_up = bool((not np.isfinite(b)) or (b > 1.01 * lee_cap) or (b <= 0.0))
-        b_large = bool(b > 0.90 * lee_cap)
-
-        y_min, y_max = float(np.min(y)), float(np.max(y))
-        y_span = float(max(y_max - y_min, 1e-6))
-        m_outside_data = bool(
-            (m < y_min - 0.10 * y_span) or (m > y_max + 0.10 * y_span)
-        )
-
-        # robust weights diagnostics
-        if robust_w is None:
-            robust_weights_min = float("nan")
-            robust_weights_median = float("nan")
-            robust_weights_max = float("nan")
-            robust_weights_frac_floored = float("nan")
-            robust_weights_entropy = float("nan")
-        else:
-            rw = np.asarray(robust_w, dtype=np.float64).reshape(-1)
-            robust_weights_min = float(np.min(rw)) if rw.size else float("nan")
-            robust_weights_median = float(np.median(rw)) if rw.size else float("nan")
-            robust_weights_max = float(np.max(rw)) if rw.size else float("nan")
-            robust_weights_frac_floored = (
-                float(np.mean(rw <= float(irls_w_floor) * (1.0 + 1e-12)))
-                if rw.size
-                else float("nan")
-            )
-
-            eff_w = (eff_sqrt_w * eff_sqrt_w).astype(np.float64, copy=False)
-            robust_weights_entropy = _safe_entropy_normalized(eff_w)
-
-        ok = True
-        reasons: list[str] = []
-
-        if n_viol > 0:
-            ok = False
-            reasons.append(f"domain_negative_w (n={n_viol}, min_w={min_w_domain:.3g})")
-
-        if not bfly.ok:
-            ok = False
-            reasons.append(bfly.failure_reason or "butterfly_arbitrage")
-
-        if rho_near_pm1:
-            reasons.append("rho_near_pm1")
-        if sigma_tiny:
-            reasons.append("sigma_tiny")
-        if b_blown_up:
-            ok = False
-            reasons.append("b_invalid_or_exceeds_cap")
-
-        failure_reason = "; ".join(reasons) if (not ok or reasons) else None
-
-        summary = (
-            f"ok={ok} rmse_w={rmse_w:.3g} rmse_unw={rmse_unw:.3g} "
-            f"min_w_dom={min_w_domain:.3g} min_g={bfly.min_g:.3g} "
-            f"sR={sR:.3g} sL={sL:.3g} sigma/floor={sigma_vs_floor:.3g} irls={irls_iters}"
-        )
-
-        return SVIFitDiagnostics(
-            ok=ok,
-            failure_reason=failure_reason,
-            termination=str(getattr(res_final, "message", "")),
-            nfev=int(getattr(res_final, "nfev", 0)),
-            cost=float(getattr(res_final, "cost", float("nan"))),
-            optimality=float(getattr(res_final, "optimality", float("nan"))),
-            step_norm=float(step_norm),
-            n_obs=n_obs,
-            n_reg=n_reg,
-            RMSE=RMSE_total,
-            max_abs=max_abs_total,
-            residual=residual_norm,
-            rmse_w=rmse_w,
-            rmse_unw=rmse_unw,
-            mae_w=mae_w,
-            max_abs_werr=max_abs_werr,
-            cost_data=cost_data,
-            cost_reg=cost_reg,
-            y_domain=y_domain,
-            w_floor=w_floor,
-            min_w_domain=min_w_domain,
-            argmin_y_domain=argmin_y_domain,
-            n_violations=n_viol,
-            butterfly_ok=bool(bfly.ok),
-            min_g=float(bfly.min_g),
-            argmin_g_y=float(bfly.argmin_y),
-            g_left_inf=float(bfly.g_left_inf),
-            g_right_inf=float(bfly.g_right_inf),
-            n_stationary_g=int(bfly.n_stationary),
-            butterfly_reason=bfly.failure_reason,
-            sR=sR,
-            sL=sL,
-            lee_cap=lee_cap,
-            lee_slack_R=lee_slack_R,
-            lee_slack_L=lee_slack_L,
-            sR_target=sR_obs,
-            sL_target=sL_obs,
-            sR_target_used=sR_used,
-            sL_target_used=sL_used,
-            sR_target_err=sR_target_err,
-            sL_target_err=sL_target_err,
-            a=a,
-            b=b,
-            rho=rho,
-            m=m,
-            sigma=sigma,
-            alpha=alpha,
-            sigma_vs_floor=sigma_vs_floor,
-            rho_near_pm1=rho_near_pm1,
-            sigma_tiny=sigma_tiny,
-            b_blown_up=b_blown_up,
-            b_large=b_large,
-            m_outside_data=m_outside_data,
-            irls_outer_iters=int(irls_iters),
-            robust_weights_min=robust_weights_min,
-            robust_weights_median=robust_weights_median,
-            robust_weights_max=robust_weights_max,
-            robust_weights_frac_floored=robust_weights_frac_floored,
-            robust_weights_entropy=robust_weights_entropy,
-            summary=summary,
-        )
+    ctx = SVIDiagnosticsContext(
+        y=y,
+        w_obs=w_obs,
+        base_sqrt_w=base_sqrt_w,
+        dom_cfg=dom_cfg,
+        y_domain=y_domain,
+        y_chk=y_chk,
+        reg=reg,
+        transform=transform,
+        sL_obs=sL_obs,
+        sR_obs=sR_obs,
+        irls_w_floor=float(irls_w_floor),
+    )
 
     # ==========================
     # Branch A: robustify everything (SciPy loss)
@@ -1454,7 +1798,8 @@ def calibrate_svi(
             else np.ones_like(y)
         )
 
-        diag = _build_diag(
+        diag = build_svi_diagnostics(
+            ctx=ctx,
             u_final=u_final,
             res_final=res,
             eff_sqrt_w=base_sqrt_w,
@@ -1462,6 +1807,7 @@ def calibrate_svi(
             irls_iters=0,
             step_norm=float(np.linalg.norm(u_final - u)),
         )
+
         return SVIFitResult(params=p_final, diag=diag)
 
     # ==========================
@@ -1483,14 +1829,17 @@ def calibrate_svi(
         p_final = transform.decode(u_final)
 
         robust_w = np.ones_like(y)
-        diag = _build_diag(
+
+        diag = build_svi_diagnostics(
+            ctx=ctx,
             u_final=u_final,
             res_final=res,
             eff_sqrt_w=base_sqrt_w,
-            robust_w=robust_w,
+            robust_w=np.ones_like(y),
             irls_iters=0,
             step_norm=float(np.linalg.norm(u_final - u)),
         )
+
         return SVIFitResult(params=p_final, diag=diag)
 
     # ==========================
@@ -1549,12 +1898,14 @@ def calibrate_svi(
     u_final = np.asarray(u, dtype=np.float64)
     p_final = transform.decode(u_final)
 
-    diag = _build_diag(
+    diag = build_svi_diagnostics(
+        ctx=ctx,
         u_final=u_final,
         res_final=res_final,
-        eff_sqrt_w=obj.sqrt_w,  # includes base * sqrt(robust_w)
+        eff_sqrt_w=obj.sqrt_w,  # matches what you did before
         robust_w=robust_w_final,
         irls_iters=irls_iters,
         step_norm=step_norm_final,
     )
+
     return SVIFitResult(params=p_final, diag=diag)

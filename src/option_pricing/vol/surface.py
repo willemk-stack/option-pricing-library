@@ -396,7 +396,8 @@ class VolSurface:
             fit = calibrate_svi(y=y, w_obs=w, **ck)
 
             # Use the diagnostic domain as the recommended sampling range.
-            y_lo, y_hi = fit.diag.y_domain
+            y_lo, y_hi = fit.diag.checks.y_domain
+
             smiles.append(
                 SVISmile(
                     T=float(T_np),
