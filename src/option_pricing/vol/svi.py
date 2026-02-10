@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import Literal
+from typing import Literal, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -507,8 +507,30 @@ class SVIRegConfig:
     slope_floor: float = 0.10
     slope_denom: float = 0.15  # overwritten per smile
 
+    lambda_g: float = 1e5
+    g_scale: float = 0.02
+    g_floor: float = 0.0
+    g_n_grid: int = 81  # optional if you use the data-based n above
 
-RegOverride = dict[str, float] | Callable[[SVIRegConfig], SVIRegConfig]
+
+class SVIRegOverrideDict(TypedDict, total=False):
+    lambda_m: float
+    m_prior: float
+    m_scale: float
+    lambda_inv_sigma: float
+    sigma_floor: float
+    lambda_slope_L: float
+    lambda_slope_R: float
+    slope_cap: float
+    slope_floor: float
+    slope_denom: float
+    lambda_g: float
+    g_scale: float
+    g_floor: float
+    g_n_grid: int
+
+
+RegOverride = SVIRegOverrideDict | Callable[[SVIRegConfig], SVIRegConfig]
 
 
 def default_reg_from_data(
@@ -578,6 +600,65 @@ def svi_jac_wrt_params(y: NDArray[np.float64], p: SVIParams) -> NDArray[np.float
         dw_dsigma = p.b * (p.sigma / s)
 
     return np.stack([dw_da, dw_db, dw_drho, dw_dm, dw_dsigma], axis=-1)
+
+
+def svi_jac_w1_wrt_params(y: NDArray[np.float64], p: SVIParams) -> NDArray[np.float64]:
+    z = y - p.m
+    s = np.hypot(z, p.sigma)
+    s3 = s**3
+    sig = p.sigma
+    sig2 = sig * sig
+
+    dw1_da = np.zeros_like(y)
+    dw1_db = p.rho + np.where(s > 0, z / s, 0.0)
+    dw1_drho = np.full_like(y, p.b)
+    dw1_dm = np.where(s3 > 0, -p.b * sig2 / s3, 0.0)
+    dw1_dsig = np.where(s3 > 0, -p.b * z * sig / s3, 0.0)
+
+    return np.stack([dw1_da, dw1_db, dw1_drho, dw1_dm, dw1_dsig], axis=-1)
+
+
+def svi_jac_w2_wrt_params(y: NDArray[np.float64], p: SVIParams) -> NDArray[np.float64]:
+    z = y - p.m
+    s = np.hypot(z, p.sigma)
+    s3 = s**3
+    s5 = s**5
+    sig = p.sigma
+    sig2 = sig * sig
+
+    dw2_da = np.zeros_like(y)
+    dw2_db = np.where(s3 > 0, sig2 / s3, 0.0)
+    dw2_drho = np.zeros_like(y)
+    dw2_dm = np.where(s5 > 0, 3.0 * p.b * sig2 * z / s5, 0.0)
+    dw2_dsig = np.where(s5 > 0, p.b * sig * (2.0 * z * z - sig2) / s5, 0.0)
+
+    return np.stack([dw2_da, dw2_db, dw2_drho, dw2_dm, dw2_dsig], axis=-1)
+
+
+def gatheral_g_jac_params(
+    y: NDArray[np.float64], p: SVIParams, *, w_floor: float = 0.0
+) -> NDArray[np.float64]:
+    y = np.asarray(y, np.float64)
+    w = svi_total_variance(y, p)
+    w1 = svi_total_variance_dy(y, p)
+
+    bad = w <= float(w_floor)
+    w_safe = np.where(bad, np.nan, w)
+
+    A = 1.0 - y * w1 / (2.0 * w_safe)
+
+    Cw = (A * y * w1) / (w_safe * w_safe) + (w1 * w1) / (4.0 * w_safe * w_safe)
+    C1 = -(A * y) / w_safe - (w1 / 2.0) * (1.0 / w_safe + 0.25)
+
+    Jw = svi_jac_wrt_params(y, p)  # (n,5)
+    Jw1 = svi_jac_w1_wrt_params(y, p)  # (n,5)
+    Jw2 = svi_jac_w2_wrt_params(y, p)  # (n,5)
+
+    Jg = Cw[:, None] * Jw + C1[:, None] * Jw1 + 0.5 * Jw2
+
+    # If w is invalid at a point, don't contribute this row via g (handle via separate w-floor penalty)
+    Jg = np.where(np.isfinite(Jg), Jg, 0.0)
+    return Jg
 
 
 # ==========================
@@ -755,6 +836,8 @@ class SVIObjective:
     reg: SVIRegConfig
     sL_obs: float | None = None
     sR_obs: float | None = None
+    y_g: NDArray[np.float64] | None = None
+    w_floor: float = 0.0
 
     def __post_init__(self):
         sw = np.asarray(self.sqrt_w, dtype=np.float64).reshape(-1)
@@ -791,18 +874,18 @@ class SVIObjective:
         w_model = svi_total_variance(self.y, p)
         r = self.sqrt_w * (w_model - self.w_obs)
 
-        reg_terms: list[float] = []
+        reg_terms: list[NDArray[np.float64]] = []
 
         if self.reg.lambda_m > 0.0:
-            reg_terms.append(
+            val = (
                 np.sqrt(self.reg.lambda_m) * (p.m - self.reg.m_prior) / self.reg.m_scale
             )
+            reg_terms.append(np.array([val], dtype=np.float64))
 
         if self.reg.lambda_inv_sigma > 0.0:
             ratio = self.reg.sigma_floor / max(p.sigma, EPS)
-            reg_terms.append(
-                np.sqrt(self.reg.lambda_inv_sigma) * soft_hinge_log_ratio(ratio)
-            )
+            val = np.sqrt(self.reg.lambda_inv_sigma) * soft_hinge_log_ratio(ratio)
+            reg_terms.append(np.array([val], dtype=np.float64))
 
         sL_use, sR_use = self._usable_obs_slopes()
         cap = float(self.reg.slope_cap)
@@ -812,63 +895,77 @@ class SVIObjective:
         if self.reg.lambda_slope_R > 0.0 and sR_use is not None:
             uR = float(u[1])
             sR_model = s_min + span * float(sigmoid(uR))
-            reg_terms.append(
+            val = (
                 np.sqrt(self.reg.lambda_slope_R)
                 * (sR_model - sR_use)
                 / self.reg.slope_denom
             )
+            reg_terms.append(np.array([val], dtype=np.float64))
 
         if self.reg.lambda_slope_L > 0.0 and sL_use is not None:
             uL = float(u[2])
             sL_model = -(s_min + span * float(sigmoid(uL)))
-            reg_terms.append(
+            val = (
                 np.sqrt(self.reg.lambda_slope_L)
                 * (sL_model - sL_use)
                 / self.reg.slope_denom
             )
+            reg_terms.append(np.array([val], dtype=np.float64))
+
+        if self.reg.lambda_g > 0.0 and self.y_g is not None and self.y_g.size:
+            g = gatheral_g_vec(self.y_g, p, w_floor=self.w_floor)
+            deficit = (self.reg.g_floor - g) / max(self.reg.g_scale, 1e-12)
+            h = softplus(deficit) - LOG2
+            h = np.maximum(h, 0.0)
+            r_g = (np.sqrt(self.reg.lambda_g) * h).astype(np.float64, copy=False)
+            reg_terms.append(r_g)
 
         if reg_terms:
-            return np.concatenate([r, np.asarray(reg_terms, dtype=np.float64)])
+            return np.concatenate([r, np.concatenate(reg_terms)])
         return r
 
     def jac(self, u: NDArray[np.float64]) -> NDArray[np.float64]:
         u = np.asarray(u, dtype=np.float64).reshape(5)
         p = self.transform.decode(u)
 
+        # ---- data block ----
         J_wp = svi_jac_wrt_params(self.y, p)  # (n,5) wrt [a,b,rho,m,sigma]
         dpdu = self.transform.dp_du(u, p)  # (5,5)
         J_wu = J_wp @ dpdu  # (n,5) wrt u
         J = self.sqrt_w[:, None] * J_wu  # (n,5)
 
-        rows: list[NDArray[np.float64]] = []
+        # Collect extra reg Jacobian blocks in the SAME order as residual()
+        blocks: list[NDArray[np.float64]] = []
 
+        # ---- m prior row (1,5) ----
         if self.reg.lambda_m > 0.0:
-            row = np.zeros(5, dtype=np.float64)
-            row[3] = np.sqrt(self.reg.lambda_m) / self.reg.m_scale  # um
-            rows.append(row)
+            row = np.zeros((1, 5), dtype=np.float64)
+            row[0, 3] = np.sqrt(self.reg.lambda_m) / self.reg.m_scale
+            blocks.append(row)
 
+        # ---- inv-sigma hinge row (1,5) ----
         if self.reg.lambda_inv_sigma > 0.0:
             sigma = max(float(p.sigma), EPS)
             x = float(np.log(max(self.reg.sigma_floor / sigma, EPS)))
             h = float(softplus(x) - LOG2)
 
-            row = np.zeros(5, dtype=np.float64)
+            row = np.zeros((1, 5), dtype=np.float64)
             if h > 0.0:
                 dsoft_dx = float(sigmoid(x))
                 dx_dsigma = -1.0 / sigma
                 dsigma_dusig = float(sigmoid(float(u[4])))
-                row[4] = (
+                row[0, 4] = (
                     np.sqrt(self.reg.lambda_inv_sigma)
                     * dsoft_dx
                     * dx_dsigma
                     * dsigma_dusig
                 )
-            rows.append(row)
+            blocks.append(row)
 
+        # ---- slope target rows (1,5) each ----
         denom = float(self.reg.slope_denom)
         sL_use, sR_use = self._usable_obs_slopes()
         cap = float(self.reg.slope_cap)
-
         s_min = float(self.transform.slope_min)
         span = cap - s_min
 
@@ -877,21 +974,43 @@ class SVIObjective:
             sigR = float(sigmoid(uR))
             dsR_duR = span * sigR * (1.0 - sigR)
 
-            row = np.zeros(5, dtype=np.float64)
-            row[1] = np.sqrt(self.reg.lambda_slope_R) * dsR_duR / denom
-            rows.append(row)
+            row = np.zeros((1, 5), dtype=np.float64)
+            row[0, 1] = np.sqrt(self.reg.lambda_slope_R) * dsR_duR / denom
+            blocks.append(row)
 
         if self.reg.lambda_slope_L > 0.0 and sL_use is not None:
             uL = float(u[2])
             sigL = float(sigmoid(uL))
             dsL_duL = -span * sigL * (1.0 - sigL)
 
-            row = np.zeros(5, dtype=np.float64)
-            row[2] = np.sqrt(self.reg.lambda_slope_L) * dsL_duL / denom
-            rows.append(row)
+            row = np.zeros((1, 5), dtype=np.float64)
+            row[0, 2] = np.sqrt(self.reg.lambda_slope_L) * dsL_duL / denom
+            blocks.append(row)
 
-        if rows:
-            J = np.vstack([J, np.vstack(rows)])
+        # ---- g-penalty block (ng,5) ----
+        if self.reg.lambda_g > 0.0 and self.y_g is not None and self.y_g.size:
+            y_g = np.asarray(self.y_g, dtype=np.float64).reshape(-1)
+
+            g = gatheral_g_vec(y_g, p, w_floor=self.w_floor)
+            g_scale = max(float(self.reg.g_scale), 1e-12)
+            deficit = (float(self.reg.g_floor) - g) / g_scale
+
+            # hinge derivative: 0 when deficit<=0, else sigmoid(deficit)
+            dh_ddef = np.zeros_like(deficit)
+            active = deficit > 0.0
+            dh_ddef[active] = sigmoid(deficit[active])
+
+            Jg_p = gatheral_g_jac_params(y_g, p, w_floor=self.w_floor)  # (ng,5) wrt p
+            Jg_u = Jg_p @ dpdu  # (ng,5) wrt u
+
+            scale = -np.sqrt(self.reg.lambda_g) / g_scale
+            Jg_rows = (scale * dh_ddef)[:, None] * Jg_u  # (ng,5)
+
+            blocks.append(Jg_rows)
+
+        # ---- final stack ----
+        if blocks:
+            J = np.vstack([J, np.vstack(blocks)])
         return J
 
 
@@ -1928,6 +2047,8 @@ def calibrate_svi(
     repair_method: Literal["project", "line_search"] = "line_search",
     repair_n_scan: int = 31,
     repair_n_bisect: int = 30,
+    refit_after_repair: bool = True,
+    refit_max_nfev: int = 1500,
 ) -> SVIFitResult:
     y = np.asarray(y, dtype=np.float64).reshape(-1)
     w_obs = np.asarray(w_obs, dtype=np.float64).reshape(-1)
@@ -1935,9 +2056,6 @@ def calibrate_svi(
         raise ValueError("y and w_obs must have same shape")
     if not (np.all(np.isfinite(y)) and np.all(np.isfinite(w_obs))):
         raise ValueError("y and w_obs must be finite")
-
-    dom_cfg = DomainCheckConfig() if domain_check is None else domain_check
-    y_domain, y_chk = build_domain_grid(y, dom_cfg)
 
     base_sqrt_w = (
         np.ones_like(w_obs)
@@ -1960,8 +2078,24 @@ def calibrate_svi(
             sigma=0.2,
         )
 
+    dom_cfg = DomainCheckConfig() if domain_check is None else domain_check
+    y_domain, y_chk = build_domain_grid(y, dom_cfg)
+
     base_reg = default_reg_from_data(y, w_obs, base_sqrt_w)
     reg = apply_reg_override(base_reg, reg_override)
+
+    # g-penalty grid
+    y_lo, y_hi = y_domain
+    n = reg.g_n_grid
+    y_g = np.linspace(y_lo, y_hi, n, dtype=np.float64)
+
+    span = max(y_hi - y_lo, 0.5)
+    wing = np.array(
+        [y_lo - span, y_lo - 0.5 * span, y_hi + 0.5 * span, y_hi + span],
+        dtype=np.float64,
+    )
+
+    y_g = np.unique(np.concatenate([y_g, wing])).astype(np.float64)
 
     transform = SVITransformLeeCap(slope_cap=reg.slope_cap)
     u = transform.encode(x0)
@@ -1986,6 +2120,8 @@ def calibrate_svi(
         reg=reg,
         sL_obs=sL_obs,
         sR_obs=sR_obs,
+        y_g=y_g,
+        w_floor=float(dom_cfg.w_floor),
     )
 
     ctx = SVIDiagnosticsContext(
@@ -2034,6 +2170,49 @@ def calibrate_svi(
                     n_scan=repair_n_scan,
                     n_bisect=repair_n_bisect,
                 )
+                # ---- REFIT (warm-start) from repaired params ----
+                if refit_after_repair:
+                    # make objective use the final effective weights (IRLS or base)
+                    obj.sqrt_w = np.asarray(eff_sqrt_w, dtype=np.float64).reshape(-1)
+
+                    u0 = transform.encode(p_out)
+
+                    # one more local polish step; keep it linear because robust weights are already in obj.sqrt_w (IRLS)
+                    res2 = least_squares(
+                        fun=obj.residual,
+                        x0=u0,
+                        jac=obj.jac,
+                        loss="linear",
+                        x_scale="jac",
+                        max_nfev=int(refit_max_nfev),
+                    )
+                    if res2.success and np.all(np.isfinite(res2.x)):
+                        u_final = np.asarray(res2.x, dtype=np.float64)
+                        p_out = transform.decode(u_final)
+                        res_final = res2
+                        step_norm = float(np.linalg.norm(u_final - u0))
+
+                        # final guard: refit can reintroduce arb
+                        b2 = check_butterfly_arbitrage(
+                            p_out,
+                            y_domain_hint=ctx.y_domain,
+                            w_floor=float(ctx.dom_cfg.w_floor),
+                            g_floor=0.0,
+                            tol=1e-10,
+                        )
+                        if not b2.ok:
+                            p_out = repair_butterfly_raw(
+                                p_out,
+                                T=1.0,
+                                y_domain_hint=ctx.y_domain,
+                                w_floor=float(ctx.dom_cfg.w_floor),
+                                method=repair_method,
+                                tol=1e-10,
+                                n_scan=repair_n_scan,
+                                n_bisect=repair_n_bisect,
+                            )
+                            # keep u consistent for diagnostics
+                            u_final = transform.encode(p_out)
 
         diag = build_svi_diagnostics(
             ctx=ctx,

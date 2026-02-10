@@ -1,9 +1,15 @@
-# tests/test_svi_repair.py
+"""SVI repair / calibration tests.
+
+These tests are intentionally written to be robust to small implementation
+changes in the SVI module (e.g. adding a post-repair refit or adding new
+regularization terms) while still verifying the key behaviors.
+"""
+
+import inspect
+
 import numpy as np
 import pytest
 
-# TODO: change this import to your actual module path, e.g.
-# import option_pricing.svi as svi
 import option_pricing.vol.svi as svi
 
 
@@ -27,6 +33,15 @@ def _arb_good_params() -> svi.SVIParams:
     return svi.SVIParams(a=0.05, b=0.30, rho=-0.20, m=0.00, sigma=0.25)
 
 
+def _assert_params_close(
+    p: svi.SVIParams, q: svi.SVIParams, *, atol: float = 1e-10
+) -> None:
+    """Dataclass equality is exact; allow tiny float diffs (e.g. encode/decode roundtrips)."""
+    pv = np.array([p.a, p.b, p.rho, p.m, p.sigma], dtype=np.float64)
+    qv = np.array([q.a, q.b, q.rho, q.m, q.sigma], dtype=np.float64)
+    assert np.allclose(pv, qv, rtol=0.0, atol=atol), (pv, qv)
+
+
 @pytest.mark.parametrize("method", ["project", "line_search"])
 def test_repair_butterfly_raw_returns_feasible(method: str) -> None:
     p_bad = _arb_bad_params()
@@ -45,7 +60,7 @@ def test_repair_butterfly_raw_returns_feasible(method: str) -> None:
         T=1.0,  # you're working in total-variance space
         y_domain_hint=(-1.25, 1.25),
         w_floor=0.0,
-        method=method,  # "project" or "line_search"
+        method=method,
         tol=1e-10,
         n_scan=31,
         n_bisect=30,
@@ -93,7 +108,7 @@ def test_calibrate_svi_triggers_repair_path(monkeypatch: pytest.MonkeyPatch) -> 
     - Avoid running a real optimizer: monkeypatch least_squares to return x0.
     - Force the first butterfly check in _finalize to fail, so repair runs.
     - Monkeypatch repair_butterfly_raw to return a known good params.
-    - Ensure output params are the repaired ones and diagnostics show butterfly_ok=True.
+    - Ensure output params are ~repaired ones and diagnostics show butterfly_ok=True.
     """
 
     class DummyLSQRes:
@@ -105,19 +120,22 @@ def test_calibrate_svi_triggers_repair_path(monkeypatch: pytest.MonkeyPatch) -> 
             self.cost = 0.0
             self.optimality = 0.0
 
-    # Patch least_squares used inside your module
-    def fake_least_squares(*, fun, x0, jac, loss, **kwargs):
+    # Patch least_squares used inside your module (robust to signature changes)
+    def fake_least_squares(*args, **kwargs):
+        if "x0" in kwargs:
+            x0 = kwargs["x0"]
+        else:
+            x0 = args[1]  # least_squares(fun, x0, ...)
         return DummyLSQRes(x0)
 
     monkeypatch.setattr(svi, "least_squares", fake_least_squares)
 
-    # Force the first call to check_butterfly_arbitrage (the one inside _finalize)
-    # to fail, then succeed thereafter (diagnostics uses it too).
+    # First butterfly check fails -> triggers repair; later checks succeed
     calls = {"n": 0}
 
-    def fake_check(p, *args, **kwargs):
+    def fake_check(*args, **kwargs):
         calls["n"] += 1
-        ok = calls["n"] >= 2  # first call fails -> triggers repair
+        ok = calls["n"] != 1
         ydom = kwargs.get("y_domain_hint", (-1.25, 1.25))
         return svi.ButterflyCheck(
             ok=ok,
@@ -134,25 +152,46 @@ def test_calibrate_svi_triggers_repair_path(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(svi, "check_butterfly_arbitrage", fake_check)
 
     p_good = _arb_good_params()
+    repair_called = {"n": 0}
 
-    # Patch repair_butterfly_raw to return a known good slice
     def fake_repair(*args, **kwargs):
+        repair_called["n"] += 1
         return p_good
 
     monkeypatch.setattr(svi, "repair_butterfly_raw", fake_repair)
 
-    # Run calibrate on tiny synthetic data
     y = np.array([-0.2, 0.0, 0.2], dtype=np.float64)
     w_obs = np.array([0.08, 0.06, 0.07], dtype=np.float64)
+
+    sig = inspect.signature(svi.calibrate_svi).parameters
+
+    # Optional post-repair refit knobs
+    refit_kwargs: dict[str, object] = {}
+    if "refit_after_repair" in sig:
+        refit_kwargs["refit_after_repair"] = True
+        if "refit_max_nfev" in sig:
+            refit_kwargs["refit_max_nfev"] = 1
+
+    # Optional g-penalty knobs (disable it for this test if present)
+    reg_kwargs: dict[str, object] = {}
+    if hasattr(svi, "SVIRegConfig") and "lambda_g" in getattr(
+        svi.SVIRegConfig, "__annotations__", {}
+    ):
+        reg_kwargs["reg_override"] = {"lambda_g": 0.0}
 
     out = svi.calibrate_svi(
         y=y,
         w_obs=w_obs,
         loss="linear",
         robust_data_only=True,
-        repair_butterfly=True,  # key
-        x0=_arb_good_params(),  # doesn't matter because least_squares is patched
+        repair_butterfly=True,
+        x0=_arb_good_params(),
+        **refit_kwargs,
+        **reg_kwargs,
     )
 
-    assert out.params == p_good
+    assert (
+        repair_called["n"] >= 1
+    ), "expected calibrate_svi to call repair_butterfly_raw"
+    _assert_params_close(out.params, p_good)
     assert out.diag.checks.butterfly_ok is True
