@@ -1378,8 +1378,10 @@ def build_svi_diagnostics(
     robust_w: NDArray[np.float64] | None = None,
     irls_iters: int = 0,
     step_norm: float = float("nan"),
+    p_override: SVIParams | None = None,
 ) -> SVIFitDiagnostics:
-    # 1) choose params + u
+
+    # 0) choose base params + u (for reporting step_norm etc.)
     if p_final is None:
         if u_final is None:
             raise ValueError("Need u_final or p_final")
@@ -1392,6 +1394,11 @@ def build_svi_diagnostics(
             if u_final is not None
             else ctx.transform.encode(p_final)
         )
+
+    # 1) override params if provided (e.g. repaired slice)
+    if p_override is not None:
+        p = p_override
+        u_use = ctx.transform.encode(p_override)  # keep r_total consistent with p
 
     # 2) weights for data-only stats
     if eff_sqrt_w is None:
@@ -1679,6 +1686,227 @@ class SVISmile:
 
 
 # ==========================
+# Smile repair
+# ==========================
+
+
+def _find_min_feasible_lambda(
+    p_jw: JWParams,
+    c_ast: float,
+    v_tilde_ast: float,
+    T: float,
+    *,
+    y_domain_hint: tuple[float, float],
+    w_floor: float,
+    tol: float = 1e-10,
+    n_scan: int = 31,
+    n_bisect: int = 30,
+) -> tuple[float, SVIParams, ButterflyCheck]:
+    c0 = float(p_jw.c)
+    v0 = float(p_jw.v_tilde)
+    c1 = float(c_ast)
+    v1 = float(v_tilde_ast)
+
+    def is_ok(lam: float):
+        lam = float(np.clip(lam, 0.0, 1.0))
+        c = (1.0 - lam) * c0 + lam * c1
+        vt = (1.0 - lam) * v0 + lam * v1
+
+        jw = replace(p_jw, c=float(c), v_tilde=float(vt))
+        try:
+            raw = jw_to_raw(jw, T)
+        except ValueError:
+            return False, None, None
+
+        bfly = check_butterfly_arbitrage(
+            raw,
+            y_domain_hint=y_domain_hint,
+            w_floor=w_floor,
+            g_floor=0.0,
+            tol=tol,
+        )
+        return bool(bfly.ok), raw, bfly
+
+    # ---- endpoints ----
+    ok0, raw0, b0 = is_ok(0.0)
+    if ok0 and raw0 is not None:
+        return 0.0, raw0, b0
+
+    ok1, raw1, b1 = is_ok(1.0)
+
+    # If λ=1 is degenerate for JW->raw, try a small retreat from 1.0
+    if raw1 is None:
+        for eps in (1e-12, 1e-10, 1e-8, 1e-6, 1e-4):
+            ok1, raw1, b1 = is_ok(1.0 - eps)
+            if raw1 is not None:
+                break
+
+    if raw1 is None:
+        raise ValueError(
+            "SVI repair failed: projection endpoint hits JW->raw degeneracy "
+            "(cannot represent candidate in raw parameters)."
+        )
+
+    if not ok1:
+        raise ValueError(
+            "SVI projection (Section 5.1 construction) did not yield a butterfly-arb-free slice "
+            f"(reason={b1.failure_reason}, min_g={b1.min_g})."
+        )
+
+    # ---- coarse scan for first fail->pass bracket ----
+    grid = np.linspace(0.0, 1.0, int(max(n_scan, 3)), dtype=np.float64)
+    prev_lam = float(grid[0])
+    prev_ok = False  # we know ok0 is False here
+
+    lo = hi = None
+    for lam in grid[1:]:
+        ok, raw, bfly = is_ok(float(lam))
+
+        # Treat "not representable" as not ok (acts like a failure region)
+        if raw is None:
+            prev_lam, prev_ok = float(lam), False
+            continue
+
+        if (not prev_ok) and ok:
+            lo, hi = float(prev_lam), float(lam)
+            break
+
+        prev_lam, prev_ok = float(lam), bool(ok)
+
+    if lo is None or hi is None:
+        # Shouldn't happen if ok1 True, but keep it safe.
+        return 1.0, raw1, b1
+
+    # ---- bisection for minimal feasible lambda ----
+    lo_lam, hi_lam = lo, hi
+    # hi_lam should be feasible (or at least representable)
+    ok_hi, raw_hi, b_hi = is_ok(hi_lam)
+    if (raw_hi is None) or (not ok_hi):
+        # fallback: return the endpoint which is feasible
+        return 1.0, raw1, b1
+
+    best_lam, best_raw, best_bfly = hi_lam, raw_hi, b_hi
+
+    for _ in range(int(max(n_bisect, 1))):
+        mid = 0.5 * (lo_lam + hi_lam)
+        ok, raw, bfly = is_ok(mid)
+
+        # not representable => treat like failure
+        if raw is None or not ok:
+            lo_lam = mid
+        else:
+            best_lam, best_raw, best_bfly = mid, raw, bfly
+            hi_lam = mid
+
+    return float(best_lam), best_raw, best_bfly
+
+
+def repair_butterfly_raw(
+    p_raw: SVIParams,
+    T: float,
+    *,
+    y_domain_hint: tuple[float, float],
+    w_floor: float,
+    method: Literal["project", "line_search"] = "line_search",
+    tol: float = 1e-10,
+    n_scan: int = 31,
+    n_bisect: int = 30,
+) -> SVIParams:
+
+    # 0) If already ok, return unchanged.
+    b0 = check_butterfly_arbitrage(
+        p_raw,
+        y_domain_hint=y_domain_hint,
+        w_floor=w_floor,
+        g_floor=0.0,
+        tol=tol,
+    )
+    if b0.ok:
+        return p_raw
+
+    # 1) raw -> JW
+    p_jw = p_raw.to_jw(T=T)
+
+    # 2) Section 5.1 targets
+    c_ast = float(p_jw.p + 2.0 * p_jw.psi)
+
+    if c_ast < 0.0 and c_ast > -1e-14:
+        c_ast = 0.0
+    if c_ast < 0.0:
+        raise ValueError(
+            f"Invalid c_ast={c_ast} from JW; check JW constraints / inputs."
+        )
+
+    denom = float(p_jw.p + c_ast)
+    if denom <= 0.0:
+        raise ValueError("Invalid JW: p + c_ast must be > 0 for projection formula.")
+
+    frac = float((4.0 * p_jw.p * c_ast) / (denom * denom))
+    frac = float(np.clip(frac, 0.0, 1.0))
+    vtilde_ast = float(p_jw.v * frac)
+
+    if method == "project":
+        jw_target = replace(p_jw, c=c_ast, v_tilde=vtilde_ast)
+
+        # Fast path: try direct full projection
+        try:
+            p_candidate = jw_to_raw(jw_target, T)
+            b = check_butterfly_arbitrage(
+                p_candidate,
+                y_domain_hint=y_domain_hint,
+                w_floor=w_floor,
+                g_floor=0.0,
+                tol=tol,
+            )
+            if b.ok:
+                return p_candidate
+        except ValueError:
+            # JW->raw degeneracy (or other conversion issue) -> fall back below
+            pass
+
+        # Robust fallback: reuse the existing line-search to guarantee feasibility
+        lam, p_candidate, b = _find_min_feasible_lambda(
+            p_jw=p_jw,
+            c_ast=c_ast,
+            v_tilde_ast=vtilde_ast,
+            T=T,
+            y_domain_hint=y_domain_hint,
+            w_floor=w_floor,
+            tol=tol,
+            n_scan=n_scan,
+            n_bisect=n_bisect,
+        )
+        if not b.ok:
+            raise ValueError(
+                "Fallback line-search returned non-feasible candidate unexpectedly "
+                f"(reason={b.failure_reason}, min_g={b.min_g})."
+            )
+        return p_candidate
+
+    if method == "line_search":
+        lam, p_candidate, b = _find_min_feasible_lambda(
+            p_jw=p_jw,
+            c_ast=c_ast,
+            v_tilde_ast=vtilde_ast,
+            T=T,
+            y_domain_hint=y_domain_hint,
+            w_floor=w_floor,
+            tol=tol,
+            n_scan=n_scan,
+            n_bisect=n_bisect,
+        )
+        # b should be ok by construction, but keep the guard
+        if not b.ok:
+            raise ValueError(
+                "Line-search returned non-feasible candidate unexpectedly "
+                f"(reason={b.failure_reason}, min_g={b.min_g})."
+            )
+        return p_candidate
+
+    raise ValueError(f"Unknown method={method!r}")
+
+
+# ==========================
 # Calibration
 # ==========================
 def calibrate_svi(
@@ -1696,6 +1924,10 @@ def calibrate_svi(
     irls_w_floor: float = 1e-4,
     irls_damp: float = 0.0,
     irls_tol: float = 1e-8,
+    repair_butterfly: bool = False,
+    repair_method: Literal["project", "line_search"] = "line_search",
+    repair_n_scan: int = 31,
+    repair_n_bisect: int = 30,
 ) -> SVIFitResult:
     y = np.asarray(y, dtype=np.float64).reshape(-1)
     w_obs = np.asarray(w_obs, dtype=np.float64).reshape(-1)
@@ -1770,6 +2002,51 @@ def calibrate_svi(
         irls_w_floor=float(irls_w_floor),
     )
 
+    def _finalize(
+        *,
+        u_final: NDArray[np.float64],
+        p_final: SVIParams,
+        res_final,
+        eff_sqrt_w: NDArray[np.float64],
+        robust_w: NDArray[np.float64] | None,
+        irls_iters: int,
+        step_norm: float,
+    ) -> SVIFitResult:
+        p_out = p_final
+
+        if repair_butterfly:
+            bfly = check_butterfly_arbitrage(
+                p_out,
+                y_domain_hint=ctx.y_domain,
+                w_floor=float(ctx.dom_cfg.w_floor),
+                g_floor=0.0,
+                tol=1e-10,
+            )
+            if not bfly.ok:
+                # Use T=1.0 because you're in total-variance calibration space
+                p_out = repair_butterfly_raw(
+                    p_out,
+                    T=1.0,
+                    y_domain_hint=ctx.y_domain,
+                    w_floor=float(ctx.dom_cfg.w_floor),
+                    method=repair_method,
+                    tol=1e-10,
+                    n_scan=repair_n_scan,
+                    n_bisect=repair_n_bisect,
+                )
+
+        diag = build_svi_diagnostics(
+            ctx=ctx,
+            u_final=u_final,
+            res_final=res_final,
+            eff_sqrt_w=eff_sqrt_w,
+            robust_w=robust_w if robust_w is not None else np.ones_like(y),
+            irls_iters=irls_iters,
+            step_norm=step_norm,
+            p_override=p_out,  # <-- important
+        )
+        return SVIFitResult(params=p_out, diag=diag)
+
     # ==========================
     # Branch A: robustify everything (SciPy loss)
     # ==========================
@@ -1798,17 +2075,15 @@ def calibrate_svi(
             else np.ones_like(y)
         )
 
-        diag = build_svi_diagnostics(
-            ctx=ctx,
+        return _finalize(
             u_final=u_final,
+            p_final=p_final,
             res_final=res,
             eff_sqrt_w=base_sqrt_w,
             robust_w=robust_w,
             irls_iters=0,
             step_norm=float(np.linalg.norm(u_final - u)),
         )
-
-        return SVIFitResult(params=p_final, diag=diag)
 
     # ==========================
     # Branch B: linear (no robust)
@@ -1830,17 +2105,15 @@ def calibrate_svi(
 
         robust_w = np.ones_like(y)
 
-        diag = build_svi_diagnostics(
-            ctx=ctx,
+        return _finalize(
             u_final=u_final,
+            p_final=p_final,
             res_final=res,
             eff_sqrt_w=base_sqrt_w,
-            robust_w=np.ones_like(y),
+            robust_w=robust_w,
             irls_iters=0,
             step_norm=float(np.linalg.norm(u_final - u)),
         )
-
-        return SVIFitResult(params=p_final, diag=diag)
 
     # ==========================
     # Branch C: IRLS (robustify data only)
@@ -1898,14 +2171,12 @@ def calibrate_svi(
     u_final = np.asarray(u, dtype=np.float64)
     p_final = transform.decode(u_final)
 
-    diag = build_svi_diagnostics(
-        ctx=ctx,
+    return _finalize(
         u_final=u_final,
+        p_final=p_final,
         res_final=res_final,
-        eff_sqrt_w=obj.sqrt_w,  # matches what you did before
-        robust_w=robust_w_final,
+        eff_sqrt_w=obj.sqrt_w,  # effective weights after IRLS
+        robust_w=robust_w_final,  # the robust weights
         irls_iters=irls_iters,
         step_norm=step_norm_final,
     )
-
-    return SVIFitResult(params=p_final, diag=diag)
