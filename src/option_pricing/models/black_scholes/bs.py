@@ -364,6 +364,68 @@ def black76_put_price_vec(
     return C - df * (float(forward) - K)
 
 
+def black76_call_price_vega_vec(
+    *,
+    forward: float,
+    strikes: np.ndarray,
+    sigma: float | np.ndarray,
+    tau: float,
+    df: float = 1.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Vectorized discounted Black-76 call price + vega.
+    price = df * (F N(d1) - K N(d2))
+    vega  = df * F * n(d1) * sqrt(tau)
+
+    Handy for solvers when computing implied volatility or implied variance
+    """
+    F = float(forward)
+    if F <= 0.0:
+        raise ValueError("forward must be positive")
+
+    K = np.asarray(strikes, dtype=FloatDType)
+    if np.any(K <= 0.0):
+        raise ValueError("strikes must be positive")
+
+    tau = float(tau)
+    if tau < 0.0:
+        raise ValueError("tau must be >= 0")
+
+    df = float(df)
+    if df <= 0.0:
+        raise ValueError("df must be positive")
+
+    sig = np.asarray(sigma, dtype=FloatDType)
+    if np.any(sig < 0.0):
+        raise ValueError("sigma must be non-negative")
+
+    intrinsic = df * np.maximum(F - K, 0.0)
+    if tau == 0.0:
+        return intrinsic, np.zeros_like(K, dtype=FloatDType)
+
+    sqrt_tau = np.sqrt(tau)
+    sig_sqrt_tau = sig * sqrt_tau
+
+    mask = sig_sqrt_tau > 1e-16
+    if not np.any(mask):
+        return intrinsic, np.zeros_like(K, dtype=FloatDType)
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        logFK = np.log(F / K)
+        d1 = (logFK + 0.5 * (sig**2) * tau) / sig_sqrt_tau
+        d2 = d1 - sig_sqrt_tau
+
+        Nd1 = norm.cdf(d1)
+        Nd2 = norm.cdf(d2)
+
+        price = df * (F * Nd1 - K * Nd2)
+        vega = df * F * norm.pdf(d1) * sqrt_tau
+
+    price = np.where(mask, price, intrinsic)
+    vega = np.where(mask, vega, 0.0)
+    return price, vega
+
+
 ###
 # Digital option
 ###
