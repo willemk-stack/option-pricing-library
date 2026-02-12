@@ -3,6 +3,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from math import erfc
 from typing import Literal, cast, overload
 
 import numpy as np
@@ -223,7 +224,8 @@ class Smile:
 
 def _norm_cdf(x):
     x = np.asarray(x, dtype=np.float64)
-    return 0.5 * np.special.erfc(-x / np.sqrt(2.0))
+    erfc_vec = np.vectorize(erfc, otypes=[np.float64])
+    return 0.5 * erfc_vec(-x / np.sqrt(2.0))
 
 
 def _bs_call_fwd_norm(

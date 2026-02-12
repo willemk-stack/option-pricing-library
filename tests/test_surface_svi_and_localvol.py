@@ -7,8 +7,8 @@ import pytest
 
 from option_pricing.vol.dupire import _gatheral_local_var_from_w
 from option_pricing.vol.surface import (
-    InterpolatedSmileSlice,
     LocalVolSurface,
+    NoArbInterpolatedSmileSlice,
     Smile,
     VolSurface,
 )
@@ -98,23 +98,41 @@ def test_volsurface_from_grid_preserves_constant_iv_across_time_interpolation() 
 
     surface = VolSurface.from_grid(rows, forward=fwd)
 
-    # Off-node interpolation in time (linear in total variance) should preserve constant IV.
+    # Off-node interpolation in time defaults to "no_arb" (call-price blend).
+    # This preserves the ATM theta curve but does not preserve constant IV off-ATM.
     Tq = 0.75
     Kq = np.array([80.0, 100.0, 120.0], dtype=np.float64)
+
+    # ATM should stay essentially unchanged.
+    iv_atm = float(surface.iv(np.array([fwd(Tq)], dtype=np.float64), Tq)[0])
+    assert iv_atm == pytest.approx(iv0, abs=1e-4)
+
+    # Off-ATM is not exact under no-arb time interpolation, but should remain close.
     ivq = surface.iv(Kq, Tq)
-    np.testing.assert_allclose(ivq, iv0, rtol=0.0, atol=2e-12)
+    np.testing.assert_allclose(ivq, iv0, rtol=0.0, atol=6e-3)
 
     # slice() clamps beyond boundaries
     assert surface.slice(0.1) is surface.smiles[0]
     assert surface.slice(10.0) is surface.smiles[-1]
 
 
-def test_interpolated_smile_slice_derivatives_gate() -> None:
-    # Underlying slices without derivative methods => dw_dy should raise.
+def test_noarb_interpolated_smile_slice_has_no_derivatives() -> None:
+    # Underlying slices without derivative methods => the *no-arb* time
+    # interpolator should not expose y-derivatives.
     s0 = Smile(T=0.5, y=np.array([-0.1, 0.1]), w=np.array([0.02, 0.02]))
     s1 = Smile(T=1.0, y=np.array([-0.1, 0.1]), w=np.array([0.04, 0.04]))
 
-    s = InterpolatedSmileSlice(T=0.75, s0=s0, s1=s1, a=0.5)
+    th0 = float(np.asarray(s0.w_at(0.0)))
+    th1 = float(np.asarray(s1.w_at(0.0)))
+
+    def theta_interp(tq):
+        t = np.asarray(tq, dtype=np.float64)
+        out = np.interp(t, [float(s0.T), float(s1.T)], [th0, th1], left=th0, right=th1)
+        return np.asarray(out, dtype=np.float64)
+
+    s = NoArbInterpolatedSmileSlice(
+        T=0.75, s0=s0, s1=s1, a=0.5, theta_interp=theta_interp
+    )
 
     with pytest.raises(AttributeError):
         _ = s.dw_dy(np.array([0.0]))
