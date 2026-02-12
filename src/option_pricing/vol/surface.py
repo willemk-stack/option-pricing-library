@@ -3,45 +3,62 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from typing import Literal, cast, overload
 
 import numpy as np
 
 from ..numerics.interpolation import FritschCarlson
+from ..numerics.regression import isotonic_regression
 from ..typing import ArrayLike, FloatArray, ScalarFn
 from .dupire import _gatheral_local_var_from_w
-from .vol_types import SmileSlice
+from .vol_types import DifferentiableSmileSlice, SmileSlice
+
+TimeInterp = Literal["no_arb", "linear_w"]
 
 
-def _is_monotone(y: np.ndarray) -> bool:
+def _is_monotone(y: np.ndarray, *, eps: float = 0.0) -> bool:
     dy = np.diff(y)
-    return bool(np.all(dy >= 0.0) or np.all(dy <= 0.0))
+    return bool(np.all(dy >= -eps) or np.all(dy <= eps))
 
 
 def _u_split_index(w: np.ndarray, *, eps: float | None = None) -> int | None:
-    """Heuristic U-shape split index.
-
-    Returns k such that left piece is w[:k+1], right piece is w[k:].
-    Uses a tolerance to reduce sensitivity to small numerical noise / plateaus.
     """
+    Return k such that left piece is w[:k+1], right piece is w[k:].
+    Detects a U-turn: negative slope region followed by positive slope region,
+    with tolerance eps to ignore noise/plateaus.
+    If multiple U-turns exist, picks the deepest valley (smallest w[k]).
+    """
+    w = np.asarray(w, dtype=np.float64)
     if w.size < 3:
         return None
-
-    dw = np.diff(w)
 
     if eps is None:
         scale = float(max(1.0, np.max(np.abs(w))))
         eps = 1e-12 * scale
 
-    neg = dw < -eps
-    pos = dw > eps
-    if not np.any(neg) or not np.any(pos):
+    dw = np.diff(w)
+    s = np.zeros_like(dw, dtype=np.int8)
+    s[dw < -eps] = -1
+    s[dw > eps] = +1
+
+    # Find all "neg -> pos" transitions, allowing zeros between them
+    candidates: list[int] = []
+    seen_neg = False
+    for i in range(s.size):
+        if s[i] == -1:
+            seen_neg = True
+            continue
+        if seen_neg and s[i] == +1:
+            k = i + 1  # slope index i is between w[i] and w[i+1]
+            if 0 < k < w.size - 1:
+                candidates.append(k)
+
+    if not candidates:
         return None
 
-    # first index where slope becomes meaningfully positive
-    k = int(np.argmax(pos)) + 1
-    if 0 < k < w.size - 1:
-        return k
-    return None
+    # Pick the deepest valley among candidates
+    k_best = min(candidates, key=lambda k: w[k])
+    return int(k_best)
 
 
 def _linear_interp_factory(
@@ -204,73 +221,207 @@ class Smile:
         return float(self.y[-1])
 
 
+def _norm_cdf(x):
+    x = np.asarray(x, dtype=np.float64)
+    return 0.5 * np.special.erfc(-x / np.sqrt(2.0))
+
+
+def _bs_call_fwd_norm(
+    y: ArrayLike, w: ArrayLike, *, eps_w: float = 1e-16
+) -> np.ndarray:
+    """
+    Black(-76) forward-normalized call price c = C/F for log-moneyness y=ln(K/F)
+    and total variance w = sigma^2 * T.
+
+    Returns c(y,w) = N(d+) - exp(y) N(d-), with:
+        d+ = -y/sqrt(w) + 0.5*sqrt(w)
+        d- = d+ - sqrt(w)
+
+    For w -> 0: returns intrinsic max(1 - exp(y), 0).
+    """
+    y_arr = np.asarray(y, dtype=np.float64)
+    w_arr = np.asarray(w, dtype=np.float64)
+
+    # Broadcast to common shape
+    yb, wb = np.broadcast_arrays(y_arr, w_arr)
+
+    # Intrinsic (F=1)
+    ey = np.exp(yb)
+    intrinsic = np.maximum(1.0 - ey, 0.0)
+
+    # Clamp negative w to 0 for robustness
+    wb_pos = np.maximum(wb, 0.0)
+    sqrtw = np.sqrt(wb_pos)
+
+    out = np.empty_like(yb, dtype=np.float64)
+
+    small = sqrtw <= eps_w
+    if np.any(small):
+        out[small] = intrinsic[small]
+
+    big = ~small
+    if np.any(big):
+        sw = sqrtw[big]
+        yy = yb[big]
+        d_plus = (-yy / sw) + 0.5 * sw
+        d_minus = d_plus - sw
+
+        Nd1 = _norm_cdf(d_plus)
+        Nd2 = _norm_cdf(d_minus)
+        out_big = Nd1 - np.exp(yy) * Nd2
+
+        # Numerical safety: enforce no-arb bounds for normalized call
+        out[big] = np.clip(out_big, intrinsic[big], 1.0)
+
+    return np.asarray(out, dtype=np.float64)
+
+
 @dataclass(frozen=True, slots=True)
-class InterpolatedSmileSlice:
-    """A synthetic smile slice formed by linear interpolation in total variance.
-
-        w(y, T) = (1-a) * w0(y) + a * w1(y)
-
-    where (T0, w0) and (T1, w1) are the bracketing slices.
-
-    Notes
-    -----
-    This is primarily useful for implied-vol interpolation. If the underlying
-    slices provide analytic derivatives in y (e.g. SVI), this class exposes
-    dw_dy and d2w_dy2 as the same linear blend.
+class NoArbInterpolatedSmileSlice:
+    """
+    Gatheral/Jacquier Lemma 5.1 interpolation:
+      blend normalized call prices at constant log-moneyness,
+      with alpha_t from a monotone theta(t)=w(0,t) interpolation.
     """
 
     T: float
     s0: SmileSlice
     s1: SmileSlice
-    a: float  # in [0, 1]
+    a: float
+    theta_interp: Callable[[np.ndarray], np.ndarray]
 
-    def w_at(self, xq: ArrayLike) -> FloatArray:
-        xq_arr = np.asarray(xq, dtype=np.float64)
-        w0 = self.s0.w_at(xq_arr)
-        w1 = self.s1.w_at(xq_arr)
-        w = np.float64(1.0 - self.a) * w0 + np.float64(self.a) * w1
-        return np.asarray(w, dtype=np.float64)
+    _alpha: float = field(init=False, repr=False)
+    _inv_sqrtT: float = field(init=False, repr=False)
 
-    def iv_at(self, xq: ArrayLike) -> FloatArray:
-        wq = self.w_at(xq)
-        out = np.sqrt(np.maximum(wq / np.float64(self.T), np.float64(0.0)))
-        return np.asarray(out, dtype=np.float64)
+    def __post_init__(self) -> None:
+        th0 = float(np.asarray(self.s0.w_at(0.0)))
+        th1 = float(np.asarray(self.s1.w_at(0.0)))
+        t = np.asarray(self.T)
+        thT = float(np.asarray(self.theta_interp(t)))
 
-    # ---- optional derivatives in y (log-moneyness) ----
-    def dw_dy(self, xq: ArrayLike) -> FloatArray:
-        if not (hasattr(self.s0, "dw_dy") and hasattr(self.s1, "dw_dy")):
-            raise AttributeError("Underlying slices do not provide dw_dy.")
-        xq_arr = np.asarray(xq, dtype=np.float64)
-        wy0 = self.s0.dw_dy(xq_arr)  # type: ignore[attr-defined]
-        wy1 = self.s1.dw_dy(xq_arr)  # type: ignore[attr-defined]
-        wy = np.float64(1.0 - self.a) * wy0 + np.float64(self.a) * wy1
-        return np.asarray(wy, dtype=np.float64)
+        s0 = np.sqrt(max(th0, 0.0))
+        s1 = np.sqrt(max(th1, 0.0))
+        sT = np.sqrt(max(thT, 0.0))
 
-    def d2w_dy2(self, xq: ArrayLike) -> FloatArray:
-        if not (hasattr(self.s0, "d2w_dy2") and hasattr(self.s1, "d2w_dy2")):
-            raise AttributeError("Underlying slices do not provide d2w_dy2.")
-        xq_arr = np.asarray(xq, dtype=np.float64)
-        wyy0 = self.s0.d2w_dy2(xq_arr)  # type: ignore[attr-defined]
-        wyy1 = self.s1.d2w_dy2(xq_arr)  # type: ignore[attr-defined]
-        wyy = np.float64(1.0 - self.a) * wyy0 + np.float64(self.a) * wyy1
-        return np.asarray(wyy, dtype=np.float64)
+        denom = s1 - s0
+        if abs(denom) < 1e-16:
+            alpha = 1.0 - float(self.a)  # degenerate theta; any alpha is ok
+        else:
+            alpha = (s1 - sT) / denom  # eq (5.2) rearranged
+
+        object.__setattr__(self, "_alpha", float(np.clip(alpha, 0.0, 1.0)))
+        object.__setattr__(self, "_inv_sqrtT", 1.0 / np.sqrt(float(self.T)))
+
+    def w_at(self, yq: ArrayLike) -> FloatArray:
+        from .implied_vol import (
+            implied_vol_black76_slice,
+        )  # move to top-level if you prefer
+
+        y = np.asarray(yq, dtype=np.float64)
+        y1d = np.atleast_1d(y)
+
+        # 1) endpoint total variances
+        w0 = np.asarray(self.s0.w_at(y1d), dtype=np.float64)
+        w1 = np.asarray(self.s1.w_at(y1d), dtype=np.float64)
+
+        # 2) normalized forward call prices (C/F) at fixed log-moneyness y
+        c0 = _bs_call_fwd_norm(y1d, w0)
+        c1 = _bs_call_fwd_norm(y1d, w1)
+
+        # 3) price blend (eq 5.3)
+        alpha = self._alpha
+        cT = alpha * c0 + (1.0 - alpha) * c1
+
+        # 4) map to Black76 inputs: choose F=1, df=1, K = exp(y)
+        K = np.exp(y1d)
+
+        # guard tiny numerical violations of no-arb bounds:
+        intrinsic = np.maximum(1.0 - K, 0.0)  # since F=1, df=1
+        cT = np.clip(cT, intrinsic, 1.0)
+
+        # 5) initial guess to reduce iterations (cheap and vectorized)
+        # linear-in-w is a *guess only* (still invert using no-arb call blend)
+        w_guess = (1.0 - self.a) * w0 + self.a * w1
+        sigma0 = np.sqrt(np.maximum(w_guess, 0.0)) * self._inv_sqrtT
+
+        sigma = implied_vol_black76_slice(
+            forward=1.0,
+            strikes=K,
+            tau=float(self.T),
+            df=1.0,
+            prices=cT,
+            is_call=True,
+            initial_sigma=sigma0,
+            sigma_lo=1e-12,
+            sigma_hi=5.0,
+            max_iter=50,
+            tol=1e-12,
+            return_result=False,
+        )
+
+        wT = (np.asarray(sigma, dtype=np.float64) ** 2) * np.float64(self.T)
+
+        if np.ndim(yq) == 0:
+            return np.asarray(wT[0], dtype=np.float64)
+        return wT.reshape(y.shape)
+
+    def iv_at(self, yq: ArrayLike) -> FloatArray:
+        wq = self.w_at(yq)
+        return np.asarray(
+            np.sqrt(np.maximum(wq / np.float64(self.T), 0.0)), dtype=np.float64
+        )
 
     @property
     def y_min(self) -> float:
-        # conservative sampling domain: overlap if possible, else union
-        lo = max(float(self.s0.y_min), float(self.s1.y_min))
-        hi = min(float(self.s0.y_max), float(self.s1.y_max))
-        if lo < hi:
-            return lo
-        return min(float(self.s0.y_min), float(self.s1.y_min))
+        return max(float(self.s0.y_min), float(self.s1.y_min))
 
     @property
     def y_max(self) -> float:
-        lo = max(float(self.s0.y_min), float(self.s1.y_min))
-        hi = min(float(self.s0.y_max), float(self.s1.y_max))
-        if lo < hi:
-            return hi
-        return max(float(self.s0.y_max), float(self.s1.y_max))
+        return min(float(self.s0.y_max), float(self.s1.y_max))
+
+
+@dataclass(frozen=True, slots=True)
+class LinearWInterpolatedSmileSlice:
+    """Time interpolation by linear blending in total variance w.
+
+    Derivatives in y are consistent if endpoints provide them.
+    Good for LocalVolSurface.
+    """
+
+    T: float
+    s0: DifferentiableSmileSlice
+    s1: DifferentiableSmileSlice
+    a: float  # in [0,1]
+
+    def w_at(self, yq: ArrayLike) -> FloatArray:
+        y = np.asarray(yq, dtype=np.float64)
+        w0 = np.asarray(self.s0.w_at(y), dtype=np.float64)
+        w1 = np.asarray(self.s1.w_at(y), dtype=np.float64)
+        return np.asarray((1.0 - self.a) * w0 + self.a * w1, dtype=np.float64)
+
+    def iv_at(self, yq: ArrayLike) -> FloatArray:
+        wq = self.w_at(yq)
+        return np.asarray(np.sqrt(np.maximum(wq / self.T, 0.0)), dtype=np.float64)
+
+    def dw_dy(self, yq: ArrayLike) -> FloatArray:
+        y = np.asarray(yq, dtype=np.float64)
+        wy0 = np.asarray(self.s0.dw_dy(y), dtype=np.float64)
+        wy1 = np.asarray(self.s1.dw_dy(y), dtype=np.float64)
+        return np.asarray((1.0 - self.a) * wy0 + self.a * wy1, dtype=np.float64)
+
+    def d2w_dy2(self, yq: ArrayLike) -> FloatArray:
+        y = np.asarray(yq, dtype=np.float64)
+        wyy0 = np.asarray(self.s0.d2w_dy2(y), dtype=np.float64)
+        wyy1 = np.asarray(self.s1.d2w_dy2(y), dtype=np.float64)
+        return np.asarray((1.0 - self.a) * wyy0 + self.a * wyy1, dtype=np.float64)
+
+    @property
+    def y_min(self) -> float:
+        return max(float(self.s0.y_min), float(self.s1.y_min))
+
+    @property
+    def y_max(self) -> float:
+        return min(float(self.s0.y_max), float(self.s1.y_max))
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,6 +437,25 @@ class VolSurface:
     expiries: FloatArray
     smiles: tuple[SmileSlice, ...]
     forward: ScalarFn  # forward(T) -> float
+    _theta_interp: Callable[[np.ndarray], np.ndarray] = field(init=False, repr=False)
+
+    def __post_init__(self):
+
+        expiries = np.asarray(self.expiries, dtype=np.float64)
+        theta_raw = np.asarray(
+            [float(np.asarray(s.w_at(0.0))) for s in self.smiles], dtype=np.float64
+        )
+        theta = isotonic_regression(theta_raw)
+        # If theta isn't monotone due to noise, either:
+        # - raise, or
+        # - fall back to linear, or
+        # - monotone-regress it (not shown here).
+        if _is_monotone(theta) and expiries.size >= 3:
+            object.__setattr__(self, "_theta_interp", FritschCarlson(expiries, theta))
+        else:
+            object.__setattr__(
+                self, "_theta_interp", _linear_interp_factory(expiries, theta)
+            )
 
     @classmethod
     def from_grid(
@@ -410,7 +580,14 @@ class VolSurface:
 
         return cls(expiries=expiries, smiles=tuple(smiles), forward=forward)
 
-    def slice(self, T: float) -> SmileSlice:
+    @overload
+    def slice(self, T: float, method: Literal["no_arb"] = "no_arb") -> SmileSlice: ...
+    @overload
+    def slice(
+        self, T: float, method: Literal["linear_w"]
+    ) -> DifferentiableSmileSlice: ...
+
+    def slice(self, T: float, method: TimeInterp = "no_arb") -> SmileSlice:
         """Return a callable single-expiry smile slice at maturity T.
 
         - Node expiry: returns the stored slice (grid or SVI).
@@ -425,15 +602,12 @@ class VolSurface:
         if T <= 0.0:
             raise ValueError("T must be > 0")
 
-        # Clamp outside known range
         if T <= float(self.expiries[0]):
             return self.smiles[0]
         if T >= float(self.expiries[-1]):
             return self.smiles[-1]
 
         j = int(np.searchsorted(self.expiries, np.float64(T), side="left"))
-
-        # Exact node hit (tolerant to tiny float noise)
         if j < len(self.expiries) and bool(
             np.isclose(self.expiries[j], np.float64(T), rtol=0.0, atol=1e-12)
         ):
@@ -443,9 +617,31 @@ class VolSurface:
         T0 = float(self.expiries[i])
         T1 = float(self.expiries[j])
         a = (T - T0) / (T1 - T0)
-        return InterpolatedSmileSlice(
-            T=T, s0=self.smiles[i], s1=self.smiles[j], a=float(a)
-        )
+
+        s0 = self.smiles[i]
+        s1 = self.smiles[j]
+
+        if method == "no_arb":
+            return NoArbInterpolatedSmileSlice(
+                T=T, s0=s0, s1=s1, a=float(a), theta_interp=self._theta_interp
+            )
+
+        if method == "linear_w":
+            if not isinstance(s0, DifferentiableSmileSlice) or not isinstance(
+                s1, DifferentiableSmileSlice
+            ):
+                raise TypeError(
+                    "method='linear_w' requires DifferentiableSmileSlice endpoints "
+                    "(e.g. SVISmile / SSVI). Use method='no_arb' or rebuild surface with differentiable slices."
+                )
+            return LinearWInterpolatedSmileSlice(
+                T=T,
+                s0=cast(DifferentiableSmileSlice, s0),
+                s1=cast(DifferentiableSmileSlice, s1),
+                a=float(a),
+            )
+
+        raise ValueError(f"method={method!r} not supported")
 
     def iv(self, K: ArrayLike, T: float) -> FloatArray:
         T = float(T)
@@ -542,10 +738,10 @@ class LocalVolSurface:
 
     def _require_derivs(self) -> None:
         for s in self.implied.smiles:
-            if not (hasattr(s, "dw_dy") and hasattr(s, "d2w_dy2")):
+            if not isinstance(s, DifferentiableSmileSlice):
                 raise TypeError(
-                    "LocalVolSurface requires implied slices with dw_dy and d2w_dy2 "
-                    "(e.g. SVISmile)."
+                    "LocalVolSurface requires DifferentiableSmileSlice expiries "
+                    "(e.g. SVISmile / SSVI)."
                 )
 
     def _bracket(self, T: float) -> tuple[int, int, float]:
@@ -582,6 +778,11 @@ class LocalVolSurface:
         T1 = float(exp[j])
         s0 = self.implied.smiles[i]
         s1 = self.implied.smiles[j]
+
+        if not isinstance(s0, DifferentiableSmileSlice) or not isinstance(
+            s1, DifferentiableSmileSlice
+        ):
+            raise TypeError("LocalVolSurface requires differentiable slices")
 
         w0 = np.asarray(s0.w_at(y_arr), dtype=np.float64)
         w1 = np.asarray(s1.w_at(y_arr), dtype=np.float64)

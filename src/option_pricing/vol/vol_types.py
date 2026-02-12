@@ -18,7 +18,7 @@ class SmileSlice(Protocol):
         - w_at(y): total variance
         - iv_at(y): implied vol
         - y_min: lowerbound
-        - y_max:
+        - y_max: upperbound
     """
 
     @property
@@ -30,8 +30,14 @@ class SmileSlice(Protocol):
     @property
     def y_max(self) -> float: ...
 
-    def w_at(self, xq: ArrayLike) -> FloatArray: ...
-    def iv_at(self, xq: ArrayLike) -> FloatArray: ...
+    def w_at(self, yq: ArrayLike) -> FloatArray: ...
+    def iv_at(self, yq: ArrayLike) -> FloatArray: ...
+
+
+@runtime_checkable
+class DifferentiableSmileSlice(SmileSlice, Protocol):
+    def dw_dy(self, y: ArrayLike) -> FloatArray: ...
+    def d2w_dy2(self, y: ArrayLike) -> FloatArray: ...
 
 
 @runtime_checkable
