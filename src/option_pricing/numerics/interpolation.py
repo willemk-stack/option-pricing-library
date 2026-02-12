@@ -18,7 +18,10 @@ def FritschCarlson(pi: NDArray, Fn: NDArray) -> Callable[[np.ndarray], np.ndarra
         raise ValueError("pi must be strictly increasing")
 
     dF = np.diff(Fn)
-    if not (np.all(dF >= 0.0) or np.all(dF <= 0.0)):
+    eps = 1e-14 * max(1.0, float(np.max(np.abs(Fn))))
+    mono_up = np.all(dF >= -eps)
+    mono_dn = np.all(dF <= eps)
+    if not (mono_up or mono_dn):
         raise ValueError("Fn must be monotone (nondecreasing or nonincreasing)")
 
     h = np.diff(pi)
@@ -29,7 +32,9 @@ def FritschCarlson(pi: NDArray, Fn: NDArray) -> Callable[[np.ndarray], np.ndarra
         raise ValueError("diff1_nonuniform must return an array with same shape as Fn")
 
     # Step 1: delta==0 => set both adjacent derivatives to 0
-    mask_zero = delta == 0.0
+
+    mask_zero = np.abs(delta) <= eps
+
     d[:-1][mask_zero] = 0.0
     d[1:][mask_zero] = 0.0
 
