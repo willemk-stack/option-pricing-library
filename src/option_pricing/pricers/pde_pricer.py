@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
+from dataclasses import replace
 
 import numpy as np
 
@@ -13,6 +14,7 @@ from ..numerics.pde import AdvectionScheme, PDESolution1D, solve_pde_1d
 from ..numerics.pde.domain import Coord
 from ..numerics.pde.ic_remedies import ICRemedy, ic_cell_average, ic_l2_projection
 from ..types import DigitalSpec, MarketData, OptionSpec, PricingInputs
+from ..vol.surface import LocalVolSurface
 from .pde.digital_black_scholes import bs_pde_wiring as digital_bs_pde_wiring
 
 # BS-specific domain selection (Option A)
@@ -20,8 +22,11 @@ from .pde.domain import BSDomainConfig, bs_compute_bounds
 
 # IMPORTANT: use the correct wiring modules
 from .pde.european_black_scholes import bs_pde_wiring as european_bs_pde_wiring
+from .pde.european_local_vol import (
+    local_vol_pde_wiring as european_local_vol_pde_wiring,
+)
 
-# Python 3.12 type aliases (optional)
+# Type aliases
 type VanillaInputs = PricingInputs[OptionSpec]
 type DigitalInputs = PricingInputs[DigitalSpec]
 type ICTransform = Callable[[Grid, Callable[[float], float]], np.ndarray]
@@ -44,6 +49,97 @@ def bs_price_pde_european(
     bounds = bs_compute_bounds(p, coord=coord, cfg=domain_cfg)
 
     wiring = european_bs_pde_wiring(p, coord, x_lb=bounds.x_lb, x_ub=bounds.x_ub)
+
+    if not (bounds.x_lb < wiring.x_0 < bounds.x_ub):
+        raise ValueError("Computed bounds do not contain x0 (spot).")
+
+    grid_cfg = GridConfig(
+        Nx=Nx,
+        Nt=Nt,
+        x_lb=bounds.x_lb,
+        x_ub=bounds.x_ub,
+        T=p.tau,
+        spacing=domain_cfg.spacing,
+        x_center=bounds.x_center,
+        cluster_strength=domain_cfg.cluster_strength,
+    )
+
+    sol = solve_pde_1d(
+        wiring.problem,
+        grid_cfg=grid_cfg,
+        method=method,
+        advection=advection,
+        store="final",
+    )
+
+    x = np.asarray(sol.grid.x, dtype=float)
+    u = np.asarray(sol.u_final, dtype=float)
+
+    if x.size >= 2 and not np.all(np.diff(x) > 0):
+        raise ValueError("Grid x must be strictly increasing for interpolation.")
+
+    price = float(np.interp(wiring.x_0, x, u))
+    return (price, sol) if return_solution else price
+
+
+def local_vol_price_pde_european(
+    p: VanillaInputs,
+    *,
+    lv: LocalVolSurface,
+    coord: Coord | str = Coord.LOG_S,
+    domain_cfg: BSDomainConfig,
+    Nx: int = 400,
+    Nt: int = 400,
+    method: str = "cn",
+    advection: AdvectionScheme = AdvectionScheme.CENTRAL,
+    return_solution: bool = False,
+    # bounds helper needs a representative sigma; default is lv at spot.
+    sigma_for_bounds: float | None = None,
+    # guardrails forwarded into coeff builder
+    tau_floor: float = 1e-8,
+    sigma2_floor: float = 1e-14,
+    sigma2_cap: float | None = None,
+) -> float | tuple[float, PDESolution1D]:
+    """European vanilla pricing under a Dupire-style local-vol surface.
+
+    Notes
+    -----
+    - The PDE coefficients use lv.local_var(S, tau) by plugging S into the K slot.
+    - Domain selection reuses the BS lognormal band logic by supplying a
+      representative volatility (sigma_for_bounds).
+    """
+
+    coord = Coord(coord)
+
+    # --- choose representative sigma for domain selection
+    if sigma_for_bounds is None:
+        try:
+            sigma0 = float(np.asarray(lv.local_vol(p.S, p.tau)).reshape(()))
+        except Exception:
+            sigma0 = float(p.sigma)
+    else:
+        sigma0 = float(sigma_for_bounds)
+
+    if not np.isfinite(sigma0) or sigma0 <= 0.0:
+        sigma0 = float(p.sigma)
+    if not np.isfinite(sigma0) or sigma0 <= 0.0:
+        raise ValueError(
+            "Need a positive sigma_for_bounds (or p.sigma) to build a domain"
+        )
+
+    p_for_bounds = replace(p, sigma=sigma0)
+    bounds = bs_compute_bounds(p_for_bounds, coord=coord, cfg=domain_cfg)
+
+    wiring = european_local_vol_pde_wiring(
+        p,
+        lv,
+        coord,
+        x_lb=bounds.x_lb,
+        x_ub=bounds.x_ub,
+        tau_floor=tau_floor,
+        sigma2_floor=sigma2_floor,
+        sigma2_cap=sigma2_cap,
+    )
 
     if not (bounds.x_lb < wiring.x_0 < bounds.x_ub):
         raise ValueError("Computed bounds do not contain x0 (spot).")
