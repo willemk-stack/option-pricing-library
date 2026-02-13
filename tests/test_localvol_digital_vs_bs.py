@@ -6,8 +6,7 @@ import numpy as np
 
 
 def test_digital_from_localvol_pde_matches_bs_on_flat_svi_surface() -> None:
-    """
-    Regression / sanity check for the local-vol -> PDE path.
+    """Regression / sanity check for the local-vol -> PDE path.
 
     We build an *implied* surface using per-expiry SVI smiles, but choose SVI params
     that produce a *flat* total-variance smile (b=0), i.e. constant implied vol.
@@ -16,19 +15,15 @@ def test_digital_from_localvol_pde_matches_bs_on_flat_svi_surface() -> None:
     to the same constant sigma, and therefore a digital priced under the local-vol
     PDE should match the closed-form Black-76 digital price.
     """
+
     from option_pricing.instruments.digital import DigitalOption
     from option_pricing.market.curves import PricingContext
     from option_pricing.models.black_scholes import bs as bs_model
-    from option_pricing.models.black_scholes.pde import bs_coord_maps
     from option_pricing.numerics.grids import GridConfig, SpacingPolicy
-    from option_pricing.numerics.pde import (
-        AdvectionScheme,
-        LinearParabolicPDE1D,
-        solve_pde_1d,
-    )
-    from option_pricing.numerics.pde.boundary import RobinBC, RobinBCSide
+    from option_pricing.numerics.pde import AdvectionScheme, solve_pde_1d
     from option_pricing.numerics.pde.domain import Coord
     from option_pricing.numerics.pde.ic_remedies import ic_l2_projection
+    from option_pricing.pricers.pde.digital_local_vol import local_vol_pde_wiring
     from option_pricing.pricers.pde.domain import (
         BSDomainConfig,
         BSDomainPolicy,
@@ -77,17 +72,13 @@ def test_digital_from_localvol_pde_matches_bs_on_flat_svi_surface() -> None:
 
     # ---- local-vol PDE in LOG_S coordinates ----
     coord = Coord.LOG_S
-    to_x, to_S = bs_coord_maps(coord)
-
-    x0 = float(np.asarray(to_x(S0)).reshape(()))
-    xK = float(np.asarray(to_x(K)).reshape(()))
 
     # Use the BS domain helper (lognormal band) for a robust computational domain,
     # and a clustered grid centered at strike (best practice for discontinuous payoffs).
-    p_for_bounds = PricingInputs(
+    p = PricingInputs(
         spec=DigitalSpec(kind=OptionType.CALL, strike=K, expiry=T, payout=payout),
         market=MarketData(spot=S0, rate=r, dividend_yield=q),
-        sigma=sigma,
+        sigma=sigma,  # only for bounds selection
         t=0.0,
     )
 
@@ -98,51 +89,13 @@ def test_digital_from_localvol_pde_matches_bs_on_flat_svi_surface() -> None:
         spacing=SpacingPolicy.CLUSTERED,
         cluster_strength=2.0,
     )
-    bounds = bs_compute_bounds(p_for_bounds, coord=coord, cfg=dom)
+    bounds = bs_compute_bounds(p, coord=coord, cfg=dom)
 
-    # Far-field Dirichlet boundaries expressed as Robin (beta=0)
-    def left_gamma(tau: float) -> float:
-        return 0.0
-
-    def right_gamma(tau: float) -> float:
-        # As S -> +inf, digital call tends to payout * df(tau)
-        return float(payout * ctx.df(float(tau)))
-
-    bc = RobinBC(
-        left=RobinBCSide(alpha=lambda tau: 1.0, beta=lambda tau: 0.0, gamma=left_gamma),
-        right=RobinBCSide(
-            alpha=lambda tau: 1.0, beta=lambda tau: 0.0, gamma=right_gamma
-        ),
-    )
-
-    mu = float(r - q)
-
-    # Clamp tau away from 0 to avoid LocalVolSurface(T<=0) guardrails during coefficient eval.
-    def _sigma2(x: np.ndarray | float, tau: float) -> np.ndarray:
-        x_arr = np.asarray(x, dtype=float)
-        tau_eff = max(float(tau), 1e-8)
-        S = np.exp(x_arr)
-        return np.asarray(lv.local_var(S, tau_eff), dtype=float)
-
-    def a(x: np.ndarray | float, tau: float) -> np.ndarray:
-        return 0.5 * _sigma2(x, tau)
-
-    def b(x: np.ndarray | float, tau: float) -> np.ndarray:
-        sig2 = _sigma2(x, tau)
-        return (mu - 0.5 * sig2).astype(float, copy=False)
-
-    def c(x: np.ndarray | float, tau: float) -> np.ndarray:
-        x_arr = np.asarray(x, dtype=float)
-        return (-float(r)) + 0.0 * x_arr
-
-    payoff = inst.payoff
-
-    def ic(x: float) -> float:
-        return float(payoff(float(to_S(x))))
-
-    problem = LinearParabolicPDE1D(a=a, b=b, c=c, bc=bc, ic=ic)
+    wiring = local_vol_pde_wiring(p, lv, coord, x_lb=bounds.x_lb, x_ub=bounds.x_ub)
 
     # L2 projection (best default) at the strike discontinuity + Rannacher time-stepping
+    xK = float(np.asarray(wiring.to_x(K)).reshape(()))
+
     def ic_transform(grid, ic_fn):
         return ic_l2_projection(grid=grid, ic=ic_fn, breakpoints=(xK,))
 
@@ -158,7 +111,7 @@ def test_digital_from_localvol_pde_matches_bs_on_flat_svi_surface() -> None:
     )
 
     sol = solve_pde_1d(
-        problem,
+        wiring.problem,
         grid_cfg=grid_cfg,
         method="rannacher",
         advection=AdvectionScheme.CENTRAL,
@@ -168,7 +121,7 @@ def test_digital_from_localvol_pde_matches_bs_on_flat_svi_surface() -> None:
 
     x = np.asarray(sol.grid.x, dtype=float)
     u = np.asarray(sol.u_final, dtype=float)
-    pde = float(np.interp(x0, x, u))
+    pde = float(np.interp(wiring.x_0, x, u))
 
     # With a discontinuous payoff, tight tolerances need both smoothing + Rannacher.
     # The flat-SVI construction ensures the local-vol PDE should match Black-76.

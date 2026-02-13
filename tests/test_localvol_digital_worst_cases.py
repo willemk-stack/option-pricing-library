@@ -76,18 +76,15 @@ def _price_localvol_digital_pde(
     - clustered grid around strike
     - Rannacher time-stepping
     - L2 projection of the discontinuous payoff
+
+    The PDE coefficients / BCs are wired using the library helper rather than
+    re-implementing that logic in the test.
     """
-    from option_pricing.instruments.digital import DigitalOption
-    from option_pricing.models.black_scholes.pde import bs_coord_maps
     from option_pricing.numerics.grids import GridConfig, SpacingPolicy
-    from option_pricing.numerics.pde import (
-        AdvectionScheme,
-        LinearParabolicPDE1D,
-        solve_pde_1d,
-    )
-    from option_pricing.numerics.pde.boundary import RobinBC, RobinBCSide
+    from option_pricing.numerics.pde import AdvectionScheme, solve_pde_1d
     from option_pricing.numerics.pde.domain import Coord
     from option_pricing.numerics.pde.ic_remedies import ic_l2_projection
+    from option_pricing.pricers.pde.digital_local_vol import local_vol_pde_wiring
     from option_pricing.pricers.pde.domain import (
         BSDomainConfig,
         BSDomainPolicy,
@@ -95,20 +92,17 @@ def _price_localvol_digital_pde(
     )
     from option_pricing.types import DigitalSpec, MarketData, OptionType, PricingInputs
 
-    ctx = MarketData(spot=S0, rate=r, dividend_yield=q).to_context()
-
-    coord = Coord.LOG_S
-    to_x, to_S = bs_coord_maps(coord)
-    x0 = float(np.asarray(to_x(S0)).reshape(()))
-    xK = float(np.asarray(to_x(K)).reshape(()))
-
-    # PDE bounds (computed from a sigma guess; LV is used inside coefficients)
-    p_for_bounds = PricingInputs(
-        spec=DigitalSpec(kind=OptionType.CALL, strike=K, expiry=T, payout=payout),
-        market=MarketData(spot=S0, rate=r, dividend_yield=q),
-        sigma=float(sigma_for_bounds),
+    p = PricingInputs(
+        spec=DigitalSpec(
+            kind=OptionType.CALL, strike=float(K), expiry=float(T), payout=float(payout)
+        ),
+        market=MarketData(spot=float(S0), rate=float(r), dividend_yield=float(q)),
+        sigma=float(sigma_for_bounds),  # bounds selection only
         t=0.0,
     )
+
+    coord = Coord.LOG_S
+
     dom = BSDomainConfig(
         policy=BSDomainPolicy.LOG_NSIGMA,
         n_sigma=float(n_sigma),
@@ -116,46 +110,11 @@ def _price_localvol_digital_pde(
         spacing=SpacingPolicy.CLUSTERED,
         cluster_strength=2.0,
     )
-    bounds = bs_compute_bounds(p_for_bounds, coord=coord, cfg=dom)
+    bounds = bs_compute_bounds(p, coord=coord, cfg=dom)
 
-    mu = float(r - q)
+    wiring = local_vol_pde_wiring(p, lv, coord, x_lb=bounds.x_lb, x_ub=bounds.x_ub)
 
-    # Clamp tau away from 0 to avoid LocalVolSurface(T<=0) guardrails during coefficient eval.
-    def _sigma2(x: np.ndarray | float, tau: float) -> np.ndarray:
-        x_arr = np.asarray(x, dtype=float)
-        tau_eff = max(float(tau), 1e-8)
-        S = np.exp(x_arr)
-        return np.asarray(lv.local_var(S, tau_eff), dtype=float)
-
-    def a(x: np.ndarray | float, tau: float) -> np.ndarray:
-        return 0.5 * _sigma2(x, tau)
-
-    def b(x: np.ndarray | float, tau: float) -> np.ndarray:
-        sig2 = _sigma2(x, tau)
-        return (mu - 0.5 * sig2).astype(float, copy=False)
-
-    def c(x: np.ndarray | float, tau: float) -> np.ndarray:
-        x_arr = np.asarray(x, dtype=float)
-        return (-float(r)) + 0.0 * x_arr
-
-    digital = DigitalOption(expiry=T, strike=K, payout=payout, kind=OptionType.CALL)
-
-    # Digital call PV tends to payout*df(tau) as S -> +inf, and 0 as S -> 0.
-    bc = RobinBC(
-        left=RobinBCSide(
-            alpha=lambda tau: 1.0, beta=lambda tau: 0.0, gamma=lambda tau: 0.0
-        ),
-        right=RobinBCSide(
-            alpha=lambda tau: 1.0,
-            beta=lambda tau: 0.0,
-            gamma=lambda tau: float(payout * ctx.df(float(tau))),
-        ),
-    )
-
-    def ic(x: float) -> float:
-        return float(digital.payoff(float(to_S(x))))
-
-    problem = LinearParabolicPDE1D(a=a, b=b, c=c, bc=bc, ic=ic)
+    xK = float(np.asarray(wiring.to_x(K)).reshape(()))
 
     def ic_transform(grid, ic_fn):
         return ic_l2_projection(grid=grid, ic=ic_fn, breakpoints=(xK,))
@@ -172,7 +131,7 @@ def _price_localvol_digital_pde(
     )
 
     sol = solve_pde_1d(
-        problem,
+        wiring.problem,
         grid_cfg=grid_cfg,
         method="rannacher",
         advection=AdvectionScheme.CENTRAL,
@@ -182,7 +141,7 @@ def _price_localvol_digital_pde(
 
     x = np.asarray(sol.grid.x, dtype=float)
     u = np.asarray(sol.u_final, dtype=float)
-    return float(np.interp(x0, x, u))
+    return float(np.interp(wiring.x_0, x, u))
 
 
 def test_localvol_digital_worst_cases_short_maturity_and_wings() -> None:

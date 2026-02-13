@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import warnings
 
 import numpy as np
@@ -53,74 +52,21 @@ def _build_skewed_svi_localvol_surface(
     return ctx, lv
 
 
-def _price_localvol_pde_1d(
+def _solve_pde_from_wiring(
     *,
-    payoff_S,  # payoff at expiry as a function of S
-    bc_left_gamma,
-    bc_right_gamma,
-    S0: float,
-    r: float,
-    q: float,
+    wiring,
     T: float,
-    lv,
     bounds,
+    dom,
     Nx: int,
     Nt: int,
-    x_breakpoints: tuple[float, ...] = (),
+    x_breakpoints: tuple[float, ...],
 ) -> float:
-    """Solve the local-vol PDE in LOG_S and return u(tau=T, x0)."""
-    from option_pricing.models.black_scholes.pde import bs_coord_maps
+    """Solve a wired PDE and return the interpolated PV at spot."""
     from option_pricing.numerics.grids import GridConfig
-    from option_pricing.numerics.pde import (
-        AdvectionScheme,
-        LinearParabolicPDE1D,
-        solve_pde_1d,
-    )
-    from option_pricing.numerics.pde.boundary import RobinBC, RobinBCSide
-    from option_pricing.numerics.pde.domain import Coord
+    from option_pricing.numerics.pde import AdvectionScheme, solve_pde_1d
     from option_pricing.numerics.pde.ic_remedies import ic_l2_projection
 
-    coord = Coord.LOG_S
-    to_x, to_S = bs_coord_maps(coord)
-
-    x0 = float(np.asarray(to_x(S0)).reshape(()))
-
-    mu = float(r - q)
-
-    # Clamp tau away from 0 to avoid LocalVolSurface(T<=0) guardrails during coefficient eval.
-    def _sigma2(x: np.ndarray | float, tau: float) -> np.ndarray:
-        x_arr = np.asarray(x, dtype=float)
-        tau_eff = max(float(tau), 1e-8)
-        S = np.exp(x_arr)
-        return np.asarray(lv.local_var(S, tau_eff), dtype=float)
-
-    def a(x: np.ndarray | float, tau: float) -> np.ndarray:
-        return 0.5 * _sigma2(x, tau)
-
-    def b(x: np.ndarray | float, tau: float) -> np.ndarray:
-        sig2 = _sigma2(x, tau)
-        return (mu - 0.5 * sig2).astype(float, copy=False)
-
-    def c(x: np.ndarray | float, tau: float) -> np.ndarray:
-        x_arr = np.asarray(x, dtype=float)
-        return (-float(r)) + 0.0 * x_arr
-
-    # Dirichlet boundaries expressed as Robin (beta=0)
-    bc = RobinBC(
-        left=RobinBCSide(
-            alpha=lambda tau: 1.0, beta=lambda tau: 0.0, gamma=bc_left_gamma
-        ),
-        right=RobinBCSide(
-            alpha=lambda tau: 1.0, beta=lambda tau: 0.0, gamma=bc_right_gamma
-        ),
-    )
-
-    def ic(x: float) -> float:
-        return float(payoff_S(float(to_S(x))))
-
-    problem = LinearParabolicPDE1D(a=a, b=b, c=c, bc=bc, ic=ic)
-
-    # L2 projection is robust for kinks/discontinuities. If no breakpoints, skip transform.
     def ic_transform(grid, ic_fn):
         return ic_l2_projection(grid=grid, ic=ic_fn, breakpoints=x_breakpoints)
 
@@ -130,28 +76,27 @@ def _price_localvol_pde_1d(
         x_lb=float(bounds.x_lb),
         x_ub=float(bounds.x_ub),
         T=float(T),
-        spacing=bounds.spacing,
+        spacing=dom.spacing,
         x_center=float(bounds.x_center),
-        cluster_strength=float(bounds.cluster_strength),
+        cluster_strength=float(dom.cluster_strength),
     )
 
     sol = solve_pde_1d(
-        problem,
+        wiring.problem,
         grid_cfg=grid_cfg,
         method="rannacher",
         advection=AdvectionScheme.CENTRAL,
         store="final",
-        ic_transform=ic_transform if x_breakpoints else None,
+        ic_transform=ic_transform,
     )
 
     x = np.asarray(sol.grid.x, dtype=float)
     u = np.asarray(sol.u_final, dtype=float)
-    return float(np.interp(x0, x, u))
+    return float(np.interp(float(wiring.x_0), x, u))
 
 
 def test_localvol_digital_matches_minus_strike_derivative_of_call() -> None:
-    """
-    Internal consistency check (no external libs):
+    """Internal consistency check:
 
       Digital(K,T)  ≈  - d/dK Call(K,T)
 
@@ -160,18 +105,32 @@ def test_localvol_digital_matches_minus_strike_derivative_of_call() -> None:
     We do this under a *skewed* LocalVol surface derived from SVI smiles.
     We also check basic numerical stability (coarse vs fine grids) and set the
     tolerance relative to the observed discretization step.
+
+    The test delegates pricing to the library PDE wiring helpers (for both
+    digitals and vanillas) instead of re-implementing coefficients/BCs here.
     """
-    from option_pricing.instruments.digital import DigitalOption
-    from option_pricing.instruments.vanilla import VanillaOption
+
     from option_pricing.models.black_scholes.pde import bs_coord_maps
     from option_pricing.numerics.grids import SpacingPolicy
     from option_pricing.numerics.pde.domain import Coord
+    from option_pricing.pricers.pde.digital_local_vol import (
+        local_vol_pde_wiring as digital_lv_wiring,
+    )
     from option_pricing.pricers.pde.domain import (
         BSDomainConfig,
         BSDomainPolicy,
         bs_compute_bounds,
     )
-    from option_pricing.types import DigitalSpec, MarketData, OptionType, PricingInputs
+    from option_pricing.pricers.pde.european_local_vol import (
+        local_vol_pde_wiring as european_lv_wiring,
+    )
+    from option_pricing.types import (
+        DigitalSpec,
+        MarketData,
+        OptionSpec,
+        OptionType,
+        PricingInputs,
+    )
 
     # --- contract / market ---
     S0 = 100.0
@@ -190,14 +149,13 @@ def test_localvol_digital_matches_minus_strike_derivative_of_call() -> None:
     # --- local-vol surface (SVI) ---
     expiries = np.asarray([0.25, T, 1.25], dtype=float)
     sigma_atm = 0.25
-    ctx, lv = _build_skewed_svi_localvol_surface(
+    _, lv = _build_skewed_svi_localvol_surface(
         S0=S0, r=r, q=q, sigma_atm=sigma_atm, expiries=expiries
     )
 
     # --- shared PDE domain/grid (cluster around K) ---
     coord = Coord.LOG_S
     to_x, _ = bs_coord_maps(coord)
-    xK = float(np.asarray(to_x(K)).reshape(()))
 
     p_for_bounds = PricingInputs(
         spec=DigitalSpec(kind=OptionType.CALL, strike=K, expiry=T, payout=payout),
@@ -215,88 +173,65 @@ def test_localvol_digital_matches_minus_strike_derivative_of_call() -> None:
     )
     bounds = bs_compute_bounds(p_for_bounds, coord=coord, cfg=dom)
 
-    # We'll carry these through to _price_localvol_pde_1d via a small struct-like shim
-    class _Bounds:
-        x_lb = bounds.x_lb
-        x_ub = bounds.x_ub
-        x_center = bounds.x_center
-        spacing = dom.spacing
-        cluster_strength = dom.cluster_strength
-
-    bnd = _Bounds()
-
-    # --- boundary functions ---
-    # Digital call: tends to payout*df(tau) as S -> +inf
-    def digital_left_gamma(tau: float) -> float:
-        return 0.0
-
-    def digital_right_gamma(tau: float) -> float:
-        return float(payout * ctx.df(float(tau)))
-
-    # Call: tends to S*df_q(tau) - K*df(tau) as S -> +inf (Dirichlet at S_ub)
-    S_ub = float(math.exp(float(bounds.x_ub)))
-
-    def call_left_gamma(tau: float) -> float:
-        return 0.0
-
-    def call_right_gamma_factory(Ki: float):
-        def _gamma(tau: float) -> float:
-            tau = float(tau)
-            return float(S_ub * ctx.df_q(tau) - float(Ki) * ctx.df(tau))
-
-        return _gamma
-
-    # --- payoff functions ---
-    digital = DigitalOption(expiry=T, strike=K, payout=payout, kind=OptionType.CALL)
-    call_m = VanillaOption(expiry=T, strike=K - h, kind=OptionType.CALL)
-    call_p = VanillaOption(expiry=T, strike=K + h, kind=OptionType.CALL)
-
     # Breakpoints for L2 projection (strike kink/discontinuity)
+    xK = float(np.asarray(to_x(K)).reshape(()))
     xKm = float(np.asarray(to_x(K - h)).reshape(()))
     xKp = float(np.asarray(to_x(K + h)).reshape(()))
 
     def _compute(Nx: int, Nt: int):
         # Digital PV
-        d = _price_localvol_pde_1d(
-            payoff_S=digital.payoff,
-            bc_left_gamma=digital_left_gamma,
-            bc_right_gamma=digital_right_gamma,
-            S0=S0,
-            r=r,
-            q=q,
+        p_d = PricingInputs(
+            spec=DigitalSpec(kind=OptionType.CALL, strike=K, expiry=T, payout=payout),
+            market=MarketData(spot=S0, rate=r, dividend_yield=q),
+            sigma=sigma_atm,
+            t=0.0,
+        )
+        wiring_d = digital_lv_wiring(p_d, lv, coord, x_lb=bounds.x_lb, x_ub=bounds.x_ub)
+        d = _solve_pde_from_wiring(
+            wiring=wiring_d,
             T=T,
-            lv=lv,
-            bounds=bnd,
+            bounds=bounds,
+            dom=dom,
             Nx=Nx,
             Nt=Nt,
             x_breakpoints=(xK,),
         )
 
         # Calls for strike-derivative
-        Cm = _price_localvol_pde_1d(
-            payoff_S=call_m.payoff,
-            bc_left_gamma=call_left_gamma,
-            bc_right_gamma=call_right_gamma_factory(K - h),
-            S0=S0,
-            r=r,
-            q=q,
+        p_cm = PricingInputs(
+            spec=OptionSpec(kind=OptionType.CALL, strike=K - h, expiry=T),
+            market=MarketData(spot=S0, rate=r, dividend_yield=q),
+            sigma=sigma_atm,
+            t=0.0,
+        )
+        p_cp = PricingInputs(
+            spec=OptionSpec(kind=OptionType.CALL, strike=K + h, expiry=T),
+            market=MarketData(spot=S0, rate=r, dividend_yield=q),
+            sigma=sigma_atm,
+            t=0.0,
+        )
+
+        wiring_cm = european_lv_wiring(
+            p_cm, lv, coord, x_lb=bounds.x_lb, x_ub=bounds.x_ub
+        )
+        wiring_cp = european_lv_wiring(
+            p_cp, lv, coord, x_lb=bounds.x_lb, x_ub=bounds.x_ub
+        )
+
+        Cm = _solve_pde_from_wiring(
+            wiring=wiring_cm,
             T=T,
-            lv=lv,
-            bounds=bnd,
+            bounds=bounds,
+            dom=dom,
             Nx=Nx,
             Nt=Nt,
             x_breakpoints=(xKm,),
         )
-        Cp = _price_localvol_pde_1d(
-            payoff_S=call_p.payoff,
-            bc_left_gamma=call_left_gamma,
-            bc_right_gamma=call_right_gamma_factory(K + h),
-            S0=S0,
-            r=r,
-            q=q,
+        Cp = _solve_pde_from_wiring(
+            wiring=wiring_cp,
             T=T,
-            lv=lv,
-            bounds=bnd,
+            bounds=bounds,
+            dom=dom,
             Nx=Nx,
             Nt=Nt,
             x_breakpoints=(xKp,),

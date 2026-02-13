@@ -19,28 +19,16 @@ def _our_localvol_pde_digital_price_from_flat_svi(
     Nx: int = 401,
     Nt: int = 401,
 ) -> float:
-    """
-    Price a cash-or-nothing digital call under a LocalVol surface derived from
-    per-expiry SVI smiles. We choose b=0 so the smile is flat and local vol is
-    (numerically) constant.
+    """Price a cash-or-nothing digital call under a flat-SVI-derived LocalVol surface.
 
-    Uses "best practice" numerics for discontinuous payoffs:
-      - LOG_S coordinate
-      - clustered grid centered at strike
-      - Rannacher timestepping
-      - L2 projection of initial condition at the strike kink
+    This uses the library local-vol digital PDE wiring (coefficients + BCs + payoff)
+    and focuses the test on numerics + integration with QuantLib.
     """
-    from option_pricing.instruments.digital import DigitalOption
-    from option_pricing.models.black_scholes.pde import bs_coord_maps
     from option_pricing.numerics.grids import GridConfig, SpacingPolicy
-    from option_pricing.numerics.pde import (
-        AdvectionScheme,
-        LinearParabolicPDE1D,
-        solve_pde_1d,
-    )
-    from option_pricing.numerics.pde.boundary import RobinBC, RobinBCSide
+    from option_pricing.numerics.pde import AdvectionScheme, solve_pde_1d
     from option_pricing.numerics.pde.domain import Coord
     from option_pricing.numerics.pde.ic_remedies import ic_l2_projection
+    from option_pricing.pricers.pde.digital_local_vol import local_vol_pde_wiring
     from option_pricing.pricers.pde.domain import (
         BSDomainConfig,
         BSDomainPolicy,
@@ -51,7 +39,6 @@ def _our_localvol_pde_digital_price_from_flat_svi(
     from option_pricing.vol.svi import SVIParams, SVISmile
 
     ctx = MarketData(spot=S0, rate=r, dividend_yield=q).to_context()
-    inst = DigitalOption(expiry=T, strike=K, payout=payout, kind=OptionType.CALL)
 
     # --- implied surface (SVI smiles), but flat in y via b=0 ---
     expiries = np.asarray([0.25, float(T), 1.25], dtype=float)
@@ -76,19 +63,14 @@ def _our_localvol_pde_digital_price_from_flat_svi(
         warnings.simplefilter("ignore", category=FutureWarning)
         lv = LocalVolSurface.from_implied(implied, forward=ctx.fwd, discount=ctx.df)
 
-    # --- LOG_S PDE coefficients using local vol ---
-    coord = Coord.LOG_S
-    to_x, to_S = bs_coord_maps(coord)
-
-    x0 = float(np.asarray(to_x(S0)).reshape(()))
-    xK = float(np.asarray(to_x(K)).reshape(()))
-
-    p_for_bounds = PricingInputs(
+    p = PricingInputs(
         spec=DigitalSpec(kind=OptionType.CALL, strike=K, expiry=T, payout=payout),
         market=MarketData(spot=S0, rate=r, dividend_yield=q),
-        sigma=sigma,  # used only for bounds selection here
+        sigma=sigma,  # bounds selection only
         t=0.0,
     )
+
+    coord = Coord.LOG_S
     dom = BSDomainConfig(
         policy=BSDomainPolicy.LOG_NSIGMA,
         n_sigma=6.0,
@@ -96,48 +78,10 @@ def _our_localvol_pde_digital_price_from_flat_svi(
         spacing=SpacingPolicy.CLUSTERED,
         cluster_strength=2.0,
     )
-    bounds = bs_compute_bounds(p_for_bounds, coord=coord, cfg=dom)
+    bounds = bs_compute_bounds(p, coord=coord, cfg=dom)
+    wiring = local_vol_pde_wiring(p, lv, coord, x_lb=bounds.x_lb, x_ub=bounds.x_ub)
 
-    # Far-field Dirichlet in PV terms (expressed as Robin beta=0)
-    def left_gamma(tau: float) -> float:
-        return 0.0
-
-    def right_gamma(tau: float) -> float:
-        return float(payout * ctx.df(float(tau)))
-
-    bc = RobinBC(
-        left=RobinBCSide(alpha=lambda tau: 1.0, beta=lambda tau: 0.0, gamma=left_gamma),
-        right=RobinBCSide(
-            alpha=lambda tau: 1.0, beta=lambda tau: 0.0, gamma=right_gamma
-        ),
-    )
-
-    mu = float(r - q)
-
-    # avoid T=0 guardrails in LV eval inside the PDE time loop
-    def _sigma2(x: np.ndarray | float, tau: float) -> np.ndarray:
-        tau_eff = max(float(tau), 1e-8)
-        x_arr = np.asarray(x, dtype=float)
-        S = np.exp(x_arr)
-        return np.asarray(lv.local_var(S, tau_eff), dtype=float)
-
-    def a(x: np.ndarray | float, tau: float) -> np.ndarray:
-        return 0.5 * _sigma2(x, tau)
-
-    def b(x: np.ndarray | float, tau: float) -> np.ndarray:
-        sig2 = _sigma2(x, tau)
-        return (mu - 0.5 * sig2).astype(float, copy=False)
-
-    def c(x: np.ndarray | float, tau: float) -> np.ndarray:
-        x_arr = np.asarray(x, dtype=float)
-        return (-float(r)) + 0.0 * x_arr
-
-    payoff = inst.payoff
-
-    def ic(x: float) -> float:
-        return float(payoff(float(to_S(x))))
-
-    problem = LinearParabolicPDE1D(a=a, b=b, c=c, bc=bc, ic=ic)
+    xK = float(np.asarray(wiring.to_x(K)).reshape(()))
 
     def ic_transform(grid, ic_fn):
         return ic_l2_projection(grid=grid, ic=ic_fn, breakpoints=(xK,))
@@ -154,7 +98,7 @@ def _our_localvol_pde_digital_price_from_flat_svi(
     )
 
     sol = solve_pde_1d(
-        problem,
+        wiring.problem,
         grid_cfg=grid_cfg,
         method="rannacher",
         advection=AdvectionScheme.CENTRAL,
@@ -164,7 +108,7 @@ def _our_localvol_pde_digital_price_from_flat_svi(
 
     x = np.asarray(sol.grid.x, dtype=float)
     u = np.asarray(sol.u_final, dtype=float)
-    return float(np.interp(x0, x, u))
+    return float(np.interp(wiring.x_0, x, u))
 
 
 def _quantlib_fd_digital_price(
@@ -332,17 +276,11 @@ def _our_localvol_pde_digital_price_from_svi_smiles(
     n_sigma_bounds: float = 6.0,
 ) -> float:
     """Price a digital under LocalVol derived from the supplied SVI smile slices."""
-    from option_pricing.instruments.digital import DigitalOption
-    from option_pricing.models.black_scholes.pde import bs_coord_maps
     from option_pricing.numerics.grids import GridConfig, SpacingPolicy
-    from option_pricing.numerics.pde import (
-        AdvectionScheme,
-        LinearParabolicPDE1D,
-        solve_pde_1d,
-    )
-    from option_pricing.numerics.pde.boundary import RobinBC, RobinBCSide
+    from option_pricing.numerics.pde import AdvectionScheme, solve_pde_1d
     from option_pricing.numerics.pde.domain import Coord
     from option_pricing.numerics.pde.ic_remedies import ic_l2_projection
+    from option_pricing.pricers.pde.digital_local_vol import local_vol_pde_wiring
     from option_pricing.pricers.pde.domain import (
         BSDomainConfig,
         BSDomainPolicy,
@@ -352,7 +290,6 @@ def _our_localvol_pde_digital_price_from_svi_smiles(
     from option_pricing.vol.surface import LocalVolSurface, VolSurface
 
     ctx = MarketData(spot=S0, rate=r, dividend_yield=q).to_context()
-    inst = DigitalOption(expiry=T, strike=K, payout=payout, kind=OptionType.CALL)
 
     implied = VolSurface(
         expiries=np.asarray(expiries, dtype=float),
@@ -364,18 +301,14 @@ def _our_localvol_pde_digital_price_from_svi_smiles(
         warnings.simplefilter("ignore", category=FutureWarning)
         lv = LocalVolSurface.from_implied(implied, forward=ctx.fwd, discount=ctx.df)
 
-    coord = Coord.LOG_S
-    to_x, to_S = bs_coord_maps(coord)
-
-    x0 = float(np.asarray(to_x(S0)).reshape(()))
-    xK = float(np.asarray(to_x(K)).reshape(()))
-
-    p_for_bounds = PricingInputs(
+    p = PricingInputs(
         spec=DigitalSpec(kind=OptionType.CALL, strike=K, expiry=T, payout=payout),
         market=MarketData(spot=S0, rate=r, dividend_yield=q),
         sigma=0.25,  # bounds selection only
         t=0.0,
     )
+
+    coord = Coord.LOG_S
     dom = BSDomainConfig(
         policy=BSDomainPolicy.LOG_NSIGMA,
         n_sigma=float(n_sigma_bounds),
@@ -383,46 +316,11 @@ def _our_localvol_pde_digital_price_from_svi_smiles(
         spacing=SpacingPolicy.CLUSTERED,
         cluster_strength=2.0,
     )
-    bounds = bs_compute_bounds(p_for_bounds, coord=coord, cfg=dom)
+    bounds = bs_compute_bounds(p, coord=coord, cfg=dom)
 
-    def left_gamma(tau: float) -> float:
-        return 0.0
+    wiring = local_vol_pde_wiring(p, lv, coord, x_lb=bounds.x_lb, x_ub=bounds.x_ub)
 
-    def right_gamma(tau: float) -> float:
-        return float(payout * ctx.df(float(tau)))
-
-    bc = RobinBC(
-        left=RobinBCSide(alpha=lambda tau: 1.0, beta=lambda tau: 0.0, gamma=left_gamma),
-        right=RobinBCSide(
-            alpha=lambda tau: 1.0, beta=lambda tau: 0.0, gamma=right_gamma
-        ),
-    )
-
-    mu = float(r - q)
-
-    def _sigma2(x: np.ndarray | float, tau: float) -> np.ndarray:
-        tau_eff = max(float(tau), 1e-8)
-        x_arr = np.asarray(x, dtype=float)
-        S = np.exp(x_arr)
-        return np.asarray(lv.local_var(S, tau_eff), dtype=float)
-
-    def a(x: np.ndarray | float, tau: float) -> np.ndarray:
-        return 0.5 * _sigma2(x, tau)
-
-    def b(x: np.ndarray | float, tau: float) -> np.ndarray:
-        sig2 = _sigma2(x, tau)
-        return (mu - 0.5 * sig2).astype(float, copy=False)
-
-    def c(x: np.ndarray | float, tau: float) -> np.ndarray:
-        x_arr = np.asarray(x, dtype=float)
-        return (-float(r)) + 0.0 * x_arr
-
-    payoff = inst.payoff
-
-    def ic(x: float) -> float:
-        return float(payoff(float(to_S(x))))
-
-    problem = LinearParabolicPDE1D(a=a, b=b, c=c, bc=bc, ic=ic)
+    xK = float(np.asarray(wiring.to_x(K)).reshape(()))
 
     def ic_transform(grid, ic_fn):
         return ic_l2_projection(grid=grid, ic=ic_fn, breakpoints=(xK,))
@@ -439,7 +337,7 @@ def _our_localvol_pde_digital_price_from_svi_smiles(
     )
 
     sol = solve_pde_1d(
-        problem,
+        wiring.problem,
         grid_cfg=grid_cfg,
         method="rannacher",
         advection=AdvectionScheme.CENTRAL,
@@ -449,7 +347,7 @@ def _our_localvol_pde_digital_price_from_svi_smiles(
 
     x = np.asarray(sol.grid.x, dtype=float)
     u = np.asarray(sol.u_final, dtype=float)
-    return float(np.interp(x0, x, u))
+    return float(np.interp(wiring.x_0, x, u))
 
 
 def _quantlib_fd_digital_price_from_implied_surface(
