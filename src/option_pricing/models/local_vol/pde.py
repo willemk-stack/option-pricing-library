@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
@@ -91,9 +91,25 @@ def local_vol_pde_coeffs(
     # Use the same coord normalization / mapping as BS.
     to_x, to_S = bs_coord_maps(coord)
 
+    # Caching logic to avoid duplicate computations
+    _last_tau_eff: float | None = None
+    _last_x_id: int | None = None
+    _last_sig2: FloatArray | None = None
+
     def _sigma2(x: ArrayLike, tau: float) -> FloatArray:
+        nonlocal _last_tau_eff, _last_x_id, _last_sig2
+
         x_arr = np.asarray(x, dtype=float)
         tau_eff = max(float(tau), float(tau_floor))
+
+        # fast path: same tau + same x object (after np.asarray)
+        # TODO: FIX CACHING SPEEDUP
+        if (
+            _last_sig2 is not None
+            and _last_tau_eff == tau_eff
+            and _last_x_id == id(x_arr)
+        ):
+            return _last_sig2
 
         # solver x -> underlying S
         S = to_S(x_arr)
@@ -105,7 +121,10 @@ def local_vol_pde_coeffs(
         sig2 = np.maximum(sig2, float(sigma2_floor))
         if sigma2_cap is not None:
             sig2 = np.minimum(sig2, float(sigma2_cap))
-        return np.asarray(sig2, dtype=float)
+
+        _last_tau, _last_x_id, _last_sig2 = tau_eff, id(x_arr), sig2
+
+        return cast(FloatArray, sig2)
 
     ck = _coord_key(coord)
 
