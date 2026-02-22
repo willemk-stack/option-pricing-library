@@ -92,17 +92,46 @@ def local_vol_pde_coeffs(
     to_x, to_S = bs_coord_maps(coord)
 
     # ---- caching ----
-    # Your operator builder evaluates a(x,t) and b(x,t) by looping over x *scalars*.
-    # A 1-element "last value" cache won't help there. Instead we cache sigma^2 for
-    # all scalar x values within the same tau step.
+    # The PDE operator builder tries to evaluate coefficient functions on a whole
+    # x-grid in one vectorized call. When that succeeds, we want to avoid
+    # evaluating local_var twice per time step (once via a(x,t) and once via
+    # b(x,t)).
+    #
+    # Some diagnostics / ad-hoc callers still evaluate coefficients in scalar
+    # loops or pass list-like x values. For those cases we keep:
+    #   - a small per-timestep cache for scalar x
+    #   - a "last vector" cache that also matches equal-valued x arrays (not only
+    #     identical ndarray objects)
     _cache_tau_eff: float | None = None
     _cache_sig2_by_x: dict[float, float] = {}
 
-    # Also keep a fast-path for vector calls (if any future code evaluates coeffs
-    # in a vectorized way).
+    # Also keep a fast-path for vector calls (used by the PDE builder and most
+    # performance-sensitive paths).
     _last_tau_eff: float | None = None
     _last_x_arr: np.ndarray | None = None
     _last_sig2: FloatArray | None = None
+
+    def _coerce_to_shape(arr: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
+        """Best-effort coerce/broadcast to a target shape.
+
+        This keeps vectorized coefficient evaluation robust even when a
+        local_var implementation returns e.g. (N, 1) for an (N,) input.
+        """
+
+        if arr.shape == shape:
+            return arr
+
+        # Scalar -> broadcast
+        if arr.size == 1:
+            return np.broadcast_to(np.asarray(arr).reshape(()), shape)
+
+        # Same number of elements -> reshape
+        n = int(np.prod(shape))
+        if arr.size == n:
+            return np.asarray(arr).reshape(shape)
+
+        # Fall back to numpy broadcasting rules
+        return np.broadcast_to(arr, shape)
 
     def _sanitize_sig2(sig2: np.ndarray) -> np.ndarray:
         sig2 = np.where(np.isfinite(sig2), sig2, float(sigma2_floor))
@@ -123,7 +152,8 @@ def local_vol_pde_coeffs(
             _cache_tau_eff = tau_eff
             _cache_sig2_by_x.clear()
 
-        # Scalar x path (this is what your PDE operator builder uses)
+        # Scalar x path (used by scalar-only diagnostics or as a fallback when
+        # a caller provides a non-vectorizable coefficient evaluation path).
         if x_arr.ndim == 0:
             xi = float(x_arr.reshape(()))
             hit = _cache_sig2_by_x.get(xi)
@@ -138,14 +168,26 @@ def local_vol_pde_coeffs(
             _cache_sig2_by_x[xi] = val
             return cast(FloatArray, np.asarray(val, dtype=float))
 
-        # Vector x fast-path (identity cache)
-        if _last_sig2 is not None and _last_tau_eff == tau_eff and _last_x_arr is x_arr:
-            return _last_sig2
+        # Vector x fast-path.
+        # - First try ndarray identity (zero overhead).
+        # - Then fall back to value equality so callers can pass list-like x
+        #   without defeating the cache (common in diagnostics).
+        if (
+            _last_sig2 is not None
+            and _last_tau_eff == tau_eff
+            and _last_x_arr is not None
+        ):
+            if _last_x_arr is x_arr:
+                return _last_sig2
+            # Only pay for an equality check when shapes match.
+            if _last_x_arr.shape == x_arr.shape and np.array_equal(_last_x_arr, x_arr):
+                return _last_sig2
 
         # Vector compute
         S = to_S(x_arr)
         sig2 = np.asarray(local_var(S, tau_eff), dtype=float)
-        sig2 = np.broadcast_to(sig2, np.asarray(S, dtype=float).shape)
+        target_shape = np.asarray(S, dtype=float).shape
+        sig2 = _coerce_to_shape(sig2, target_shape)
         sig2 = _sanitize_sig2(sig2)
 
         _last_tau_eff, _last_x_arr, _last_sig2 = tau_eff, x_arr, cast(FloatArray, sig2)
