@@ -11,7 +11,11 @@ import numpy as np
 from ..numerics.interpolation import FritschCarlson
 from ..numerics.regression import isotonic_regression
 from ..typing import ArrayLike, FloatArray, ScalarFn
-from .dupire import _gatheral_local_var_from_w
+from .dupire import (
+    GatheralLVReport,
+    _gatheral_local_var_from_w,
+    gatheral_local_var_diagnostics,
+)
 from .vol_types import DifferentiableSmileSlice, SmileSlice
 
 TimeInterp = Literal["no_arb", "linear_w"]
@@ -833,6 +837,44 @@ class LocalVolSurface:
             y=y, w=w, w_y=w_y, w_yy=w_yy, w_T=w_T, eps_w=eps_w, eps_denom=eps_denom
         )
         return np.asarray(lv, dtype=np.float64)
+
+    def local_var_diagnostics(
+        self,
+        K: ArrayLike,
+        T: float,
+        *,
+        eps_w: float = 1e-12,
+        eps_denom: float = 1e-12,
+    ) -> GatheralLVReport:
+        """Return Gatheral local-variance diagnostics at strike K and maturity T.
+
+        This does *not* clamp or silently drop invalid points: invalidity is
+        reported via a reason-coded mask in the returned report.
+        """
+        T = float(T)
+        if T <= 0.0:
+            raise ValueError("T must be > 0")
+
+        K_arr = np.asarray(K, dtype=np.float64)
+        if np.any(K_arr <= 0.0):
+            raise ValueError("K must be > 0")
+
+        F = float(self.forward(T))
+        if F <= 0.0:
+            raise ValueError(f"forward(T) must be > 0, got {F} at T={T}")
+
+        y = np.log(K_arr / np.float64(F)).astype(np.float64, copy=False)
+        w, w_y, w_yy, w_T = self._w_and_derivs(y, T)
+
+        return gatheral_local_var_diagnostics(
+            y=y,
+            w=w,
+            w_y=w_y,
+            w_yy=w_yy,
+            w_T=w_T,
+            eps_w=eps_w,
+            eps_denom=eps_denom,
+        )
 
     def local_vol(
         self,

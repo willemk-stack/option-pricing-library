@@ -7,6 +7,7 @@ portfolio-style notebooks and demos:
 * pricing calls on smile grids (Black-76)
 * flattening/summary of no-arbitrage reports
 * surfacing SVI calibration diagnostics (when smiles expose them)
+* local-vol (Dupire / Gatheral) grid diagnostics summaries
 
 The helpers rely on small Protocol interfaces (``VolSurfaceLike`` / ``SmileLike``)
 so they can work with multiple surface implementations.
@@ -22,6 +23,8 @@ import numpy as np
 import pandas as pd
 
 from option_pricing.typing import ArrayLike, ScalarFn
+from option_pricing.vol.dupire import GatheralLVReport, LVInvalidReason
+from option_pricing.vol.surface import LocalVolSurface
 from option_pricing.vol.vol_types import GridSmileSlice, SmileSlice
 
 # -----------------------------------------------------------------------------
@@ -373,6 +376,195 @@ def calendar_summary(report: Any) -> dict[str, Any]:
         "message": str(getattr(cal, "message", "")),
         "x_grid": getattr(cal, "x_grid", None),
         "bad_pairs": bad_pairs,
+    }
+
+
+# -----------------------------------------------------------------------------
+# Local-vol diagnostics helpers
+# -----------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class LocalVolGridReport:
+    """Local-vol diagnostics sampled on a (T, y) grid.
+
+    This is intended for notebook visualizations: heatmaps, invalid masks,
+    denominator stability, etc.
+    """
+
+    expiries: np.ndarray  # (nT,)
+    y: np.ndarray  # (ny,)
+    K: np.ndarray  # (nT, ny)
+
+    local_var: np.ndarray  # (nT, ny)
+    sigma: np.ndarray  # (nT, ny)
+    denom: np.ndarray  # (nT, ny)
+
+    invalid: np.ndarray  # (nT, ny) bool
+    reason: np.ndarray  # (nT, ny) uint32 bitmask
+
+    invalid_count: int
+    invalid_frac: float
+    reason_counts: dict[str, int]
+    worst_points: pd.DataFrame
+
+
+def _reasons_to_str(mask: int) -> str:
+    if mask == 0:
+        return ""
+    parts: list[str] = []
+    for r in LVInvalidReason:
+        if int(r) != 0 and (mask & int(r)):
+            name = r.name
+            if name is not None:
+                parts.append(name)
+    return "|".join(parts)
+
+
+def localvol_grid_diagnostics(
+    localvol: LocalVolSurface,
+    *,
+    expiries: Sequence[float],
+    y_grid: np.ndarray,
+    eps_w: float = 1e-12,
+    eps_denom: float = 1e-12,
+    top_n: int = 10,
+) -> LocalVolGridReport:
+    """Sample Gatheral local vol on a grid and return a diagnostics report.
+
+    Parameters
+    ----------
+    localvol:
+        :class:`option_pricing.vol.surface.LocalVolSurface`
+    expiries:
+        Sequence of maturities (years).
+    y_grid:
+        Log-moneyness grid y = ln(K/F(T)).
+
+    Notes
+    -----
+    Uses :meth:`LocalVolSurface.local_var_diagnostics`, which returns a reason-coded
+    invalid mask and the Gatheral denominator.
+    """
+
+    Ts = np.asarray(list(expiries), dtype=float)
+    y = np.asarray(y_grid, dtype=float)
+    if Ts.ndim != 1 or Ts.size == 0:
+        raise ValueError("expiries must be a non-empty 1D sequence")
+    if y.ndim != 1 or y.size == 0:
+        raise ValueError("y_grid must be a non-empty 1D array")
+
+    # allocate
+    nT = int(Ts.size)
+    ny = int(y.size)
+    K_grid = np.empty((nT, ny), dtype=float)
+    lv = np.empty((nT, ny), dtype=float)
+    sig = np.empty((nT, ny), dtype=float)
+    denom = np.empty((nT, ny), dtype=float)
+    invalid = np.empty((nT, ny), dtype=bool)
+    reason = np.empty((nT, ny), dtype=np.uint32)
+
+    for i, T in enumerate(Ts):
+        T_ = float(T)
+        F = float(localvol.forward(T_))
+        K = F * np.exp(y)
+        K_grid[i, :] = K
+
+        rep: GatheralLVReport = localvol.local_var_diagnostics(
+            K, T_, eps_w=eps_w, eps_denom=eps_denom
+        )
+        lv[i, :] = np.asarray(rep.local_var, dtype=float)
+        sig[i, :] = np.asarray(rep.sigma, dtype=float)
+        denom[i, :] = np.asarray(rep.denom, dtype=float)
+        invalid[i, :] = np.asarray(rep.invalid, dtype=bool)
+        reason[i, :] = np.asarray(rep.reason, dtype=np.uint32)
+
+    invalid_count = int(np.sum(invalid))
+    invalid_frac = float(invalid_count) / float(nT * ny)
+
+    # reason breakdown
+    reason_counts: dict[str, int] = {}
+    for r in LVInvalidReason:
+        if int(r) == 0:
+            continue
+        c = int(np.sum((reason & np.uint32(int(r))) != 0))
+        if c:
+            name = r.name
+            if name is not None:
+                reason_counts[name] = c
+
+    # worst points: smallest |denom| among finite denom
+    denom_abs = np.abs(denom)
+    finite = np.isfinite(denom_abs)
+    flat_idx = np.argsort(np.where(finite, denom_abs, np.inf).ravel())
+    rows: list[dict[str, float | str | int]] = []
+    taken = 0
+    for k in flat_idx:
+        if taken >= int(top_n):
+            break
+        ii = int(k // ny)
+        jj = int(k % ny)
+        if not finite[ii, jj]:
+            continue
+        rows.append(
+            {
+                "rank": taken + 1,
+                "T": float(Ts[ii]),
+                "y": float(y[jj]),
+                "K": float(K_grid[ii, jj]),
+                "denom": float(denom[ii, jj]),
+                "local_var": float(lv[ii, jj]) if np.isfinite(lv[ii, jj]) else np.nan,
+                "sigma": float(sig[ii, jj]) if np.isfinite(sig[ii, jj]) else np.nan,
+                "invalid": bool(invalid[ii, jj]),
+                "reasons": _reasons_to_str(int(reason[ii, jj])),
+            }
+        )
+        taken += 1
+
+    worst_df = pd.DataFrame(rows)
+
+    return LocalVolGridReport(
+        expiries=Ts,
+        y=y,
+        K=K_grid,
+        local_var=lv,
+        sigma=sig,
+        denom=denom,
+        invalid=invalid,
+        reason=reason,
+        invalid_count=invalid_count,
+        invalid_frac=invalid_frac,
+        reason_counts=reason_counts,
+        worst_points=worst_df,
+    )
+
+
+def localvol_summary(rep: LocalVolGridReport) -> dict[str, float | int]:
+    """Notebook-friendly summary stats for a :class:`LocalVolGridReport`."""
+
+    sig = np.asarray(rep.sigma, dtype=float)
+    mask = np.asarray(rep.invalid, dtype=bool) | (~np.isfinite(sig))
+    safe = np.where(mask, np.nan, sig)
+
+    return {
+        "invalid_count": int(rep.invalid_count),
+        "invalid_frac": float(rep.invalid_frac),
+        "sigma_min": (
+            float(np.nanmin(safe)) if np.isfinite(np.nanmin(safe)) else float("nan")
+        ),
+        "sigma_median": (
+            float(np.nanmedian(safe))
+            if np.isfinite(np.nanmedian(safe))
+            else float("nan")
+        ),
+        "sigma_max": (
+            float(np.nanmax(safe)) if np.isfinite(np.nanmax(safe)) else float("nan")
+        ),
+        "denom_abs_min": (
+            float(np.nanmin(np.abs(rep.denom)))
+            if np.isfinite(np.nanmin(np.abs(rep.denom)))
+            else float("nan")
+        ),
     }
 
 
