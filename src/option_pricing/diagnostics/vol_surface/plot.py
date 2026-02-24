@@ -10,6 +10,7 @@ from .compute import (
     calendar_dW,
     calendar_dW_from_report,
     call_prices_from_smile,
+    first_failing_convexity,
     first_failing_smile,
     get_smile_at_T,
     surface_domain_report,
@@ -165,6 +166,101 @@ def plot_first_strike_monotonicity_violation(
         bs_model=bs_model,
         figsize=figsize,
     )
+
+
+def plot_first_convexity_violation(
+    surface: Any,
+    report: Any,
+    *,
+    forward,
+    df,
+    bs_model: Any | None = None,
+    figsize=(9, 4),
+):
+    """Find the first convexity (butterfly proxy) violation and plot call prices.
+
+    Marks violating center indices on the call-price curve.
+    """
+
+    found = first_failing_convexity(report)
+    if found is None:
+        print("No convexity violations found.")
+        return None
+
+    T_fail, rep_fail = found
+    bad_centers = np.asarray(getattr(rep_fail, "bad_indices", []), dtype=int)
+    if bad_centers.size == 0:
+        print("No convexity violations found.")
+        return None
+
+    plt = _get_plt()
+    K, C, _iv = call_prices_from_smile(
+        surface, T=float(T_fail), forward=forward, df=df, bs_model=bs_model
+    )
+
+    plt.figure(figsize=figsize)
+    plt.plot(K, C, marker="o", linewidth=1.5, label="Call price")
+    plt.scatter(K[bad_centers], C[bad_centers], s=70, label="Convexity violation")
+    plt.xlabel("Strike K")
+    plt.ylabel("Call price (discounted)")
+    plt.title(
+        f"Call convexity check at T={float(T_fail):g}y — bad points={bad_centers.size}"
+    )
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.show()
+
+
+def plot_worst_calendar_slice(
+    surface: Any,
+    report: Any,
+    *,
+    title: str | None = None,
+    figsize=(9, 4),
+):
+    """Plot Δw(x) for the *worst* calendar expiry step, highlighting negative cells."""
+
+    cal = getattr(report, "calendar_total_variance", None)
+    if cal is None or (not bool(getattr(cal, "performed", False))):
+        print("Calendar check not available/performed.")
+        return None
+
+    # Use the same x-grid as the report.
+    xg = np.asarray(getattr(cal, "x_grid", np.empty((0,), dtype=float)))
+    if xg.size == 0:
+        print("Calendar report has empty x_grid.")
+        return None
+
+    dW = calendar_dW(surface, x_grid=xg)
+    if dW.size == 0:
+        print("Calendar Δw grid is empty.")
+        return None
+
+    # Find the step with the most negative cell.
+    i_step, j_x = np.unravel_index(int(np.nanargmin(dW)), dW.shape)
+
+    plt = _get_plt()
+    plt.figure(figsize=figsize)
+    plt.axhline(0.0, linewidth=1.0)
+    plt.plot(xg, dW[i_step, :], marker="o", linewidth=1.5, label="Δw")
+
+    neg = dW[i_step, :] < 0.0
+    if np.any(neg):
+        plt.scatter(xg[neg], dW[i_step, :][neg], s=60, label="violations")
+
+    Ts = [float(s.T) for s in surface.smiles]
+    t0 = Ts[i_step] if i_step < len(Ts) else float("nan")
+    t1 = Ts[i_step + 1] if (i_step + 1) < len(Ts) else float("nan")
+
+    plt.xlabel("log-moneyness x")
+    plt.ylabel("Δw")
+    plt.title(
+        title
+        or f"Worst calendar step: T={t0:g}→{t1:g} (min Δw at x={float(xg[j_x]):.3g})"
+    )
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.show()
 
 
 def plot_calendar_heatmap_from_report(

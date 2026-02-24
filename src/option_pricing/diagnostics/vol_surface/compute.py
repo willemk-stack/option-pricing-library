@@ -446,6 +446,246 @@ def calendar_summary(report: Any) -> dict[str, Any]:
 
 
 # -----------------------------------------------------------------------------
+# Actionable no-arbitrage reporting ("where" + "how bad" + "what next")
+# -----------------------------------------------------------------------------
+
+
+def first_failing_convexity(report: Any) -> tuple[float, Any] | None:
+    """Return (T, convexity_report) for the first expiry that fails convexity."""
+
+    for T, r in getattr(report, "smile_convexity", []):
+        if not bool(getattr(r, "ok", True)):
+            return float(T), r
+    return None
+
+
+@dataclass(frozen=True)
+class NoArbWorstPointsReport:
+    """Actionable no-arb breakdown.
+
+    The intent is notebook-friendly "triage":
+      * where are the violations?
+      * how large are they?
+      * what should you look at next?
+    """
+
+    monotonicity: pd.DataFrame
+    convexity: pd.DataFrame
+    calendar: pd.DataFrame
+    summary: dict[str, Any]
+    suggestions: tuple[str, ...]
+
+
+def noarb_worst_points(
+    surface: VolSurfaceLike,
+    report: Any,
+    *,
+    forward: ScalarFn,
+    df: ScalarFn,
+    bs_model: Black76Module | None = None,
+    top_n: int = 10,
+) -> NoArbWorstPointsReport:
+    """Return actionable "worst points" tables from a surface no-arb report.
+
+    Parameters
+    ----------
+    surface:
+        Surface used to reconstruct strike grids and call prices.
+    report:
+        A report compatible with :class:`option_pricing.vol.arbitrage.SurfaceNoArbReport`.
+    forward, df:
+        Market curves needed to price calls.
+    top_n:
+        Max rows returned per section (monotonicity / convexity / calendar).
+    """
+
+    if bs_model is None:
+        bs_model = _default_black76()
+
+    # -----------------
+    # Monotonicity rows
+    # -----------------
+    mono_rows: list[dict[str, Any]] = []
+    mono_max = 0.0
+    mono_count = 0
+
+    for T, mrep in getattr(report, "smile_monotonicity", ()) or ():
+        bad_i = np.asarray(getattr(mrep, "bad_indices", np.empty((0,), dtype=int)))
+        if bad_i.size == 0:
+            continue
+        T_ = float(T)
+        K, C, _iv = call_prices_from_smile(
+            surface, T=T_, forward=forward, df=df, bs_model=bs_model
+        )
+        dC = np.diff(C)
+        F = float(forward(T_))
+
+        for i in bad_i.astype(int, copy=False):
+            if i < 0 or i >= dC.size:
+                continue
+            v = float(dC[i])
+            mono_max = max(mono_max, v)
+            mono_count += 1
+            mono_rows.append(
+                {
+                    "T": T_,
+                    "i": int(i),
+                    "K_left": float(K[i]),
+                    "K_right": float(K[i + 1]),
+                    "y_left": float(np.log(K[i] / F)),
+                    "y_right": float(np.log(K[i + 1] / F)),
+                    "C_left": float(C[i]),
+                    "C_right": float(C[i + 1]),
+                    "dC": v,
+                }
+            )
+
+    mono_df = pd.DataFrame(mono_rows)
+    if not mono_df.empty:
+        mono_df = mono_df.sort_values("dC", ascending=False).head(int(top_n))
+
+    # --------------
+    # Convexity rows
+    # --------------
+    conv_rows: list[dict[str, Any]] = []
+    conv_max = 0.0
+    conv_count = 0
+
+    for T, crep in getattr(report, "smile_convexity", ()) or ():
+        bad_centers = np.asarray(
+            getattr(crep, "bad_indices", np.empty((0,), dtype=int))
+        ).astype(int, copy=False)
+        if bad_centers.size == 0:
+            continue
+
+        T_ = float(T)
+        K, C, _iv = call_prices_from_smile(
+            surface, T=T_, forward=forward, df=df, bs_model=bs_model
+        )
+        if K.size < 3:
+            continue
+
+        F = float(forward(T_))
+
+        # chord weights for interior points i = 1..n-2
+        K_m1 = K[:-2]
+        K_0 = K[1:-1]
+        K_p1 = K[2:]
+        denom = K_p1 - K_m1
+        # ignore pathological grids
+        safe = denom > 0.0
+        wL = np.where(safe, (K_p1 - K_0) / denom, np.nan)
+        wR = np.where(safe, (K_0 - K_m1) / denom, np.nan)
+        C_chord = wL * C[:-2] + wR * C[2:]
+        violation = C[1:-1] - C_chord  # should be <= 0
+
+        for i in bad_centers:
+            if i <= 0 or i >= K.size - 1:
+                continue
+            v = float(violation[i - 1]) if np.isfinite(violation[i - 1]) else np.nan
+            if np.isfinite(v):
+                conv_max = max(conv_max, v)
+            conv_count += 1
+            conv_rows.append(
+                {
+                    "T": T_,
+                    "i": int(i),
+                    "K_left": float(K[i - 1]),
+                    "K_mid": float(K[i]),
+                    "K_right": float(K[i + 1]),
+                    "y_mid": float(np.log(K[i] / F)),
+                    "C_mid": float(C[i]),
+                    "C_chord": (
+                        float(C_chord[i - 1]) if np.isfinite(C_chord[i - 1]) else np.nan
+                    ),
+                    "violation": v,
+                }
+            )
+
+    conv_df = pd.DataFrame(conv_rows)
+    if not conv_df.empty:
+        conv_df = conv_df.sort_values("violation", ascending=False).head(int(top_n))
+
+    # -------------
+    # Calendar rows
+    # -------------
+    cal = getattr(report, "calendar_total_variance", None)
+    cal_rows: list[dict[str, Any]] = []
+    cal_count = 0
+    cal_max = 0.0
+
+    if cal is not None and bool(getattr(cal, "performed", False)):
+        xg = np.asarray(getattr(cal, "x_grid", np.empty((0,), dtype=float)))
+        bad_pairs = np.asarray(getattr(cal, "bad_pairs", np.empty((0, 2), dtype=int)))
+        if xg.size and bad_pairs.size:
+            dW = calendar_dW(surface, x_grid=xg)  # shape (nT-1, nx)
+            Ts = np.asarray([float(s.T) for s in surface.smiles], dtype=float)
+
+            for pair in bad_pairs:
+                if pair.size != 2:
+                    continue
+                i = int(pair[0])
+                j = int(pair[1])
+                if i < 0 or i >= dW.shape[0] or j < 0 or j >= dW.shape[1]:
+                    continue
+
+                val = float(dW[i, j])
+                viol = float(-val) if np.isfinite(val) and val < 0.0 else 0.0
+                cal_max = max(cal_max, viol)
+                cal_count += 1
+                cal_rows.append(
+                    {
+                        "step": i,
+                        "T0": float(Ts[i]),
+                        "T1": float(Ts[i + 1]),
+                        "x": float(xg[j]),
+                        "dW": val,
+                        "violation": viol,
+                    }
+                )
+
+    cal_df = pd.DataFrame(cal_rows)
+    if not cal_df.empty:
+        cal_df = cal_df.sort_values("violation", ascending=False).head(int(top_n))
+
+    summary: dict[str, Any] = {
+        "monotonicity_n": int(mono_count),
+        "monotonicity_max": float(mono_max),
+        "convexity_n": int(conv_count),
+        "convexity_max": float(conv_max),
+        "calendar_n": int(cal_count),
+        "calendar_max": float(cal_max),
+        "report_message": str(getattr(report, "message", "")),
+        "report_ok": bool(getattr(report, "ok", True)),
+    }
+
+    # Suggestions: keep conservative and diagnostic-driven.
+    suggestions: list[str] = []
+    if mono_count:
+        suggestions.append(
+            "Strike monotonicity violations: look for outlier wing quotes / noisy slices; consider trimming wings or refitting with robust weights."
+        )
+    if conv_count:
+        suggestions.append(
+            "Convexity (butterfly) violations: check smile shape and quote consistency; consider enforcing no-butterfly constraints (e.g., SVI rails) or smoothing."
+        )
+    if cal_count:
+        suggestions.append(
+            "Calendar violations in total variance: check cross-expiry consistency; consider monotone time interpolation of w(T, x) or isotonic regression on ATM total variance."
+        )
+    if not suggestions:
+        suggestions.append("No no-arbitrage violations detected by these proxy checks.")
+
+    return NoArbWorstPointsReport(
+        monotonicity=mono_df,
+        convexity=conv_df,
+        calendar=cal_df,
+        summary=summary,
+        suggestions=tuple(suggestions),
+    )
+
+
+# -----------------------------------------------------------------------------
 # Local-vol diagnostics helpers
 # -----------------------------------------------------------------------------
 
