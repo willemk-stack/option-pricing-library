@@ -9,7 +9,7 @@ portfolio-style notebooks and demos:
 * surfacing SVI calibration diagnostics (when smiles expose them)
 * local-vol (Dupire / Gatheral) grid diagnostics summaries
 
-The helpers rely on small Protocol interfaces (``VolSurfaceLike`` / ``SmileLike``)
+The helpers rely on small Protocol interfaces (``VolSurfaceLike`` / ``SmileSlice``)
 so they can work with multiple surface implementations.
 """
 
@@ -23,7 +23,12 @@ import numpy as np
 import pandas as pd
 
 from option_pricing.typing import ArrayLike, ScalarFn
-from option_pricing.vol.dupire import GatheralLVReport, LVInvalidReason
+from option_pricing.vol.dupire import (
+    DupireLVReport,
+    GatheralLVReport,
+    LVInvalidReason,
+    local_vol_from_call_grid_diagnostics,
+)
 from option_pricing.vol.surface import LocalVolSurface
 from option_pricing.vol.vol_types import GridSmileSlice, SmileSlice
 
@@ -33,20 +38,7 @@ from option_pricing.vol.vol_types import GridSmileSlice, SmileSlice
 # -----------------------------------------------------------------------------
 
 
-class SmileLike(SmileSlice, Protocol):
-    """Compatibility protocol.
-
-    In this package, a smile slice may be grid-based (``y``/``w`` arrays) or
-    analytic (e.g. SVI) and only exposes ``w_at`` / ``iv_at`` plus a recommended
-    ``y`` domain.
-
-    Some smiles (e.g. :class:`option_pricing.vol.svi.SVISmile`) also expose a
-    ``diagnostics`` attribute. We treat it as optional and access it via
-    duck-typing.
-    """
-
-
-def _smile_grid(smile: SmileLike, *, n: int = 81) -> tuple[np.ndarray, np.ndarray]:
+def _smile_grid(smile: SmileSlice, *, n: int = 81) -> tuple[np.ndarray, np.ndarray]:
     """Return a (y, w) grid for a smile.
 
     * If the smile is grid-based, use its native grid.
@@ -64,7 +56,8 @@ def _smile_grid(smile: SmileLike, *, n: int = 81) -> tuple[np.ndarray, np.ndarra
 
 
 class VolSurfaceLike(Protocol):
-    smiles: Sequence[SmileLike]
+    @property
+    def smiles(self) -> Sequence[SmileSlice]: ...
 
     def iv(self, K: ArrayLike, T: float) -> np.ndarray: ...
 
@@ -89,6 +82,16 @@ class Black76Module(Protocol):
         tau: float,
         df: float,
     ) -> np.ndarray: ...
+
+
+def _default_black76() -> Black76Module:
+    """Lazy-import Black-76 helpers to keep diagnostics lightweight."""
+
+    from option_pricing.models.black_scholes import (
+        bs as _bs,  # type: ignore[attr-defined]
+    )
+
+    return cast(Black76Module, _bs)
 
 
 # -----------------------------------------------------------------------------
@@ -200,7 +203,7 @@ def query_iv_curve(surface: VolSurfaceLike, *, K: ArrayLike, T: float) -> np.nda
 
 def get_smile_at_T(
     surface: VolSurfaceLike, T: float, *, atol: float = 1e-12
-) -> SmileLike:
+) -> SmileSlice:
     """Find a smile by expiry using ``np.isclose`` matching."""
 
     T = float(T)
@@ -228,11 +231,7 @@ def call_prices_from_smile(
     """Compute discounted Black-76 call prices on the smile grid for expiry ``T``."""
 
     if bs_model is None:
-        from option_pricing.models.black_scholes import (
-            bs as _bs,  # type: ignore[attr-defined]
-        )
-
-        bs_model = cast(Black76Module, _bs)
+        bs_model = _default_black76()
 
     s = get_smile_at_T(surface, T)
     T = float(s.T)
@@ -245,6 +244,73 @@ def call_prices_from_smile(
 
     C = bs_model.black76_call_price_vec(forward=F, strikes=K, sigma=iv, tau=T, df=dfT)
     return K, np.asarray(C, dtype=float), iv
+
+
+def call_prices_from_surface_on_strikes(
+    surface: VolSurfaceLike,
+    *,
+    expiries: Sequence[float],
+    strikes: np.ndarray,
+    forward: ScalarFn,
+    df: ScalarFn,
+    bs_model: Black76Module | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Compute discounted Black-76 call prices on a *shared* strike grid.
+
+    This is primarily used for Dupire-from-call-grid diagnostics, which require
+    a consistent K-grid across maturities.
+
+    Returns
+    -------
+    strikes : (nK,)
+    taus    : (nT,)
+    calls   : (nT, nK)
+    iv      : (nT, nK)
+    forwards: (nT,)
+    """
+
+    if bs_model is None:
+        bs_model = _default_black76()
+
+    Ts = np.asarray(list(expiries), dtype=float)
+    K = np.asarray(strikes, dtype=float)
+
+    if Ts.ndim != 1 or Ts.size == 0:
+        raise ValueError("expiries must be a non-empty 1D sequence")
+    if K.ndim != 1 or K.size == 0:
+        raise ValueError("strikes must be a non-empty 1D array")
+    if not np.all(np.diff(Ts) > 0):
+        raise ValueError("expiries must be strictly increasing for Dupire grids")
+    if not np.all(np.diff(K) > 0):
+        raise ValueError("strikes must be strictly increasing")
+    if np.any(K <= 0):
+        raise ValueError("strikes must be > 0")
+
+    nT = int(Ts.size)
+    nK = int(K.size)
+    calls = np.empty((nT, nK), dtype=float)
+    iv = np.empty((nT, nK), dtype=float)
+    forwards = np.empty((nT,), dtype=float)
+    dfs = np.empty((nT,), dtype=float)
+
+    for i, T in enumerate(Ts):
+        T_ = float(T)
+        F = float(forward(T_))
+        dfT = float(df(T_))
+        if F <= 0.0:
+            raise ValueError(f"forward(T) must be > 0, got {F} at T={T_}")
+        if dfT <= 0.0:
+            raise ValueError(f"df(T) must be > 0, got {dfT} at T={T_}")
+
+        sigma = np.asarray(surface.iv(K, T_), dtype=float)
+        forwards[i] = F
+        dfs[i] = dfT
+        iv[i, :] = sigma
+        calls[i, :] = bs_model.black76_call_price_vec(
+            forward=F, strikes=K, sigma=sigma, tau=T_, df=dfT
+        )
+
+    return K, Ts, calls, iv, forwards
 
 
 # -----------------------------------------------------------------------------
@@ -568,12 +634,250 @@ def localvol_summary(rep: LocalVolGridReport) -> dict[str, float | int]:
     }
 
 
+@dataclass(frozen=True)
+class LocalVolCompareReport:
+    """Compare Gatheral-from-w vs Dupire-from-call-grid local vol on a shared (T, K) grid."""
+
+    expiries: np.ndarray  # (nT,)
+    strikes: np.ndarray  # (nK,)
+    forwards: np.ndarray  # (nT,)
+
+    # Gatheral diagnostics sampled at each maturity on the shared strike grid
+    y: np.ndarray  # (nT, nK)
+    g_sigma: np.ndarray  # (nT, nK)
+    g_local_var: np.ndarray  # (nT, nK)
+    g_denom: np.ndarray  # (nT, nK)
+    g_invalid: np.ndarray  # (nT, nK)
+    g_reason: np.ndarray  # (nT, nK)
+
+    # Dupire diagnostics on the same call grid
+    dupire: DupireLVReport
+
+    # Differences (Dupire - Gatheral)
+    diff_sigma: np.ndarray  # (nT, nK)
+    diff_local_var: np.ndarray  # (nT, nK)
+    invalid_union: np.ndarray  # (nT, nK)
+
+    summary: dict[str, float | int]
+    worst_diffs: pd.DataFrame
+    gatheral_reason_counts: dict[str, int]
+    dupire_reason_counts: dict[str, int]
+
+
+def _reason_counts(reason: np.ndarray) -> dict[str, int]:
+    out: dict[str, int] = {}
+    r = np.asarray(reason, dtype=np.uint32)
+    for flag in LVInvalidReason:
+        if int(flag) == 0:
+            continue
+        c = int(np.sum((r & np.uint32(int(flag))) != 0))
+        if c:
+            name = flag.name
+            if name is not None:
+                out[name] = c
+    return out
+
+
+def localvol_compare_gatheral_vs_dupire(
+    localvol: LocalVolSurface,
+    *,
+    expiries: Sequence[float],
+    strikes: np.ndarray,
+    market: Any,
+    # gatheral guardrails
+    eps_w: float = 1e-12,
+    eps_denom: float = 1e-12,
+    # dupire settings
+    price_convention: str = "discounted",
+    strike_coordinate: str = "logK",
+    trim_t: int = 1,
+    trim_k: int = 1,
+    eps_rel: float = 1e-12,
+    eps_gamma_rel: float = 1e-12,
+    # outputs
+    top_n: int = 10,
+    bs_model: Black76Module | None = None,
+) -> LocalVolCompareReport:
+    """Compare Gatheral local vol against Dupire local vol on a shared (T, K) grid.
+
+    Notes
+    -----
+    * Gatheral is evaluated via :meth:`LocalVolSurface.local_var_diagnostics` at each
+      maturity on the *same strike grid*.
+    * Dupire is computed from a call-price grid derived from the **implied** surface
+      (Black-76 using the surface implied vols).
+    * This is intended as a *diagnostic consistency check*; disagreement can be due
+      to finite-difference noise, time interpolation of w(T, y), trimming, or any of
+      the Gatheral denominator fragilities.
+    """
+
+    Ts = np.asarray(list(expiries), dtype=float)
+    K = np.asarray(strikes, dtype=float)
+    if Ts.ndim != 1 or Ts.size == 0:
+        raise ValueError("expiries must be a non-empty 1D sequence")
+    if K.ndim != 1 or K.size == 0:
+        raise ValueError("strikes must be a non-empty 1D array")
+    if Ts.size < 3 or K.size < 3:
+        raise ValueError(
+            "Need at least 3 maturities and 3 strikes to compare Dupire vs Gatheral."
+        )
+
+    # Ensure we respect the assumptions of the Dupire finite-difference stencils.
+    if not np.all(np.diff(Ts) > 0):
+        raise ValueError("expiries must be strictly increasing")
+    if not np.all(np.diff(K) > 0):
+        raise ValueError("strikes must be strictly increasing")
+    if np.any(K <= 0):
+        raise ValueError("strikes must be > 0")
+
+    if bs_model is None:
+        bs_model = _default_black76()
+
+    nT = int(Ts.size)
+    nK = int(K.size)
+
+    y = np.empty((nT, nK), dtype=float)
+    g_sigma = np.empty((nT, nK), dtype=float)
+    g_lv = np.empty((nT, nK), dtype=float)
+    g_denom = np.empty((nT, nK), dtype=float)
+    g_invalid = np.empty((nT, nK), dtype=bool)
+    g_reason = np.empty((nT, nK), dtype=np.uint32)
+    forwards = np.empty((nT,), dtype=float)
+
+    for i, T in enumerate(Ts):
+        rep: GatheralLVReport = localvol.local_var_diagnostics(
+            K, float(T), eps_w=eps_w, eps_denom=eps_denom
+        )
+        y[i, :] = np.asarray(rep.y, dtype=float)
+        g_sigma[i, :] = np.asarray(rep.sigma, dtype=float)
+        g_lv[i, :] = np.asarray(rep.local_var, dtype=float)
+        g_denom[i, :] = np.asarray(rep.denom, dtype=float)
+        g_invalid[i, :] = np.asarray(rep.invalid, dtype=bool)
+        g_reason[i, :] = np.asarray(rep.reason, dtype=np.uint32)
+        forwards[i] = float(localvol.forward(float(T)))
+
+    # Build call grid from implied surface on the shared strike grid
+    _K, _Ts, calls, _iv, _forwards2 = call_prices_from_surface_on_strikes(
+        localvol.implied,
+        expiries=Ts.tolist(),
+        strikes=K,
+        forward=localvol.forward,
+        df=localvol.discount,
+        bs_model=bs_model,
+    )
+    # keep forwards from the pricing call (should match the gatheral forwards)
+    forwards = np.asarray(_forwards2, dtype=float)
+
+    dup = local_vol_from_call_grid_diagnostics(
+        calls,
+        strikes=K,
+        taus=Ts,
+        market=market,
+        price_convention=cast(Any, price_convention),
+        strike_coordinate=cast(Any, strike_coordinate),
+        trim_t=int(trim_t),
+        trim_k=int(trim_k),
+        eps_rel=float(eps_rel),
+        eps_gamma_rel=float(eps_gamma_rel),
+    )
+
+    diff_sigma = np.asarray(dup.sigma, dtype=float) - np.asarray(g_sigma, dtype=float)
+    diff_lv = np.asarray(dup.local_var, dtype=float) - np.asarray(g_lv, dtype=float)
+    invalid_union = (
+        np.asarray(g_invalid, dtype=bool)
+        | np.asarray(dup.invalid, dtype=bool)
+        | (~np.isfinite(diff_sigma))
+    )
+
+    diff_sigma = np.where(invalid_union, np.nan, diff_sigma)
+    diff_lv = np.where(invalid_union, np.nan, diff_lv)
+
+    # Summary stats
+    valid = ~invalid_union
+    n_total = int(nT * nK)
+    n_valid = int(np.sum(valid))
+
+    abs_diff = np.abs(diff_sigma)
+    rmse = (
+        float(np.sqrt(np.nanmean(diff_sigma * diff_sigma))) if n_valid else float("nan")
+    )
+    mae = float(np.nanmean(abs_diff)) if n_valid else float("nan")
+    max_abs = float(np.nanmax(abs_diff)) if n_valid else float("nan")
+
+    summary: dict[str, float | int] = {
+        "n_total": n_total,
+        "n_compared": n_valid,
+        "compared_frac": float(n_valid) / float(n_total) if n_total else 0.0,
+        "gatheral_invalid_frac": (
+            float(np.sum(g_invalid)) / float(n_total) if n_total else 0.0
+        ),
+        "dupire_invalid_frac": (
+            float(np.sum(dup.invalid)) / float(n_total) if n_total else 0.0
+        ),
+        "union_invalid_frac": (
+            float(np.sum(invalid_union)) / float(n_total) if n_total else 0.0
+        ),
+        "diff_sigma_rmse": rmse,
+        "diff_sigma_mae": mae,
+        "diff_sigma_max_abs": max_abs,
+    }
+
+    # Worst differences table
+    rows: list[dict[str, Any]] = []
+    if n_valid:
+        flat = np.argsort(np.where(valid, abs_diff, -np.inf).ravel())[::-1]
+        taken = 0
+        for idx in flat:
+            if taken >= int(top_n):
+                break
+            ii = int(idx // nK)
+            jj = int(idx % nK)
+            if not valid[ii, jj]:
+                continue
+            rows.append(
+                {
+                    "rank": taken + 1,
+                    "T": float(Ts[ii]),
+                    "K": float(K[jj]),
+                    "y": float(y[ii, jj]),
+                    "sigma_gatheral": float(g_sigma[ii, jj]),
+                    "sigma_dupire": float(dup.sigma[ii, jj]),
+                    "diff_sigma": float(diff_sigma[ii, jj]),
+                    "denom_gatheral": float(g_denom[ii, jj]),
+                    "denom_dupire": float(dup.denom[ii, jj]),
+                }
+            )
+            taken += 1
+
+    worst_df = pd.DataFrame(rows)
+
+    return LocalVolCompareReport(
+        expiries=Ts,
+        strikes=K,
+        forwards=forwards,
+        y=y,
+        g_sigma=g_sigma,
+        g_local_var=g_lv,
+        g_denom=g_denom,
+        g_invalid=g_invalid,
+        g_reason=g_reason,
+        dupire=dup,
+        diff_sigma=diff_sigma,
+        diff_local_var=diff_lv,
+        invalid_union=invalid_union,
+        summary=summary,
+        worst_diffs=worst_df,
+        gatheral_reason_counts=_reason_counts(g_reason),
+        dupire_reason_counts=_reason_counts(dup.reason),
+    )
+
+
 # -----------------------------------------------------------------------------
 # SVI fit diagnostics (duck-typed)
 # -----------------------------------------------------------------------------
 
 
-def _maybe_get_svi_diagnostics(smile: SmileLike) -> tuple[Any, Any, Any] | None:
+def _maybe_get_svi_diagnostics(smile: SmileSlice) -> tuple[Any, Any, Any] | None:
     """Return (diag, checks, solver) if the smile exposes *SVI-like* diagnostics.
 
     We intentionally keep this duck-typed, but we also try to avoid false positives
