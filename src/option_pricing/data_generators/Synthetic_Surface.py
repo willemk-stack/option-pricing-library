@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import numpy.typing as npt
+
+if TYPE_CHECKING:
+    # avoid runtime import for users who only need synthetic data helpers
+    from option_pricing.vol.svi import SVIParams
 
 SurfaceModel = Literal["poly", "svi"]
 NoiseMode = Literal["none", "absolute", "relative"]
@@ -88,6 +92,175 @@ def _iv_svi_like(
     iv = np.sqrt(np.maximum(w / max(T_, 1e-12), 0.0))
     iv = np.maximum(iv, floor)
     return np.asarray(iv, dtype=np.float64)
+
+
+@dataclass(frozen=True)
+class BadSVISmileCase:
+    """Deterministic raw-SVI smile pair for butterfly-repair demos.
+
+    `params_good` is intended to be a visually reasonable, arbitrage-free baseline on
+    the supplied y-domain; `params_bad` is a perturbed version that should trigger the
+    butterfly-arbitrage checker on the same domain.
+    """
+
+    T: float
+    y_min: float
+    y_max: float
+    # use forward references to avoid runtime import
+    params_good: SVIParams
+    params_bad: SVIParams
+    source: str
+    metadata: dict[str, float | str | bool]
+
+
+def generate_bad_svi_smile_case(
+    *,
+    T: float = 1.0,
+    y_domain: tuple[float, float] = (-0.35, 0.35),
+    base_params: SVIParams | None = None,
+    trial_scales: Sequence[tuple[float, float]] = (
+        (2.25, 0.75),
+        (1.80, 0.85),
+        (1.50, 0.90),
+    ),
+    rho_abs: float = 0.95,
+) -> BadSVISmileCase:
+    """Create a reproducibly *bad* raw-SVI smile for repair demonstrations.
+
+    This helper is intentionally opinionated and demo-focused: it starts from either a
+    supplied SVI parameter set or a canonical one, then applies a small list of
+    perturbations until the library butterfly checker reports a violation on the given
+    y-domain.
+
+    Notes
+    -----
+    - Imports from `option_pricing.vol.svi` are local to avoid creating import-time
+      dependencies for users who only need synthetic quote generation.
+    - The returned `params_good` / `params_bad` objects are `SVIParams` instances.
+    """
+
+    from option_pricing.vol.svi import SVIParams, check_butterfly_arbitrage
+
+    T_ = float(T)
+    y_min, y_max = map(float, y_domain)
+    if y_min == y_max:
+        raise ValueError("y_domain must have non-zero width")
+    if y_min > y_max:
+        y_min, y_max = y_max, y_min
+
+    if base_params is None:
+        params_good = SVIParams(a=0.020, b=0.070, rho=-0.45, m=-0.02, sigma=0.22)
+        source = "canonical"
+    else:
+        params_good = base_params
+        source = "from_base_params"
+
+    rep_good = check_butterfly_arbitrage(
+        params_good,
+        y_domain_hint=(y_min, y_max),
+        w_floor=1e-12,
+        g_floor=0.0,
+    )
+
+    sign_rho = np.sign(getattr(params_good, "rho", -1.0))
+    if sign_rho == 0.0:
+        sign_rho = -1.0
+
+    a0 = float(params_good.a)
+    b0 = float(max(1e-8, params_good.b))
+    m0 = float(params_good.m)
+    sigma0 = float(max(1e-4, params_good.sigma))
+
+    rho_bad = float(np.clip(sign_rho * float(rho_abs), -0.999, 0.999))
+
+    # Sufficient wing-violation threshold for raw SVI via Gatheral wing limits:
+    # need max{|b(1+rho)|, |b(rho-1)|} = b(1+|rho|) > 2
+    b_wing_threshold = float((2.0 + 1e-3) / max(1e-8, (1.0 + abs(rho_bad))))
+
+    # Candidate list:
+    # 1) relative perturbations (preferred when base slice is already "large enough")
+    # 2) forced absolute-b candidates that guarantee a wing-limit violation
+    candidate_specs: list[tuple[float, float, str]] = []
+
+    for b_mult, sigma_mult in trial_scales:
+        candidate_specs.append(
+            (float(max(1e-6, b0 * float(b_mult))), float(sigma_mult), "relative")
+        )
+
+    for b_factor in (1.02, 1.10, 1.25):
+        for sigma_mult in (0.90, 0.75, 0.50):
+            candidate_specs.append(
+                (
+                    float(max(b0 * 1.10, b_wing_threshold * b_factor)),
+                    float(sigma_mult),
+                    "forced_wing",
+                )
+            )
+
+    last_bad = None
+    seen: set[tuple[int, int]] = set()
+
+    for b_bad, sigma_mult, mode in candidate_specs:
+        sigma_bad = float(max(1e-4, sigma0 * float(sigma_mult)))
+
+        # de-dup near-identical candidates
+        key = (int(round(b_bad * 1e6)), int(round(sigma_bad * 1e6)))
+        if key in seen:
+            continue
+        seen.add(key)
+
+        p_bad = SVIParams(
+            a=a0,
+            b=b_bad,
+            rho=rho_bad,
+            m=m0,
+            sigma=sigma_bad,
+        )
+        rep_bad = check_butterfly_arbitrage(
+            p_bad,
+            y_domain_hint=(y_min, y_max),
+            w_floor=1e-12,
+            g_floor=0.0,
+        )
+        last_bad = (p_bad, rep_bad, mode, b_bad, sigma_bad)
+
+        if not bool(rep_bad.ok):
+            return BadSVISmileCase(
+                T=T_,
+                y_min=y_min,
+                y_max=y_max,
+                params_good=params_good,
+                params_bad=p_bad,
+                source=source,
+                metadata={
+                    "good_ok": bool(rep_good.ok),
+                    "bad_ok": bool(rep_bad.ok),
+                    "rho_abs": float(rho_abs),
+                    "mode": str(mode),
+                    "b_base": float(b0),
+                    "b_bad": float(b_bad),
+                    "b_mult_eff": float(b_bad / b0) if b0 > 0 else float("inf"),
+                    "sigma_base": float(sigma0),
+                    "sigma_bad": float(sigma_bad),
+                    "sigma_mult_eff": (
+                        float(sigma_bad / sigma0) if sigma0 > 0 else float("inf")
+                    ),
+                    "b_wing_threshold": float(b_wing_threshold),
+                    "good_min_g": float(getattr(rep_good, "min_g", np.nan)),
+                    "bad_min_g": float(getattr(rep_bad, "min_g", np.nan)),
+                    "bad_failure_reason": str(getattr(rep_bad, "failure_reason", "")),
+                },
+            )
+
+    if last_bad is None:
+        raise RuntimeError("No bad-SVI candidate was generated (empty candidate set).")
+
+    p_bad, rep_bad, mode, b_bad, sigma_bad = last_bad
+    raise RuntimeError(
+        "Failed to create a butterfly-violating raw-SVI smile even after forced wing-violation attempts. "
+        f"Last trial: mode={mode}, b_bad={b_bad}, sigma_bad={sigma_bad}, rep_ok={rep_bad.ok}, "
+        f'min_g={getattr(rep_bad, "min_g", None)}, reason={getattr(rep_bad, "failure_reason", None)}.'
+    )
 
 
 @dataclass(frozen=True)
