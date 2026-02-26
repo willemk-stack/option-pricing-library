@@ -15,7 +15,7 @@ from .math import (
 )
 
 if TYPE_CHECKING:
-    from .models import SVIParams
+    from .models import JWParams, SVIParams
 from .domain import DomainCheckConfig
 from .math import EPS
 from .objective import svi_residual_vector
@@ -536,4 +536,221 @@ def build_svi_diagnostics(
         solver=solver,
         checks=checks,
         summary=summary,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class GJExample51RepairResult:
+    """Result bundle for the Gatheral–Jacquier (2013) Example 5.1 sanity check."""
+
+    T: float
+
+    p_raw: SVIParams
+    jw_raw: JWParams
+
+    c0_target: float
+    vtilde0_target: float
+
+    p_projected: SVIParams
+    jw_projected: JWParams
+
+    p_optimal: SVIParams
+    jw_optimal: JWParams
+
+    check_raw: ButterflyCheck
+    check_projected: ButterflyCheck
+    check_optimal: ButterflyCheck
+
+    y_plot: NDArray[np.float64]
+    w_raw: NDArray[np.float64]
+    w_projected: NDArray[np.float64]
+    w_optimal: NDArray[np.float64]
+
+    g_raw: NDArray[np.float64]
+    g_projected: NDArray[np.float64]
+    g_optimal: NDArray[np.float64]
+
+    paper_jw: dict[str, float]
+    paper_proj: dict[str, float]
+    paper_opt: dict[str, float]
+
+
+def run_gj_example51_repair_sanity_check(
+    *,
+    T: float = 1.0,
+    p_raw: SVIParams | None = None,
+    y_domain_hint: tuple[float, float] = (-1.5, 1.5),
+    w_floor: float = 1e-12,
+    y_obj: NDArray[np.float64] | None = None,
+    y_penalty: NDArray[np.float64] | None = None,
+    y_plot: NDArray[np.float64] | None = None,
+    lambda_price: float = 1.0,
+    lambda_g: float = 1e7,
+    g_floor: float = 0.0,
+    g_scale: float = 0.02,
+    lambda_wfloor: float = 0.0,
+    max_nfev: int = 2000,
+) -> GJExample51RepairResult:
+    """
+    Reproduce the library-side workflow for Gatheral–Jacquier (2013), Example 5.1:
+
+      1) start from the raw-SVI slice from Example 3.1
+      2) convert to JW
+      3) compute the Section 5.1 projection target
+      4) build:
+           - projected repair via repair_butterfly_raw(..., method="project")
+           - optimal refinement via repair_butterfly_jw_optimal(...)
+      5) run butterfly checks and precompute w(y), g(y) curves for plotting
+
+    This is intentionally a diagnostics/sanity-check helper, not core repair API.
+    """
+    from .models import SVIParams
+    from .repair import (
+        _gj_section51_targets,
+        repair_butterfly_jw_optimal,
+        repair_butterfly_raw,
+    )
+
+    if T <= 0.0:
+        raise ValueError("T must be > 0")
+
+    if p_raw is None:
+        p_raw = SVIParams(
+            a=-0.0410,
+            b=0.1331,
+            rho=0.3060,
+            m=0.3586,
+            sigma=0.4153,
+        )
+
+    y0, y1 = float(min(y_domain_hint)), float(max(y_domain_hint))
+    if not np.isfinite(y0) or not np.isfinite(y1) or y0 >= y1:
+        raise ValueError("y_domain_hint must be a finite ordered pair (y_min, y_max)")
+
+    if y_obj is None:
+        y_obj = np.linspace(y0, y1, 301, dtype=np.float64)
+    else:
+        y_obj = np.asarray(y_obj, dtype=np.float64).reshape(-1)
+
+    if y_penalty is None:
+        y_penalty = np.linspace(y0, y1, 1201, dtype=np.float64)
+    else:
+        y_penalty = np.asarray(y_penalty, dtype=np.float64).reshape(-1)
+
+    if y_plot is None:
+        y_plot = np.linspace(y0, y1, 801, dtype=np.float64)
+    else:
+        y_plot = np.asarray(y_plot, dtype=np.float64).reshape(-1)
+
+    y_obj = y_obj[np.isfinite(y_obj)]
+    y_penalty = y_penalty[np.isfinite(y_penalty)]
+    y_plot = y_plot[np.isfinite(y_plot)]
+
+    if y_obj.size == 0:
+        raise ValueError("y_obj must contain at least one finite point")
+    if y_penalty.size == 0:
+        raise ValueError("y_penalty must contain at least one finite point")
+    if y_plot.size == 0:
+        raise ValueError("y_plot must contain at least one finite point")
+
+    jw_raw = p_raw.to_jw(T=T)
+    c0_target, vtilde0_target = _gj_section51_targets(jw_raw)
+
+    p_projected = repair_butterfly_raw(
+        p_raw,
+        T=T,
+        y_domain_hint=(y0, y1),
+        w_floor=w_floor,
+        method="project",
+    )
+    jw_projected = p_projected.to_jw(T=T)
+
+    p_optimal = repair_butterfly_jw_optimal(
+        p_raw,
+        T=T,
+        y_obj=y_obj,
+        y_penalty=y_penalty,
+        y_domain_hint=(y0, y1),
+        w_floor=w_floor,
+        lambda_price=lambda_price,
+        lambda_g=lambda_g,
+        g_floor=g_floor,
+        g_scale=g_scale,
+        lambda_wfloor=lambda_wfloor,
+        max_nfev=max_nfev,
+    )
+    jw_optimal = p_optimal.to_jw(T=T)
+
+    check_raw = check_butterfly_arbitrage(
+        p_raw,
+        y_domain_hint=(y0, y1),
+        w_floor=w_floor,
+        g_floor=g_floor,
+    )
+    check_projected = check_butterfly_arbitrage(
+        p_projected,
+        y_domain_hint=(y0, y1),
+        w_floor=w_floor,
+        g_floor=g_floor,
+    )
+    check_optimal = check_butterfly_arbitrage(
+        p_optimal,
+        y_domain_hint=(y0, y1),
+        w_floor=w_floor,
+        g_floor=g_floor,
+    )
+
+    w_raw = np.asarray(svi_total_variance(y_plot, p_raw), dtype=np.float64)
+    w_projected = np.asarray(svi_total_variance(y_plot, p_projected), dtype=np.float64)
+    w_optimal = np.asarray(svi_total_variance(y_plot, p_optimal), dtype=np.float64)
+
+    g_raw = np.asarray(gatheral_g_vec(y_plot, p_raw, w_floor=w_floor), dtype=np.float64)
+    g_projected = np.asarray(
+        gatheral_g_vec(y_plot, p_projected, w_floor=w_floor),
+        dtype=np.float64,
+    )
+    g_optimal = np.asarray(
+        gatheral_g_vec(y_plot, p_optimal, w_floor=w_floor),
+        dtype=np.float64,
+    )
+
+    paper_jw = {
+        "v": 0.01742625,
+        "psi": -0.1752111,
+        "p": 0.6997381,
+        "c": 1.316798,
+        "v_tilde": 0.0116249,
+    }
+    paper_proj = {
+        "c0": 0.3493158,
+        "vtilde0": 0.01548182,
+    }
+    paper_opt = {
+        "c_star": 0.8564763,
+        "vtilde_star": 0.0116249,
+    }
+
+    return GJExample51RepairResult(
+        T=float(T),
+        p_raw=p_raw,
+        jw_raw=jw_raw,
+        c0_target=float(c0_target),
+        vtilde0_target=float(vtilde0_target),
+        p_projected=p_projected,
+        jw_projected=jw_projected,
+        p_optimal=p_optimal,
+        jw_optimal=jw_optimal,
+        check_raw=check_raw,
+        check_projected=check_projected,
+        check_optimal=check_optimal,
+        y_plot=y_plot,
+        w_raw=w_raw,
+        w_projected=w_projected,
+        w_optimal=w_optimal,
+        g_raw=g_raw,
+        g_projected=g_projected,
+        g_optimal=g_optimal,
+        paper_jw=paper_jw,
+        paper_proj=paper_proj,
+        paper_opt=paper_opt,
     )

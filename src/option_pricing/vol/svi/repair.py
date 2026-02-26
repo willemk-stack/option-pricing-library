@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -464,3 +464,164 @@ def repair_butterfly_raw(
         return p_candidate
 
     raise ValueError(f"Unknown method={method!r}")
+
+
+def repair_butterfly_with_fallback(
+    p_raw: SVIParams,
+    *,
+    T: float,
+    y_domain_hint: tuple[float, float],
+    w_floor: float = 1e-12,
+    try_jw_optimal: bool = True,
+    raw_methods: tuple[Literal["line_search", "project"], ...] = (
+        "line_search",
+        "project",
+    ),
+    jw_kwargs: dict | None = None,
+    raw_kwargs: dict | None = None,
+) -> tuple[SVIParams, ButterflyCheck, list[dict[str, object]]]:
+    """
+    Repair a raw-SVI slice using an ordered fallback strategy.
+
+    Strategy
+    --------
+    1) If already butterfly-arbitrage free, return unchanged.
+    2) Try JW-optimal repair first (if enabled).
+    3) Fall back to raw repair methods in the order supplied.
+
+    Returns
+    -------
+    params_fixed, check_post, attempt_log
+
+    where ``attempt_log`` is notebook-friendly and can be turned into a DataFrame.
+    """
+    if T <= 0.0:
+        raise ValueError("T must be > 0")
+
+    y0, y1 = float(min(y_domain_hint)), float(max(y_domain_hint))
+    if not np.isfinite(y0) or not np.isfinite(y1) or y0 >= y1:
+        raise ValueError("y_domain_hint must be a finite ordered pair (y_min, y_max)")
+
+    check_pre = check_butterfly_arbitrage(
+        p_raw,
+        y_domain_hint=(y0, y1),
+        w_floor=w_floor,
+        g_floor=0.0,
+    )
+    if check_pre.ok:
+        return (
+            p_raw,
+            check_pre,
+            [
+                {
+                    "method": "already_ok",
+                    "ok": True,
+                    "min_g": float(check_pre.min_g),
+                    "failure_reason": str(check_pre.failure_reason or ""),
+                    "error": "",
+                }
+            ],
+        )
+
+    attempt_log: list[dict[str, object]] = []
+    last_exc: Exception | None = None
+
+    jw_kwargs = dict(jw_kwargs or {})
+    raw_kwargs = dict(raw_kwargs or {})
+
+    if try_jw_optimal:
+        jw_call: dict[str, Any] = dict(
+            y_obj=np.linspace(y0, y1, 101),
+            y_penalty=np.linspace(y0, y1, 301),
+            y_domain_hint=(y0, y1),
+            w_floor=w_floor,
+            init_method="line_search",
+            init_n_scan=101,
+            init_n_bisect=50,
+        )
+        jw_call.update(jw_kwargs)
+
+        try:
+            # mypy can't infer types of **jw_call; cast to Any to bypass
+            p_try = repair_butterfly_jw_optimal(
+                p_raw,
+                T=T,
+                **cast(Any, jw_call),
+            )
+            rep = check_butterfly_arbitrage(
+                p_try,
+                y_domain_hint=(y0, y1),
+                w_floor=w_floor,
+                g_floor=0.0,
+            )
+            attempt_log.append(
+                {
+                    "method": "jw_optimal",
+                    "ok": bool(rep.ok),
+                    "min_g": float(rep.min_g),
+                    "failure_reason": str(rep.failure_reason or ""),
+                    "error": "",
+                }
+            )
+            if rep.ok:
+                return p_try, rep, attempt_log
+        except Exception as e:  # noqa: BLE001
+            last_exc = e
+            attempt_log.append(
+                {
+                    "method": "jw_optimal",
+                    "ok": False,
+                    "min_g": np.nan,
+                    "failure_reason": "",
+                    "error": f"{type(e).__name__}: {e}",
+                }
+            )
+
+    for method in raw_methods:
+        raw_call: dict[str, Any] = dict(
+            y_domain_hint=(y0, y1),
+            w_floor=w_floor,
+            method=method,
+            n_scan=101,
+            n_bisect=50,
+        )
+        raw_call.update(raw_kwargs)
+
+        try:
+            p_try = repair_butterfly_raw(
+                p_raw,
+                T=T,
+                **cast(Any, raw_call),
+            )
+            rep = check_butterfly_arbitrage(
+                p_try,
+                y_domain_hint=(y0, y1),
+                w_floor=w_floor,
+                g_floor=0.0,
+            )
+            attempt_log.append(
+                {
+                    "method": str(method),
+                    "ok": bool(rep.ok),
+                    "min_g": float(rep.min_g),
+                    "failure_reason": str(rep.failure_reason or ""),
+                    "error": "",
+                }
+            )
+            if rep.ok:
+                return p_try, rep, attempt_log
+        except Exception as e:  # noqa: BLE001
+            last_exc = e
+            attempt_log.append(
+                {
+                    "method": str(method),
+                    "ok": False,
+                    "min_g": np.nan,
+                    "failure_reason": "",
+                    "error": f"{type(e).__name__}: {e}",
+                }
+            )
+
+    raise RuntimeError(
+        "SVI slice repair failed for all configured methods. " f"Last error: {last_exc}"
+    )

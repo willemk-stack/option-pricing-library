@@ -16,6 +16,7 @@ from .calibrate import calibrate_svi
 # diagnostics
 from .diagnostics import (
     ButterflyCheck,
+    GJExample51RepairResult,
     LeeWingCheck,
     SVIDiagnosticsContext,
     SVIFitDiagnostics,
@@ -23,6 +24,7 @@ from .diagnostics import (
     SVISolverInfo,
     build_svi_diagnostics,
     check_butterfly_arbitrage,
+    run_gj_example51_repair_sanity_check,
 )
 
 # domain
@@ -73,7 +75,11 @@ from .regularization import (
 )
 
 # repair utilities
-from .repair import repair_butterfly_jw_optimal, repair_butterfly_raw
+from .repair import (
+    repair_butterfly_jw_optimal,
+    repair_butterfly_raw,
+    repair_butterfly_with_fallback,
+)
 
 # transforms
 from .transforms import SVITransformLeeCap, logit, sigmoid, softplus, softplus_inv
@@ -130,6 +136,8 @@ __all__ = [
     # repair
     "repair_butterfly_raw",
     "repair_butterfly_jw_optimal",
+    "repair_butterfly_with_fallback",
+    "run_gj_example51_repair_sanity_check",
     # diagnostics
     "LeeWingCheck",
     "ButterflyCheck",
@@ -139,6 +147,7 @@ __all__ = [
     "SVIFitDiagnostics",
     "SVIDiagnosticsContext",
     "build_svi_diagnostics",
+    "GJExample51RepairResult",
     # models
     "SVIParams",
     "JWParams",

@@ -671,3 +671,63 @@ def plot_localvol_method_diff(
 
     plt.title(title or default_title)
     plt.show()
+
+
+def plot_repricing_heatmap(
+    df,
+    *,
+    value_col: str,
+    title: str,
+    figsize=(10, 4),
+):
+    """Heatmap helper for repricing diagnostics.
+
+    Expects ``df`` to have columns ``T``, ``K``, and ``value_col``.
+    """
+    try:
+        import pandas as pd  # type: ignore
+    except ModuleNotFoundError as e:
+        raise ModuleNotFoundError(
+            "plot_repricing_heatmap requires pandas + matplotlib. Install: pip install pandas matplotlib"
+        ) from e
+
+    if not isinstance(df, pd.DataFrame):
+        df = pd.DataFrame(df)
+
+    for c in ("T", "K", value_col):
+        if c not in df.columns:
+            raise ValueError(f"df must contain column {c!r}")
+
+    Ts = np.asarray(sorted(df["T"].unique()), dtype=float)
+    Ks = np.asarray(sorted(df["K"].unique()), dtype=float)
+
+    mat = np.full((len(Ts), len(Ks)), np.nan, dtype=float)
+
+    # Populate via dict lookup for robustness to missing grid points.
+    key_to_val = {
+        (float(r.T), float(r.K)): float(getattr(r, value_col))
+        for r in df[["T", "K", value_col]].itertuples(index=False)
+    }
+
+    for i, T in enumerate(Ts):
+        for j, K in enumerate(Ks):
+            v = key_to_val.get((float(T), float(K)))
+            if v is not None:
+                mat[i, j] = v
+
+    plt = _get_plt()
+    plt.figure(figsize=figsize)
+    plt.imshow(mat, aspect="auto", origin="lower")
+    plt.colorbar(label=value_col)
+
+    # Y axis: maturities
+    plt.yticks(np.arange(len(Ts)), [f"{float(t):g}" for t in Ts])
+    plt.ylabel("Expiry T")
+
+    # X axis: strikes
+    xt = np.linspace(0, len(Ks) - 1, min(6, max(2, len(Ks))))
+    plt.xticks(xt, np.round(np.linspace(float(Ks[0]), float(Ks[-1]), len(xt)), 3))
+    plt.xlabel("Strike K")
+
+    plt.title(title)
+    plt.show()
