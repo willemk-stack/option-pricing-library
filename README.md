@@ -186,8 +186,8 @@ from option_pricing import (
     OptionSpec,
     OptionType,
     RootMethod,
-    implied_vol_bs_result,
 )
+from option_pricing.vol.implied_vol_scalar import implied_vol_bs_result
 
 market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.0)
 spec = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)
@@ -214,7 +214,7 @@ print(f"f(root)={rr.f_at_root:.3e}  bracket={rr.bracket}  bounds={res.bounds}")
 | **`models/`**      | Defines *how* the underlying evolves (e.g., GBM, Heston). | `black_scholes.py`, `gbm.py`           |
 | **`pricers/`**     | Numerical engines (analytic, tree, MC).                   | `black_scholes.py`, `tree.py`, `mc.py` |
 | **`market/`**      | Market data (spot, rates, dividends).                     | `market_data.py`, `pricing_context.py` |
-| **`vol/`**         | Volatility structures and interpolation.                  | `smile.py`, `surface.py`               |
+| **`vol/`**         | Volatility structures and interpolation.                  | `smile_grid.py`, `surface_core.py`     |
 | **`diagnostics/`** | No-arbitrage, convergence, stability checks.              | `noarb.py`, `monte_carlo_error.py`     |
 
 ---

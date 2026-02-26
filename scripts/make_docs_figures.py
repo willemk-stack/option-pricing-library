@@ -10,10 +10,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Allow running from a fresh checkout without installing the package first.
 try:
-    from option_pricing import MarketData, RandomConfig, VolSurface
+    from option_pricing import MarketData, RandomConfig
+    from option_pricing.vol.surface_core import VolSurface
 except ModuleNotFoundError:  # pragma: no cover
     sys.path.insert(0, str(ROOT / "src"))
-    from option_pricing import MarketData, RandomConfig, VolSurface
+    from option_pricing import MarketData, RandomConfig
+    from option_pricing.vol.surface_core import VolSurface
 
 
 @dataclass(frozen=True, slots=True)

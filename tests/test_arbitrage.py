@@ -11,7 +11,8 @@ from option_pricing.vol.arbitrage import (
     check_smile_price_monotonicity,
     check_surface_noarb,
 )
-from option_pricing.vol.surface import Smile, VolSurface
+from option_pricing.vol.smile_grid import Smile
+from option_pricing.vol.surface_core import VolSurface
 
 
 # -------------------------

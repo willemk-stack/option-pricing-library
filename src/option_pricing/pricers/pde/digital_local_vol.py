@@ -9,7 +9,7 @@ from ...numerics.pde import LinearParabolicPDE1D
 from ...numerics.pde.boundary import RobinBC, RobinBCSide
 from ...numerics.pde.domain import Coord
 from ...types import DigitalSpec, OptionType, PricingInputs
-from ...vol.surface import LocalVolSurface
+from ...vol.local_vol_surface import LocalVolSurface
 from .pde_wiring import PDEWiring1D
 
 

@@ -7,7 +7,7 @@ import numpy as np
 from option_pricing.typing import ScalarFn
 
 from ..models.black_scholes import bs as bs_model
-from .surface import VolSurface
+from .surface_core import VolSurface
 from .vol_types import GridSmileSlice, SmileSlice
 
 

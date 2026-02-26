@@ -50,8 +50,9 @@ from .pricers.tree import (
     binom_price_instrument_from_ctx,
 )
 from .types import MarketData, OptionSpec, OptionType, PricingInputs
-from .vol.implied_vol import implied_vol_bs, implied_vol_bs_result
-from .vol.surface import Smile, VolSurface
+from .vol.implied_vol_scalar import implied_vol_bs, implied_vol_bs_result
+from .vol.smile_grid import Smile
+from .vol.surface_core import VolSurface
 
 __all__ = [
     # Types

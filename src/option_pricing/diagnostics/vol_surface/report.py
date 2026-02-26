@@ -1,6 +1,7 @@
 """High-level orchestration for vol-surface diagnostics.
 
-The low-level building blocks live in :mod:`option_pricing.diagnostics.vol_surface.compute`.
+Low-level building blocks live in the dedicated submodules under
+``option_pricing.diagnostics.vol_surface`` (sampling, noarb, svi, domain).
 This module provides a notebook-friendly *one-call* runner that returns a
 structured report object containing tables + (optional) grids.
 
@@ -24,18 +25,13 @@ import pandas as pd
 
 from option_pricing.typing import ScalarFn
 from option_pricing.vol.arbitrage import check_surface_noarb
-from option_pricing.vol.surface import VolSurface
+from option_pricing.vol.surface_core import VolSurface
 
-from .compute import (
-    VolSurfaceLike,
-    calendar_dW,
-    calendar_summary,
-    noarb_smile_table,
-    noarb_worst_points,
-    surface_domain_report,
-    surface_points_df,
-    svi_fit_table,
-)
+from .contracts import VolSurfaceLike
+from .domain import surface_domain_report
+from .noarb import calendar_dW, calendar_summary, noarb_smile_table, noarb_worst_points
+from .sampling import surface_points_df
+from .svi import svi_fit_table
 
 
 def _array_summary(a: np.ndarray) -> dict[str, Any]:

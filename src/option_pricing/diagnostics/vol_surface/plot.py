@@ -4,20 +4,17 @@ from typing import Any
 
 import numpy as np
 
-from .compute import (
-    LocalVolCompareReport,
-    LocalVolGridReport,
+from .domain import surface_domain_report
+from .models import LocalVolCompareReport, LocalVolGridReport
+from .noarb import (
     calendar_dW,
     calendar_dW_from_report,
-    call_prices_from_smile,
     first_failing_convexity,
     first_failing_smile,
-    get_smile_at_T,
-    surface_domain_report,
-    surface_slices,
-    svi_fit_table,
-    svi_residuals_df,
 )
+from .pricing import call_prices_from_smile
+from .sampling import get_smile_at_T, surface_slices
+from .svi import svi_fit_table, svi_residuals_df
 
 
 def _get_plt():

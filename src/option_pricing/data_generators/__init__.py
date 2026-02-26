@@ -10,7 +10,7 @@ not included in setuptools' ``find_packages`` output. Adding it ensures the
 synthetic generators are packaged and importable from an installed wheel.
 """
 
-from .Synthetic_Surface import (
+from .synthetic_surface import (
     BadSVISmileCase,
     SyntheticSurface,
     generate_bad_svi_smile_case,

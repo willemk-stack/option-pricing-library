@@ -8,7 +8,7 @@ import pytest
 from option_pricing import MarketData, OptionSpec, OptionType, PricingInputs, bs_price
 from option_pricing.config import ImpliedVolConfig
 from option_pricing.exceptions import InvalidOptionPriceError
-from option_pricing.vol.implied_vol import implied_vol_bs_result
+from option_pricing.vol.implied_vol_scalar import implied_vol_bs_result
 
 
 def price_for(

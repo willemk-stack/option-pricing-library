@@ -18,7 +18,8 @@ def _build_skewed_svi_localvol_surface(
     Includes very short expiries so we can stress short-maturity digitals.
     """
     from option_pricing.types import MarketData
-    from option_pricing.vol.surface import LocalVolSurface, VolSurface
+    from option_pricing.vol.local_vol_surface import LocalVolSurface
+    from option_pricing.vol.surface_core import VolSurface
     from option_pricing.vol.svi import SVIParams, SVISmile
 
     ctx = MarketData(spot=S0, rate=r, dividend_yield=q).to_context()

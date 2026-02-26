@@ -3,7 +3,7 @@ from __future__ import annotations
 
 """Opinionated synthetic-surface recipes.
 
-The core generator :func:`option_pricing.data_generators.Synthetic_Surface.generate_synthetic_surface`
+The core generator :func:`option_pricing.data_generators.synthetic_surface.generate_synthetic_surface`
 is intentionally simple and exposes many knobs. For demos and tests we often
 want *reproducible* synthetic quotes whose **latent truth** is arbitrage-free,
 while still allowing the **observed quotes** to contain noise/outliers.
@@ -17,12 +17,12 @@ from typing import Any, Literal
 import numpy as np
 import pandas as pd
 
-from option_pricing.data_generators.Synthetic_Surface import (
+from option_pricing.data_generators.synthetic_surface import (
     SyntheticSurface,
     generate_synthetic_surface,
 )
 from option_pricing.vol.arbitrage import SurfaceNoArbReport, check_surface_noarb
-from option_pricing.vol.surface import VolSurface
+from option_pricing.vol.surface_core import VolSurface
 
 
 @dataclass(frozen=True)
