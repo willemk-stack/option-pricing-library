@@ -73,6 +73,23 @@ class FlatDiscountCurve:
     r: float
 
     def df(self, tau: float) -> float:
+        """Discount factor.
+
+        Parameters
+        ----------
+        tau
+            Time to expiry.
+
+        Returns
+        -------
+        float
+            Discount factor P(tau) = exp(-r*tau).
+
+        Raises
+        ------
+        ValueError
+            If tau < 0.
+        """
         tau = float(tau)
         if tau < 0.0:
             raise ValueError("tau must be >= 0")
@@ -105,6 +122,23 @@ class FlatCarryForwardCurve:
     q: float = 0.0
 
     def fwd(self, tau: float) -> float:
+        """Forward price.
+
+        Parameters
+        ----------
+        tau
+            Time to expiry.
+
+        Returns
+        -------
+        float
+            Forward price F(tau) = S0 * exp((r - q) * tau).
+
+        Raises
+        ------
+        ValueError
+            If tau < 0 or spot <= 0.
+        """
         tau = float(tau)
         if tau < 0.0:
             raise ValueError("tau must be >= 0")
@@ -115,6 +149,25 @@ class FlatCarryForwardCurve:
 
     # Legacy alias for earlier code in this repo.
     def forward(self, T: float, t: float = 0.0) -> float:
+        """Forward price (legacy alias).
+
+        Parameters
+        ----------
+        T
+            Maturity time.
+        t
+            Valuation time (default: 0.0).
+
+        Returns
+        -------
+        float
+            Forward price for delivery at T.
+
+        Raises
+        ------
+        ValueError
+            If T < t.
+        """
         tau = float(T) - float(t)
         if tau < 0.0:
             raise ValueError("T must be >= t")
@@ -154,10 +207,34 @@ class PricingContext:
     forward: ForwardCurve
 
     def df(self, tau: float) -> float:
+        """Discount factor.
+
+        Parameters
+        ----------
+        tau
+            Time to expiry.
+
+        Returns
+        -------
+        float
+            Discount factor P(tau) from the discount curve.
+        """
         tau = float(tau)
         return float(self.discount.df(tau))
 
     def fwd(self, tau: float) -> float:
+        """Forward price.
+
+        Parameters
+        ----------
+        tau
+            Time to expiry.
+
+        Returns
+        -------
+        float
+            Forward price F(tau) from the forward curve.
+        """
         tau = float(tau)
         return float(self.forward.fwd(tau))
 

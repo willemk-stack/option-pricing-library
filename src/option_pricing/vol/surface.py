@@ -208,11 +208,35 @@ class Smile:
         object.__setattr__(self, "_w_interp", _make_w_interpolator(y, w))
 
     def w_at(self, xq: ArrayLike) -> FloatArray:
+        """Interpolate total variance at given log-moneyness points.
+
+        Parameters
+        ----------
+        xq
+            Log-moneyness point(s) at which to evaluate total variance.
+
+        Returns
+        -------
+        FloatArray
+            Total variance w(x) = T * iv(x)^2 at xq.
+        """
         xq_arr = np.asarray(xq, dtype=np.float64)
         out = self._w_interp(xq_arr)
         return np.asarray(out, dtype=np.float64)
 
     def iv_at(self, xq: ArrayLike) -> FloatArray:
+        """Interpolate implied volatility at given log-moneyness points.
+
+        Parameters
+        ----------
+        xq
+            Log-moneyness point(s) at which to evaluate implied volatility.
+
+        Returns
+        -------
+        FloatArray
+            Implied volatility iv(x) = sqrt(w(x) / T) at xq.
+        """
         wq = self.w_at(xq)
         out = np.sqrt(np.maximum(wq / np.float64(self.T), np.float64(0.0)))
         return np.asarray(out, dtype=np.float64)
@@ -471,6 +495,22 @@ class VolSurface:
         *,
         expiry_round_decimals: int = 10,
     ) -> VolSurface:
+        """Build a surface from market quotes (T, K, iv) on a grid.
+
+        Parameters
+        ----------
+        rows
+            Iterable of (T, K, iv) market data points.
+        forward
+            Callable forward(T) -> float.
+        expiry_round_decimals
+            Number of decimals to round each T for bucketing (default: 10).
+
+        Returns
+        -------
+        VolSurface
+            Surface with Smile slices per unique expiry.
+        """
         buckets: dict[float, list[tuple[float, float]]] = {}
 
         for T_raw, K_raw, iv_raw in rows:
@@ -650,6 +690,20 @@ class VolSurface:
         raise ValueError(f"method={method!r} not supported")
 
     def iv(self, K: ArrayLike, T: float) -> FloatArray:
+        """Implied volatility at given strikes and maturity.
+
+        Parameters
+        ----------
+        K
+            Strike price(s).
+        T
+            Maturity time.
+
+        Returns
+        -------
+        FloatArray
+            Implied volatility at (K, T).
+        """
         T = float(T)
         if T <= 0.0:
             raise ValueError("T must be > 0")
@@ -666,7 +720,20 @@ class VolSurface:
         return self.slice(T).iv_at(y)
 
     def w(self, y: ArrayLike, T: float) -> FloatArray:
-        """Return total variance w(y, T) at log-moneyness y."""
+        """Total variance at given log-moneyness and maturity.
+
+        Parameters
+        ----------
+        y
+            Log-moneyness y = ln(K/F).
+        T
+            Maturity time.
+
+        Returns
+        -------
+        FloatArray
+            Total variance w(y, T) = T * iv(y, T)^2.
+        """
         T = float(T)
         if T <= 0.0:
             raise ValueError("T must be > 0")
@@ -734,9 +801,21 @@ class LocalVolSurface:
         forward: ScalarFn | None = None,
         discount: ScalarFn | None = None,
     ) -> LocalVolSurface:
-        """Convenience constructor.
+        """Convenience constructor from an implied volatility surface.
 
-        If forward/discount are omitted, uses implied.forward and a flat df=1.
+        Parameters
+        ----------
+        implied
+            Implied volatility surface (:class:`VolSurface`).
+        forward
+            Forward price function. If None, uses implied.forward.
+        discount
+            Discount factor function. If None, uses flat df=1.0.
+
+        Returns
+        -------
+        LocalVolSurface
+            Local volatility surface derived from implied.
         """
         fwd = implied.forward if forward is None else forward
         df = (lambda T: 1.0) if discount is None else discount
@@ -817,7 +896,27 @@ class LocalVolSurface:
         eps_w: float = 1e-12,
         eps_denom: float = 1e-12,
     ) -> FloatArray:
-        """Return local variance sigma_loc^2 at strike K and maturity T."""
+        """Local variance sigma_loc^2(K, T).
+
+        Computed from implied surface using Gatheral's one-dimensional
+        local-volatility formula in log-moneyness coordinates.
+
+        Parameters
+        ----------
+        K
+            Strike price(s).
+        T
+            Maturity time.
+        eps_w
+            Small value to avoid numerical issues near w=0 (default: 1e-12).
+        eps_denom
+            Small value for denominator regularization (default: 1e-12).
+
+        Returns
+        -------
+        FloatArray
+            Local variance at (K, T).
+        """
         T = float(T)
         if T <= 0.0:
             raise ValueError("T must be > 0")
@@ -846,10 +945,26 @@ class LocalVolSurface:
         eps_w: float = 1e-12,
         eps_denom: float = 1e-12,
     ) -> GatheralLVReport:
-        """Return Gatheral local-variance diagnostics at strike K and maturity T.
+        """Diagnostics for local variance computation.
 
-        This does *not* clamp or silently drop invalid points: invalidity is
-        reported via a reason-coded mask in the returned report.
+        Returns intermediate quantities (w derivatives, local vol, etc.)
+        useful for analysis and debugging.
+
+        Parameters
+        ----------
+        K
+            Strike price(s).
+        T
+            Maturity time.
+        eps_w
+            Small value to avoid numerical issues near w=0 (default: 1e-12).
+        eps_denom
+            Small value for denominator regularization (default: 1e-12).
+
+        Returns
+        -------
+        GatheralLVReport
+            Report object containing w, derivatives, local vol, and other diagnostics.
         """
         T = float(T)
         if T <= 0.0:
@@ -867,13 +982,7 @@ class LocalVolSurface:
         w, w_y, w_yy, w_T = self._w_and_derivs(y, T)
 
         return gatheral_local_var_diagnostics(
-            y=y,
-            w=w,
-            w_y=w_y,
-            w_yy=w_yy,
-            w_T=w_T,
-            eps_w=eps_w,
-            eps_denom=eps_denom,
+            y=y, w=w, w_y=w_y, w_yy=w_yy, w_T=w_T, eps_w=eps_w, eps_denom=eps_denom
         )
 
     def local_vol(
@@ -884,7 +993,26 @@ class LocalVolSurface:
         eps_w: float = 1e-12,
         eps_denom: float = 1e-12,
     ) -> FloatArray:
-        """Return local volatility sigma_loc at strike K and maturity T."""
+        """Local volatility sigma_loc(K, T).
+
+        Square root of local variance.
+
+        Parameters
+        ----------
+        K
+            Strike price(s).
+        T
+            Maturity time.
+        eps_w
+            Small value to avoid numerical issues near w=0 (default: 1e-12).
+        eps_denom
+            Small value for denominator regularization (default: 1e-12).
+
+        Returns
+        -------
+        FloatArray
+            Local volatility at (K, T).
+        """
         lv = self.local_var(K, T, eps_w=eps_w, eps_denom=eps_denom)
         with np.errstate(invalid="ignore"):
             out = np.sqrt(lv)

@@ -6,32 +6,96 @@ from .market.curves import FlatCarryForwardCurve, FlatDiscountCurve, PricingCont
 
 
 class OptionType(str, Enum):
+    """Option type enumeration.
+
+    Attributes
+    ----------
+    CALL
+        European or American call option.
+    PUT
+        European or American put option.
+    """
+
     CALL = "call"
     PUT = "put"
 
 
 @dataclass(frozen=True, slots=True)
 class MarketData:
+    """Flat market data container.
+
+    Primarily a convenience structure for common Black-Scholes and binomial tree scenarios.
+    For richer market structures (term structures, stochastic rates), use
+    :class:`~option_pricing.market.curves.PricingContext` instead.
+
+    Attributes
+    ----------
+    spot
+        Spot price at valuation time.
+    rate
+        Continuously-compounded domestic risk-free rate.
+    dividend_yield
+        Continuously-compounded dividend yield (default: 0.0).
+    """
+
     spot: float
     rate: float
     dividend_yield: float = 0.0
 
     def df(self, T: float, t: float = 0.0) -> float:
+        """Discount factor from time t to T.
+
+        Parameters
+        ----------
+        T
+            Maturity time.
+        t
+            Valuation time (default: 0.0).
+
+        Returns
+        -------
+        float
+            Discount factor P(0, T-t) = exp(-r * tau).
+        """
         tau = float(T) - float(t)
         if tau < 0:
             raise ValueError("T must be >= t")
         return math.exp(-self.rate * tau)
 
     def forward(self, T: float, t: float = 0.0) -> float:
+        """Forward price from time t for delivery at T.
+
+        Uses the cost-of-carry model: F(t,T) = S(t) * exp((r - q) * (T - t)).
+
+        Parameters
+        ----------
+        T
+            Maturity time.
+        t
+            Valuation time (default: 0.0).
+
+        Returns
+        -------
+        float
+            Forward price.
+        """
         tau = float(T) - float(t)
         if tau < 0:
             raise ValueError("T must be >= t")
         return self.spot * math.exp((self.rate - self.dividend_yield) * tau)
 
     def fwd(self, T: float, t: float = 0.0) -> float:
+        """Alias for :meth:`forward`."""
         return self.forward(T, t)
 
     def to_context(self) -> PricingContext:
+        """Convert to a :class:`~option_pricing.market.curves.PricingContext`.
+
+        Returns
+        -------
+        PricingContext
+            Curves-first market container with flat discount and forward curves.
+        """
         discount = FlatDiscountCurve(self.rate)
         forward = FlatCarryForwardCurve(
             spot=self.spot, r=self.rate, q=self.dividend_yield
@@ -41,6 +105,18 @@ class MarketData:
 
 @dataclass(frozen=True, slots=True)
 class OptionSpec:
+    """Specification of a vanilla option.
+
+    Attributes
+    ----------
+    kind
+        Option type (call or put).
+    strike
+        Strike price.
+    expiry
+        Time to expiry (tau).
+    """
+
     kind: OptionType
     strike: float
     expiry: float
@@ -48,11 +124,37 @@ class OptionSpec:
 
 @dataclass(frozen=True, slots=True)
 class DigitalSpec(OptionSpec):
+    """Specification of a digital (binary) option.
+
+    Extends :class:`OptionSpec` with a fixed payout amount.
+
+    Attributes
+    ----------
+    payout
+        Fixed payoff amount at expiry (default: 1.0).
+    """
+
     payout: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
 class PricingInputs[SpecT: OptionSpec]:
+    """All inputs needed to price an option.
+
+    Generic over the option specification (vanilla, digital, etc.).
+
+    Attributes
+    ----------
+    spec
+        Option specification (:class:`OptionSpec` or subclass).
+    market
+        Market data (:class:`MarketData`).
+    sigma
+        Implied volatility.
+    t
+        Current valuation time (default: 0.0).
+    """
+
     spec: SpecT
     market: MarketData
     sigma: float
@@ -60,22 +162,27 @@ class PricingInputs[SpecT: OptionSpec]:
 
     @property
     def S(self) -> float:
+        """Spot price from market data."""
         return self.market.spot
 
     @property
     def ctx(self) -> PricingContext:
+        """Pricing context derived from market data."""
         return self.market.to_context()
 
     @property
     def K(self) -> float:
+        """Strike price from option spec."""
         return self.spec.strike
 
     @property
     def T(self) -> float:
+        """Absolute expiry time from option spec."""
         return self.spec.expiry
 
     @property
     def tau(self) -> float:
+        """Time to expiry from current valuation time t."""
         tau = float(self.T - self.t)
         if tau <= 0.0:
             raise ValueError("Need expiry > t")
@@ -83,10 +190,12 @@ class PricingInputs[SpecT: OptionSpec]:
 
     @property
     def df(self) -> float:
+        """Discount factor from current time to expiry."""
         return self.ctx.df(self.tau)
 
     @property
     def F(self) -> float:
+        """Forward price for delivery at expiry."""
         return self.ctx.fwd(self.tau)
 
 

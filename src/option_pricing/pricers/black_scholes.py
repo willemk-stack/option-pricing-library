@@ -44,6 +44,31 @@ def bs_price_put_from_ctx(
 def bs_price_from_ctx(
     *, kind: OptionType, strike: float, sigma: float, tau: float, ctx: PricingContext
 ) -> float:
+    """European option price using Black-Scholes-Merton model.
+
+    Parameters
+    ----------
+    kind
+        Option type: CALL or PUT.
+    strike
+        Strike price.
+    sigma
+        Implied volatility.
+    tau
+        Time to expiry.
+    ctx
+        Pricing context providing discount and forward curves.
+
+    Returns
+    -------
+    float
+        Option price.
+
+    Raises
+    ------
+    ValueError
+        If option kind is not supported.
+    """
     if kind == OptionType.CALL:
         return bs_price_call_from_ctx(strike=strike, sigma=sigma, tau=tau, ctx=ctx)
     if kind == OptionType.PUT:
@@ -54,6 +79,24 @@ def bs_price_from_ctx(
 def bs_call_greeks_from_ctx(
     *, strike: float, sigma: float, tau: float, ctx: PricingContext
 ) -> dict[str, float]:
+    """European call Greeks using Black-Scholes-Merton model.
+
+    Parameters
+    ----------
+    strike
+        Strike price.
+    sigma
+        Implied volatility.
+    tau
+        Time to expiry.
+    ctx
+        Pricing context providing discount and forward curves.
+
+    Returns
+    -------
+    dict[str, float]
+        Dictionary of Greeks: delta, gamma, vega, theta, rho, etc.
+    """
     tau = float(tau)
     df = ctx.df(tau)
     F = ctx.fwd(tau)
@@ -70,6 +113,24 @@ def bs_call_greeks_from_ctx(
 def bs_put_greeks_from_ctx(
     *, strike: float, sigma: float, tau: float, ctx: PricingContext
 ) -> dict[str, float]:
+    """European put Greeks using Black-Scholes-Merton model.
+
+    Parameters
+    ----------
+    strike
+        Strike price.
+    sigma
+        Implied volatility.
+    tau
+        Time to expiry.
+    ctx
+        Pricing context providing discount and forward curves.
+
+    Returns
+    -------
+    dict[str, float]
+        Dictionary of Greeks: delta, gamma, vega, theta, rho, etc.
+    """
     tau = float(tau)
     df = ctx.df(tau)
     F = ctx.fwd(tau)
@@ -86,6 +147,31 @@ def bs_put_greeks_from_ctx(
 def bs_greeks_from_ctx(
     *, kind: OptionType, strike: float, sigma: float, tau: float, ctx: PricingContext
 ) -> dict[str, float]:
+    """European option Greeks using Black-Scholes-Merton model.
+
+    Parameters
+    ----------
+    kind
+        Option type: CALL or PUT.
+    strike
+        Strike price.
+    sigma
+        Implied volatility.
+    tau
+        Time to expiry.
+    ctx
+        Pricing context providing discount and forward curves.
+
+    Returns
+    -------
+    dict[str, float]
+        Dictionary of Greeks: delta, gamma, vega, theta, rho, etc.
+
+    Raises
+    ------
+    ValueError
+        If option kind is not supported.
+    """
     if kind == OptionType.CALL:
         return bs_call_greeks_from_ctx(strike=strike, sigma=sigma, tau=tau, ctx=ctx)
     if kind == OptionType.PUT:
@@ -156,28 +242,100 @@ def bs_greeks_instrument(
 
 
 def bs_price_call(p: PricingInputs) -> float:
+    """European call price from PricingInputs.
+
+    Parameters
+    ----------
+    p
+        Pricing inputs (:class:`~option_pricing.types.PricingInputs`).
+
+    Returns
+    -------
+    float
+        Call price.
+    """
     return bs_price_call_from_ctx(strike=p.K, sigma=p.sigma, tau=p.tau, ctx=p.ctx)
 
 
 def bs_price_put(p: PricingInputs) -> float:
+    """European put price from PricingInputs.
+
+    Parameters
+    ----------
+    p
+        Pricing inputs (:class:`~option_pricing.types.PricingInputs`).
+
+    Returns
+    -------
+    float
+        Put price.
+    """
     return bs_price_put_from_ctx(strike=p.K, sigma=p.sigma, tau=p.tau, ctx=p.ctx)
 
 
 def bs_price(p: PricingInputs) -> float:
+    """European option price from PricingInputs.
+
+    Parameters
+    ----------
+    p
+        Pricing inputs (:class:`~option_pricing.types.PricingInputs`).
+
+    Returns
+    -------
+    float
+        Option price.
+    """
     return bs_price_from_ctx(
         kind=p.spec.kind, strike=p.K, sigma=p.sigma, tau=p.tau, ctx=p.ctx
     )
 
 
 def bs_call_greeks(p: PricingInputs) -> dict[str, float]:
+    """European call Greeks from PricingInputs.
+
+    Parameters
+    ----------
+    p
+        Pricing inputs (:class:`~option_pricing.types.PricingInputs`).
+
+    Returns
+    -------
+    dict[str, float]
+        Dictionary of Greeks: delta, gamma, vega, theta, rho, etc.
+    """
     return bs_call_greeks_from_ctx(strike=p.K, sigma=p.sigma, tau=p.tau, ctx=p.ctx)
 
 
 def bs_put_greeks(p: PricingInputs) -> dict[str, float]:
+    """European put Greeks from PricingInputs.
+
+    Parameters
+    ----------
+    p
+        Pricing inputs (:class:`~option_pricing.types.PricingInputs`).
+
+    Returns
+    -------
+    dict[str, float]
+        Dictionary of Greeks: delta, gamma, vega, theta, rho, etc.
+    """
     return bs_put_greeks_from_ctx(strike=p.K, sigma=p.sigma, tau=p.tau, ctx=p.ctx)
 
 
 def bs_greeks(p: PricingInputs) -> dict[str, float]:
+    """European option Greeks from PricingInputs.
+
+    Parameters
+    ----------
+    p
+        Pricing inputs (:class:`~option_pricing.types.PricingInputs`).
+
+    Returns
+    -------
+    dict[str, float]
+        Dictionary of Greeks: delta, gamma, vega, theta, rho, etc.
+    """
     return bs_greeks_from_ctx(
         kind=p.spec.kind, strike=p.K, sigma=p.sigma, tau=p.tau, ctx=p.ctx
     )
