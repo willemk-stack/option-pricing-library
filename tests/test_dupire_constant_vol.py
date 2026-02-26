@@ -5,7 +5,7 @@ import pytest
 
 from option_pricing.pricers.black_scholes import black76_call_prices_vec_from_ctx
 from option_pricing.types import MarketData
-from option_pricing.vol.dupire import local_vol_from_call_grid
+from option_pricing.vol.local_vol_dupire import local_vol_from_call_grid
 
 
 @pytest.mark.parametrize("strike_coordinate", ["logK", "K"])

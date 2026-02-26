@@ -17,8 +17,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from option_pricing.data_generators.Synthetic_Surface import generate_bad_svi_smile_case
-from option_pricing.vol.surface import VolSurface
+from option_pricing.data_generators.synthetic_surface import generate_bad_svi_smile_case
+from option_pricing.vol.surface_core import VolSurface
 from option_pricing.vol.svi.diagnostics import (
     GJExample51RepairResult,
     check_butterfly_arbitrage,
@@ -190,7 +190,7 @@ def run_explicit_svi_repair_demo(
     narrative, while this helper owns the deterministic smile generation, repair
     fallback sequence, and tabular summaries.
     """
-    from .compute import get_smile_at_T
+    from .sampling import get_smile_at_T
 
     base_params = None
     base_source = "canonical"

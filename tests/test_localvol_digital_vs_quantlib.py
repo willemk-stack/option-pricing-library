@@ -35,7 +35,8 @@ def _our_localvol_pde_digital_price_from_flat_svi(
         bs_compute_bounds,
     )
     from option_pricing.types import DigitalSpec, MarketData, OptionType, PricingInputs
-    from option_pricing.vol.surface import LocalVolSurface, VolSurface
+    from option_pricing.vol.local_vol_surface import LocalVolSurface
+    from option_pricing.vol.surface_core import VolSurface
     from option_pricing.vol.svi import SVIParams, SVISmile
 
     ctx = MarketData(spot=S0, rate=r, dividend_yield=q).to_context()
@@ -287,7 +288,8 @@ def _our_localvol_pde_digital_price_from_svi_smiles(
         bs_compute_bounds,
     )
     from option_pricing.types import DigitalSpec, MarketData, OptionType, PricingInputs
-    from option_pricing.vol.surface import LocalVolSurface, VolSurface
+    from option_pricing.vol.local_vol_surface import LocalVolSurface
+    from option_pricing.vol.surface_core import VolSurface
 
     ctx = MarketData(spot=S0, rate=r, dividend_yield=q).to_context()
 
@@ -441,7 +443,7 @@ def test_localvol_digital_matches_quantlib_fd_on_skewed_svi_surface() -> None:
     )
 
     from option_pricing.types import MarketData
-    from option_pricing.vol.surface import VolSurface
+    from option_pricing.vol.surface_core import VolSurface
     from option_pricing.vol.svi import SVIParams, SVISmile
 
     S0 = 100.0

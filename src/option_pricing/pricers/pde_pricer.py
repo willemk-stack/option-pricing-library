@@ -14,7 +14,7 @@ from ..numerics.pde import AdvectionScheme, PDESolution1D, solve_pde_1d
 from ..numerics.pde.domain import Coord
 from ..numerics.pde.ic_remedies import ICRemedy, ic_cell_average, ic_l2_projection
 from ..types import DigitalSpec, MarketData, OptionSpec, PricingInputs
-from ..vol.surface import LocalVolSurface
+from ..vol.local_vol_surface import LocalVolSurface
 from .pde.digital_black_scholes import bs_pde_wiring as digital_bs_pde_wiring
 
 # BS-specific domain selection (Option A)

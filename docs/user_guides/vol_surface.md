@@ -10,7 +10,8 @@ The two central ideas are:
 ## Core objects
 
 ```python
-from option_pricing import Smile, VolSurface
+from option_pricing.vol.smile_grid import Smile
+from option_pricing.vol.surface_core import VolSurface
 ```
 
 A `Smile` stores:
@@ -25,7 +26,7 @@ A `VolSurface` stores multiple smile slices plus a `forward(T)` callable.
 
 ```python
 import numpy as np
-from option_pricing import VolSurface
+from option_pricing.vol.surface_core import VolSurface
 
 S, r, q = 100.0, 0.02, 0.00
 

@@ -23,8 +23,8 @@ from option_pricing.pricers.black_scholes import bs_price_from_ctx
 from option_pricing.pricers.pde.domain import BSDomainConfig
 from option_pricing.pricers.pde_pricer import local_vol_price_pde_european
 from option_pricing.types import MarketData, OptionSpec, OptionType, PricingInputs
-from option_pricing.vol.implied_vol import implied_vol_bs
-from option_pricing.vol.surface import LocalVolSurface
+from option_pricing.vol.implied_vol_scalar import implied_vol_bs
+from option_pricing.vol.local_vol_surface import LocalVolSurface
 
 
 @dataclass(frozen=True)

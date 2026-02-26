@@ -24,7 +24,7 @@ An SVI-based surface does.
 
 ```python
 import numpy as np
-from option_pricing import VolSurface
+from option_pricing.vol.surface_core import VolSurface
 
 S, r, q = 100.0, 0.02, 0.00
 
@@ -57,7 +57,7 @@ surface_svi = VolSurface.from_svi(
 
 ```python
 import warnings
-from option_pricing.vol.surface import LocalVolSurface
+from option_pricing.vol.local_vol_surface import LocalVolSurface
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", category=FutureWarning)
@@ -129,7 +129,8 @@ price = local_vol_price_pde_european(
 ## What fails with a grid-only surface?
 
 ```python
-from option_pricing.vol.surface import LocalVolSurface, VolSurface
+from option_pricing.vol.local_vol_surface import LocalVolSurface
+from option_pricing.vol.surface_core import VolSurface
 
 surface_grid = VolSurface.from_grid(rows, forward=forward)
 lv_bad = LocalVolSurface.from_implied(surface_grid)

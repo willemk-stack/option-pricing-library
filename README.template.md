@@ -123,7 +123,7 @@ Both APIs share the same pricing engines underneath; the `PricingInputs` version
 | **`models/`**      | Defines *how* the underlying evolves (e.g., GBM, Heston). | `black_scholes.py`, `gbm.py`           |
 | **`pricers/`**     | Numerical engines (analytic, tree, MC).                   | `black_scholes.py`, `tree.py`, `mc.py` |
 | **`market/`**      | Market data (spot, rates, dividends).                     | `market_data.py`, `pricing_context.py` |
-| **`vol/`**         | Volatility structures and interpolation.                  | `smile.py`, `surface.py`               |
+| **`vol/`**         | Volatility structures and interpolation.                  | `smile_grid.py`, `surface_core.py`     |
 | **`diagnostics/`** | No-arbitrage, convergence, stability checks.              | `noarb.py`, `monte_carlo_error.py`     |
 
 ---
