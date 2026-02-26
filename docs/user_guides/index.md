@@ -1,24 +1,35 @@
 # User guides
 
-This section shows how to use **option_pricing** in practical workflows, with runnable examples and explanations of the key inputs (spot, rates, dividend yield, volatility, and time to expiry).
+These guides focus on *how to use the library in practice*.
+They are organized from the simplest workflows to the more advanced volatility and PDE tooling.
 
 ## Start here
 
-- [Installation](../installation.md) — install the package and verify everything works.
-- [Quickstart](quickstart.md) — pricing your first option and understanding the basic inputs.
+- [Installation](../installation.md) - install the package and verify the environment.
+- [Quickstart](quickstart.md) - price your first option with the legacy `PricingInputs` API.
+- [Market APIs](market_api.md) - understand flat `MarketData` versus curves-first `PricingContext`.
+- [Instruments](instruments.md) - use the newer instrument-based workflow.
 
-## Guides
+## Vanilla pricing
 
-- [Market APIs](market_api.md) — convenience (flat) vs curves-first market inputs.
-- [Black-Scholes](black_scholes.md) — vanilla European option pricing and Greeks.
-- [Monte Carlo](monte_carlo.md) — simulation-based pricing and estimators.
-- [Binomial CRR](binomial_crr.md) — lattice pricing and intuition around convergence.
-- [Diagnostics](diagnostics.md) — inspecting numerical behavior and debugging inputs.
-- [Implied volatility](implied_vol.md) — invert prices to implied vol and interpret results.
-- [Volatility surface](vol_surface.md) — build and query a simple volatility surface + applying no-arbitrage checks.
+- [Black-Scholes](black_scholes.md) - closed-form pricing and analytic Greeks.
+- [Monte Carlo](monte_carlo.md) - GBM pricing, standard errors, and reproducibility.
+- [Binomial CRR](binomial_crr.md) - lattice pricing, convergence, and American exercise.
+- [PDE pricing](pde_pricing.md) - finite-difference pricing under Black-Scholes and local vol.
+- [Diagnostics](diagnostics.md) - notebook-friendly helpers for comparisons, sweeps, and surface reports.
 
-## Conventions used in the guides
+## Volatility workflows
 
-- Rates and yields are treated as **continuously compounded** where applicable.
-- Times are in **years** (make sure inputs are consistent).
-- Strikes and spot/forward levels must be **positive**.
+- [Implied volatility](implied_vol.md) - invert Black-Scholes prices to implied vol.
+- [Volatility surface](vol_surface.md) - build, query, and sanity-check grid-based or SVI-based surfaces.
+- [SVI](svi.md) - calibrate analytic SVI slices and inspect fit diagnostics.
+- [SVI repair](svi_repair.md) - detect and repair butterfly-arbitrage issues in a slice.
+- [Local volatility](local_vol.md) - derive a local-vol surface from a differentiable implied surface and use it in PDE pricing.
+
+## Conventions used throughout
+
+- Rates and dividend yields are treated as continuously compounded.
+- Times are in years.
+- `PricingInputs` uses absolute expiry `T` together with valuation time `t`, so `tau = T - t`.
+- Instrument objects such as `VanillaOption` use `expiry` to mean time-to-expiry directly.
+- Strike, spot, and forward inputs must be positive where log-moneyness is used.

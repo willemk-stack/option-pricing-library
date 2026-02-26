@@ -112,12 +112,17 @@ nav:
       - Installation: installation.md
       - Quickstart: user_guides/quickstart.md
       - Market APIs: user_guides/market_api.md
+      - Instruments: user_guides/instruments.md
       - Black-Scholes: user_guides/black_scholes.md
       - Monte Carlo: user_guides/monte_carlo.md
       - Binomial CRR: user_guides/binomial_crr.md
+      - PDE pricing: user_guides/pde_pricing.md
       - Diagnostics: user_guides/diagnostics.md
       - Implied volatility: user_guides/implied_vol.md
       - Volatility surface: user_guides/vol_surface.md
+      - SVI: user_guides/svi.md
+      - SVI repair: user_guides/svi_repair.md
+      - Local volatility: user_guides/local_vol.md
 
   - Notes:
       - Overview: notes/index.md

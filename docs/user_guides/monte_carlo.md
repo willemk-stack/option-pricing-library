@@ -1,68 +1,106 @@
-# Monte Carlo (GBM)
+# Monte Carlo
 
-The Monte Carlo pricer simulates terminal stock prices under risk-neutral GBM and estimates the discounted payoff.
+The Monte Carlo pricer simulates terminal prices under risk-neutral GBM and returns:
 
-## Price a call (returns price + SE)
+- the discounted price estimate
+- the estimated standard error of that estimate
+
+## Basic usage
 
 ```python
 from option_pricing import mc_price
 from option_pricing.config import MCConfig, RandomConfig
 
-cfg = MCConfig(n_paths=100_000, random=RandomConfig(seed=0))
+cfg = MCConfig(
+    n_paths=100_000,
+    antithetic=False,
+    random=RandomConfig(seed=0),
+)
+
 price, se = mc_price(p, cfg=cfg)
 ```
 
-- `price` is the Monte Carlo estimate
-- `se` is the (discounted) standard error of the estimator
+## Antithetic variates
 
+You can reduce variance with paired `Z` and `-Z` samples:
 
-## Calls and puts
+```python
+cfg = MCConfig(
+    n_paths=100_000,
+    antithetic=True,
+    random=RandomConfig(seed=0),
+)
 
-`mc_price` dispatches on `p.spec.kind`. To price a put, set `kind=OptionType.PUT` in your `OptionSpec` and call `mc_price` the same way.
+price, se = mc_price(p, cfg=cfg)
+```
+
+When `antithetic=True`, `n_paths` must be even.
 
 ## Reproducibility
 
-You can control randomness in two ways:
+There are two common ways to control randomness.
 
-- provide `cfg.random.seed=...` (via `RandomConfig`, convenient)
-- provide a `rng=np.random.Generator` (useful if you want to reuse a generator)
+### 1) Use `RandomConfig`
+
+```python
+from option_pricing.config import MCConfig, RandomConfig
+
+cfg = MCConfig(n_paths=50_000, random=RandomConfig(seed=123, rng_type="pcg64"))
+price, se = mc_price(p, cfg=cfg)
+```
+
+Supported NumPy-backed RNG types are:
+
+- `"pcg64"`
+- `"mt19937"`
+
+`"sobol"` is reserved in the config type but is not implemented by NumPy in this pricer, so it raises `NotImplementedError` unless you provide your own explicit generator path in a future extension.
+
+### 2) Pass an explicit generator
 
 ```python
 import numpy as np
-from option_pricing import mc_price
 from option_pricing.config import MCConfig
 
 rng = np.random.default_rng(123)
 cfg = MCConfig(n_paths=50_000, rng=rng)
+
 price1, se1 = mc_price(p, cfg=cfg)
-price2, se2 = mc_price(p, cfg=cfg)  # advances the same RNG
+price2, se2 = mc_price(p, cfg=cfg)  # same generator, now advanced
 ```
 
-## SE scaling quick check
+## Standard error scaling
 
-A useful “math-signal” check is that standard error scales roughly like:
-
-- `SE(N) ≈ c / sqrt(N)`
-
-So if you 4× your paths, SE should drop about 2×.
+A quick sanity check is that the standard error should shrink roughly like `1 / sqrt(N)`.
 
 ```python
 from option_pricing.config import MCConfig, RandomConfig
 
-p1, se1 = mc_price(p, cfg=MCConfig(n_paths=25_000, random=RandomConfig(seed=0)))
-p2, se2 = mc_price(p, cfg=MCConfig(n_paths=100_000, random=RandomConfig(seed=0)))
-print(se1 / se2)  # should be around 2
+_, se1 = mc_price(p, cfg=MCConfig(n_paths=25_000, random=RandomConfig(seed=0)))
+_, se2 = mc_price(p, cfg=MCConfig(n_paths=100_000, random=RandomConfig(seed=0)))
+
+print(se1 / se2)
 ```
 
-## Price a put
+A ratio near `2` is the usual rule-of-thumb expectation here.
 
-The library exposes a Monte Carlo put function too:
+## Curves-first and instrument-based workflows
+
+The same engine is also available through:
+
+- `mc_price_from_ctx(...)`
+- `mc_price_instrument(...)`
+
+Example:
 
 ```python
-from option_pricing import mc_price, MCConfig, RandomConfig
+from option_pricing import mc_price_instrument
 
-cfg = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=123))
-price, err = mc_price(p, cfg=cfg) # Make sure to configure OptionType.PUT correctly in PricingInputs
+price, se = mc_price_instrument(inst, market=market, sigma=0.20, cfg=cfg)
 ```
 
-`mc_price_put` uses the same config-driven interface as `mc_price`.
+## Notes
+
+- This Monte Carlo implementation is for European, terminal-payoff products.
+- It returns a standard error, not a confidence interval. You build that interval yourself from the returned `se`.
+- For method comparisons against Black-Scholes, see [Diagnostics](diagnostics.md).
