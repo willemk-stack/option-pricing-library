@@ -1,6 +1,8 @@
 # option_pricing
 
-Typed Python library for **European and American vanilla option pricing** — includes analytic, tree, and Monte Carlo methods — now with **instruments-based** and **legacy** APIs.
+Typed Python library for **vanilla option pricing, implied-volatility workflows, volatility surfaces, local-vol diagnostics, and finite-difference PDE pricing**.
+
+It supports **analytic Black–Scholes(-Merton)** pricing, **CRR binomial trees** for European and American vanilla options, **Monte Carlo under GBM**, and more advanced **surface / local-vol / PDE** workflows — with both **instruments-based** and **flat-input** APIs.
 
 [![Tests](https://github.com/willemk-stack/option-pricing-library/actions/workflows/tests.yaml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/tests.yaml)
 [![Docs](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml)
@@ -15,22 +17,68 @@ Typed Python library for **European and American vanilla option pricing** — in
 
 ---
 
-## Overview
+## Why this repo
 
-The library provides a **typed**, **composable**, and **test-backed** toolkit for option pricing:
+This project is designed as a **typed, test-backed quant library** rather than a notebook-only collection of pricing code.
 
-- **Black–Scholes(-Merton)** analytic formulas (price + Greeks)
-- **Monte Carlo under GBM** (with optional antithetic / control variates)
-- **CRR binomial tree** (European / American)
-- **Implied volatility (BS inversion)** with robust bracketing solvers
-- **Volatility structures**: `Smile`, `VolSurface` with interpolation and no-arbitrage checks
-- **Market abstractions**:  
-  - `MarketData`, `PricingInputs` for a flat, convenient API  
-  - `PricingContext` for curves-first workflows
-- **Instrument layer**: reusable definitions of contracts (e.g. `VanillaOption`) with structured payoffs
+Core strengths:
+
+- **Multiple pricing engines** for vanilla options: Black–Scholes, Monte Carlo, and CRR binomial trees
+- **Volatility tooling**: implied-vol inversion, smiles, surfaces, no-arbitrage checks, SVI fitting and repair
+- **Advanced numerics**: local-vol extraction, diagnostics, and finite-difference PDE pricing
+- **Validation-first approach**: analytic baselines, convergence checks, stress tests, and CI-executed notebooks
+- **Layered API design**: simple flat-input workflows, instrument-based workflows, and curves-first pricing contexts
 
 Docs: [📘 willemk-stack.github.io/option-pricing-library](https://willemk-stack.github.io/option-pricing-library)  
 API Reference: [📘 /api](https://willemk-stack.github.io/option-pricing-library/api/)
+
+---
+
+## Best places to start
+
+### Flagship capstones
+
+#### Capstone 1 — Vol surfaces, no-arbitrage diagnostics, and SVI
+
+**quotes / smiles → surface construction → arbitrage diagnostics → SVI fitting / repair**
+
+Start here:
+
+- **Showcase demo:** `demos/05_vol_surface_and_noarb.ipynb`
+- **User guides:** `docs/user_guides/vol_surface.md`, `docs/user_guides/svi.md`, `docs/user_guides/svi_repair.md`
+- **Representative tests:** `tests/test_surface_svi_and_localvol.py`, `tests/test_svi.py`, `tests/test_svi_repair.py`, `tests/test_arbitrage.py`
+
+#### Capstone 2 — Local Vol + PDE Pricing + Diagnostics
+
+**surface quotes → implied surface → local-vol diagnostics → PDE pricing → convergence / repricing checks**
+
+Why it stands out:
+
+- **Local volatility is treated as a numerical engineering problem**, not just a formula.
+- **Diagnostics are first-class outputs**: invalid masks, denominator failures, unstable regions.
+- **The PDE stack is validated**, not just implemented: analytic baselines, convergence checks, and discontinuous-payoff remedies.
+- **The workflow is end-to-end**: surface construction, local-vol extraction, pricing, and validation are connected in one pipeline.
+
+Validated by:
+
+- constant-vol recovery tests for Dupire local volatility
+- vanilla PDE checks against Black–Scholes baselines
+- digital-option convergence and remedy tests
+- QuantLib comparison tests for local-vol digital pricing
+
+Start here:
+
+- **Showcase demo:** `demos/07_vol_surfaces_localvol_pde.ipynb`
+- **PDE-focused demo:** `demos/06_pde_pricing_and_diagnostics.ipynb`
+- **User guides:** `docs/user_guides/local_vol.md`, `docs/user_guides/pde_pricing.md`
+- **Representative tests:**
+  - `tests/test_dupire_constant_vol.py`
+  - `tests/test_localvol_pde_vanilla_vs_bs.py`
+  - `tests/test_localvol_digital_vs_quantlib.py`
+  - `tests/test_localvol_digital_convergence_sweep.py`
+  - `tests/test_convergence_remedies_digital.py`
+
+**What this demonstrates:** end-to-end surface construction, local-vol extraction, PDE pricing, and numerical validation in a single workflow.
 
 ---
 
@@ -40,19 +88,38 @@ Core library:
 
 ```bash
 pip install -e .
-````
+```
 
-Development (tests, notebooks, linting):
+Development (tests, notebooks, linting, docs):
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev,docs]"
 ```
+
+Python requirement:
+
+- **Python 3.12+**
 
 ---
 
-## Quick example (legacy API)
+## API styles
 
-The original, convenient `PricingInputs` workflow still works:
+The repo supports three complementary ways to work:
+
+- **Flat-input API** for quick experiments and tutorial-style usage (`PricingInputs`)
+- **Instrument-based API** to separate contracts from pricing engines (`VanillaOption`, `ExerciseStyle`)
+- **Curves-first API** for discount / forward curve workflows (`PricingContext`)
+
+For most first-time users, the easiest starting points are:
+
+- `PricingInputs` for concise examples
+- `VanillaOption` + instrument pricers for a more structured public API
+
+---
+
+## Quick example (flat-input API)
+
+The convenient `PricingInputs` workflow is a good starting point for quick pricing checks and tutorials:
 
 ```python
 {{ QUICKSTART }}
@@ -60,19 +127,19 @@ The original, convenient `PricingInputs` workflow still works:
 
 ---
 
-## Instrument workflow (new)
+## Instrument workflow
 
 Instruments cleanly separate *what you’re pricing* (the contract) from *how it’s priced* (the pricer and model).
 
 ```python
 from option_pricing import (
+    ExerciseStyle,
     MarketData,
     OptionType,
     VanillaOption,
-    ExerciseStyle,
+    binom_price_instrument,
     bs_price_instrument,
     mc_price_instrument,
-    binom_price_instrument,
 )
 
 inst = VanillaOption(
@@ -91,15 +158,15 @@ bs_price_instrument(inst, market=market, sigma=sigma)
 # Monte Carlo
 mc_price_instrument(inst, market=market, sigma=sigma)
 
-# Binomial tree (European/American)
+# Binomial tree (European / American)
 binom_price_instrument(inst, market=market, sigma=sigma, n_steps=200)
 ```
 
-Both APIs share the same pricing engines underneath; the `PricingInputs` versions simply wrap instruments internally.
+Both APIs share the same pricing engines underneath; the flat-input versions simply wrap instruments internally.
 
 ---
 
-## Curves-first example (PricingContext)
+## Curves-first example (`PricingContext`)
 
 ```python
 {{ CURVES_FIRST }}
@@ -107,7 +174,7 @@ Both APIs share the same pricing engines underneath; the `PricingInputs` version
 
 ---
 
-### Implied volatility (BS inversion)
+## Implied volatility example
 
 ```python
 {{ IMPLIED_VOL }}
@@ -115,38 +182,58 @@ Both APIs share the same pricing engines underneath; the `PricingInputs` version
 
 ---
 
-## Module structure
+## What is implemented
 
-| Layer              | Purpose                                                   | Example modules                        |
-| ------------------ | --------------------------------------------------------- | -------------------------------------- |
-| **`instruments/`** | Defines *what* is being priced (contracts + payoffs).     | `base.py`, `vanilla.py`, `factory.py`  |
-| **`models/`**      | Defines *how* the underlying evolves (e.g., GBM, Heston). | `black_scholes.py`, `gbm.py`           |
-| **`pricers/`**     | Numerical engines (analytic, tree, MC).                   | `black_scholes.py`, `tree.py`, `mc.py` |
-| **`market/`**      | Market data (spot, rates, dividends).                     | `market_data.py`, `pricing_context.py` |
-| **`vol/`**         | Volatility structures and interpolation.                  | `smile_grid.py`, `surface_core.py`     |
-| **`diagnostics/`** | No-arbitrage, convergence, stability checks.              | `noarb.py`, `monte_carlo_error.py`     |
+### Pricing engines
 
----
+- **Black–Scholes(-Merton)** price and Greeks
+- **CRR binomial tree** for European and American vanilla options
+- **Monte Carlo under GBM** with optional variance-reduction features
+- **Finite-difference PDE pricing** for selected advanced workflows
 
-## Notebooks / demos
+### Volatility and diagnostics
 
-| File                                           | Topic                        |
-| ---------------------------------------------- | ---------------------------- |
-| `demos/01_black_scholes_and_greeks.ipynb`      | Analytic pricing + Greeks    |
-| `demos/02_monte_carlo_pricing_and_error.ipynb` | Monte Carlo pricing + SE     |
-| `demos/03_binomial_convergence.ipynb`          | Tree convergence             |
-| `demos/04_implied_volatility.ipynb`            | Implied volatility inversion |
-| `demos/05_vol_surface_and_noarb.ipynb`         | Vol surfaces + no-arb checks |
+- **BS implied-volatility inversion** with bracketing-based solvers
+- **Smile** and **VolSurface** objects with interpolation support
+- **Static no-arbitrage diagnostics** for surfaces
+- **SVI fitting and repair** workflows
+- **Local-vol extraction and diagnostics** from surfaces
+- **Convergence and model-validation utilities**
 
 ---
 
-## Roadmap
+## Project layout
 
-See the MkDocs roadmap: [docs/roadmap.md](./docs/roadmap.md)
+| Layer | Purpose |
+| --- | --- |
+| **`instruments/`** | Contracts, payoffs, and exercise-style abstractions |
+| **`market/`** | Spot, rates, dividends, curves, and pricing contexts |
+| **`pricers/`** | Public pricing entry points for analytic, tree, Monte Carlo, and PDE workflows |
+| **`models/`** | Model-specific internals such as Black–Scholes and local-vol components |
+| **`vol/`** | Implied vol, smiles, surfaces, SVI, and local-vol extraction |
+| **`numerics/`** | Root-finding, finite differences, tridiagonal solvers, and PDE building blocks |
+| **`diagnostics/`** | Arbitrage checks, convergence studies, repricing, and validation helpers |
+| **`viz/`** | Plotting helpers for surfaces, diagnostics, and reports |
 
 ---
 
-## Development
+## Demos and notebooks
+
+| File | Topic |
+| --- | --- |
+| `demos/01_black_scholes_and_greeks.ipynb` | Analytic pricing + Greeks |
+| `demos/02_monte_carlo_pricing_and_error.ipynb` | Monte Carlo pricing + standard errors |
+| `demos/03_binomial_convergence.ipynb` | CRR tree convergence |
+| `demos/04_implied_volatility.ipynb` | Implied-volatility inversion |
+| `demos/05_vol_surface_and_noarb.ipynb` | Vol surfaces, arbitrage checks, and SVI |
+| `demos/06_pde_pricing_and_diagnostics.ipynb` | PDE pricing, stability, and convergence diagnostics |
+| `demos/07_vol_surfaces_localvol_pde.ipynb` | End-to-end surface → local vol → PDE showcase |
+
+---
+
+## Validation and development
+
+Development checks:
 
 ```bash
 ruff check .
@@ -154,6 +241,18 @@ black --check .
 pytest -q
 mypy
 ```
+
+The repo also includes:
+
+- GitHub Actions for tests and docs
+- README freshness checks
+- CI notebook execution via `nbmake`
+
+---
+
+## Roadmap
+
+See the MkDocs roadmap: [docs/roadmap.md](./docs/roadmap.md)
 
 ---
 
