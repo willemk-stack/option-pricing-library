@@ -34,6 +34,12 @@ class LocalVolRepricingResult:
     meta: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class LocalVolConvergenceSweepResult:
+    grid: pd.DataFrame
+    meta: dict[str, Any]
+
+
 def _as_1d_float(x: Any) -> np.ndarray:
     arr = np.asarray(x, dtype=float).reshape(-1)
     if arr.size == 0:
@@ -41,6 +47,83 @@ def _as_1d_float(x: Any) -> np.ndarray:
     if not np.all(np.isfinite(arr)):
         raise ValueError("Expected finite values")
     return arr
+
+
+def localvol_pde_single_option_convergence_sweep(
+    *,
+    lv: LocalVolSurface,
+    market: MarketData,
+    strike: float,
+    expiry: float,
+    grids: list[tuple[int, int]] | tuple[tuple[int, int], ...],
+    solver_cfg: dict[str, Any],
+    kind: OptionType = OptionType.CALL,
+) -> LocalVolConvergenceSweepResult:
+    """Run a single-option local-vol PDE convergence sweep.
+
+    This is intentionally lightweight and demo-facing: it uses the implied-vol
+    surface embedded in ``lv`` to define the Black-76 target price, then records
+    price error and runtime across a grid sweep.
+    """
+
+    T = float(expiry)
+    K = float(strike)
+    if T <= 0.0:
+        raise ValueError("expiry must be > 0")
+    if K <= 0.0:
+        raise ValueError("strike must be > 0")
+
+    target_iv = float(
+        np.asarray(lv.implied.iv(np.array([K], dtype=float), T)).reshape(-1)[0]
+    )
+    target_price = float(
+        bs_price_from_ctx(
+            kind=kind,
+            strike=K,
+            sigma=target_iv,
+            tau=T,
+            ctx=market.to_context(),
+        )
+    )
+
+    spec = OptionSpec(kind=kind, strike=K, expiry=T)
+    p = PricingInputs(spec=spec, market=market, sigma=max(target_iv, 1e-4))
+
+    rows: list[dict[str, Any]] = []
+    for Nx, Nt in grids:
+        t0 = perf_counter()
+        price_raw = local_vol_price_pde_european(
+            p,
+            lv=lv,
+            Nx=int(Nx),
+            Nt=int(Nt),
+            return_solution=False,
+            **solver_cfg,
+        )
+        price = float(cast(float, price_raw))
+        runtime_ms = 1e3 * (perf_counter() - t0)
+        rows.append(
+            {
+                "Nx": int(Nx),
+                "Nt": int(Nt),
+                "grid_points": int(Nx) * int(Nt),
+                "pde_price": price,
+                "target_price": target_price,
+                "abs_error": abs(price - target_price),
+                "runtime_ms": float(runtime_ms),
+            }
+        )
+
+    grid = pd.DataFrame(rows).sort_values(["Nx", "Nt"]).reset_index(drop=True)
+    meta = {
+        "strike": K,
+        "expiry": T,
+        "kind": str(kind.value),
+        "target_iv": float(target_iv),
+        "target_price": float(target_price),
+        "solver_cfg": dict(solver_cfg),
+    }
+    return LocalVolConvergenceSweepResult(grid=grid, meta=meta)
 
 
 def localvol_pde_repricing_grid(
@@ -208,5 +291,7 @@ def localvol_pde_repricing_grid(
 
 __all__ = [
     "LocalVolRepricingResult",
+    "LocalVolConvergenceSweepResult",
     "localvol_pde_repricing_grid",
+    "localvol_pde_single_option_convergence_sweep",
 ]
