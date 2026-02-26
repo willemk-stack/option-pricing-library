@@ -1,6 +1,9 @@
 # Public API
 
-## Flat convenience API
+This page covers the main objects re-exported from `option_pricing`.
+For pricing functions, see [Pricers](pricers.md).
+
+## Core types
 
 ::: option_pricing.types
     options:
@@ -10,20 +13,50 @@
         - OptionSpec
         - PricingInputs
 
-## Pricers (PricingInputs)
+## Instrument layer
 
-::: option_pricing.pricers.black_scholes
+::: option_pricing.instruments.base
     options:
       members:
-        - bs_price
-        - bs_greeks
+        - ExerciseStyle
 
-::: option_pricing.pricers.mc
+::: option_pricing.instruments.vanilla
     options:
       members:
-        - mc_price
+        - VanillaPayoff
+        - VanillaOption
 
-::: option_pricing.pricers.tree
+## Market context and curves
+
+These names are re-exported from the package root:
+
+- `PricingContext`
+- `DiscountCurve`
+- `ForwardCurve`
+- `FlatDiscountCurve`
+- `FlatCarryForwardCurve`
+
+See the dedicated [Curves-first API](curves.md) page for the canonical class documentation.
+
+## Configuration and solver selection
+
+::: option_pricing.config
     options:
       members:
-        - binom_price
+        - RandomConfig
+        - MCConfig
+        - ImpliedVolConfig
+
+::: option_pricing.numerics.root_finding
+    options:
+      members:
+        - RootMethod
+
+## Volatility objects
+
+These names are re-exported from the package root:
+
+- `VolSurface`
+- `Smile`
+
+See the dedicated [Volatility](vol.md) page for the canonical class documentation.

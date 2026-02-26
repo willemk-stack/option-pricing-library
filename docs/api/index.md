@@ -1,19 +1,20 @@
 # API
 
-The `option_pricing` package exposes two ways to work:
+The `option_pricing` package exposes three complementary user-facing styles:
 
-- **Flat convenience API** (spot, r, q): great for quick pricing and greeks
-- **Curves-first API**: explicit discount/forward curves for more realistic term structures
+- **Flat convenience API**: `MarketData` + `OptionSpec` + `PricingInputs`
+- **Curves-first API**: `PricingContext`, `DiscountCurve`, and `ForwardCurve`
+- **Instrument-based API**: `VanillaOption` and `ExerciseStyle`
 
-Use the pages below as entry points.
+Use the pages below as the main entry points into the library surface.
 
 ## Overview
 
-- [Public API](public.md) — core dataclasses and the main entry points
-- [Curves-first API](curves.md) — `PricingContext` and curve objects
-- [Pricers](pricers.md) — Black–Scholes, Monte Carlo, Binomial
-- [Volatility](vol.md) — implied vol, surfaces, smiles
-- [Exceptions](exceptions.md) — error types you may want to catch
+- [Public API](public.md) - top-level types, instruments, configs, and common objects re-exported from `option_pricing`
+- [Curves-first API](curves.md) - `PricingContext` and curve objects
+- [Pricers](pricers.md) - Black-Scholes, Monte Carlo, and Binomial entry points for all three API styles
+- [Volatility](vol.md) - implied vol inversion, smiles, and surfaces
+- [Exceptions](exceptions.md) - error types you may want to catch
 
 ## Quick snippets
 
@@ -22,29 +23,63 @@ Use the pages below as entry points.
 ```python
 from option_pricing import MarketData, OptionSpec, PricingInputs, OptionType, bs_price
 
-md = MarketData(spot=100.0, rate=0.03, dividend_yield=0.01)
-spec = OptionSpec(option_type=OptionType.CALL, strike=100.0, expiry=1.0)
-inp = PricingInputs(spec=spec, market=md, sigma=0.2)
+market = MarketData(spot=100.0, rate=0.03, dividend_yield=0.01)
+spec = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)
+p = PricingInputs(spec=spec, market=market, sigma=0.2)
 
-price = bs_price(inp)
+price = bs_price(p)
 ```
 
 ### Curves-first API
 
 ```python
-from option_pricing import MarketData, OptionSpec, PricingInputs, OptionType, bs_price_from_ctx
+from option_pricing import (
+    FlatCarryForwardCurve,
+    FlatDiscountCurve,
+    OptionType,
+    PricingContext,
+    bs_price_from_ctx,
+)
 
-md = MarketData(spot=100.0, rate=0.03, dividend_yield=0.01)
-spec = OptionSpec(option_type=OptionType.CALL, strike=100.0, expiry=1.0)
-inp = PricingInputs(spec=spec, market=md, sigma=0.2)
+ctx = PricingContext(
+    spot=100.0,
+    discount=FlatDiscountCurve(r=0.03),
+    forward=FlatCarryForwardCurve(spot=100.0, r=0.03, q=0.01),
+)
 
-ctx = inp.ctx
-tau = inp.tau
+price = bs_price_from_ctx(
+    kind=OptionType.CALL,
+    strike=100.0,
+    sigma=0.2,
+    tau=1.0,
+    ctx=ctx,
+)
+```
 
-price = bs_price_from_ctx(ctx=ctx, option=spec, sigma=inp.sigma, tau=tau)
+### Instrument-based API
+
+```python
+from option_pricing import (
+    ExerciseStyle,
+    MarketData,
+    OptionType,
+    VanillaOption,
+    bs_price_instrument,
+)
+
+inst = VanillaOption(
+    expiry=1.0,
+    strike=100.0,
+    kind=OptionType.CALL,
+    exercise=ExerciseStyle.EUROPEAN,
+)
+
+market = MarketData(spot=100.0, rate=0.03, dividend_yield=0.01)
+price = bs_price_instrument(inst, market=market, sigma=0.2)
 ```
 
 ## Notes
 
 - Times are expressed in years.
-- Internally, pricers work with `tau` (time-to-expiry). If you work with (t, T) in user code, convert using tau = T - t.
+- `PricingInputs` uses absolute expiry `T` together with valuation time `t`, and exposes `tau` as `T - t`.
+- `PricingContext` and instrument-based pricers work directly with `tau` (time to expiry).
