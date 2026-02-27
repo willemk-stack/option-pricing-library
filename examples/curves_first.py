@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+import os
+
+
+def _mc_paths(default: int) -> int:
+    if os.getenv("OP_FAST_EXAMPLES"):
+        return min(default, 10_000)
+    return default
+
 
 def main() -> None:
     # [START README_CURVES_FIRST]
@@ -39,7 +47,9 @@ def main() -> None:
         ),
     )
 
-    cfg_mc = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=0))
+    cfg_mc = MCConfig(
+        n_paths=_mc_paths(200_000), antithetic=True, random=RandomConfig(seed=0)
+    )
     price_mc, se = mc_price_from_ctx(
         kind=OptionType.CALL, strike=K, sigma=sigma, tau=tau, ctx=ctx, cfg=cfg_mc
     )
