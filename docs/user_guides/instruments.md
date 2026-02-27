@@ -1,6 +1,7 @@
 # Instruments
 
 The library supports a newer instrument-based workflow in addition to the older `PricingInputs` API.
+This is the recommended public entry point for most users.
 
 The idea is simple:
 

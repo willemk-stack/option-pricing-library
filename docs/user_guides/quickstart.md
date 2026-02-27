@@ -1,7 +1,8 @@
 # Quickstart
 
 This guide shows the fastest path from inputs to prices.
-It uses the legacy `PricingInputs` workflow because it is compact and easy to read.
+It uses the convenience `PricingInputs` workflow because it is compact and easy to read.
+For the recommended public API, start with the [Instruments](instruments.md) guide.
 
 ## 1) Build inputs
 

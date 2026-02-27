@@ -110,14 +110,15 @@ The repo supports three complementary ways to work:
 - **Instrument-based API** to separate contracts from pricing engines (`VanillaOption`, `ExerciseStyle`)
 - **Curves-first API** for discount / forward curve workflows (`PricingContext`)
 
-For most first-time users, the easiest starting points are:
+### Recommended API path
 
-- `PricingInputs` for concise examples
-- `VanillaOption` + instrument pricers for a more structured public API
+- **Recommended API**: instrument-based workflow (`VanillaOption` + instrument pricers). This is the intended public entry point for most users and keeps contracts separate from pricing methods.
+- **Convenience API**: flat-input workflow (`PricingInputs`). Use this for compact tutorials, tests, and quick checks.
+- **Advanced API**: curves-first + surface / PDE workflows (`PricingContext`, vol, diagnostics). Use this when you need term structures, surfaces, or local-vol / PDE pipelines.
 
 ---
 
-## Quick example (flat-input API)
+## Quick example (convenience API)
 
 The convenient `PricingInputs` workflow is a good starting point for quick pricing checks and tutorials:
 

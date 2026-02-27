@@ -73,6 +73,8 @@ price = bs_price_from_ctx(
 
 ## When to use which API
 
+If you are following the recommended instrument-based workflow, you still choose between `MarketData` and `PricingContext` for the market inputs.
+
 Use `MarketData` + `PricingInputs` when:
 
 - you want the most compact examples

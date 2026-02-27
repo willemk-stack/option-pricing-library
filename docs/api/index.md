@@ -8,6 +8,12 @@ The `option_pricing` package exposes three complementary user-facing styles:
 
 Use the pages below as the main entry points into the library surface.
 
+## Recommended API path
+
+- **Recommended API**: instrument-based workflow (`VanillaOption` + instrument pricers). This is the intended public entry point for most users.
+- **Convenience API**: flat-input workflow (`PricingInputs`). Use this for compact tutorials and quick checks.
+- **Advanced API**: curves-first workflow (`PricingContext`) and the volatility / PDE modules for term-structure or surface-heavy use cases.
+
 ## Overview
 
 - [Public API](public.md) - top-level types, instruments, configs, and common objects re-exported from `option_pricing`
@@ -18,7 +24,29 @@ Use the pages below as the main entry points into the library surface.
 
 ## Quick snippets
 
-### Flat convenience API
+### Recommended API (instrument-based)
+
+```python
+from option_pricing import (
+    ExerciseStyle,
+    MarketData,
+    OptionType,
+    VanillaOption,
+    bs_price_instrument,
+)
+
+inst = VanillaOption(
+    expiry=1.0,
+    strike=100.0,
+    kind=OptionType.CALL,
+    exercise=ExerciseStyle.EUROPEAN,
+)
+
+market = MarketData(spot=100.0, rate=0.03, dividend_yield=0.01)
+price = bs_price_instrument(inst, market=market, sigma=0.2)
+```
+
+### Convenience API (flat inputs)
 
 ```python
 from option_pricing import MarketData, OptionSpec, PricingInputs, OptionType, bs_price
@@ -30,7 +58,7 @@ p = PricingInputs(spec=spec, market=market, sigma=0.2)
 price = bs_price(p)
 ```
 
-### Curves-first API
+### Advanced API (curves-first)
 
 ```python
 from option_pricing import (
@@ -56,27 +84,9 @@ price = bs_price_from_ctx(
 )
 ```
 
-### Instrument-based API
+### Instrument-based API (alternate view)
 
-```python
-from option_pricing import (
-    ExerciseStyle,
-    MarketData,
-    OptionType,
-    VanillaOption,
-    bs_price_instrument,
-)
-
-inst = VanillaOption(
-    expiry=1.0,
-    strike=100.0,
-    kind=OptionType.CALL,
-    exercise=ExerciseStyle.EUROPEAN,
-)
-
-market = MarketData(spot=100.0, rate=0.03, dividend_yield=0.01)
-price = bs_price_instrument(inst, market=market, sigma=0.2)
-```
+See the recommended snippet above, or use the [Pricers](pricers.md) page for the full list of instrument entry points.
 
 ## Notes
 

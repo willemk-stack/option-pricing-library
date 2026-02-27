@@ -6,9 +6,9 @@ They are organized from the simplest workflows to the more advanced volatility a
 ## Start here
 
 - [Installation](../installation.md) - install the package and verify the environment.
-- [Quickstart](quickstart.md) - price your first option with the legacy `PricingInputs` API.
+- [Instruments](instruments.md) - recommended public entry point for most users.
+- [Quickstart](quickstart.md) - compact walkthrough using the convenience `PricingInputs` API.
 - [Market APIs](market_api.md) - understand flat `MarketData` versus curves-first `PricingContext`.
-- [Instruments](instruments.md) - use the newer instrument-based workflow.
 
 ## Vanilla pricing
 

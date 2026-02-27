@@ -28,31 +28,18 @@ The project started as a compact pricing library for textbook models, and now al
 ### Theory and background
 - [Notes index](notes/index.md)
 
-## Recommended workflow
+## Recommended API path
 
-The library supports a few ways to work, but the intended learning path is:
+The library supports a few ways to work. The intended starting point for most users is the instrument-based workflow, with the other styles documented as convenience or advanced paths:
 
-### 1. Start with the convenient pricing workflow
-Use `PricingInputs` and the top-level pricers when you want a compact, direct interface for pricing and experiments.
+### Recommended API: instrument-based workflow
+Use `VanillaOption` with the instrument pricers when you want the clearest separation between **what** is being priced and **how** it is priced. This is the intended public entry point for most users.
 
-This is the easiest way to:
-- price vanilla options quickly
-- compare Black–Scholes, tree, and Monte Carlo methods
-- test implied-vol and surface workflows
+### Convenience API: flat inputs
+Use `PricingInputs` and the flat-input pricers when you want compact examples, tutorials, or quick checks.
 
-### 2. Move to instruments when you want cleaner contracts
-Use the instruments layer when you want a clearer separation between:
-- **what** is being priced
-- **how** it is being priced
-
-This is a better fit for reusable workflows and a more explicit contract model.
-
-### 3. Use curves / surfaces / PDE modules for advanced work
-Use the lower-level market, vol, diagnostics, and PDE modules when you want:
-- surface construction
-- no-arbitrage checks
-- local-vol extraction
-- finite-difference pricing and diagnostics
+### Advanced API: curves / surfaces / PDE modules
+Use `PricingContext`, the volatility modules, and PDE tooling when you need term structures, surface construction, local-vol extraction, or diagnostic-heavy workflows.
 
 ## Flagship capstones
 

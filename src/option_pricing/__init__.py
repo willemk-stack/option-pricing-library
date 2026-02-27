@@ -6,6 +6,9 @@ Core option pricing library.
 This package exposes the main user-facing functions at the top level, so you
 can write, for example:
 
+    # Recommended public entry point
+    # Use instrument-based workflows for clear contract/pricer separation.
+
     from option_pricing import (
         MarketData, OptionSpec, OptionType, PricingInputs,
         # legacy/tutorial-friendly entrypoints
