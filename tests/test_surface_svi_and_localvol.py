@@ -5,11 +5,13 @@ from dataclasses import dataclass
 import numpy as np
 import pytest
 
-from option_pricing.vol import VolSurface
+from option_pricing.vol import (
+    LocalVolSurface,
+    NoArbInterpolatedSmileSlice,
+    Smile,
+    VolSurface,
+)
 from option_pricing.vol.local_vol_gatheral import _gatheral_local_var_from_w
-from option_pricing.vol.local_vol_surface import LocalVolSurface
-from option_pricing.vol.smile_grid import Smile
-from option_pricing.vol.smile_interpolated import NoArbInterpolatedSmileSlice
 
 
 @dataclass(frozen=True)

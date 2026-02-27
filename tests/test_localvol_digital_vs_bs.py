@@ -30,8 +30,7 @@ def test_digital_from_localvol_pde_matches_bs_on_flat_svi_surface() -> None:
         bs_compute_bounds,
     )
     from option_pricing.types import DigitalSpec, MarketData, OptionType, PricingInputs
-    from option_pricing.vol.local_vol_surface import LocalVolSurface
-    from option_pricing.vol.surface_core import VolSurface
+    from option_pricing.vol import LocalVolSurface, VolSurface
     from option_pricing.vol.svi import SVIParams, SVISmile
 
     # ---- market + contract ----

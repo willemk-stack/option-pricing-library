@@ -6,8 +6,7 @@ def test_noarb_worst_points_and_run_surface_diagnostics():
         noarb_worst_points,
         run_surface_diagnostics,
     )
-    from option_pricing.vol.arbitrage import check_surface_noarb
-    from option_pricing.vol.surface_core import VolSurface
+    from option_pricing.vol import VolSurface, check_surface_noarb
 
     def forward(T):
         return 100.0

@@ -13,8 +13,7 @@ from option_pricing.pricers.black_scholes import bs_price
 from option_pricing.pricers.pde.domain import BSDomainConfig, BSDomainPolicy
 from option_pricing.pricers.pde_pricer import local_vol_price_pde_european
 from option_pricing.types import OptionType
-from option_pricing.vol.local_vol_surface import LocalVolSurface
-from option_pricing.vol.surface_core import VolSurface
+from option_pricing.vol import LocalVolSurface, VolSurface
 
 
 @dataclass(frozen=True)

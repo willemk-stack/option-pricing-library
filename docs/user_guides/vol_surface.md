@@ -10,8 +10,7 @@ The two central ideas are:
 ## Core objects
 
 ```python
-from option_pricing.vol.smile_grid import Smile
-from option_pricing.vol.surface_core import VolSurface
+from option_pricing.vol import Smile, VolSurface
 ```
 
 A `Smile` stores:
@@ -26,7 +25,7 @@ A `VolSurface` stores multiple smile slices plus a `forward(T)` callable.
 
 ```python
 import numpy as np
-from option_pricing.vol.surface_core import VolSurface
+from option_pricing.vol import VolSurface
 
 S, r, q = 100.0, 0.02, 0.00
 
@@ -89,7 +88,7 @@ That gives you analytic per-expiry slices instead of grid-interpolated smiles.
 ## Surface no-arbitrage sanity checks
 
 ```python
-from option_pricing.vol.arbitrage import check_surface_noarb
+from option_pricing.vol import check_surface_noarb
 
 def df(T: float) -> float:
     return float(np.exp(-r * float(T)))

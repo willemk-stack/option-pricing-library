@@ -182,8 +182,7 @@ Relevant tests include:
 The core user-facing idea is intentionally compact:
 
 ```python
-from option_pricing.vol.surface_core import VolSurface
-from option_pricing.vol.local_vol_surface import LocalVolSurface
+from option_pricing.vol import LocalVolSurface, VolSurface
 from option_pricing.pricers.pde_pricer import local_vol_price_pde_european
 
 surface_svi = VolSurface.from_svi(rows, forward=forward)

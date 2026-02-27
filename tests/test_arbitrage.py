@@ -6,13 +6,13 @@ from collections.abc import Callable
 import numpy as np
 import pytest
 
-from option_pricing.vol.arbitrage import (
+from option_pricing.vol import (
+    Smile,
+    VolSurface,
     check_smile_call_convexity,
     check_smile_price_monotonicity,
     check_surface_noarb,
 )
-from option_pricing.vol.smile_grid import Smile
-from option_pricing.vol.surface_core import VolSurface
 
 
 # -------------------------
