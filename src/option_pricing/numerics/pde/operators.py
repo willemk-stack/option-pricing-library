@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import cast
 
 import numpy as np
@@ -29,7 +29,7 @@ XTOutput = float | NDArray[np.floating]
 ScalarXT = Callable[[XTInput, float], XTOutput]
 
 
-class AdvectionScheme(str, Enum):
+class AdvectionScheme(StrEnum):
     """Spatial discretization choice for the first-derivative term b(x,t) u_x."""
 
     CENTRAL = "central"  # 2nd order (on nonuniform: quadratic interpolation)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 import numpy as np
@@ -9,7 +9,7 @@ import numpy as np
 from option_pricing.numerics.root_finding import RootMethod
 
 
-class SeedStrategy(str, Enum):
+class SeedStrategy(StrEnum):
     """Strategy for initializing root-finding seeds in implied volatility calculation.
 
     Attributes

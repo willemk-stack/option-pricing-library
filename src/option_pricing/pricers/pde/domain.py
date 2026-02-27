@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Literal, Protocol
 
 import numpy as np
@@ -43,7 +43,7 @@ class BSInputs(Protocol):
     def market(self) -> _HasMarket: ...
 
 
-class BSDomainPolicy(str, Enum):
+class BSDomainPolicy(StrEnum):
     MANUAL = "MANUAL"
     STRIKE_MULTIPLE = "STRIKE_MULTIPLE"
     LOG_NSIGMA = "LOG_NSIGMA"

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Sequence
-from enum import Enum
+from enum import StrEnum
 from typing import cast
 
 import numpy as np
@@ -16,7 +16,7 @@ FloatArray = NDArray[np.float64]
 FloatFn = Callable[[float], float]
 
 
-class ICRemedy(str, Enum):
+class ICRemedy(StrEnum):
     NONE = "none"
     CELL_AVG = "cell_avg"
     L2_PROJ = "l2_proj"

@@ -20,7 +20,7 @@ dev = [
     "jupyter",
     "nbmake",
     "pytest",
-    "ruff",
+    "ruff==0.15.2",
     "black",
     "mypy",
     "scipy-stubs",

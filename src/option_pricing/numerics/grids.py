@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 import numpy as np
 from numpy.typing import NDArray
@@ -20,7 +20,7 @@ __all__ = [
 ]
 
 
-class SpacingPolicy(str, Enum):
+class SpacingPolicy(StrEnum):
     UNIFORM = "uniform"
     CLUSTERED = "clustered"
 

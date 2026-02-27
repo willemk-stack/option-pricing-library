@@ -1,11 +1,11 @@
 import math
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from .market.curves import FlatCarryForwardCurve, FlatDiscountCurve, PricingContext
 
 
-class OptionType(str, Enum):
+class OptionType(StrEnum):
     """Option type enumeration.
 
     Attributes
