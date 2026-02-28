@@ -15,7 +15,7 @@ dependencies = ["numpy", "scipy"]
 
 [project.optional-dependencies]
 dev = [
-    "pandas",
+    "pandas==2.2.3",
     "matplotlib",
     "jupyter",
     "nbmake",
@@ -25,7 +25,7 @@ dev = [
     "black",
     "mypy",
     "scipy-stubs",
-    "pandas-stubs",
+    "pandas-stubs==2.2.3.241126",
 ]
 notebooks = ["jupyter", "matplotlib", "pandas"]
 plot = ["matplotlib"]
@@ -82,6 +82,7 @@ disallow_untyped_defs = false
 [[tool.mypy.overrides]]
 module = ["matplotlib.*", "nbmake.*"]
 ignore_missing_imports = true
+
 
 [tool.setuptools]
 package-dir = { "" = "src" }
