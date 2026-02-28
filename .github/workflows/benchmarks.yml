@@ -1,0 +1,39 @@
+name: benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  run-benchmarks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            pyproject.toml
+            requirements*.txt
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run BS implied-vol benchmarks
+        run: |
+          python - <<'EOF'
+          from option_pricing.diagnostics.iv.benchmarks import run_bs_iv_benchmarks
+          df = run_bs_iv_benchmarks(strict=True)
+          print(df.to_string())
+          EOF
