@@ -5,6 +5,7 @@ Typed Python library for **vanilla option pricing, implied-volatility workflows,
 It supports **analytic Black–Scholes(-Merton)** pricing, **CRR binomial trees** for European and American vanilla options, **Monte Carlo under GBM**, and more advanced **surface / local-vol / PDE** workflows — with both **instruments-based** and **flat-input** APIs.
 
 [![Tests](https://github.com/willemk-stack/option-pricing-library/actions/workflows/tests.yaml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/tests.yaml)
+[![Codecov](https://codecov.io/gh/willemk-stack/option-pricing-library/branch/main/graph/badge.svg)](https://codecov.io/gh/willemk-stack/option-pricing-library)
 [![Docs](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
@@ -142,7 +143,9 @@ p = PricingInputs(spec=spec, market=market, sigma=0.20, t=0.0)
 print("BS:", bs_price(p))
 print("Greeks:", bs_greeks(p))
 
-cfg_mc = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=0))
+cfg_mc = MCConfig(
+    n_paths=_mc_paths(200_000), antithetic=True, random=RandomConfig(seed=0)
+)
 price_mc, se = mc_price(p, cfg=cfg_mc)
 print("MC:", price_mc, "(SE=", se, ")")
 
@@ -229,7 +232,9 @@ print(
     ),
 )
 
-cfg_mc = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=0))
+cfg_mc = MCConfig(
+    n_paths=_mc_paths(200_000), antithetic=True, random=RandomConfig(seed=0)
+)
 price_mc, se = mc_price_from_ctx(
     kind=OptionType.CALL, strike=K, sigma=sigma, tau=tau, ctx=ctx, cfg=cfg_mc
 )

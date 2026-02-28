@@ -5,6 +5,7 @@ Typed Python library for **vanilla option pricing, implied-volatility workflows,
 It supports **analytic Black–Scholes(-Merton)** pricing, **CRR binomial trees** for European and American vanilla options, **Monte Carlo under GBM**, and more advanced **surface / local-vol / PDE** workflows — with both **instruments-based** and **flat-input** APIs.
 
 [![Tests](https://github.com/willemk-stack/option-pricing-library/actions/workflows/tests.yaml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/tests.yaml)
+[![Codecov](https://codecov.io/gh/willemk-stack/option-pricing-library/branch/main/graph/badge.svg)](https://codecov.io/gh/willemk-stack/option-pricing-library)
 [![Docs](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 

@@ -42,6 +42,14 @@ jobs:
       - name: Pytest (unit tests)
         run: pytest -q tests
 
+      - name: Pytest (coverage)
+        run: pytest -q tests --cov=option_pricing --cov-report=term-missing --cov-report=xml --cov-fail-under=80
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+
       - name: Pytest (notebooks)
         env:
           MPLBACKEND: Agg

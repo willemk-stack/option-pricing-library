@@ -20,6 +20,7 @@ dev = [
     "jupyter",
     "nbmake",
     "pytest",
+    "pytest-cov",
     "ruff==0.15.2",
     "black",
     "mypy",
@@ -51,6 +52,23 @@ ignore = ["E501"]                   # remove for line-length checks
 
 [tool.ruff.lint.isort]
 known-first-party = ["option_pricing"]
+
+[tool.coverage.run]
+branch = true
+source = ["option_pricing"]
+omit = [
+    "src/option_pricing/diagnostics/*",
+    "src/option_pricing/diagnostics/**",
+    "demos/*",
+    "demos/**",
+    "tutorials/**",
+    "scripts/**",
+    "docs/**",
+    "**/_mpl.py",
+]
+
+[tool.coverage.report]
+show_missing = true
 
 # Optional mypy (only if you installed mypy)
 [tool.mypy]
