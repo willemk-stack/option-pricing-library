@@ -60,6 +60,8 @@ source = ["option_pricing"]
 omit = [
     "src/option_pricing/diagnostics/*",
     "src/option_pricing/diagnostics/**",
+    "**/diagnostics/**",
+    "**\\diagnostics\\**",
     "demos/*",
     "demos/**",
     "tutorials/**",
@@ -70,6 +72,19 @@ omit = [
 
 [tool.coverage.report]
 show_missing = true
+omit = [
+    "src/option_pricing/diagnostics/*",
+    "src/option_pricing/diagnostics/**",
+    "**/diagnostics/**",
+    "**\\diagnostics\\**",
+    "*diagnostics*",
+    "demos/*",
+    "demos/**",
+    "tutorials/**",
+    "scripts/**",
+    "docs/**",
+    "**/_mpl.py",
+]
 
 # Optional mypy (only if you installed mypy)
 [tool.mypy]
