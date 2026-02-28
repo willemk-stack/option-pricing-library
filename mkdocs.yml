@@ -106,6 +106,7 @@ extra_css:
 nav:
   - Home: index.md
   - Roadmap: roadmap.md
+  - Performance: performance.md
   
   - User guides:
       - Overview: user_guides/index.md

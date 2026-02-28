@@ -20,6 +20,7 @@ dev = [
     "jupyter",
     "nbmake",
     "pytest",
+    "pytest-benchmark",
     "pytest-cov",
     "ruff==0.15.2",
     "black",
