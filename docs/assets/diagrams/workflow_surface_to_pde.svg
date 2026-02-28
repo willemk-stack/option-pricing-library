@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="420" viewBox="0 0 1100 420" role="img" aria-label="Surface to local vol to PDE workflow">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc" />
+      <stop offset="1" stop-color="#eef2f7" />
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#2f3b52" />
+    </marker>
+    <style>
+      .title { font: 600 18px "IBM Plex Sans", Arial, sans-serif; fill: #1f2a44; }
+      .label { font: 600 14px "IBM Plex Sans", Arial, sans-serif; fill: #1f2a44; }
+      .muted { font: 13px "IBM Plex Sans", Arial, sans-serif; fill: #48556a; }
+      .card { fill: #ffffff; stroke: #2f3b52; stroke-width: 1.2; }
+      .accent { fill: #e9f0ff; stroke: #2f3b52; stroke-width: 1.2; }
+      .success { fill: #ecf8f1; stroke: #3f7a4c; stroke-width: 1.2; }
+      .line { stroke: #2f3b52; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect x="20" y="16" width="1060" height="388" rx="18" fill="url(#bg)" />
+  <text x="40" y="52" class="title">Surface to local-vol to PDE pipeline</text>
+
+  <rect x="60" y="170" width="180" height="64" rx="10" class="card" />
+  <text x="78" y="202" class="label">Quotes</text>
+  <text x="78" y="222" class="muted">T, K, implied vol</text>
+
+  <rect x="270" y="90" width="210" height="64" rx="10" class="card" />
+  <text x="290" y="122" class="label">VolSurface.from_grid</text>
+
+  <rect x="270" y="240" width="210" height="64" rx="10" class="card" />
+  <text x="290" y="272" class="label">VolSurface.from_svi</text>
+
+  <rect x="510" y="240" width="180" height="64" rx="10" class="accent" />
+  <text x="532" y="272" class="label">calibrate_svi</text>
+
+  <rect x="510" y="90" width="210" height="64" rx="10" class="card" />
+  <text x="532" y="122" class="label">check_surface_noarb</text>
+
+  <rect x="740" y="170" width="240" height="64" rx="10" class="card" />
+  <text x="760" y="202" class="label">LocalVolSurface.from_implied</text>
+
+  <rect x="990" y="90" width="90" height="64" rx="10" class="card" />
+  <text x="1000" y="122" class="label">solve_pde_1d</text>
+
+  <rect x="990" y="240" width="90" height="64" rx="10" class="success" />
+  <text x="1000" y="272" class="label">repricing</text>
+
+  <rect x="990" y="320" width="90" height="64" rx="10" class="card" />
+  <text x="1000" y="352" class="label">implied_vol</text>
+
+  <text x="992" y="206" class="muted">local_vol_price_pde</text>
+
+  <path d="M240,202 L270,122" class="line" />
+  <path d="M240,202 L270,272" class="line" />
+
+  <path d="M480,122 L510,122" class="line" />
+  <path d="M480,272 L510,272" class="line" />
+
+  <path d="M690,272 L740,202" class="line" />
+  <path d="M720,122 L740,202" class="line" />
+
+  <path d="M980,202 L990,122" class="line" />
+  <path d="M980,202 L990,272" class="line" />
+  <path d="M1035,304 L1035,320" class="line" />
+</svg>

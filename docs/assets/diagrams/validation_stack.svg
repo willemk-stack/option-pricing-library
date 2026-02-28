@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="460" viewBox="0 0 1000 460" role="img" aria-label="Validation stack">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc" />
+      <stop offset="1" stop-color="#eef2f7" />
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#2f3b52" />
+    </marker>
+    <style>
+      .title { font: 600 18px "IBM Plex Sans", Arial, sans-serif; fill: #1f2a44; }
+      .label { font: 600 14px "IBM Plex Sans", Arial, sans-serif; fill: #1f2a44; }
+      .muted { font: 13px "IBM Plex Sans", Arial, sans-serif; fill: #48556a; }
+      .card { fill: #ffffff; stroke: #2f3b52; stroke-width: 1.2; }
+      .card-accent { fill: #e9f0ff; stroke: #2f3b52; stroke-width: 1.2; }
+      .card-warm { fill: #fff2e8; stroke: #8b5a2b; stroke-width: 1.2; }
+      .line { stroke: #2f3b52; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect x="20" y="16" width="960" height="428" rx="18" fill="url(#bg)" />
+  <text x="40" y="52" class="title">Validation stack</text>
+
+  <rect x="70" y="100" width="230" height="70" rx="10" class="card" />
+  <text x="90" y="134" class="label">Analytic baselines</text>
+  <text x="90" y="156" class="muted">bs_price_from_ctx</text>
+
+  <rect x="70" y="200" width="230" height="70" rx="10" class="card" />
+  <text x="90" y="234" class="muted">black76_call_price_vec</text>
+
+  <rect x="360" y="100" width="270" height="70" rx="10" class="card-accent" />
+  <text x="380" y="134" class="label">PDE stack</text>
+  <text x="380" y="156" class="muted">bs_price_pde_european</text>
+
+  <rect x="360" y="200" width="270" height="70" rx="10" class="card-accent" />
+  <text x="380" y="234" class="muted">local_vol_price_pde_european</text>
+
+  <rect x="360" y="300" width="270" height="70" rx="10" class="card-accent" />
+  <text x="380" y="334" class="muted">solve_pde_1d</text>
+
+  <rect x="700" y="120" width="240" height="70" rx="10" class="card-warm" />
+  <text x="720" y="154" class="label">Validation</text>
+  <text x="720" y="176" class="muted">test_pde_pricer.py</text>
+
+  <rect x="700" y="220" width="240" height="70" rx="10" class="card-warm" />
+  <text x="720" y="254" class="muted">test_convergence_remedies</text>
+
+  <rect x="700" y="320" width="240" height="70" rx="10" class="card-warm" />
+  <text x="720" y="354" class="muted">localvol vs QuantLib</text>
+
+  <path d="M300,135 L360,135" class="line" />
+  <path d="M300,235 L360,235" class="line" />
+
+  <path d="M630,135 L700,155" class="line" />
+  <path d="M630,235 L700,255" class="line" />
+  <path d="M630,335 L700,355" class="line" />
+</svg>

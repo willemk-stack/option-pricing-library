@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560" role="img" aria-label="Architecture layers">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc" />
+      <stop offset="1" stop-color="#eef2f7" />
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#2f3b52" />
+    </marker>
+    <style>
+      .title { font: 600 18px "IBM Plex Sans", Arial, sans-serif; fill: #1f2a44; }
+      .subtitle { font: 13px "IBM Plex Sans", Arial, sans-serif; fill: #516078; }
+      .label { font: 600 14px "IBM Plex Sans", Arial, sans-serif; fill: #1f2a44; }
+      .muted { font: 13px "IBM Plex Sans", Arial, sans-serif; fill: #48556a; }
+      .card { fill: #ffffff; stroke: #2f3b52; stroke-width: 1.2; }
+      .card-accent { fill: #e9f0ff; stroke: #2f3b52; stroke-width: 1.2; }
+      .card-warm { fill: #fff2e8; stroke: #8b5a2b; stroke-width: 1.2; }
+      .line { stroke: #2f3b52; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect x="20" y="16" width="960" height="528" rx="18" fill="url(#bg)" />
+
+  <text x="40" y="52" class="title">Layered architecture</text>
+  <text x="40" y="72" class="subtitle">Dependency flow moves downward and right</text>
+
+  <rect x="60" y="100" width="260" height="80" rx="10" class="card" />
+  <text x="80" y="134" class="label">Types &amp; Instruments</text>
+  <text x="80" y="156" class="muted">OptionSpec, DigitalSpec</text>
+
+  <rect x="370" y="100" width="260" height="80" rx="10" class="card" />
+  <text x="390" y="134" class="label">Market &amp; Curves</text>
+  <text x="390" y="156" class="muted">PricingContext, Curves</text>
+
+  <rect x="680" y="100" width="260" height="80" rx="10" class="card" />
+  <text x="700" y="134" class="label">Volatility</text>
+  <text x="700" y="156" class="muted">Surface, Smile, Local vol</text>
+
+  <rect x="140" y="240" width="220" height="76" rx="10" class="card-accent" />
+  <text x="160" y="272" class="label">Models</text>
+  <text x="160" y="294" class="muted">PDE coefficients</text>
+
+  <rect x="390" y="240" width="220" height="76" rx="10" class="card-accent" />
+  <text x="410" y="272" class="label">Numerics</text>
+  <text x="410" y="294" class="muted">Grids, solver, remedies</text>
+
+  <rect x="640" y="240" width="240" height="76" rx="10" class="card-accent" />
+  <text x="660" y="272" class="label">Pricers</text>
+  <text x="660" y="294" class="muted">BS, MC, Tree, PDE</text>
+
+  <rect x="320" y="380" width="360" height="88" rx="12" class="card-warm" />
+  <text x="340" y="418" class="label">Diagnostics</text>
+  <text x="340" y="440" class="muted">Surface reports, PDE repricing</text>
+
+  <path d="M320,140 L370,140" class="line" />
+  <path d="M630,140 L680,140" class="line" />
+
+  <path d="M190,180 L190,240" class="line" />
+  <path d="M500,180 L500,240" class="line" />
+  <path d="M810,180 L810,240" class="line" />
+
+  <path d="M360,278 L390,278" class="line" />
+  <path d="M610,278 L640,278" class="line" />
+
+  <path d="M760,316 L760,424" class="line" />
+  <path d="M500,316 L500,380" class="line" />
+  <path d="M350,316 L350,424" class="line" />
+</svg>

@@ -94,7 +94,6 @@ markdown_extensions:
   - toc:
       permalink: true
       toc_depth: 3
-
 extra_javascript:
   - javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
@@ -107,6 +106,7 @@ nav:
   - Home: index.md
   - Roadmap: roadmap.md
   - Performance: performance.md
+  - Architecture: architecture.md
   
   - User guides:
       - Overview: user_guides/index.md
@@ -124,6 +124,7 @@ nav:
       - SVI: user_guides/svi.md
       - SVI repair: user_guides/svi_repair.md
       - Local volatility: user_guides/local_vol.md
+      - Flagship: user_guides\flagship_capstone2_page.md
 
   - Notes:
       - Overview: notes/index.md
