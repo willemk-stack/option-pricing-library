@@ -7,3 +7,84 @@
 .doc-heading code {
     font-size: 0.95em;
 }
+
+/* --- Diagrams ------------------------------------------------------------
+
+MkDocs Material toggles light/dark via:
+
+  body[data-md-color-scheme="default"]  (light)
+  body[data-md-color-scheme="slate"]    (dark)
+
+SVGs don't automatically follow this toggle, so we support two variants:
+  - *.light.svg
+  - *.dark.svg
+
+In Markdown, include both images and tag them with:
+  class="diagram-img diagram-light"
+  class="diagram-img diagram-dark"
+
+Then the CSS below will show the correct one.
+
+------------------------------------------------------------------------- */
+
+figure.diagram {
+    margin: 1.2rem auto;
+    padding: 0.85rem 1rem 0.7rem;
+    border-radius: 16px;
+    border: 1px solid var(--md-default-fg-color--lightest);
+    background: var(--md-default-bg-color);
+}
+
+figure.diagram>p {
+    margin: 0;
+}
+
+figure.diagram img {
+    display: block;
+    height: auto;
+    margin: 0 auto;
+}
+
+/* Sensible default sizing (prevents “suddenly huge” diagrams on wide screens) */
+figure.diagram img.diagram-img {
+    width: 100%;
+    max-width: var(--diagram-max-width, 1000px);
+}
+
+/* Theme-aware swapping: default to light, override in slate (dark). */
+/* Default: show light, hide dark */
+figure.diagram img.diagram-dark {
+    display: none !important;
+}
+
+/* MkDocs Material dark scheme */
+[data-md-color-scheme="slate"] figure.diagram img.diagram-light {
+    display: none !important;
+}
+
+[data-md-color-scheme="slate"] figure.diagram img.diagram-dark {
+    display: block !important;
+}
+
+[data-md-color-scheme="slate"] figure.diagram {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.10);
+}
+
+figure.diagram figcaption {
+    margin-top: 0.65rem;
+    font-size: 0.9em;
+    opacity: 0.85;
+}
+
+@media print {
+
+    /* Ensure something prints even if the scheme is slate. */
+    figure.diagram img.diagram-light {
+        display: block !important;
+    }
+
+    figure.diagram img.diagram-dark {
+        display: none !important;
+    }
+}

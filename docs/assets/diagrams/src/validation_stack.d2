@@ -1,0 +1,95 @@
+"""Validation stack diagram."""
+
+direction: down
+
+classes: {
+  card: {
+    style: {
+      stroke-width: 2
+      border-radius: 10
+      shadow: true
+    }
+  }
+
+  accent: {
+    style: {
+      stroke-width: 2
+      border-radius: 10
+      shadow: true
+      fill-pattern: lines
+    }
+  }
+
+  warm: {
+    style: {
+      stroke-width: 2
+      border-radius: 12
+      shadow: true
+      fill-pattern: grain
+    }
+  }
+
+  row: {
+    style: {
+      fill: transparent
+      stroke: transparent
+    }
+  }
+}
+
+row_1: "" {
+  class: row
+  direction: right
+
+  analytic: |md
+**Analytic baselines**
+
+`bs_price_from_ctx`
+|
+  analytic.class: card
+
+  pde_stack: |md
+**PDE stack**
+
+`bs_price_pde_european`
+|
+  pde_stack.class: accent
+
+  validation: |md
+**Validation**
+
+`test_pde_pricer.py`
+|
+  validation.class: warm
+
+  analytic -> pde_stack -> validation
+}
+
+row_2: "" {
+  class: row
+  direction: right
+
+  black76: "black76_call_price_vec"
+  black76.class: card
+
+  localvol_pde: "local_vol_price_pde_european"
+  localvol_pde.class: accent
+
+  convergence: "test_convergence_remedies"
+  convergence.class: warm
+
+  black76 -> localvol_pde -> convergence
+}
+
+row_3: "" {
+  class: row
+  direction: right
+
+  solve: "solve_pde_1d"
+  solve.class: accent
+
+  ql: "localvol vs QuantLib"
+  ql.class: warm
+
+  solve -> ql
+}

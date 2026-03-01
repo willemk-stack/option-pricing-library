@@ -97,3 +97,6 @@ venv.bak/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Temporary output from scripts/render_d2_diagrams.py
+.tmp_d2_render/

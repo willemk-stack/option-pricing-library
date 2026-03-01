@@ -39,6 +39,13 @@ jobs:
           python -m pip install -U pip
           pip install -e ".[docs,plot]"
 
+      - name: Install D2 (diagrams)
+        run: |
+          curl -fsSL https://d2lang.com/install.sh | sh -s --
+
+      - name: Render D2 diagrams
+        run: python scripts/render_d2_diagrams.py
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
