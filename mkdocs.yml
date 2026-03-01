@@ -136,6 +136,9 @@ nav:
       - Implied volatility: notes/IV.md
       - Risk neutral pricing: notes/risk_neutral_pricing.md
       - Finite Differences: notes/finite_difference_pde.md
+      - Dupire local vol: notes/dupire_local_vol.md
+      - Interpolation: notes/interpolation.md
+      - PDE convergence: notes/pde/PDE_convergence.md
       - PDE diagnostics notes: notes/diagnostics_notes.md
 
   - API:

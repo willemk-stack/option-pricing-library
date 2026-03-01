@@ -45,7 +45,6 @@ API Reference: [📘 /api](https://willemk-stack.github.io/option-pricing-librar
 
 Start here:
 
-- **Showcase demo:** `demos/05_vol_surface_and_noarb.ipynb`
 - **User guides:** `docs/user_guides/vol_surface.md`, `docs/user_guides/svi.md`, `docs/user_guides/svi_repair.md`
 - **Representative tests:** `tests/test_surface_svi_and_localvol.py`, `tests/test_svi.py`, `tests/test_svi_repair.py`, `tests/test_arbitrage.py`
 
@@ -69,8 +68,8 @@ Validated by:
 
 Start here:
 
-- **Showcase demo:** `demos/07_vol_surfaces_localvol_pde.ipynb`
-- **PDE-focused demo:** `demos/06_pde_pricing_and_diagnostics.ipynb`
+- **Showcase demo:** `demos/06_vol_surfaces_localvol_pde.ipynb`
+- **PDE-focused demo:** `demos/05_pde_pricing_and_diagnostics.ipynb`
 - **User guides:** `docs/user_guides/local_vol.md`, `docs/user_guides/pde_pricing.md`
 - **Representative tests:**
   - `tests/test_dupire_constant_vol.py`
@@ -227,9 +226,8 @@ Both APIs share the same pricing engines underneath; the flat-input versions sim
 | `demos/02_monte_carlo_pricing_and_error.ipynb` | Monte Carlo pricing + standard errors |
 | `demos/03_binomial_convergence.ipynb` | CRR tree convergence |
 | `demos/04_implied_volatility.ipynb` | Implied-volatility inversion |
-| `demos/05_vol_surface_and_noarb.ipynb` | Vol surfaces, arbitrage checks, and SVI |
-| `demos/06_pde_pricing_and_diagnostics.ipynb` | PDE pricing, stability, and convergence diagnostics |
-| `demos/07_vol_surfaces_localvol_pde.ipynb` | End-to-end surface → local vol → PDE showcase |
+| `demos/05_pde_pricing_and_diagnostics.ipynb` | PDE pricing, stability, and convergence diagnostics |
+| `demos/06_vol_surfaces_localvol_pde.ipynb` | End-to-end surface → local vol → PDE showcase |
 
 ---
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "option_pricing"                     # this is the name you'll install with pip
-version = "0.1.0"
+version = "0.4.0"
 description = "Core option pricing library"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -23,8 +23,8 @@ dev = [
     "pytest-benchmark",
     "pytest-cov",
     "ruff==0.15.2",
-    "black",
-    "mypy",
+    "black==25.12.0",
+    "mypy==1.19.1",
     "scipy-stubs",
     "pandas-stubs==2.2.3.241126",
 ]

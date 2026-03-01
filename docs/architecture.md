@@ -137,7 +137,7 @@ Strongest tests (8 to 12)
 Showcase notebooks executed in CI
 
 - CI runs pytest -q demos --nbmake
-- Showcase demos: demos/05_vol_surface_and_noarb.ipynb, demos/06_pde_pricing_and_diagnostics.ipynb, demos/07_vol_surfaces_localvol_pde.ipynb
+- Showcase demos: demos/05_pde_pricing_and_diagnostics.ipynb, demos/06_vol_surfaces_localvol_pde.ipynb
 
 <figure markdown class="diagram">
   ![Validation stack](assets/diagrams/validation_stack.light.svg){ .diagram-img .diagram-light }

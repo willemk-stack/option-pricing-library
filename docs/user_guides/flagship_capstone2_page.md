@@ -83,7 +83,7 @@ If you want the shortest path to the full story, start here:
 
 ### Main showcase notebook
 
-- `demos/07_vol_surfaces_localvol_pde.ipynb`
+- `demos/06_vol_surfaces_localvol_pde.ipynb`
 
 This is the best current end-to-end capstone demo. It already presents the strongest narrative:
 
@@ -97,7 +97,7 @@ This is the best current end-to-end capstone demo. It already presents the stron
 
 ### Supporting PDE notebook
 
-- `demos/06_pde_pricing_and_diagnostics.ipynb`
+- `demos/05_pde_pricing_and_diagnostics.ipynb`
 
 Use this when you want the PDE side explained more directly before returning to the full local-vol pipeline.
 
@@ -237,7 +237,7 @@ This page works best if the README links to it from a capstone section like:
 and then links directly to:
 
 - this page,
-- `demos/07_vol_surfaces_localvol_pde.ipynb`,
+- `demos/06_vol_surfaces_localvol_pde.ipynb`,
 - the most convincing validation tests.
 
 ---
