@@ -75,7 +75,11 @@ markdown_extensions:
   # Better Markdown ergonomics for Material
   - admonition
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.inlinehilite
   - pymdownx.highlight
 
@@ -97,6 +101,8 @@ markdown_extensions:
 extra_javascript:
   - javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+  - https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js
+  - javascripts/mermaid.js
 
 # add custom tweaks from (docs/stylesheets/extra.css)
 extra_css:
@@ -124,7 +130,7 @@ nav:
       - SVI: user_guides/svi.md
       - SVI repair: user_guides/svi_repair.md
       - Local volatility: user_guides/local_vol.md
-      - Flagship: user_guides\flagship_capstone2_page.md
+      - Flagship: user_guides/flagship_capstone2_page.md
 
   - Notes:
       - Overview: notes/index.md
