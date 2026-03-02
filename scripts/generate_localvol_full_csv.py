@@ -8,13 +8,49 @@ and can export either:
 
 1) a *single* diagnostics table to a CSV (the original behavior), or
 2) a *poster bundle* of CSVs that directly support the "mountain" style plots
-   shown in the capstone/poster figures:
+   shown in the capstone/poster figures.
 
-   - Gatheral vs Dupire local-vol differences (grid, long-form)
-   - PDE convergence sweep (single-option)
-   - Round-trip repricing residual mountain (IV/price error vs (T, K))
-   - Local-vol "calibration struggles" (worst points + reason counts)
-   - SVI fit / repair diagnostics (optional but useful)
+Poster bundle outputs (when available)
+-------------------------------------
+**mountain/**
+- gatheral_vs_dupire_diff_grid.csv
+    Long-form (T, K) grid: Gatheral vs Dupire local vol + denominators + invalid
+    masks + reason strings + diff_sigma
+- pde_roundtrip_residual_mountain.csv
+    Long-form repricing residuals (T, K) with price_error and iv_error_bp
+- svi_calibration_residual_mountain.csv
+    Long-form residuals of fitted SVI vs observed quote IVs (bp), plus y if possible
+
+**convergence/**
+- localvol_pde_convergence.csv
+    Single-option convergence sweep (expected columns depend on capstone2 implementation)
+- digital_errors.csv / digital_grouped.csv / digital_frontier.csv
+    Optional baseline/stability tables if capstone provides them
+
+**calibration/**
+- localvol_worst_points.csv
+    Worst LV points (where denominators are small/invalid), for “struggles” plots
+- localvol_invalid_reason_counts.csv
+    Counts by LVInvalidReason flag (bar plots)
+- svi_fit_compare.csv, svi_repair_attempts.csv, svi_repair_failure_summary.csv
+    Optional but useful SVI health diagnostics
+
+**repricing/**
+- repricing_grid.csv
+- repricing_summary.csv
+
+**surface/**  (NEW: for hero + consistent coordinate systems)
+- quotes_df.csv
+    Raw quotes table (useful for scatter overlays + debugging)
+- forwards_by_T.csv
+    Forward curve sampled at the capstone expiries (or inferred from repricing grid)
+- iv_surface_grid.csv
+    Regular (T, K) grid of implied vols from the fitted/repaired SVI surface,
+    with F(T), y=log(K/F) when possible. Great for hero heatmaps/3D surfaces.
+
+**meta/**
+- run_meta.json
+    cfg/flags/meta snapshot for reproducibility
 
 Typical usage (from repo root):
 
@@ -26,8 +62,7 @@ Typical usage (from repo root):
 
 Notes
 -----
-- This script relies on pandas because the diagnostics tables are pandas
-  DataFrames.
+- This script relies on pandas because the diagnostics tables are pandas DataFrames.
 - If you haven't installed dev dependencies, use:
     python -m pip install -e '.[dev]'
 """
@@ -37,13 +72,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 
 def _ensure_src_on_path() -> None:
     """Ensure repo/src is importable when running from a source checkout."""
-
     repo_root = Path(__file__).resolve().parents[1]
     src = repo_root / "src"
     if src.exists() and str(src) not in sys.path:
@@ -52,7 +87,6 @@ def _ensure_src_on_path() -> None:
 
 def _load_overrides(path_or_json: str) -> dict[str, Any]:
     """Load overrides from a JSON string or a path to a JSON file."""
-
     p = Path(path_or_json)
     if p.exists() and p.is_file():
         return json.loads(p.read_text(encoding="utf-8"))
@@ -61,7 +95,6 @@ def _load_overrides(path_or_json: str) -> dict[str, Any]:
 
 def _get_run_capstone2() -> Any:
     """Import run_capstone2, adding repo/src to sys.path as a fallback."""
-
     try:
         from option_pricing.demos.capstone2 import run_capstone2  # type: ignore
 
@@ -75,8 +108,6 @@ def _get_run_capstone2() -> Any:
 
 def _write_df(df: Any, path: Path) -> None:
     """Write a DataFrame to CSV, ensuring its parent directory exists."""
-
-    # Pandas is a dev dependency; import here so the error points to install step.
     import pandas as pd  # noqa: PLC0415
 
     if not isinstance(df, pd.DataFrame):
@@ -88,7 +119,6 @@ def _write_df(df: Any, path: Path) -> None:
 
 def _reasons_to_str(mask: int) -> str:
     """Decode LVInvalidReason bitmask to a stable, plot-friendly string."""
-
     try:
         from option_pricing.vol.local_vol_types import LVInvalidReason  # type: ignore
     except Exception:  # noqa: BLE001
@@ -107,7 +137,6 @@ def _reasons_to_str(mask: int) -> str:
 
 def _build_lv_compare_grid_df(lv_cmp: Any) -> Any:
     """Long-form (T, K) grid for Gatheral-vs-Dupire comparison."""
-
     import numpy as np  # noqa: PLC0415
     import pandas as pd  # noqa: PLC0415
 
@@ -154,9 +183,136 @@ def _build_lv_compare_grid_df(lv_cmp: Any) -> Any:
     return pd.DataFrame(rows)
 
 
+def _build_forward_curve_df(artifacts: Any) -> Any:
+    """Build a forwards_by_T table (T, F) from whatever the capstone provides."""
+    import numpy as np  # noqa: PLC0415
+    import pandas as pd  # noqa: PLC0415
+
+    # 1) Best: lv_compare forwards at expiries
+    lv_cmp = artifacts.reports.get("lv_compare", None)
+    if lv_cmp is not None:
+        Ts = np.asarray(getattr(lv_cmp, "expiries", []), dtype=float).reshape(-1)
+        Fs = np.asarray(getattr(lv_cmp, "forwards", []), dtype=float).reshape(-1)
+        if Ts.size > 0 and Fs.size == Ts.size:
+            return pd.DataFrame({"T": Ts.astype(float), "F": Fs.astype(float)})
+
+    # 2) Next: repricing grid already has F
+    grid = artifacts.tables.get("repricing_grid", None)
+    if grid is not None and not grid.empty and {"T", "F"}.issubset(set(grid.columns)):
+        df = grid[["T", "F"]].copy()
+        df["T"] = df["T"].astype(float)
+        df["F"] = df["F"].astype(float)
+        # Aggregate to a single forward per expiry (median is robust)
+        df = df.groupby("T", as_index=False)["F"].median()
+        return df.sort_values("T").reset_index(drop=True)
+
+    # 3) Fallback: callable forward function + expiries from any table
+    fwd = None
+    try:
+        fwd = artifacts.synthetic.get("forward", None)
+    except Exception:  # noqa: BLE001
+        fwd = None
+
+    if callable(fwd):
+        Ts: list[float] = []
+        # try repricing grid Ts first, else quotes_df Ts
+        q1 = artifacts.tables.get("repricing_grid", None)
+        if q1 is not None and not q1.empty and "T" in q1.columns:
+            Ts = sorted({float(t) for t in q1["T"].astype(float).to_list()})
+        else:
+            q2 = artifacts.tables.get("quotes_df", None)
+            if q2 is not None and not q2.empty and "T" in q2.columns:
+                Ts = sorted({float(t) for t in q2["T"].astype(float).to_list()})
+
+        if Ts:
+            F = np.array([float(fwd(float(t))) for t in Ts], dtype=float)
+            return pd.DataFrame({"T": np.asarray(Ts, dtype=float), "F": F})
+
+    return pd.DataFrame()
+
+
+def _make_forward_lookup(artifacts: Any) -> Callable[[float], float] | None:
+    """Return a forward lookup f(T) via interpolation on forwards_by_T if possible."""
+    import numpy as np  # noqa: PLC0415
+
+    fwd = None
+    try:
+        fwd = artifacts.synthetic.get("forward", None)
+    except Exception:  # noqa: BLE001
+        fwd = None
+    if callable(fwd):
+        return lambda t: float(fwd(float(t)))
+
+    fwd_df = _build_forward_curve_df(artifacts)
+    if fwd_df is None or fwd_df.empty or not {"T", "F"}.issubset(set(fwd_df.columns)):
+        return None
+
+    Ts = fwd_df["T"].astype(float).to_numpy()
+    Fs = fwd_df["F"].astype(float).to_numpy()
+    if Ts.size == 0:
+        return None
+
+    # Ensure sorted for interpolation
+    order = np.argsort(Ts)
+    Ts = Ts[order]
+    Fs = Fs[order]
+
+    def _interp(t: float) -> float:
+        tt = float(t)
+        if tt <= float(Ts[0]):
+            return float(Fs[0])
+        if tt >= float(Ts[-1]):
+            return float(Fs[-1])
+        return float(np.interp(tt, Ts, Fs))
+
+    return _interp
+
+
+def _add_forward_and_moneyness_cols(df: Any, artifacts: Any) -> Any:
+    """Ensure df has F, moneyness, y if possible (non-destructive)."""
+    import numpy as np  # noqa: PLC0415
+
+    if df is None or df.empty:
+        return df
+
+    out = df.copy()
+
+    if "T" not in out.columns or "K" not in out.columns:
+        return out
+
+    # 1) If F already present, use it
+    if "F" in out.columns:
+        try:
+            F = out["F"].astype(float).to_numpy()
+            K = out["K"].astype(float).to_numpy()
+            with np.errstate(divide="ignore", invalid="ignore"):
+                if "moneyness" not in out.columns:
+                    out["moneyness"] = K / F
+                if "y" not in out.columns:
+                    out["y"] = np.log(K / F)
+            return out
+        except Exception:  # noqa: BLE001
+            pass
+
+    # 2) Try to compute F from a forward lookup (callable or interpolated)
+    f = _make_forward_lookup(artifacts)
+    if f is None:
+        return out
+
+    Ts = out["T"].astype(float).to_numpy()
+    F = np.array([float(f(float(t))) for t in Ts], dtype=float)
+    out["F"] = F
+
+    K = out["K"].astype(float).to_numpy()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        out["moneyness"] = K / F
+        out["y"] = np.log(K / F)
+
+    return out
+
+
 def _build_repricing_mountain_df(artifacts: Any) -> Any:
     """Long-form (T, K) repricing residuals, ready for a heatmap/mountain plot."""
-
     import numpy as np  # noqa: PLC0415
     import pandas as pd  # noqa: PLC0415
 
@@ -167,20 +323,8 @@ def _build_repricing_mountain_df(artifacts: Any) -> Any:
     if grid.empty:
         return grid
 
-    fwd = None
-    try:
-        fwd = artifacts.synthetic.get("forward", None)
-    except Exception:  # noqa: BLE001
-        fwd = None
-
-    if callable(fwd) and "T" in grid.columns:
-        Ts = grid["T"].astype(float).to_numpy()
-        F = np.array([float(fwd(float(t))) for t in Ts], dtype=float)
-        grid["F"] = F
-        if "K" in grid.columns:
-            K = grid["K"].astype(float).to_numpy()
-            grid["moneyness"] = K / F
-            grid["y"] = np.log(K / F)
+    # Ensure F/moneyness/y if possible (robust to missing artifacts.synthetic['forward'])
+    grid = _add_forward_and_moneyness_cols(grid, artifacts)
 
     # Signed errors are often more useful for heatmaps than absolute error.
     if "pde_price" in grid.columns and "target_price" in grid.columns:
@@ -192,7 +336,6 @@ def _build_repricing_mountain_df(artifacts: Any) -> Any:
         grid["iv_error_bp"] = 1e4 * (
             grid["pde_iv"].astype(float) - grid["target_iv"].astype(float)
         )
-        # Keep a consistent name for absolute error in bp.
         if "abs_iv_error_bp" not in grid.columns:
             grid["abs_iv_error_bp"] = np.abs(grid["iv_error_bp"].astype(float))
 
@@ -201,7 +344,6 @@ def _build_repricing_mountain_df(artifacts: Any) -> Any:
 
 def _build_svi_residual_mountain_df(artifacts: Any) -> Any:
     """Long-form (T, K) residuals for SVI calibration vs observed quotes."""
-
     import numpy as np  # noqa: PLC0415
     import pandas as pd  # noqa: PLC0415
 
@@ -209,7 +351,13 @@ def _build_svi_residual_mountain_df(artifacts: Any) -> Any:
     if quotes is None or quotes.empty:
         return pd.DataFrame()
 
+    # Prefer repaired surface, fallback to any plausible SVI-like surface key.
     surface = artifacts.surfaces.get("svi_repaired", None)
+    if surface is None:
+        for key in ("svi", "svi_surface", "svi_raw", "implied_svi"):
+            surface = artifacts.surfaces.get(key, None)
+            if surface is not None:
+                break
     if surface is None:
         return pd.DataFrame()
 
@@ -226,21 +374,97 @@ def _build_svi_residual_mountain_df(artifacts: Any) -> Any:
             if iv.shape == Ks.shape:
                 iv_svi[ii] = iv
         except Exception:  # noqa: BLE001
-            # leave NaNs
             pass
 
     df["iv_svi"] = iv_svi
     df["iv_resid_bp"] = 1e4 * (df["iv_svi"].astype(float) - df["iv_obs"].astype(float))
     df["abs_iv_resid_bp"] = np.abs(df["iv_resid_bp"].astype(float))
 
-    # Useful for mapping the mountain in log-moneyness coordinates.
-    if "F" in df.columns and "y" not in df.columns:
-        F = df["F"].astype(float).to_numpy()
-        K = df["K"].astype(float).to_numpy()
-        with np.errstate(divide="ignore", invalid="ignore"):
-            df["y"] = np.log(K / F)
+    # Ensure forward/moneyness/y if possible (non-destructive)
+    df = _add_forward_and_moneyness_cols(df, artifacts)
 
     return df
+
+
+def _build_iv_surface_grid_df(artifacts: Any) -> Any:
+    """Regular (T, K) grid of implied vols from fitted/repaired SVI, for hero plots."""
+    import numpy as np  # noqa: PLC0415
+    import pandas as pd  # noqa: PLC0415
+
+    # Find a surface
+    surface = artifacts.surfaces.get("svi_repaired", None)
+    if surface is None:
+        for key in ("svi", "svi_surface", "svi_raw", "implied_svi"):
+            surface = artifacts.surfaces.get(key, None)
+            if surface is not None:
+                break
+    if surface is None:
+        return pd.DataFrame()
+
+    Ts: list[float] = []
+    Ks: list[float] = []
+
+    # Prefer lv_compare grid axes if available (gives a nice rectangular mesh)
+    lv_cmp = artifacts.reports.get("lv_compare", None)
+    if lv_cmp is not None:
+        try:
+            Ts = [float(t) for t in list(lv_cmp.expiries)]
+            Ks = [float(k) for k in list(lv_cmp.strikes)]
+        except Exception:  # noqa: BLE001
+            Ts, Ks = [], []
+
+    # Else use repricing grid unique axes, else quotes unique axes
+    if not Ts or not Ks:
+        g = artifacts.tables.get("repricing_grid", None)
+        if g is not None and not g.empty and {"T", "K"}.issubset(set(g.columns)):
+            Ts = sorted({float(t) for t in g["T"].astype(float).to_list()})
+            Ks = sorted({float(k) for k in g["K"].astype(float).to_list()})
+
+    if not Ts or not Ks:
+        q = artifacts.tables.get("quotes_df", None)
+        if q is not None and not q.empty and {"T", "K"}.issubset(set(q.columns)):
+            Ts = sorted({float(t) for t in q["T"].astype(float).to_list()})
+            Ks = sorted({float(k) for k in q["K"].astype(float).to_list()})
+
+    if not Ts or not Ks:
+        return pd.DataFrame()
+
+    f = _make_forward_lookup(artifacts)
+
+    rows: list[dict[str, Any]] = []
+    Ks_arr = np.asarray(Ks, dtype=float)
+    for T in Ts:
+        try:
+            iv = np.asarray(surface.iv(Ks_arr, float(T)), dtype=float).reshape(-1)
+        except Exception:  # noqa: BLE001
+            iv = np.full((len(Ks_arr),), np.nan, dtype=float)
+
+        F = float("nan")
+        if f is not None:
+            try:
+                F = float(f(float(T)))
+            except Exception:  # noqa: BLE001
+                F = float("nan")
+
+        for K, v in zip(Ks_arr, iv, strict=False):
+            y = float("nan")
+            m = float("nan")
+            if np.isfinite(F) and F > 0:
+                m = float(K / F)
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    y = float(np.log(K / F))
+            rows.append(
+                {
+                    "T": float(T),
+                    "K": float(K),
+                    "F": float(F),
+                    "moneyness": float(m),
+                    "y": float(y),
+                    "iv_svi": float(v) if np.isfinite(v) else float("nan"),
+                }
+            )
+
+    return pd.DataFrame(rows)
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -340,6 +564,21 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
 
+        # 0) Surface helpers (NEW)
+        quotes = artifacts.tables.get("quotes_df", None)
+        if quotes is not None:
+            _write_df(quotes, out_dir / "surface" / "quotes_df.csv")
+
+        fwd_df = _build_forward_curve_df(artifacts)
+        if fwd_df is not None and not fwd_df.empty:
+            _write_df(fwd_df, out_dir / "surface" / "forwards_by_T.csv")
+
+        iv_grid = _build_iv_surface_grid_df(artifacts)
+        if iv_grid is not None and not iv_grid.empty:
+            _write_df(iv_grid, out_dir / "surface" / "iv_surface_grid.csv")
+        else:
+            print("[poster] SVI surface missing; skipping iv_surface_grid.csv")
+
         # 1) SVI calibration residual "mountain" (observed quotes vs fitted SVI)
         svi_mtn = _build_svi_residual_mountain_df(artifacts)
         if not svi_mtn.empty:
@@ -348,7 +587,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Wrote SVI calibration residual mountain CSV to {p}")
         else:
             print(
-                "[poster] quotes_df or svi_repaired missing; skipping SVI residual mountain"
+                "[poster] quotes_df or SVI surface missing; skipping SVI residual mountain"
             )
 
         # 2) Round-trip repricing residual "mountain" (uses repricing_grid)
@@ -401,19 +640,15 @@ def main(argv: list[str] | None = None) -> int:
 
         svi_attempts = artifacts.tables.get("svi_repair_attempts", None)
         if svi_attempts is not None and not svi_attempts.empty:
-            _write_df(
-                svi_attempts,
-                out_dir / "calibration" / "svi_repair_attempts.csv",
-            )
+            _write_df(svi_attempts, out_dir / "calibration" / "svi_repair_attempts.csv")
 
         svi_fail = artifacts.tables.get("svi_repair_failure_summary", None)
         if svi_fail is not None and not svi_fail.empty:
             _write_df(
-                svi_fail,
-                out_dir / "calibration" / "svi_repair_failure_summary.csv",
+                svi_fail, out_dir / "calibration" / "svi_repair_failure_summary.csv"
             )
 
-        # Also keep raw repricing summary around if present.
+        # Raw repricing tables
         rep_grid = artifacts.tables.get("repricing_grid", None)
         if rep_grid is not None:
             _write_df(rep_grid, out_dir / "repricing" / "repricing_grid.csv")
@@ -422,7 +657,7 @@ def main(argv: list[str] | None = None) -> int:
         if rep_sum is not None:
             _write_df(rep_sum, out_dir / "repricing" / "repricing_summary.csv")
 
-        # PDE baseline digital sweep (optional; used in the stability poster).
+        # PDE baseline digital sweep (optional; used in stability posters).
         for key in ("digital_errors", "digital_grouped", "digital_frontier"):
             df = artifacts.tables.get(key, None)
             if df is not None:
@@ -443,17 +678,27 @@ def main(argv: list[str] | None = None) -> int:
 
         # A tiny index file so it's obvious what's what when you open the folder.
         index_txt = "Capstone 2 poster CSV bundle\n\n"
+        index_txt += "surface/\n"
+        index_txt += "  - quotes_df.csv                                    (raw quotes, scatter overlays)\n"
+        index_txt += "  - forwards_by_T.csv                                 (forward curve sampled at expiries)\n"
+        index_txt += "  - iv_surface_grid.csv                               (SVI implied vol on a regular (T,K) grid)\n\n"
         index_txt += "mountain/\n"
-        index_txt += "  - svi_calibration_residual_mountain.csv            (observed quotes vs fitted SVI; iv_resid_bp, y)\n"
-        index_txt += "  - pde_roundtrip_residual_mountain.csv              (repricing residuals; iv_error_bp, y, price_error)\n"
-        index_txt += "  - gatheral_vs_dupire_diff_grid.csv                 (T,K diff_sigma etc; long-form)\n\n"
+        index_txt += (
+            "  - svi_calibration_residual_mountain.csv            (iv_resid_bp, y)\n"
+        )
+        index_txt += "  - pde_roundtrip_residual_mountain.csv              (iv_error_bp, y, price_error)\n"
+        index_txt += "  - gatheral_vs_dupire_diff_grid.csv                 (diff_sigma, denom, invalid, reasons; long-form)\n\n"
         index_txt += "convergence/\n"
-        index_txt += "  - localvol_pde_convergence.csv                     (Nx,Nt sweep for a single option)\n"
+        index_txt += "  - localvol_pde_convergence.csv                     (Nx/Nt sweep for a single option)\n"
         index_txt += "  - digital_errors.csv / digital_grouped.csv / digital_frontier.csv (optional baseline)\n\n"
         index_txt += "calibration/\n"
-        index_txt += "  - localvol_worst_points.csv                        (where Gatheral denom is small / invalid)\n"
-        index_txt += "  - localvol_invalid_reason_counts.csv               (counts by LVInvalidReason flag)\n"
-        index_txt += "  - svi_fit_compare.csv                              (SVI no-repair vs repaired fit quality)\n"
+        index_txt += (
+            "  - localvol_worst_points.csv                        (worst LV points)\n"
+        )
+        index_txt += "  - localvol_invalid_reason_counts.csv               (counts by LVInvalidReason)\n"
+        index_txt += (
+            "  - svi_fit_compare.csv                              (SVI fit quality)\n"
+        )
         index_txt += "  - svi_repair_attempts.csv / svi_repair_failure_summary.csv (optional repair diagnostics)\n\n"
         index_txt += "repricing/\n"
         index_txt += "  - repricing_grid.csv                               (raw repricing grid)\n"
@@ -465,6 +710,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n[poster] Wrote poster bundle to: {out_dir}")
         return 0
 
+    # Single-table export mode (original behavior)
     if args.table not in artifacts.tables:
         available = ", ".join(sorted(artifacts.tables.keys()))
         raise SystemExit(f"Unknown table '{args.table}'. Available tables: {available}")
