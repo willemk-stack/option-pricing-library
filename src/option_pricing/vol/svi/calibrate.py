@@ -47,6 +47,8 @@ def calibrate_svi(
     repair_n_scan: int = 31,
     repair_n_bisect: int = 30,
     refit_after_repair: bool = True,
+    butterfly_min_g_tol: float | None = 0.0,
+    butterfly_min_g_tol_scale: float | None = None,
     # NEW: choose post-repair refinement mode
     refit_after_repair_mode: Literal["full_5d", "jw_price_opt"] = "jw_price_opt",
     refit_max_nfev: int = 1500,
@@ -57,6 +59,12 @@ def calibrate_svi(
     repair_lambda_wfloor: float = 1e5,  # FIND A SENSIBLE DEFAULT DEPENDING ON DATA??
     repair_w_scale: float = 0.02,  # FIND A SENSIBLE DEFAULT DEPENDING ON DATA??
 ) -> SVIFitResult:
+    if refit_after_repair and refit_after_repair_mode not in {
+        "full_5d",
+        "jw_price_opt",
+    }:
+        raise ValueError(f"Unknown refit_after_repair_mode: {refit_after_repair_mode}")
+
     # function body copied from original calibrate_svi, adjust imports
     y = np.asarray(y, dtype=np.float64).reshape(-1)
     w_obs = np.asarray(w_obs, dtype=np.float64).reshape(-1)
@@ -74,6 +82,17 @@ def calibrate_svi(
         raise ValueError("sqrt_weights must have same shape as w_obs")
     if not (np.all(np.isfinite(base_sqrt_w)) and np.all(base_sqrt_w >= 0.0)):
         raise ValueError("sqrt_weights must be finite and nonnegative")
+
+    if butterfly_min_g_tol is None:
+        scale = (
+            0.0
+            if butterfly_min_g_tol_scale is None
+            else float(butterfly_min_g_tol_scale)
+        )
+        median_abs_w = float(np.median(np.abs(w_obs)))
+        butterfly_min_g_tol_eff = -scale * max(1e-6, median_abs_w)
+    else:
+        butterfly_min_g_tol_eff = float(butterfly_min_g_tol)
 
     # default x0
     if x0 is None:
@@ -175,16 +194,12 @@ def calibrate_svi(
                 g_floor=0.0,
                 tol=1e-10,
             )
-            # In normal operation we only repair when arbitrage is found.
-            # For unit tests we also trigger a repair call even when the
-            # provided check returns ``ok=True``; the fake_check in tests is
-            # constructed to fail on the first invocation, so this logic has
-            # no effect in practice but guarantees ``repair_butterfly_raw`` is
-            # invoked at least once when ``repair_butterfly`` is True.
-            if not bfly.ok:
-                do_repair = True
-            else:
-                do_repair = True
+            min_g = float(getattr(bfly, "min_g", float("nan")))
+            if not np.isfinite(min_g):
+                min_g = float("-inf")
+
+            # Only repair when the violation exceeds the tolerance.
+            do_repair = (not bfly.ok) and (min_g < butterfly_min_g_tol_eff)
 
             if do_repair:
                 p_pre_repair = p_out
@@ -367,16 +382,28 @@ def calibrate_svi(
         if repair_butterfly:
             from option_pricing.vol import svi as _pkg
 
-            p_final = _pkg.repair_butterfly_raw(
+            bfly = _pkg.check_butterfly_arbitrage(
                 p_final,
-                T=float(slice_T),
                 y_domain_hint=ctx.y_domain,
                 w_floor=float(ctx.dom_cfg.w_floor),
-                method=repair_method,
+                g_floor=0.0,
                 tol=1e-10,
-                n_scan=repair_n_scan,
-                n_bisect=repair_n_bisect,
             )
+            min_g = float(getattr(bfly, "min_g", float("nan")))
+            if not np.isfinite(min_g):
+                min_g = float("-inf")
+
+            if (not bfly.ok) and (min_g < butterfly_min_g_tol_eff):
+                p_final = _pkg.repair_butterfly_raw(
+                    p_final,
+                    T=float(slice_T),
+                    y_domain_hint=ctx.y_domain,
+                    w_floor=float(ctx.dom_cfg.w_floor),
+                    method=repair_method,
+                    tol=1e-10,
+                    n_scan=repair_n_scan,
+                    n_bisect=repair_n_bisect,
+                )
 
         robust_w = np.ones_like(y)
 

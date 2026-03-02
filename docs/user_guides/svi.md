@@ -113,7 +113,11 @@ fit = calibrate_svi(
     w_obs=w_obs,
     repair_butterfly=True,
     repair_method="line_search",
+    butterfly_min_g_tol=None,
+    butterfly_min_g_tol_scale=1.0,
 )
 ```
 
+When ``butterfly_min_g_tol`` is ``None``, the effective tolerance becomes
+$-k * \max(10^{-6}, \mathrm{median}(|w_{obs}|))$ with $k = \texttt{butterfly_min_g_tol_scale}$.
 The repair workflow is described in [SVI repair](svi_repair.md).

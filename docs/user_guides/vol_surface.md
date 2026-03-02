@@ -79,6 +79,8 @@ surface_svi = VolSurface.from_svi(
     calibrate_kwargs={
         "repair_butterfly": True,
         "repair_method": "line_search",
+        "butterfly_min_g_tol": None,
+        "butterfly_min_g_tol_scale": 1.0,
     },
 )
 ```

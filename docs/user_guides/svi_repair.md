@@ -101,6 +101,8 @@ fit = calibrate_svi(
     repair_butterfly=True,
     repair_method="line_search",
     refit_after_repair=True,
+    butterfly_min_g_tol=None,
+    butterfly_min_g_tol_scale=1.0,
 )
 ```
 
@@ -110,4 +112,7 @@ That same pattern can be passed through `VolSurface.from_svi(..., calibrate_kwar
 
 - These repair routines work in **total variance** space, so the `T` argument matters.
 - Repair is about making the slice usable and butterfly-safe, not about preserving the original parameters exactly.
+- For noisy data, prefer the data-driven tolerance: set ``butterfly_min_g_tol=None`` and choose
+    $k = \texttt{butterfly_min_g_tol_scale}$ so the effective tolerance is
+    $-k * \max(10^{-6}, \mathrm{median}(|w_{obs}|))$.
 - After repair, it is still worth inspecting the fit error and wing diagnostics from `SVIFitDiagnostics`.

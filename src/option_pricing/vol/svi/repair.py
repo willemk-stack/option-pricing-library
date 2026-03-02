@@ -323,6 +323,16 @@ def _find_min_feasible_lambda(
         )
 
     if not ok1:
+        # Projection endpoint is not feasible. Try to find any feasible point
+        # along the segment; this can happen with noisy slices where the
+        # Section 5.1 target still violates butterfly constraints.
+        grid = np.linspace(0.0, 1.0, int(max(n_scan, 3)), dtype=np.float64)
+        for lam in grid[1:]:
+            ok, raw, bfly = is_ok(float(lam))
+            if raw is None or not ok:
+                continue
+            return float(lam), raw, bfly
+
         raise ValueError(
             "SVI projection (Section 5.1 construction) did not yield a butterfly-arb-free slice "
             f"(reason={b1.failure_reason}, min_g={b1.min_g})."
