@@ -322,5 +322,5 @@ def test_digital_quadratic_convergence_with_smoothing_and_rannacher():
     p_avg = _observed_order(errs_avg[-2], errs_avg[-1])
     p_proj = _observed_order(errs_proj[-2], errs_proj[-1])
 
-    assert 1.6 <= p_avg <= 2.4
-    assert 1.6 <= p_proj <= 2.4
+    assert 1.8 <= p_avg <= 2.2
+    assert 1.8 <= p_proj <= 2.2
