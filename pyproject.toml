@@ -28,7 +28,7 @@ dev = [
     "scipy-stubs",
     "pandas-stubs==2.2.3.241126",
 ]
-notebooks = ["jupyter", "matplotlib", "pandas"]
+notebooks = ["jupyter", "matplotlib", "pandas", "ipywidgets"]
 plot = ["matplotlib"]
 docs = [
     "mkdocs",
@@ -96,7 +96,7 @@ warn_unused_configs = true
 disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
-module = ["matplotlib.*", "nbmake.*"]
+module = ["matplotlib.*", "nbmake.*", "ipywidgets.*"]
 ignore_missing_imports = true
 
 
