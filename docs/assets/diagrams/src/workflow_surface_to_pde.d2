@@ -1,0 +1,99 @@
+"""Surface → local-vol → PDE pipeline diagram."""
+
+direction: right
+
+classes: {
+  card: {
+    style: {
+      stroke-width: 2
+      border-radius: 10
+      shadow: true
+    }
+  }
+
+  accent: {
+    style: {
+      stroke-width: 2
+      border-radius: 10
+      shadow: true
+      fill-pattern: lines
+    }
+  }
+
+  success: {
+    style: {
+      stroke: "#3f7a4c"
+      stroke-width: 2
+      border-radius: 10
+      shadow: true
+      fill-pattern: dots
+    }
+  }
+
+  row: {
+    style: {
+      fill: transparent
+      stroke: transparent
+    }
+  }
+}
+
+quotes: |md
+**Quotes**
+
+T, K, implied vol
+|
+quotes.class: card
+
+paths: "" {
+  class: row
+  direction: down
+
+  from_grid_path: "" {
+    class: row
+    direction: right
+
+    from_grid: "VolSurface.from_grid"
+    from_grid.class: card
+
+    check_surface: "check_surface_noarb"
+    check_surface.class: card
+
+    from_grid -> check_surface
+  }
+
+  from_svi_path: "" {
+    class: row
+    direction: right
+
+    from_svi: "VolSurface.from_svi"
+    from_svi.class: card
+
+    calibrate_svi: "calibrate_svi"
+    calibrate_svi.class: accent
+
+    from_svi -> calibrate_svi
+  }
+}
+
+localvol: "LocalVolSurface.from_implied"
+localvol.class: card
+
+solve: "solve_pde_1d"
+solve.class: card
+
+repricing: "repricing"
+repricing.class: success
+
+implied_vol: "implied_vol"
+implied_vol.class: card
+
+quotes -> paths.from_grid_path.from_grid
+quotes -> paths.from_svi_path.from_svi
+
+paths.from_grid_path.check_surface -> localvol
+paths.from_svi_path.calibrate_svi -> localvol
+
+localvol -> solve: local_vol_price_pde
+localvol -> repricing
+repricing -> implied_vol

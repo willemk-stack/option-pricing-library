@@ -1,0 +1,116 @@
+"""Layered architecture diagram."""
+
+direction: down
+
+classes: {
+  card: {
+    style: {
+      stroke-width: 2
+      border-radius: 10
+      shadow: true
+    }
+  }
+
+  accent: {
+    style: {
+      stroke-width: 2
+      border-radius: 10
+      shadow: true
+      fill-pattern: lines
+    }
+  }
+
+  warm: {
+    style: {
+      stroke-width: 2
+      border-radius: 12
+      shadow: true
+      fill-pattern: grain
+    }
+  }
+
+  row: {
+    style: {
+      fill: transparent
+      stroke: transparent
+    }
+  }
+}
+
+row_1: "" {
+  class: row
+  direction: right
+
+  types: |md
+**Types & Instruments**
+
+`OptionSpec`, `DigitalSpec`
+|
+  types.class: card
+
+  market: |md
+**Market & Curves**
+
+`PricingContext`, curves
+|
+  market.class: card
+
+  vol: |md
+**Volatility**
+
+Surface, smile, local vol
+|
+  vol.class: card
+
+  types -> market
+  market -> vol
+}
+
+row_2: "" {
+  class: row
+  direction: right
+
+  models: |md
+**Models**
+
+PDE coefficients
+|
+  models.class: accent
+
+  numerics: |md
+**Numerics**
+
+Grids, solver, remedies
+|
+  numerics.class: accent
+
+  pricers: |md
+**Pricers**
+
+BS, MC, Tree, PDE
+|
+  pricers.class: accent
+
+  models -> numerics
+  numerics -> pricers
+}
+
+row_3: "" {
+  class: row
+  direction: right
+
+  diagnostics: |md
+**Diagnostics**
+
+Surface reports, PDE repricing
+|
+  diagnostics.class: warm
+}
+
+row_1.types -> row_2.models
+row_1.market -> row_2.numerics
+row_1.vol -> row_2.pricers
+
+row_2.models -> row_3.diagnostics
+row_2.numerics -> row_3.diagnostics
+row_2.pricers -> row_3.diagnostics

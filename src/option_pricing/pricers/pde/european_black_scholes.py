@@ -11,7 +11,7 @@ from ...numerics.pde import LinearParabolicPDE1D
 from ...numerics.pde.boundary import RobinBC, RobinBCSide
 from ...numerics.pde.domain import Coord
 from ...types import OptionSpec, OptionType, PricingInputs
-from .pde_wiring import BSPDEWiring1D
+from .pde_wiring import PDEWiring1D
 
 
 def _bc_constr(
@@ -52,7 +52,7 @@ def bs_pde_wiring(
     *,
     x_lb: float,
     x_ub: float,
-) -> BSPDEWiring1D:
+) -> PDEWiring1D:
     """
     Build the fully specified PDE problem (coeffs + BC + terminal condition),
     in solver coordinates (x).
@@ -95,4 +95,4 @@ def bs_pde_wiring(
 
     problem = LinearParabolicPDE1D(a=a, b=b, c=c, bc=bc, ic=ic)
 
-    return BSPDEWiring1D(coord=coord, to_x=to_x, to_S=to_S, x_0=x0, problem=problem)
+    return PDEWiring1D(coord=coord, to_x=to_x, to_S=to_S, x_0=x0, problem=problem)

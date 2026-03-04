@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Literal, Protocol
 
 import numpy as np
@@ -7,12 +7,12 @@ import numpy as np
 from ..grids import GridConfig, SpacingPolicy
 
 
-class Coord(str, Enum):
+class Coord(StrEnum):
     LOG_S = "logS"
     S = "S"
 
 
-class DomainPolicy(str, Enum):
+class DomainPolicy(StrEnum):
     MANUAL = "MANUAL"
     STRIKE_MULTIPLE = "STRIKE_MULTIPLE"
 

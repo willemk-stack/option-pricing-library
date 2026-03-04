@@ -62,3 +62,9 @@ black --check .
 pytest -q
 mypy
 ```
+
+## Coverage (local)
+
+```bash
+pytest --cov=option_pricing --cov-report=term-missing --cov-report=xml --cov-report=html
+```

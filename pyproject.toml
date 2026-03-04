@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "option_pricing"                     # this is the name you'll install with pip
-version = "0.1.0"
+version = "0.4.0"
 description = "Core option pricing library"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -15,16 +15,20 @@ dependencies = ["numpy", "scipy"]
 
 [project.optional-dependencies]
 dev = [
-    "pandas",
+    "pandas==2.2.3",
     "matplotlib",
     "jupyter",
     "nbmake",
     "pytest",
-    "ruff",
-    "black",
-    "mypy",
+    "pytest-benchmark",
+    "pytest-cov",
+    "ruff==0.15.2",
+    "black==25.12.0",
+    "mypy==1.19.1",
+    "scipy-stubs",
+    "pandas-stubs==2.2.3.241126",
 ]
-notebooks = ["jupyter", "matplotlib", "pandas"]
+notebooks = ["jupyter", "matplotlib", "pandas", "ipywidgets"]
 plot = ["matplotlib"]
 docs = [
     "mkdocs",
@@ -50,16 +54,53 @@ ignore = ["E501"]                   # remove for line-length checks
 [tool.ruff.lint.isort]
 known-first-party = ["option_pricing"]
 
+[tool.coverage.run]
+branch = true
+source = ["option_pricing"]
+omit = [
+    "src/option_pricing/diagnostics/*",
+    "src/option_pricing/diagnostics/**",
+    "src/option_pricing/demos/*",
+    "src/option_pricing/demos/**",
+    "**/diagnostics/**",
+    "**\\diagnostics\\**",
+    "demos/*",
+    "demos/**",
+    "tutorials/**",
+    "scripts/**",
+    "docs/**",
+    "**/_mpl.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+omit = [
+    "src/option_pricing/diagnostics/*",
+    "src/option_pricing/diagnostics/**",
+    "**/diagnostics/**",
+    "**\\diagnostics\\**",
+    "*diagnostics*",
+    "demos/*",
+    "demos/**",
+    "tutorials/**",
+    "scripts/**",
+    "docs/**",
+    "**/_mpl.py",
+]
+
 # Optional mypy (only if you installed mypy)
 [tool.mypy]
 python_version = "3.12"
 mypy_path = "src"
 files = ["src/option_pricing"]
-
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["matplotlib.*", "nbmake.*", "ipywidgets.*"]
 ignore_missing_imports = true
+
 
 [tool.setuptools]
 package-dir = { "" = "src" }

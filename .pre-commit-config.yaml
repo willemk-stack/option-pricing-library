@@ -3,7 +3,7 @@ default_language_version:
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.9
+    rev: v0.15.2
     hooks:
       - id: ruff-check
         args: [--fix, --show-fixes]
@@ -18,8 +18,15 @@ repos:
     rev: v1.19.1
     hooks:
       - id: mypy
-        stages: [pre-push]
+        stages: [pre-commit, pre-push]
         args: [--config-file=pyproject.toml]
         pass_filenames: false
-        additional_dependencies: [numpy==2.3.5, scipy==1.15.3, scipy-stubs==1.15.3.0]
+        # .pre-commit-config.yaml
+        additional_dependencies:
+          - numpy==2.4.0
+          - scipy==1.16.3
+          - scipy-stubs==1.16.3.3
+          - optype[numpy]==0.15.0
+          - pandas==2.2.3
+          - pandas-stubs==2.2.3.241126
 

@@ -1,0 +1,28 @@
+name: benchmarks
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-benchmarks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Run benchmarks
+        run: RUN_BENCHMARKS=1 pytest benchmarks -q --benchmark-only --benchmark-json benchmarks.json
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks-json
+          path: benchmarks.json

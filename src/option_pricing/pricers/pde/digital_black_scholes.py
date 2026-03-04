@@ -10,7 +10,7 @@ from ...numerics.pde import LinearParabolicPDE1D
 from ...numerics.pde.boundary import RobinBC, RobinBCSide
 from ...numerics.pde.domain import Coord
 from ...types import DigitalSpec, OptionType, PricingInputs
-from .pde_wiring import BSPDEWiring1D
+from .pde_wiring import PDEWiring1D
 
 
 def _bc_constr_digital(*, kind: OptionType, r: float, Q: float) -> RobinBC:
@@ -54,7 +54,7 @@ def bs_pde_wiring(
     *,
     x_lb: float,
     x_ub: float,
-) -> BSPDEWiring1D:
+) -> PDEWiring1D:
     coord = Coord(coord)
 
     sigma = float(p.sigma)
@@ -88,4 +88,4 @@ def bs_pde_wiring(
 
     problem = LinearParabolicPDE1D(a=a, b=b, c=c, bc=bc, ic=ic)
 
-    return BSPDEWiring1D(coord=coord, to_x=to_x, to_S=to_S, x_0=x0, problem=problem)
+    return PDEWiring1D(coord=coord, to_x=to_x, to_S=to_S, x_0=x0, problem=problem)

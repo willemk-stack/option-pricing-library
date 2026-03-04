@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from option_pricing.exceptions import (
@@ -14,7 +14,7 @@ from option_pricing.exceptions import (
 from option_pricing.typing import ScalarFn
 
 
-class RootMethod(str, Enum):
+class RootMethod(StrEnum):
     """Supported root-finding methods.
 
     Notes

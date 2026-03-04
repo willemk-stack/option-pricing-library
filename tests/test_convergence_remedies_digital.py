@@ -29,15 +29,6 @@ import numpy as np
 import pytest
 
 
-def _norm_cdf(x: float) -> float:
-    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
-
-
-def _bs_d2(*, S: float, K: float, r: float, q: float, sigma: float, T: float) -> float:
-    vol_sqrt = sigma * math.sqrt(T)
-    return (math.log(S / K) + (r - q - 0.5 * sigma * sigma) * T) / vol_sqrt
-
-
 def bs_digital_call_price(
     *,
     S: float,
@@ -48,9 +39,25 @@ def bs_digital_call_price(
     T: float,
     payout: float = 1.0,
 ) -> float:
-    """Analytic Black–Scholes digital call with payoff `payout * 1{S_T >= K}`."""
-    d2 = _bs_d2(S=S, K=K, r=r, q=q, sigma=sigma, T=T)
-    return payout * math.exp(-r * T) * _norm_cdf(d2)
+    """Analytic Black–Scholes digital call with payoff `payout * 1{S_T >= K}`.
+
+    This is a thin wrapper around the library implementation (Black-76 via
+    forward + discount factor).
+    """
+    from option_pricing.instruments.digital import DigitalOption
+    from option_pricing.models.black_scholes import bs as bs_model
+    from option_pricing.types import MarketData, OptionType
+
+    ctx = MarketData(spot=float(S), rate=float(r), dividend_yield=float(q)).to_context()
+    inst = DigitalOption(
+        expiry=float(T),
+        strike=float(K),
+        payout=float(payout),
+        kind=OptionType.CALL,
+    )
+    return float(
+        bs_model.digital_call_price(instr=inst, market=ctx, sigma=float(sigma))
+    )
 
 
 def _observed_order(err_coarse: float, err_fine: float) -> float:
@@ -315,5 +322,5 @@ def test_digital_quadratic_convergence_with_smoothing_and_rannacher():
     p_avg = _observed_order(errs_avg[-2], errs_avg[-1])
     p_proj = _observed_order(errs_proj[-2], errs_proj[-1])
 
-    assert 1.6 <= p_avg <= 2.4
-    assert 1.6 <= p_proj <= 2.4
+    assert 1.8 <= p_avg <= 2.2
+    assert 1.8 <= p_proj <= 2.2

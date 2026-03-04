@@ -6,7 +6,7 @@ import pytest
 
 from option_pricing import MarketData, OptionSpec, OptionType, PricingInputs, bs_price
 from option_pricing.config import ImpliedVolConfig
-from option_pricing.vol.implied_vol import implied_vol_bs_result
+from option_pricing.vol import implied_vol_bs_result
 
 BENCHMARKS = [
     dict(

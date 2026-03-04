@@ -2,10 +2,20 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
 
 from option_pricing.types import MarketData, OptionSpec, OptionType, PricingInputs
+
+# Ensure the src-layout package is importable when running tests from a source checkout.
+# (CI / local runs often do `pytest` without `pip install -e .`.)
+_ROOT = Path(__file__).resolve().parents[1]
+_SRC = _ROOT / "src"
+if _SRC.exists():
+    sys.path.insert(0, str(_SRC))
 
 
 @pytest.fixture

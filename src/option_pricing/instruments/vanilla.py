@@ -23,6 +23,20 @@ def call_payoff(ST: float, K: float) -> float: ...
 @overload
 def call_payoff(ST: FloatArray, K: float) -> FloatArray: ...
 def call_payoff(ST: float | FloatArray, K: float) -> float | FloatArray:
+    """Terminal payoff for a call option: max(S_T - K, 0).
+
+    Parameters
+    ----------
+    ST
+        Terminal price(s).
+    K
+        Strike price.
+
+    Returns
+    -------
+    float or FloatArray
+        Call payoff(s) at maturity.
+    """
     return np.maximum(ST - K, 0.0)
 
 
@@ -31,6 +45,20 @@ def put_payoff(ST: float, K: float) -> float: ...
 @overload
 def put_payoff(ST: FloatArray, K: float) -> FloatArray: ...
 def put_payoff(ST: float | FloatArray, K: float) -> float | FloatArray:
+    """Terminal payoff for a put option: max(K - S_T, 0).
+
+    Parameters
+    ----------
+    ST
+        Terminal price(s).
+    K
+        Strike price.
+
+    Returns
+    -------
+    float or FloatArray
+        Put payoff(s) at maturity.
+    """
     return np.maximum(K - ST, 0.0)
 
 
@@ -47,6 +75,18 @@ class VanillaPayoff:
     def __call__(self, ST: FloatArray) -> FloatArray: ...
 
     def __call__(self, ST: float | FloatArray) -> float | FloatArray:
+        """Evaluate payoff at terminal price(s).
+
+        Parameters
+        ----------
+        ST
+            Terminal price(s).
+
+        Returns
+        -------
+        float or FloatArray
+            Option payoff(s) at maturity.
+        """
         if self.kind == OptionType.CALL:
             out = call_payoff(ST, K=self.strike)
         elif self.kind == OptionType.PUT:
@@ -78,6 +118,13 @@ class VanillaOption:
 
     @property
     def payoff(self) -> TerminalPayoff:
+        """Terminal payoff function.
+
+        Returns
+        -------
+        TerminalPayoff
+            A callable :class:`VanillaPayoff` object.
+        """
         return VanillaPayoff(kind=self.kind, strike=self.strike)
 
     @overload
@@ -86,4 +133,16 @@ class VanillaOption:
     def intrinsic_value(self, spot: FloatArray) -> FloatArray: ...
 
     def intrinsic_value(self, spot: float | FloatArray) -> float | FloatArray:
+        """Intrinsic value at a given spot price.
+
+        Parameters
+        ----------
+        spot
+            Current spot price(s).
+
+        Returns
+        -------
+        float or FloatArray
+            Intrinsic value(s) at current spot.
+        """
         return self.payoff(spot)

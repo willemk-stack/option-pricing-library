@@ -9,7 +9,7 @@ type CoordFn = Callable[[ArrayLike], ArrayLike]
 
 
 @dataclass(frozen=True, slots=True)
-class BSPDEWiring1D:
+class PDEWiring1D:
     coord: Coord
     to_x: CoordFn
     to_S: CoordFn

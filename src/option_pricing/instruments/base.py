@@ -11,7 +11,7 @@ Only a small subset is required by the pricers in this repository:
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Protocol, overload, runtime_checkable
 
 import numpy as np
@@ -20,7 +20,7 @@ from numpy.typing import NDArray
 from option_pricing.typing import FloatArray
 
 
-class ExerciseStyle(str, Enum):
+class ExerciseStyle(StrEnum):
     """Exercise style for vanilla options."""
 
     EUROPEAN = "european"

@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import asdict, dataclass
-from time import perf_counter
-
-import numpy as np
+from dataclasses import dataclass
+from typing import Literal, SupportsFloat, SupportsInt, TypedDict, cast, overload
 
 from option_pricing import PricingInputs, bs_price
 from option_pricing.numerics.pde import AdvectionScheme, PDESolution1D
@@ -12,23 +10,23 @@ from option_pricing.numerics.pde.domain import Coord
 from option_pricing.pricers.pde.domain import BSDomainConfig
 from option_pricing.pricers.pde_pricer import bs_price_pde_european
 
-# ----------------------------
-# Results dataclass
-# ----------------------------
+from .._pde_compare import engine
 
 
 @dataclass(frozen=True, slots=True)
 class PDEvsBSRun:
+    """Single-run result for PDE vs analytic Black-Scholes (vanilla European)."""
+
     # Identifiers
     method: str
-    coord: str  # "logS" or "S" (Coord value)
-    spacing: str  # "uniform" / "clustered" (reporting)
+    coord: str
+    spacing: str
 
     # cfg
     advection: AdvectionScheme
     Nx: int
     Nt: int
-    x0: float  # spot in x-coordinates
+    x0: float
 
     # outputs
     bs: float
@@ -38,59 +36,51 @@ class PDEvsBSRun:
     runtime_ms: float
 
 
-# ----------------------------
-# Input coercions
-# ----------------------------
+class _EngineRunOnceRec(TypedDict):
+    method: str
+    coord: str
+    spacing: str
+    advection: str
+    Nx: SupportsInt
+    Nt: SupportsInt
+    x0: SupportsFloat
+    analytic: SupportsFloat
+    pde: SupportsFloat
+    abs_err: SupportsFloat
+    rel_err: SupportsFloat
+    runtime_ms: SupportsFloat
 
 
-def _coerce_advection(a: str | AdvectionScheme) -> AdvectionScheme:
-    if isinstance(a, AdvectionScheme):
-        return a
-    a_str = str(a).strip().lower()
-    try:
-        return AdvectionScheme(a_str)
-    except ValueError as e:
-        raise ValueError(
-            f"Unknown advection='{a}'. Expected one of: "
-            f"{[x.value for x in AdvectionScheme]}"
-        ) from e
+@overload
+def run_once(
+    p: PricingInputs,
+    *,
+    domain_cfg: BSDomainConfig,
+    Nx: int = 401,
+    Nt: int = 401,
+    coord: Coord | str = Coord.LOG_S,
+    method: str = "cn",
+    advection: str | AdvectionScheme = "central",
+    spacing: str = "clustered",
+    bs_price_fn: Callable[[PricingInputs], float] | None = None,
+    return_solution: Literal[False] = False,
+) -> PDEvsBSRun: ...
 
 
-def _coerce_coord(c: Coord | str) -> Coord:
-    return Coord(c)
-
-
-def _x0_for_coord(p: PricingInputs, coord: Coord) -> float:
-    if coord == Coord.LOG_S:
-        return float(np.log(p.S))
-    if coord == Coord.S:
-        return float(p.S)
-    raise ValueError(f"Unhandled coord: {coord}")
-
-
-def _kind_str(p: PricingInputs) -> str:
-    k = getattr(getattr(p, "spec", None), "kind", None)
-    if k is None:
-        return ""
-    return str(getattr(k, "value", k))
-
-
-def _meta_from_inputs(p: PricingInputs) -> dict[str, object]:
-    # Safe, tolerant extraction for tables/plots
-    return {
-        "tau": float(getattr(p, "tau", float("nan"))),
-        "spot": float(getattr(p, "S", float("nan"))),
-        "strike": float(getattr(p, "K", float("nan"))),
-        "kind": _kind_str(p),
-        "sigma": float(getattr(p, "sigma", float("nan"))),
-        "r": float(getattr(p, "r", float("nan"))),
-        "q": float(getattr(p, "q", float("nan"))),
-    }
-
-
-# ----------------------------
-# Core execution
-# ----------------------------
+@overload
+def run_once(
+    p: PricingInputs,
+    *,
+    domain_cfg: BSDomainConfig,
+    Nx: int = 401,
+    Nt: int = 401,
+    coord: Coord | str = Coord.LOG_S,
+    method: str = "cn",
+    advection: str | AdvectionScheme = "central",
+    spacing: str = "clustered",
+    bs_price_fn: Callable[[PricingInputs], float] | None = None,
+    return_solution: Literal[True],
+) -> tuple[PDEvsBSRun, PDESolution1D]: ...
 
 
 def run_once(
@@ -106,68 +96,76 @@ def run_once(
     bs_price_fn: Callable[[PricingInputs], float] | None = None,
     return_solution: bool = False,
 ) -> PDEvsBSRun | tuple[PDEvsBSRun, PDESolution1D]:
-    coord_enum = _coerce_coord(coord)
-    adv = _coerce_advection(advection)
+    """Run one configuration and return a compact dataclass.
 
-    # Analytic benchmark
-    bs_fn = bs_price if bs_price_fn is None else bs_price_fn
-    C_anal = float(bs_fn(p))
+    This wrapper delegates timing/error computation to the shared engine and keeps
+    the public API stable for notebooks.
+    """
 
-    # PDE solve (timed)
-    t0 = perf_counter()
-    out = bs_price_pde_european(
-        p=p,
-        coord=coord_enum,
+    analytic_fn = bs_price if bs_price_fn is None else bs_price_fn
+
+    out = engine.run_once(
+        p,
         domain_cfg=domain_cfg,
-        Nx=int(Nx),
-        Nt=int(Nt),
-        method=str(method),
-        advection=adv,
+        analytic_fn=analytic_fn,
+        pde_fn=bs_price_pde_european,
+        Nx=Nx,
+        Nt=Nt,
+        coord=coord,
+        method=method,
+        advection=advection,
+        spacing=spacing,
+        contract="vanilla",
         return_solution=return_solution,
     )
-    runtime_ms = (perf_counter() - t0) * 1e3
 
-    sol: PDESolution1D | None = None
+    rec: dict[str, object]
+    sol: PDESolution1D | None
     if return_solution:
-        C_pde, sol = out  # type: ignore[misc]
+        rec, sol = cast(tuple[dict[str, object], PDESolution1D], out)
     else:
-        C_pde = out  # type: ignore[assignment]
+        rec = cast(dict[str, object], out)
+        sol = None
 
-    C_pde = float(C_pde)
+    r = cast(_EngineRunOnceRec, rec)
 
-    abs_err = float(abs(C_pde - C_anal))
-    rel_err = float(abs_err / abs(C_anal)) if C_anal != 0.0 else float("nan")
+    adv = AdvectionScheme(str(r["advection"]))
 
     res = PDEvsBSRun(
-        method=str(method),
-        coord=str(getattr(coord_enum, "value", coord_enum)),
-        spacing=str(spacing),
+        method=str(r["method"]),
+        coord=str(r["coord"]),
+        spacing=str(r["spacing"]),
         advection=adv,
-        Nx=int(Nx),
-        Nt=int(Nt),
-        x0=_x0_for_coord(p, coord_enum),
-        bs=C_anal,
-        pde=C_pde,
-        abs_err=abs_err,
-        rel_err=rel_err,
-        runtime_ms=float(runtime_ms),
+        Nx=int(r["Nx"]),
+        Nt=int(r["Nt"]),
+        x0=float(r["x0"]),
+        bs=float(r["analytic"]),
+        pde=float(r["pde"]),
+        abs_err=float(r["abs_err"]),
+        rel_err=float(r["rel_err"]),
+        runtime_ms=float(r["runtime_ms"]),
     )
 
     if return_solution:
         if sol is None:
             raise TypeError(
-                "return_solution=True but bs_price_pde_european did not return a PDESolution1D. "
-                "Expected (price, PDESolution1D)."
+                "return_solution=True but PDE solver did not return a PDESolution1D."
             )
         return res, sol
 
     return res
 
 
-# ----------------------------
-# Batch execution (cases/sweeps)
-# Returns "records" (dicts) for downstream tables/plots
-# ----------------------------
+def _with_bs_alias(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Back-compat: add bs=analytic for downstream notebooks."""
+
+    out: list[dict[str, object]] = []
+    for r in records:
+        rr = dict(r)
+        if "analytic" in rr and "bs" not in rr:
+            rr["bs"] = rr["analytic"]
+        out.append(rr)
+    return out
 
 
 def run_cases(
@@ -182,68 +180,22 @@ def run_cases(
     spacing: str = "clustered",
     bs_price_fn: Callable[[PricingInputs], float] | None = None,
 ) -> list[dict[str, object]]:
-    from dataclasses import asdict
+    analytic_fn = bs_price if bs_price_fn is None else bs_price_fn
 
-    import numpy as np
-
-    coord_enum = _coerce_coord(coord)
-    adv = _coerce_advection(advection)
-    bs_fn = bs_price if bs_price_fn is None else bs_price_fn
-
-    records: list[dict[str, object]] = []
-
-    for name, p in cases:
-        base = {
-            "case": str(name),
-            **_meta_from_inputs(p),
-            "coord": str(getattr(coord_enum, "value", coord_enum)),
-            "method": str(method),
-            "advection": adv.value,
-            "spacing": str(spacing),
-            "Nx": int(Nx),
-            "Nt": int(Nt),
-            "x0": _x0_for_coord(p, coord_enum),
-        }
-
-        try:
-            r = run_once(
-                p,
-                domain_cfg=domain_cfg,
-                Nx=Nx,
-                Nt=Nt,
-                coord=coord_enum,
-                method=method,
-                advection=adv,
-                spacing=spacing,
-                bs_price_fn=bs_fn,
-                return_solution=False,
-            )
-            assert isinstance(r, PDEvsBSRun)
-
-            d = asdict(r)
-            d["advection"] = r.advection.value
-            d["err"] = float(r.pde - r.bs)
-
-            records.append({"status": "ok", **base, **d})
-
-        except Exception as e:
-            # Record failure as data (diagnostics-friendly)
-            bs_val = float(bs_fn(p))
-            records.append(
-                {
-                    "status": "error",
-                    "error": repr(e),
-                    **base,
-                    "bs": bs_val,
-                    "pde": np.nan,
-                    "err": np.nan,
-                    "abs_err": np.nan,
-                    "rel_err": np.nan,
-                    "runtime_ms": np.nan,
-                }
-            )
-
-    return records
+    recs = engine.run_cases(
+        cases,
+        domain_cfg=domain_cfg,
+        analytic_fn=analytic_fn,
+        pde_fn=bs_price_pde_european,
+        Nx=Nx,
+        Nt=Nt,
+        coord=coord,
+        method=method,
+        advection=advection,
+        spacing=spacing,
+        contract="vanilla",
+    )
+    return _with_bs_alias(recs)
 
 
 def sweep_nx(
@@ -258,26 +210,21 @@ def sweep_nx(
     spacing: str = "clustered",
     bs_price_fn: Callable[[PricingInputs], float] | None = None,
 ) -> list[dict[str, object]]:
-    records: list[dict[str, object]] = []
-    for Nx in Nx_list:
-        r = run_once(
-            p,
-            domain_cfg=domain_cfg,
-            Nx=int(Nx),
-            Nt=int(Nt),
-            coord=coord,
-            method=method,
-            advection=advection,
-            spacing=spacing,
-            bs_price_fn=bs_price_fn,
-            return_solution=False,
-        )
-        assert isinstance(r, PDEvsBSRun)
-        d = asdict(r)
-        d["advection"] = r.advection.value
-        d["err"] = float(r.pde - r.bs)
-        records.append({"sweep": "Nx", **_meta_from_inputs(p), **d})
-    return records
+    analytic_fn = bs_price if bs_price_fn is None else bs_price_fn
+    recs = engine.sweep_nx(
+        p,
+        domain_cfg=domain_cfg,
+        analytic_fn=analytic_fn,
+        pde_fn=bs_price_pde_european,
+        Nx_list=Nx_list,
+        Nt=Nt,
+        coord=coord,
+        method=method,
+        advection=advection,
+        spacing=spacing,
+        contract="vanilla",
+    )
+    return _with_bs_alias(recs)
 
 
 def sweep_nt(
@@ -292,26 +239,21 @@ def sweep_nt(
     spacing: str = "clustered",
     bs_price_fn: Callable[[PricingInputs], float] | None = None,
 ) -> list[dict[str, object]]:
-    records: list[dict[str, object]] = []
-    for Nt in Nt_list:
-        r = run_once(
-            p,
-            domain_cfg=domain_cfg,
-            Nx=int(Nx),
-            Nt=int(Nt),
-            coord=coord,
-            method=method,
-            advection=advection,
-            spacing=spacing,
-            bs_price_fn=bs_price_fn,
-            return_solution=False,
-        )
-        assert isinstance(r, PDEvsBSRun)
-        d = asdict(r)
-        d["advection"] = r.advection.value
-        d["err"] = float(r.pde - r.bs)
-        records.append({"sweep": "Nt", **_meta_from_inputs(p), **d})
-    return records
+    analytic_fn = bs_price if bs_price_fn is None else bs_price_fn
+    recs = engine.sweep_nt(
+        p,
+        domain_cfg=domain_cfg,
+        analytic_fn=analytic_fn,
+        pde_fn=bs_price_pde_european,
+        Nt_list=Nt_list,
+        Nx=Nx,
+        coord=coord,
+        method=method,
+        advection=advection,
+        spacing=spacing,
+        contract="vanilla",
+    )
+    return _with_bs_alias(recs)
 
 
 def sweep_nx_nt(
@@ -326,27 +268,21 @@ def sweep_nx_nt(
     spacing: str = "clustered",
     bs_price_fn: Callable[[PricingInputs], float] | None = None,
 ) -> list[dict[str, object]]:
-    records: list[dict[str, object]] = []
-    for Nx in Nx_list:
-        for Nt in Nt_list:
-            r = run_once(
-                p,
-                domain_cfg=domain_cfg,
-                Nx=int(Nx),
-                Nt=int(Nt),
-                coord=coord,
-                method=method,
-                advection=advection,
-                spacing=spacing,
-                bs_price_fn=bs_price_fn,
-                return_solution=False,
-            )
-            assert isinstance(r, PDEvsBSRun)
-            d = asdict(r)
-            d["advection"] = r.advection.value
-            d["err"] = float(r.pde - r.bs)
-            records.append({"sweep": "NxNt", **_meta_from_inputs(p), **d})
-    return records
+    analytic_fn = bs_price if bs_price_fn is None else bs_price_fn
+    recs = engine.sweep_nx_nt(
+        p,
+        domain_cfg=domain_cfg,
+        analytic_fn=analytic_fn,
+        pde_fn=bs_price_pde_european,
+        Nx_list=Nx_list,
+        Nt_list=Nt_list,
+        coord=coord,
+        method=method,
+        advection=advection,
+        spacing=spacing,
+        contract="vanilla",
+    )
+    return _with_bs_alias(recs)
 
 
 __all__ = [

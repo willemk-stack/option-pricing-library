@@ -125,7 +125,7 @@ def run_synthetic_iv_smile(
     """
     # Local imports keep diagnostics lightweight until used.
     from option_pricing import MarketData, OptionSpec, PricingInputs, bs_price
-    from option_pricing.vol.implied_vol import implied_vol_bs_result
+    from option_pricing.vol.implied_vol_scalar import implied_vol_bs_result
 
     cfg = ImpliedVolConfig() if cfg is None else cfg
 
@@ -207,7 +207,7 @@ def run_bs_iv_benchmarks(
         PricingInputs,
         bs_price,
     )
-    from option_pricing.vol.implied_vol import implied_vol_bs_result
+    from option_pricing.vol.implied_vol_scalar import implied_vol_bs_result
 
     cfg = ImpliedVolConfig() if cfg is None else cfg
 

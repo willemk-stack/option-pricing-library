@@ -1,60 +1,115 @@
 # Option Pricing Library
 
-A small, usage-first Python library for pricing **European options** under common textbook models:
+A typed Python library for **vanilla option pricing**, **implied-volatility workflows**, **volatility surfaces**, and **finite-difference PDE pricing**.
 
-- **Black–Scholes (BS)** closed-form pricing (and analytic Greeks)
-- **CRR binomial tree** pricing (European)
-- **Monte Carlo (GBM)** pricing with a reported **standard error**
+The project started as a compact pricing library for textbook models, and now also includes a stronger numerics stack for:
 
-The public API is intentionally small: you build a `PricingInputs` bundle, then call top-level pricers from `option_pricing`.
+- **Black–Scholes(-Merton)** analytic pricing and Greeks
+- **CRR binomial tree** pricing
+- **Monte Carlo under GBM**
+- **Implied volatility inversion**
+- **Smile and surface construction**
+- **No-arbitrage diagnostics**
+- **Local-volatility extraction and diagnostics**
+- **Finite-difference PDE pricing and convergence checks**
 
-## Vol surface at a glance
+## Best places to start
 
-![Synthetic implied volatility surface](assets/iv_surface.png)
+### New to the library
+- [Installation](installation.md)
+- [Quickstart](user_guides/quickstart.md)
+- [API reference](api/index.md)
 
-![Smile slices from the surface](assets/iv_smiles.png)
+### Flagship workflows
+- [Local volatility](user_guides/local_vol.md)
+- [PDE pricing](user_guides/pde_pricing.md)
+- [Roadmap](roadmap.md)
 
-## Quick example
+### Theory and background
+- [Notes index](notes/index.md)
 
-```python
-from option_pricing import (
-    MarketData,
-    OptionSpec,
-    OptionType,
-    PricingInputs,
-    bs_price,
-    binom_price,
-    mc_price,
-)
-from option_pricing.config import MCConfig, RandomConfig
+## Recommended API path
 
-market = MarketData(spot=100.0, rate=0.05)
-opt = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)  # expiry is an absolute time
-p = PricingInputs(spec=opt, market=market, sigma=0.20, t=0.0)
+The library supports a few ways to work. The intended starting point for most users is the instrument-based workflow, with the other styles documented as convenience or advanced paths:
 
-bs = bs_price(p)
-cfg_mc = MCConfig(n_paths=50_000, random=RandomConfig(seed=0))
-mc, se = mc_price(p, cfg=cfg_mc)
-binom = binom_price(p, n_steps=400)
+### Recommended API: instrument-based workflow
+Use `VanillaOption` with the instrument pricers when you want the clearest separation between **what** is being priced and **how** it is priced. This is the intended public entry point for most users.
 
-print(f"BS:    {bs:.4f}")
-print(f"MC:    {mc:.4f}  (SE={se:.4f})")
-print(f"CRR:   {binom:.4f}")
-```
+### Convenience API: flat inputs
+Use `PricingInputs` and the flat-input pricers when you want compact examples, tutorials, or quick checks.
 
-Notes:
+### Advanced API: curves / surfaces / PDE modules
+Use `PricingContext`, the volatility modules, and PDE tooling when you need term structures, surface construction, local-vol extraction, or diagnostic-heavy workflows.
 
-* Times are **floats** (typically in **years**). `t` is “now”; `expiry` is an **absolute** time `T`. Time-to-maturity is `tau = T - t`.
-* Rates are assumed to be **continuously compounded**.
-* All top-level pricers dispatch on `OptionType` (`CALL` / `PUT`) via `p.spec.kind`.
+## Flagship capstones
 
-## Where to go next
+### Capstone 1 — Volatility surfaces, no-arbitrage, and SVI
 
-* **Get set up:** [Installation](installation.md)
-* **Build something quickly:** [Quickstart](user_guides/quickstart.md)
-* **See everything available:** [API](api/index.md)
-* **Learn the theory background:** [Notes](notes/index.md)
+This capstone focuses on building and validating implied-volatility structures:
 
-## Roadmap
+- implied-volatility inversion
+- smile construction
+- surface interpolation
+- no-arbitrage diagnostics
+- SVI fitting and repair workflows
 
-See `roadmap.md` for capstones and the working checklist.
+A good place to begin is the vol-surface demo and the user guides around surfaces and diagnostics.
+
+### Capstone 2 — Local Vol + PDE Pricing + Diagnostics
+
+This is the main numerics-focused capstone in the repo:
+
+**surface quotes → implied surface → local-vol diagnostics → PDE pricing → convergence / repricing checks**
+
+This part of the project is designed to show that local volatility is not treated as “just a formula,” but as a **numerical engineering workflow** with validation and diagnostics.
+
+It includes:
+- local-vol extraction from surfaces
+- instability and invalid-region diagnostics
+- PDE pricing under local volatility
+- convergence checks
+- discontinuous-payoff remedies
+- validation against analytic baselines and reference implementations
+
+Start here:
+- [Local volatility guide](user_guides/local_vol.md)
+- [PDE pricing guide](user_guides/pde_pricing.md)
+
+## Validation philosophy
+
+This library is meant to be **test-backed** and **numerically transparent**.
+
+That means the project emphasizes:
+- analytic cross-checks where available
+- convergence and stability checks
+- explicit diagnostics for surfaces and local volatility
+- notebook demos that illustrate the workflows end to end
+
+## Documentation map
+
+- **Getting started**
+  - [Installation](installation.md)
+  - [Quickstart](user_guides/quickstart.md)
+
+- **User guides**
+  - [Local volatility](user_guides/local_vol.md)
+  - [PDE pricing](user_guides/pde_pricing.md)
+
+- **Reference**
+  - [API reference](api/index.md)
+
+- **Background**
+  - [Notes index](notes/index.md)
+
+- **Project planning**
+  - [Roadmap](roadmap.md)
+
+## Scope
+
+The library is strongest today in:
+- vanilla pricing workflows
+- implied-volatility tooling
+- surface diagnostics
+- local-vol / PDE capstone work
+
+Some modules are still better understood as **advanced research / portfolio components** rather than fully productized end-user workflows. The roadmap calls out what is complete, what is experimental, and what comes next.
