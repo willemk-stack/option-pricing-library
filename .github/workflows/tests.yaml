@@ -38,11 +38,8 @@ jobs:
       - name: Mypy
         run: mypy src/option_pricing
 
-      - name: Pytest (unit tests)
-        run: pytest -q tests
-
-      - name: Pytest (coverage)
-        run: pytest -q tests --cov=option_pricing --cov-report=term-missing --cov-report=xml --cov-fail-under=80
+      - name: Pytest (unit tests + coverage)
+        run: pytest -q tests --cov=option_pricing --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=80
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
