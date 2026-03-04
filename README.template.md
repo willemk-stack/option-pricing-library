@@ -9,6 +9,8 @@ It supports **analytic Black–Scholes(-Merton)** pricing, **CRR binomial trees*
 [![Docs](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
+![IV Heatmap banner](./docs/assets/readme/hero_iv_heatmap_banner.png)
+
 > **Note:** This file is **auto-generated** from `README.template.md` and snippets in `examples/`.  
 > To edit, modify the template or example sources, then run:
 >
@@ -52,6 +54,8 @@ Start here:
 
 **surface quotes → implied surface → local-vol diagnostics → PDE pricing → convergence / repricing checks**
 
+![Capstone 2 poster LV PDE pricing](./docs/assets/readme/poster_capstone_wide.png)
+
 Why it stands out:
 
 - **Local volatility is treated as a numerical engineering problem**, not just a formula.
@@ -59,6 +63,7 @@ Why it stands out:
 - **The PDE stack is validated**, not just implemented: analytic baselines, convergence checks, and discontinuous-payoff remedies.
 - **The workflow is end-to-end**: surface construction, local-vol extraction, pricing, and validation are connected in one pipeline.
 
+![Workflow diagram](.docs/assets/diagrams/workflow_surface_to_pde.dark.svg)
 Validated by:
 
 - constant-vol recovery tests for Dupire local volatility

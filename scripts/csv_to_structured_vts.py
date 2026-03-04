@@ -159,7 +159,7 @@ def main():
     ap.add_argument("--csv", required=True, help="Input CSV file")
     ap.add_argument("--out", required=True, help="Output VTS (.vts) file")
 
-    ap.add_argument("--i-col", required=True, help="Grid fast axis (e.g., K)")
+    ap.add_argument("--i-col", required=True, help="Grid fast axis (e.g., y or K)")
     ap.add_argument("--j-col", required=True, help="Grid slow axis (e.g., T)")
 
     ap.add_argument("--x-col", required=True, help="X coordinate column")
@@ -188,9 +188,36 @@ def main():
     args = ap.parse_args()
     df = pd.read_csv(args.csv)
 
-    for col in [args.i_col, args.j_col, args.x_col, args.y_col, args.z_col]:
+    # Require axes/coords first (z_col may be derived below)
+    for col in [args.i_col, args.j_col, args.x_col, args.y_col]:
         if col not in df.columns:
             raise SystemExit(f"Missing required column '{col}' in CSV.")
+
+    # --- NEW: derive missing iv_svi / w_svi if possible ---
+    if "T" in df.columns:
+        T = pd.to_numeric(df["T"], errors="coerce").to_numpy(dtype=float)
+
+        if "w_svi" not in df.columns and "iv_svi" in df.columns:
+            iv = pd.to_numeric(df["iv_svi"], errors="coerce").to_numpy(dtype=float)
+            w = np.where(
+                (T > 0) & np.isfinite(T) & np.isfinite(iv), T * iv * iv, np.nan
+            )
+            df["w_svi"] = w
+
+        if "iv_svi" not in df.columns and "w_svi" in df.columns:
+            w = pd.to_numeric(df["w_svi"], errors="coerce").to_numpy(dtype=float)
+            iv = np.where(
+                (T > 0) & np.isfinite(T) & np.isfinite(w) & (w >= 0),
+                np.sqrt(w / T),
+                np.nan,
+            )
+            df["iv_svi"] = iv
+
+    # Now ensure z-col exists (it might have been derived)
+    if args.z_col not in df.columns:
+        raise SystemExit(
+            f"Missing required column '{args.z_col}' in CSV (after derivations)."
+        )
 
     # Choose arrays
     write_cols = parse_csv_list(args.write_cols)
@@ -210,6 +237,16 @@ def main():
     must = [args.i_col, args.j_col, args.x_col, args.y_col, args.z_col]
     for c in must:
         if c in df.columns and pd.api.types.is_numeric_dtype(df[c]) and c not in arrays:
+            arrays.append(c)
+
+    # --- NEW: always expose both if present & not excluded ---
+    for c in ("iv_svi", "w_svi"):
+        if (
+            c in df.columns
+            and pd.api.types.is_numeric_dtype(df[c])
+            and c not in arrays
+            and c not in exclude_cols
+        ):
             arrays.append(c)
 
     grid, i_vals, j_vals = build_ordered_rows(df, args.i_col, args.j_col)

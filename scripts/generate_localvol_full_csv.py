@@ -387,9 +387,21 @@ def _build_svi_residual_mountain_df(artifacts: Any) -> Any:
 
 
 def _build_iv_surface_grid_df(artifacts: Any) -> Any:
-    """Regular (T, K) grid of implied vols from fitted/repaired SVI, for hero plots."""
-    import numpy as np  # noqa: PLC0415
-    import pandas as pd  # noqa: PLC0415
+    """Uniform (T, y) grid of implied vols from fitted/repaired SVI.
+
+    y = log(K/F(T)) uniform on [-0.5, 0.5]
+    T uniform between min/max available expiry.
+
+    Exposes:
+      - iv_svi : implied vol from SVI
+      - w_svi  : total variance = T * iv_svi^2
+    """
+    import numpy as np
+    import pandas as pd
+
+    Y_MIN = -0.5
+    Y_MAX = 0.5
+    NY = 20
 
     # Find a surface
     surface = artifacts.surfaces.get("svi_repaired", None)
@@ -401,66 +413,81 @@ def _build_iv_surface_grid_df(artifacts: Any) -> Any:
     if surface is None:
         return pd.DataFrame()
 
-    Ts: list[float] = []
-    Ks: list[float] = []
-
-    # Prefer lv_compare grid axes if available (gives a nice rectangular mesh)
+    # Collect expiries (for range endpoints)
+    Ts_base: list[float] = []
     lv_cmp = artifacts.reports.get("lv_compare", None)
     if lv_cmp is not None:
         try:
-            Ts = [float(t) for t in list(lv_cmp.expiries)]
-            Ks = [float(k) for k in list(lv_cmp.strikes)]
-        except Exception:  # noqa: BLE001
-            Ts, Ks = [], []
+            Ts_base = [float(t) for t in list(lv_cmp.expiries)]
+        except Exception:
+            Ts_base = []
 
-    # Else use repricing grid unique axes, else quotes unique axes
-    if not Ts or not Ks:
+    if not Ts_base:
         g = artifacts.tables.get("repricing_grid", None)
-        if g is not None and not g.empty and {"T", "K"}.issubset(set(g.columns)):
-            Ts = sorted({float(t) for t in g["T"].astype(float).to_list()})
-            Ks = sorted({float(k) for k in g["K"].astype(float).to_list()})
+        if g is not None and not g.empty and "T" in g.columns:
+            Ts_base = sorted({float(t) for t in g["T"].astype(float).to_list()})
 
-    if not Ts or not Ks:
+    if not Ts_base:
         q = artifacts.tables.get("quotes_df", None)
-        if q is not None and not q.empty and {"T", "K"}.issubset(set(q.columns)):
-            Ts = sorted({float(t) for t in q["T"].astype(float).to_list()})
-            Ks = sorted({float(k) for k in q["K"].astype(float).to_list()})
+        if q is not None and not q.empty and "T" in q.columns:
+            Ts_base = sorted({float(t) for t in q["T"].astype(float).to_list()})
 
-    if not Ts or not Ks:
+    if not Ts_base:
         return pd.DataFrame()
 
+    NT = 20  # fixed density
+
+    Tmin = float(np.min(Ts_base))
+    Tmax = float(np.max(Ts_base))
+    if not (np.isfinite(Tmin) and np.isfinite(Tmax) and Tmax > Tmin):
+        return pd.DataFrame()
+
+    # Uniform T grid
+    T_grid = np.linspace(Tmin, Tmax, int(NT), dtype=float)
+
+    # Need forward lookup to map y -> K
     f = _make_forward_lookup(artifacts)
+    if f is None:
+        return pd.DataFrame()
+
+    # Uniform y grid
+    y_grid = np.linspace(Y_MIN, Y_MAX, int(NY), dtype=float)
+    m_grid = np.exp(y_grid)
 
     rows: list[dict[str, Any]] = []
-    Ks_arr = np.asarray(Ks, dtype=float)
-    for T in Ts:
+    for T in T_grid:
         try:
-            iv = np.asarray(surface.iv(Ks_arr, float(T)), dtype=float).reshape(-1)
-        except Exception:  # noqa: BLE001
-            iv = np.full((len(Ks_arr),), np.nan, dtype=float)
+            F = float(f(float(T)))
+        except Exception:
+            F = float("nan")
 
-        F = float("nan")
-        if f is not None:
+        if not (np.isfinite(F) and F > 0):
+            K_grid = np.full_like(y_grid, np.nan, dtype=float)
+            iv = np.full_like(y_grid, np.nan, dtype=float)
+            w = np.full_like(y_grid, np.nan, dtype=float)
+        else:
+            K_grid = F * m_grid
             try:
-                F = float(f(float(T)))
-            except Exception:  # noqa: BLE001
-                F = float("nan")
+                iv = np.asarray(surface.iv(K_grid, float(T)), dtype=float).reshape(-1)
+            except Exception:
+                iv = np.full((len(K_grid),), np.nan, dtype=float)
 
-        for K, v in zip(Ks_arr, iv, strict=False):
-            y = float("nan")
-            m = float("nan")
-            if np.isfinite(F) and F > 0:
-                m = float(K / F)
-                with np.errstate(divide="ignore", invalid="ignore"):
-                    y = float(np.log(K / F))
+            # Total variance: w = T * iv^2
+            if np.isfinite(T) and T > 0:
+                w = (iv.astype(float) ** 2) * float(T)
+            else:
+                w = np.full((len(K_grid),), np.nan, dtype=float)
+
+        for y, m, K, v, ww in zip(y_grid, m_grid, K_grid, iv, w, strict=False):
             rows.append(
                 {
                     "T": float(T),
-                    "K": float(K),
+                    "y": float(y),
                     "F": float(F),
                     "moneyness": float(m),
-                    "y": float(y),
+                    "K": float(K) if np.isfinite(K) else float("nan"),
                     "iv_svi": float(v) if np.isfinite(v) else float("nan"),
+                    "w_svi": float(ww) if np.isfinite(ww) else float("nan"),
                 }
             )
 
