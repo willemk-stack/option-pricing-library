@@ -3,9 +3,17 @@ name: benchmarks
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   run-benchmarks:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RUN_BENCHMARKS: "1"
+      PYTHONUNBUFFERED: "1"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -14,15 +22,32 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
 
       - name: Install
-        run: pip install -e ".[dev]"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
 
       - name: Run benchmarks
-        run: RUN_BENCHMARKS=1 pytest benchmarks -q --benchmark-only --benchmark-json benchmarks.json
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Keep the Actions log "alive" during long/quiet benchmark runs
+          ( while true; do
+              echo "benchmarks still running @ $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+              sleep 60
+            done ) &
+          KEEPALIVE_PID=$!
+          trap 'kill $KEEPALIVE_PID' EXIT
+
+          pytest benchmarks --benchmark-only --benchmark-json benchmarks.json --benchmark-verbose
 
       - name: Upload benchmark results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: benchmarks-json
           path: benchmarks.json
+          if-no-files-found: error
