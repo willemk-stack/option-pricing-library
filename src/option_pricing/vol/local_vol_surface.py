@@ -18,7 +18,7 @@ from .local_vol_gatheral import (
     gatheral_local_var_diagnostics,
 )
 from .surface_core import VolSurface
-from .vol_types import DifferentiableSmileSlice
+from .vol_types import DifferentiableSmileSlice, TimeDifferentiableImpliedSurface
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +97,10 @@ class LocalVolSurface:
         return cls(implied=implied, forward=fwd, discount=df)
 
     def _require_derivs(self) -> None:
+
+        if isinstance(self.implied, TimeDifferentiableImpliedSurface):
+            return
+
         for s in self.implied.smiles:
             if not isinstance(s, DifferentiableSmileSlice):
                 raise TypeError(
@@ -128,9 +132,21 @@ class LocalVolSurface:
         self, y: FloatArray, T: float
     ) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
         """Compute (w, w_y, w_yy, w_T) at fixed y for maturity T."""
+        y_arr = np.asarray(y, dtype=np.float64)
+
+        # --- Hook: analytic surface derivatives (SSVI lives here) ---
+        if isinstance(self.implied, TimeDifferentiableImpliedSurface):
+            w, w_y, w_yy, w_T = self.implied.w_and_derivs(y_arr, T)
+            return (
+                np.asarray(w, dtype=np.float64),
+                np.asarray(w_y, dtype=np.float64),
+                np.asarray(w_yy, dtype=np.float64),
+                np.asarray(w_T, dtype=np.float64),
+            )
+
+        # --- Fallback: slice stack + secant in T (current behavior) ---
         self._require_derivs()
 
-        y_arr = np.asarray(y, dtype=np.float64)
         i, j, a = self._bracket(T)
 
         exp = np.asarray(self.implied.expiries, dtype=np.float64)
