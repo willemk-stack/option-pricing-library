@@ -172,3 +172,30 @@ where $\varphi$ is the standard normal pdf.
 * Use **log-moneyness** $\ln(S/K)$ and $\tau$ to avoid loss of precision.
 * For very small $\tau$ or extreme strikes, clamp $\sigma\sqrt{\tau}$ away from 0 when computing $d_1,d_2$.
 * To back out $\sigma$ from a market price, see [Implied volatility](IV.md).
+
+
+# Black-Scholes-Merton pricing for a digital option
+
+## Derivation under risk-neutral measure
+
+Per reasons earlier stated, the option price at time 0 should equal the time discounted expectation value of the option payoff at expiry T under the risk-neutral measure. Which in the case of a digital option gives:
+
+$$
+V_0 = e^{-rT}\mathbb{E}^{\mathcal{Q}}[\phi(S_T)]
+\phi(S_T) = \mathbf{1}_{S_T \geq K} Q
+$$
+
+Where Q is the payout of the digital option and K the strike price. Using the log-normal property of the BSM underlying stock $S_t$, we can reduce this to:
+
+$$
+V_0 = Qe^{-rT} \mathbb{P}(S_T \geq K)
+$$
+
+$$
+\mathbb{P}(S_T \geq K) \iff \mathbb{P}(\ln(S_T) \geq \ln K)
+$$
+
+Substituting in $\ln(S_T) = \ln(S_0) + (r-q-\frac{1}{2})$
+$$\ln(S_T) \geq \ln K$$
+
+### Alt derivation (from call -> -Q * dC/dK....)
