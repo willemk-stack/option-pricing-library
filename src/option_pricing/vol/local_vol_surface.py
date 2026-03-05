@@ -7,16 +7,24 @@ from an implied surface using Gatheral's formula.
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 
 import numpy as np
 
+from ..numerics.interpolation import (
+    FritschCarlson,
+    linear_interp_derivative_factory,
+    linear_interp_factory,
+)
+from ..numerics.regression import isotonic_regression
 from ..typing import ArrayLike, FloatArray, ScalarFn
 from .local_vol_gatheral import (
     GatheralLVReport,
     _gatheral_local_var_from_w,
     gatheral_local_var_diagnostics,
 )
+from .smile_grid import _is_monotone
 from .surface_core import VolSurface
 from .vol_types import DifferentiableSmileSlice, TimeDifferentiableImpliedSurface
 
@@ -50,6 +58,10 @@ class LocalVolSurface:
     implied: VolSurface
     forward: ScalarFn
     discount: ScalarFn
+    _theta_interp: Callable[[np.ndarray], np.ndarray] = field(init=False, repr=False)
+    _theta_interp_derivative: Callable[[np.ndarray], np.ndarray] = field(
+        init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         # Heuristic: if all slices have SVI derivative methods, this is the "SVI-derived" LV path.
@@ -67,6 +79,38 @@ class LocalVolSurface:
                 category=FutureWarning,  # or UserWarning
                 stacklevel=2,
             )
+
+        # Define smooth a smooth 'a' for interpolation in w(y, T) = (1.0 - a) * w0 + a * w1,   a = a(T)
+        expiries = np.asarray(self.implied.expiries, dtype=np.float64)
+        smiles = self.implied.smiles
+        theta_raw = np.asarray(
+            [float(np.asarray(s.w_at(0.0))) for s in smiles], dtype=np.float64
+        )
+        theta = isotonic_regression(theta_raw)
+
+        theta_fn: Callable[[np.ndarray], np.ndarray]
+        dtheta_fn: Callable[[np.ndarray], np.ndarray]
+
+        if expiries.size < 2:
+            theta0 = float(theta[0])
+
+            def theta_const(xq: np.ndarray) -> np.ndarray:
+                xq_in = np.asarray(xq, dtype=np.float64)
+                return np.full_like(xq_in, theta0, dtype=np.float64)
+
+            def theta_const_deriv(xq: np.ndarray) -> np.ndarray:
+                xq_in = np.asarray(xq, dtype=np.float64)
+                return np.zeros_like(xq_in, dtype=np.float64)
+
+            theta_fn, dtheta_fn = theta_const, theta_const_deriv
+        elif _is_monotone(theta) and expiries.size >= 3:
+            theta_fn, dtheta_fn = FritschCarlson(expiries, theta)
+        else:
+            theta_fn = linear_interp_factory(expiries, theta)
+            dtheta_fn = linear_interp_derivative_factory(expiries, theta)
+
+        object.__setattr__(self, "_theta_interp", theta_fn)
+        object.__setattr__(self, "_theta_interp_derivative", dtheta_fn)
 
     @classmethod
     def from_implied(
@@ -128,6 +172,14 @@ class LocalVolSurface:
         a = (T - T0) / (T1 - T0)
         return i, j, float(a)
 
+    def _theta(self, T: float) -> float:
+        return float(np.asarray(self._theta_interp(np.asarray(T, dtype=np.float64))))
+
+    def _dtheta_dT(self, T: float) -> float:
+        return float(
+            np.asarray(self._theta_interp_derivative(np.asarray(T, dtype=np.float64)))
+        )
+
     def _w_and_derivs(
         self, y: FloatArray, T: float
     ) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
@@ -147,11 +199,13 @@ class LocalVolSurface:
         # --- Fallback: slice stack + secant in T (current behavior) ---
         self._require_derivs()
 
-        i, j, a = self._bracket(T)
-
+        i, j, a_lin = self._bracket(T)
         exp = np.asarray(self.implied.expiries, dtype=np.float64)
         T0 = float(exp[i])
         T1 = float(exp[j])
+        T_min = float(exp[0])
+        T_max = float(exp[-1])
+
         s0 = self.implied.smiles[i]
         s1 = self.implied.smiles[j]
 
@@ -159,6 +213,23 @@ class LocalVolSurface:
             s1, DifferentiableSmileSlice
         ):
             raise TypeError("LocalVolSurface requires differentiable slices")
+
+        # Construct a(T)
+        th0 = float(np.asarray(s0.w_at(0.0)))
+        th1 = float(np.asarray(s1.w_at(0.0)))
+        thT = self._theta(T)
+        thT_T = self._dtheta_dT(T)
+
+        den = th1 - th0
+        use_linear_T = (T <= T_min) or (T >= T_max)
+
+        if abs(den) < 1e-14 or use_linear_T:
+            # Linear-in-T extrapolation (keeps w_T nonzero at endpoints/outside).
+            a = a_lin
+            a_T = 1.0 / (T1 - T0)
+        else:
+            a = (thT - th0) / den
+            a_T = thT_T / den
 
         w0 = np.asarray(s0.w_at(y_arr), dtype=np.float64)
         w1 = np.asarray(s1.w_at(y_arr), dtype=np.float64)
@@ -170,7 +241,7 @@ class LocalVolSurface:
         w = (1.0 - a) * w0 + a * w1
         w_y = (1.0 - a) * wy0 + a * wy1
         w_yy = (1.0 - a) * wyy0 + a * wyy1
-        w_T = (w1 - w0) / (T1 - T0)
+        w_T = a_T * (w1 - w0)
 
         return (
             np.asarray(w, dtype=np.float64),

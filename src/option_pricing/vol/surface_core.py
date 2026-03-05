@@ -12,10 +12,10 @@ from typing import Literal, cast, overload
 
 import numpy as np
 
-from ..numerics.interpolation import FritschCarlson
+from ..numerics.interpolation import FritschCarlson, linear_interp_factory
 from ..numerics.regression import isotonic_regression
 from ..typing import ArrayLike, FloatArray, ScalarFn
-from .smile_grid import Smile, _is_monotone, _linear_interp_factory
+from .smile_grid import Smile, _is_monotone
 from .smile_interpolated import (
     LinearWInterpolatedSmileSlice,
     NoArbInterpolatedSmileSlice,
@@ -40,7 +40,9 @@ class VolSurface:
     forward: ScalarFn  # forward(T) -> float
     _theta_interp: Callable[[np.ndarray], np.ndarray] = field(init=False, repr=False)
 
-    def __post_init__(self) -> None:
+    def __post_init__(
+        self,
+    ) -> None:  # TODO: Check if is TimediffbleSurface => yes then skip
         expiries = np.asarray(self.expiries, dtype=np.float64)
         theta_raw = np.asarray(
             [float(np.asarray(s.w_at(0.0))) for s in self.smiles], dtype=np.float64
@@ -50,11 +52,20 @@ class VolSurface:
         # - raise, or
         # - fall back to linear, or
         # - monotone-regress it (not shown here).
-        if _is_monotone(theta) and expiries.size >= 3:
-            object.__setattr__(self, "_theta_interp", FritschCarlson(expiries, theta))
+        if expiries.size < 2:
+            theta0 = float(theta[0])
+
+            def theta_const(xq: np.ndarray) -> np.ndarray:
+                xq_in = np.asarray(xq, dtype=np.float64)
+                return np.full_like(xq_in, theta0, dtype=np.float64)
+
+            object.__setattr__(self, "_theta_interp", theta_const)
+        elif _is_monotone(theta) and expiries.size >= 3:
+            theta_interp, _ = FritschCarlson(expiries, theta)
+            object.__setattr__(self, "_theta_interp", theta_interp)
         else:
             object.__setattr__(
-                self, "_theta_interp", _linear_interp_factory(expiries, theta)
+                self, "_theta_interp", linear_interp_factory(expiries, theta)
             )
 
     @classmethod

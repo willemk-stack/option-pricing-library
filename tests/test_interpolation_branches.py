@@ -35,7 +35,7 @@ def test_fritsch_carlson_diff_shape_guard(monkeypatch):
 def test_fritsch_carlson_scalar_and_array_eval():
     pi = np.array([0.0, 1.0, 2.0])
     fn = np.array([0.0, 1.0, 2.0])
-    p = interpolation.FritschCarlson(pi, fn)
+    p, _ = interpolation.FritschCarlson(pi, fn)
 
     assert np.isclose(p(0.0), 0.0)
     arr = p(np.array([-1.0, 0.5, 3.0]))
