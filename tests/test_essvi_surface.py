@@ -6,7 +6,7 @@ import pytest
 from option_pricing.vol import LocalVolSurface
 from option_pricing.vol.ssvi import (
     ESSVIImpliedSurface,
-    ESSVIParamSurface,
+    ESSVITermStructures,
     EtaTermStructure,
     PsiTermStructure,
     ThetaTermStructure,
@@ -24,8 +24,8 @@ def _const_like(arg, value: float) -> np.ndarray:
     return np.full_like(arg_arr, float(value), dtype=np.float64)
 
 
-def _quadratic_params(*, eps: float = 1e-12) -> ESSVIParamSurface:
-    return ESSVIParamSurface(
+def _quadratic_params(*, eps: float = 1e-12) -> ESSVITermStructures:
+    return ESSVITermStructures(
         theta_term=ThetaTermStructure(
             value=lambda T: (
                 0.06
@@ -203,7 +203,7 @@ def test_analytic_essvi_derivatives_match_finite_differences() -> None:
 
 
 def test_short_maturity_and_small_theta_remain_finite() -> None:
-    params = ESSVIParamSurface(
+    params = ESSVITermStructures(
         theta_term=ThetaTermStructure(
             value=lambda T: 1e-8 + 1e-4 * np.asarray(T, dtype=np.float64),
             first_derivative=lambda T: _const_like(T, 1e-4),
@@ -229,7 +229,7 @@ def test_short_maturity_and_small_theta_remain_finite() -> None:
 
 
 def test_nearly_flat_smile_is_even_when_eta_is_zero() -> None:
-    params = ESSVIParamSurface(
+    params = ESSVITermStructures(
         theta_term=ThetaTermStructure.constant(0.04),
         psi_term=PsiTermStructure.constant(1e-4),
         eta_term=EtaTermStructure.constant(0.0),
@@ -246,7 +246,7 @@ def test_nearly_flat_smile_is_even_when_eta_is_zero() -> None:
 
 
 def test_validation_and_division_guards_raise_on_invalid_inputs() -> None:
-    invalid = ESSVIParamSurface(
+    invalid = ESSVITermStructures(
         theta_term=ThetaTermStructure.constant(0.04),
         psi_term=PsiTermStructure.constant(0.10),
         eta_term=EtaTermStructure.constant(0.10),
@@ -254,13 +254,13 @@ def test_validation_and_division_guards_raise_on_invalid_inputs() -> None:
     with pytest.raises(ValueError, match=r"\|eta\(T\)\| < psi\(T\)"):
         invalid.validate(1.0)
 
-    tiny_theta = ESSVIParamSurface(
+    tiny_theta = ESSVITermStructures(
         theta_term=ThetaTermStructure.constant(1e-15),
         psi_term=PsiTermStructure.constant(0.20),
         eta_term=EtaTermStructure.constant(0.01),
         eps=1e-12,
     )
-    with pytest.raises(ValueError, match="phi\(T\)"):
+    with pytest.raises(ValueError, match=r"phi\(T\)"):
         tiny_theta.phi(1.0)
 
     with pytest.raises(ValueError, match="T must be finite and > 0"):

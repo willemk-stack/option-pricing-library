@@ -44,7 +44,7 @@ from .smile_interpolated import (
 # eSSVI surfaces
 from .ssvi import (
     ESSVIImpliedSurface,
-    ESSVIParamSurface,
+    ESSVITermStructures,
     EtaTermStructure,
     PsiTermStructure,
     ThetaTermStructure,
@@ -77,7 +77,7 @@ __all__ = [
     "ThetaTermStructure",
     "PsiTermStructure",
     "EtaTermStructure",
-    "ESSVIParamSurface",
+    "ESSVITermStructures",
     "ESSVIImpliedSurface",
     # Local vol objects
     "LocalVolSurface",

@@ -16,7 +16,7 @@ from .math import (
 )
 from .models import (
     DEFAULT_NUMERICAL_TOL,
-    ESSVIParamSurface,
+    ESSVITermStructures,
     EtaTermStructure,
     MaturityTermStructure,
     PsiTermStructure,
@@ -30,7 +30,7 @@ __all__ = [
     "ThetaTermStructure",
     "PsiTermStructure",
     "EtaTermStructure",
-    "ESSVIParamSurface",
+    "ESSVITermStructures",
     "ESSVISmileSlice",
     "ESSVIImpliedSurface",
     "radicant_D",

@@ -148,7 +148,7 @@ class EtaTermStructure(MaturityTermStructure):
 
 
 @dataclass(frozen=True, slots=True)
-class ESSVIParamSurface:
+class ESSVITermStructures:
     """Primary eSSVI maturity parametrization in theta(T), psi(T), eta(T)."""
 
     theta_term: ThetaTermStructure

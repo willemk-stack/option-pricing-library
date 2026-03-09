@@ -3,7 +3,7 @@
 import numpy as np
 
 from ...typing import ArrayLike
-from .models import ESSVIParamSurface
+from .models import ESSVITermStructures
 
 
 def _as_float_array(value: ArrayLike) -> np.ndarray:
@@ -19,7 +19,7 @@ def _guard_nonzero(name: str, value: np.ndarray, eps: float) -> None:
 
 def _surface_state(
     y: ArrayLike,
-    params: ESSVIParamSurface,
+    params: ESSVITermStructures,
     T: ArrayLike,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     params.validate(T)
@@ -38,7 +38,7 @@ def _surface_state(
 
 def _surface_state_with_T_derivs(
     y: ArrayLike,
-    params: ESSVIParamSurface,
+    params: ESSVITermStructures,
     T: ArrayLike,
 ) -> tuple[np.ndarray, ...]:
     y_arr, theta, psi, eta = _surface_state(y=y, params=params, T=T)
@@ -56,7 +56,7 @@ def _surface_state_with_T_derivs(
 
 def _surface_state_with_second_T_derivs(
     y: ArrayLike,
-    params: ESSVIParamSurface,
+    params: ESSVITermStructures,
     T: ArrayLike,
 ) -> tuple[np.ndarray, ...]:
     y_arr, theta, psi, eta, dtheta, dpsi, deta = _surface_state_with_T_derivs(
@@ -100,14 +100,14 @@ def _radicant_from_state(
         return np.asarray(np.sqrt(q), dtype=np.float64)
 
 
-def radicant_D(y: ArrayLike, params: ESSVIParamSurface, T: ArrayLike) -> np.ndarray:
+def radicant_D(y: ArrayLike, params: ESSVITermStructures, T: ArrayLike) -> np.ndarray:
     y_arr, theta, psi, eta = _surface_state(y=y, params=params, T=T)
     return _radicant_from_state(y_arr, theta, psi, eta, eps=params.eps)
 
 
 def essvi_total_variance(
     y: ArrayLike,
-    params: ESSVIParamSurface,
+    params: ESSVITermStructures,
     T: ArrayLike,
 ) -> np.ndarray:
     y_arr, theta, psi, eta = _surface_state(y=y, params=params, T=T)
@@ -117,7 +117,7 @@ def essvi_total_variance(
 
 def essvi_total_variance_dk(
     y: ArrayLike,
-    params: ESSVIParamSurface,
+    params: ESSVITermStructures,
     T: ArrayLike,
 ) -> np.ndarray:
     y_arr, theta, psi, eta = _surface_state(y=y, params=params, T=T)
@@ -129,7 +129,7 @@ def essvi_total_variance_dk(
 
 def essvi_total_variance_dkk(
     y: ArrayLike,
-    params: ESSVIParamSurface,
+    params: ESSVITermStructures,
     T: ArrayLike,
 ) -> np.ndarray:
     y_arr, theta, psi, eta = _surface_state(y=y, params=params, T=T)
@@ -139,7 +139,7 @@ def essvi_total_variance_dkk(
     return np.asarray(0.5 * (psi * psi / D - (A * A) / (D * D * D)), dtype=np.float64)
 
 
-def radicant_dT(y: ArrayLike, params: ESSVIParamSurface, T: ArrayLike) -> np.ndarray:
+def radicant_dT(y: ArrayLike, params: ESSVITermStructures, T: ArrayLike) -> np.ndarray:
     y_arr, theta, psi, eta, dtheta, dpsi, deta = _surface_state_with_T_derivs(
         y=y,
         params=params,
@@ -157,7 +157,7 @@ def radicant_dT(y: ArrayLike, params: ESSVIParamSurface, T: ArrayLike) -> np.nda
 
 def essvi_total_variance_dT(
     y: ArrayLike,
-    params: ESSVIParamSurface,
+    params: ESSVITermStructures,
     T: ArrayLike,
 ) -> np.ndarray:
     y_arr, _, _, _, dtheta, _, deta = _surface_state_with_T_derivs(
@@ -171,7 +171,7 @@ def essvi_total_variance_dT(
 
 def essvi_total_variance_dk_dT(
     y: ArrayLike,
-    params: ESSVIParamSurface,
+    params: ESSVITermStructures,
     T: ArrayLike,
 ) -> np.ndarray:
     y_arr, theta, psi, eta, dtheta, dpsi, deta = _surface_state_with_T_derivs(
@@ -192,7 +192,7 @@ def essvi_total_variance_dk_dT(
     return np.asarray(0.5 * (deta + A_T / D - (A * B) / (D * D * D)), dtype=np.float64)
 
 
-def radicant_dTT(y: ArrayLike, params: ESSVIParamSurface, T: ArrayLike) -> np.ndarray:
+def radicant_dTT(y: ArrayLike, params: ESSVITermStructures, T: ArrayLike) -> np.ndarray:
     (
         y_arr,
         theta,
@@ -223,7 +223,7 @@ def radicant_dTT(y: ArrayLike, params: ESSVIParamSurface, T: ArrayLike) -> np.nd
 
 def essvi_total_variance_dTT(
     y: ArrayLike,
-    params: ESSVIParamSurface,
+    params: ESSVITermStructures,
     T: ArrayLike,
 ) -> np.ndarray:
     y_arr, _, _, _, _, _, _, d2theta, _, d2eta = _surface_state_with_second_T_derivs(
@@ -237,7 +237,7 @@ def essvi_total_variance_dTT(
 
 def essvi_w_and_derivs(
     y: ArrayLike,
-    params: ESSVIParamSurface,
+    params: ESSVITermStructures,
     T: ArrayLike,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     return (

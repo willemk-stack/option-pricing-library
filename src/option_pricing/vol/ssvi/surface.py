@@ -14,7 +14,7 @@ from .math import (
     essvi_total_variance_dTT,
     essvi_w_and_derivs,
 )
-from .models import ESSVIParamSurface
+from .models import ESSVITermStructures
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,7 +22,7 @@ class ESSVISmileSlice:
     """Single-expiry analytic eSSVI smile slice in total-variance space."""
 
     T: float
-    params: ESSVIParamSurface
+    params: ESSVITermStructures
     y_min: float = -2.5
     y_max: float = 2.5
 
@@ -50,7 +50,7 @@ class ESSVISmileSlice:
 class ESSVIImpliedSurface:
     """Continuous analytic implied surface driven by an eSSVI parameter surface."""
 
-    params: ESSVIParamSurface
+    params: ESSVITermStructures
     y_min: float = -2.5
     y_max: float = 2.5
 
