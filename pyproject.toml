@@ -98,7 +98,7 @@ warn_unused_configs = true
 disallow_untyped_defs = false
 
 [[tool.mypy.overrides]]
-module = ["matplotlib.*", "nbmake.*", "ipywidgets.*"]
+module = ["matplotlib.*", "nbmake.*", "ipywidgets.*", "IPython.*"]
 ignore_missing_imports = true
 
 

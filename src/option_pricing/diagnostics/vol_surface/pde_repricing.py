@@ -25,6 +25,7 @@ from option_pricing.pricers.pde_pricer import local_vol_price_pde_european
 from option_pricing.types import MarketData, OptionSpec, OptionType, PricingInputs
 from option_pricing.vol.implied_vol_scalar import implied_vol_bs
 from option_pricing.vol.local_vol_surface import LocalVolSurface
+from option_pricing.vol.surface_core import VolSurface
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,8 @@ def localvol_pde_single_option_convergence_sweep(
         raise ValueError("expiry must be > 0")
     if K <= 0.0:
         raise ValueError("strike must be > 0")
+
+    assert isinstance(lv.implied, VolSurface), "PDE repricing requires VolSurface"
 
     target_iv = float(
         np.asarray(lv.implied.iv(np.array([K], dtype=float), T)).reshape(-1)[0]
@@ -142,6 +145,8 @@ def localvol_pde_repricing_grid(
     """Run a grid repricing diagnostic for a local-vol PDE pricer."""
     if target != "black76_from_implied":
         raise ValueError(f"Unsupported target={target!r}")
+
+    assert isinstance(lv.implied, VolSurface), "PDE repricing requires VolSurface"
 
     Ks = _as_1d_float(strikes)
     Ts = _as_1d_float(expiries)

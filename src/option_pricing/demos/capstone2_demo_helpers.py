@@ -3,16 +3,46 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
-
-from IPython.display import (  # type: ignore[import-not-found]
-    Markdown,
-    clear_output,
-    display,
-)
+from importlib import import_module
+from typing import Any, cast
 
 from option_pricing.demos.capstone2 import run_capstone2
+
+DisplayFn = Callable[..., None]
+MarkdownFactory = Callable[[str], Any]
+
+
+def _fallback_display(*objects: Any) -> None:
+    for obj in objects:
+        print(obj)
+
+
+def _fallback_clear_output(*_args: Any, **_kwargs: Any) -> None:
+    return None
+
+
+def _fallback_markdown(text: str) -> str:
+    return text
+
+
+try:
+    _ipython_display = import_module("IPython.display")
+except Exception:
+    Markdown: MarkdownFactory = _fallback_markdown
+    clear_output: DisplayFn = _fallback_clear_output
+    display: DisplayFn = _fallback_display
+else:
+    Markdown = cast(
+        MarkdownFactory,
+        getattr(_ipython_display, "Markdown", _fallback_markdown),
+    )
+    clear_output = cast(
+        DisplayFn,
+        getattr(_ipython_display, "clear_output", _fallback_clear_output),
+    )
+    display = cast(DisplayFn, getattr(_ipython_display, "display", _fallback_display))
 
 
 @dataclass

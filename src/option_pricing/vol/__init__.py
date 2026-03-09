@@ -40,6 +40,15 @@ from .smile_interpolated import (
     LinearWInterpolatedSmileSlice,
     NoArbInterpolatedSmileSlice,
 )
+
+# eSSVI surfaces
+from .ssvi import (
+    ESSVIImpliedSurface,
+    ESSVIParamSurface,
+    EtaTermStructure,
+    PsiTermStructure,
+    ThetaTermStructure,
+)
 from .surface_core import VolSurface
 from .vol_types import DifferentiableSmileSlice, GridSmileSlice, SmileSlice
 
@@ -65,6 +74,11 @@ __all__ = [
     "SmileSlice",
     "DifferentiableSmileSlice",
     "GridSmileSlice",
+    "ThetaTermStructure",
+    "PsiTermStructure",
+    "EtaTermStructure",
+    "ESSVIParamSurface",
+    "ESSVIImpliedSurface",
     # Local vol objects
     "LocalVolSurface",
     "local_vol_from_call_grid",

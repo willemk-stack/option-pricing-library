@@ -55,7 +55,7 @@ class LocalVolSurface:
     "bands" in local vol.
     """
 
-    implied: VolSurface
+    implied: VolSurface | TimeDifferentiableImpliedSurface
     forward: ScalarFn
     discount: ScalarFn
     _theta_interp: Callable[[np.ndarray], np.ndarray] = field(init=False, repr=False)
@@ -79,6 +79,16 @@ class LocalVolSurface:
                 category=FutureWarning,  # or UserWarning
                 stacklevel=2,
             )
+
+        if isinstance(self.implied, TimeDifferentiableImpliedSurface):
+
+            def zero_interp(xq: np.ndarray) -> np.ndarray:
+                xq_in = np.asarray(xq, dtype=np.float64)
+                return np.zeros_like(xq_in, dtype=np.float64)
+
+            object.__setattr__(self, "_theta_interp", zero_interp)
+            object.__setattr__(self, "_theta_interp_derivative", zero_interp)
+            return
 
         # Define smooth a smooth 'a' for interpolation in w(y, T) = (1.0 - a) * w0 + a * w1,   a = a(T)
         expiries = np.asarray(self.implied.expiries, dtype=np.float64)
@@ -115,7 +125,7 @@ class LocalVolSurface:
     @classmethod
     def from_implied(
         cls,
-        implied: VolSurface,
+        implied: VolSurface | TimeDifferentiableImpliedSurface,
         *,
         forward: ScalarFn | None = None,
         discount: ScalarFn | None = None,
@@ -136,7 +146,14 @@ class LocalVolSurface:
         LocalVolSurface
             Local volatility surface derived from implied.
         """
-        fwd = implied.forward if forward is None else forward
+        if forward is None:
+            if not hasattr(implied, "forward"):
+                raise ValueError(
+                    "forward must be provided when the implied surface does not expose forward(T)."
+                )
+            fwd = implied.forward
+        else:
+            fwd = forward
         df = (lambda T: 1.0) if discount is None else discount
         return cls(implied=implied, forward=fwd, discount=df)
 
@@ -154,6 +171,7 @@ class LocalVolSurface:
 
     def _bracket(self, T: float) -> tuple[int, int, float]:
         """Return (i, j, a) such that T in [Ti,Tj], a in [0,1]."""
+        assert not isinstance(self.implied, TimeDifferentiableImpliedSurface)
         T = float(T)
         exp = np.asarray(self.implied.expiries, dtype=np.float64)
         if exp.size < 2:
