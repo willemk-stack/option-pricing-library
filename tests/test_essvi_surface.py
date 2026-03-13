@@ -3,6 +3,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from option_pricing.market.curves import PricingContext
+from option_pricing.models.black_scholes.bs import (
+    black76_call_price_vec,
+    black76_put_price_vec,
+)
+from option_pricing.types import MarketData, OptionType
 from option_pricing.vol import LocalVolSurface
 from option_pricing.vol.ssvi import (
     ESSVIImpliedSurface,
@@ -10,6 +16,7 @@ from option_pricing.vol.ssvi import (
     EtaTermStructure,
     PsiTermStructure,
     ThetaTermStructure,
+    essvi_implied_price,
     essvi_total_variance,
     essvi_total_variance_dk,
     essvi_total_variance_dk_dT,
@@ -226,6 +233,213 @@ def test_short_maturity_and_small_theta_remain_finite() -> None:
     assert np.all(np.isfinite(d2w))
     assert np.all(np.isfinite(dT))
     assert np.all(np.isfinite(params.phi(T)))
+
+
+def test_essvi_implied_price_matches_black76_for_scalar_term_inputs() -> None:
+    params = _quadratic_params()
+    T = 0.8
+    forward = 102.0
+    df = 0.97
+    strike = np.array([80.0, 95.0, 102.0, 115.0], dtype=np.float64)
+
+    y = np.log(strike / forward)
+    sigma = np.sqrt(essvi_total_variance(y=y, params=params, T=T) / T)
+
+    call_expected = black76_call_price_vec(
+        forward=forward,
+        strikes=strike,
+        sigma=sigma,
+        tau=T,
+        df=df,
+    )
+    put_expected = black76_put_price_vec(
+        forward=forward,
+        strikes=strike,
+        sigma=sigma,
+        tau=T,
+        df=df,
+    )
+
+    call_price = essvi_implied_price(
+        kind=OptionType.CALL,
+        strike=strike,
+        forward=forward,
+        df=df,
+        params=params,
+        T=T,
+    )
+    put_price = essvi_implied_price(
+        kind=OptionType.PUT,
+        strike=strike,
+        forward=forward,
+        df=df,
+        params=params,
+        T=T,
+    )
+
+    np.testing.assert_allclose(call_price, call_expected, rtol=0.0, atol=1e-12)
+    np.testing.assert_allclose(put_price, put_expected, rtol=0.0, atol=1e-12)
+
+
+def test_essvi_implied_price_broadcasts_across_surface_inputs() -> None:
+    params = _quadratic_params()
+    T = np.array([0.35, 0.9, 1.6], dtype=np.float64)
+    forward = np.array([101.0, 103.0, 106.0], dtype=np.float64)
+    df = np.array([0.995, 0.982, 0.955], dtype=np.float64)
+    strike = np.array([90.0, 100.0, 112.0], dtype=np.float64)
+
+    price = essvi_implied_price(
+        kind=OptionType.CALL,
+        strike=strike,
+        forward=forward,
+        df=df,
+        params=params,
+        T=T,
+    )
+
+    assert price.shape == strike.shape
+    assert np.all(np.isfinite(price))
+
+    parity_gap = price - essvi_implied_price(
+        kind=OptionType.PUT,
+        strike=strike,
+        forward=forward,
+        df=df,
+        params=params,
+        T=T,
+    )
+    np.testing.assert_allclose(parity_gap, df * (forward - strike), atol=1e-12)
+
+
+def test_essvi_implied_price_accepts_market_context() -> None:
+    params = _quadratic_params()
+    market = MarketData(spot=100.0, rate=0.02, dividend_yield=0.01)
+    T = np.array([0.25, 0.75, 1.25], dtype=np.float64)
+    strike = np.array([92.0, 100.0, 110.0], dtype=np.float64)
+
+    expected = essvi_implied_price(
+        kind=OptionType.CALL,
+        strike=strike,
+        forward=np.array([market.fwd(float(tau)) for tau in T], dtype=np.float64),
+        df=np.array([market.df(float(tau)) for tau in T], dtype=np.float64),
+        params=params,
+        T=T,
+    )
+    from_market = essvi_implied_price(
+        kind=OptionType.CALL,
+        strike=strike,
+        params=params,
+        T=T,
+        market=market,
+    )
+
+    np.testing.assert_allclose(from_market, expected, rtol=0.0, atol=1e-12)
+
+
+def test_essvi_implied_price_rejects_mixed_market_and_forward_inputs() -> None:
+    params = _quadratic_params()
+    market = MarketData(spot=100.0, rate=0.01, dividend_yield=0.0)
+
+    with pytest.raises(ValueError, match="either market or forward/df"):
+        essvi_implied_price(
+            kind=OptionType.CALL,
+            strike=100.0,
+            forward=101.0,
+            df=0.99,
+            params=params,
+            T=1.0,
+            market=market,
+        )
+
+
+def test_essvi_surface_price_methods_delegate_to_function() -> None:
+    params = _quadratic_params()
+    surface = ESSVIImpliedSurface(params=params)
+    smile = surface.slice(0.75)
+
+    strike = np.array([92.0, 100.0, 111.0], dtype=np.float64)
+    forward = 104.0
+    df = 0.98
+
+    np.testing.assert_allclose(
+        smile.price_at(
+            kind=OptionType.CALL,
+            strike=strike,
+            forward=forward,
+            df=df,
+        ),
+        essvi_implied_price(
+            kind=OptionType.CALL,
+            strike=strike,
+            forward=forward,
+            df=df,
+            params=params,
+            T=0.75,
+        ),
+        rtol=0.0,
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        surface.price(
+            kind=OptionType.PUT,
+            strike=strike,
+            forward=forward,
+            df=df,
+            T=0.75,
+        ),
+        essvi_implied_price(
+            kind=OptionType.PUT,
+            strike=strike,
+            forward=forward,
+            df=df,
+            params=params,
+            T=0.75,
+        ),
+        rtol=0.0,
+        atol=1e-12,
+    )
+
+
+def test_essvi_surface_price_methods_accept_market_context() -> None:
+    params = _quadratic_params()
+    surface = ESSVIImpliedSurface(params=params)
+    smile = surface.slice(0.75)
+    market = PricingContext(
+        spot=100.0,
+        discount=MarketData(spot=100.0, rate=0.02, dividend_yield=0.01)
+        .to_context()
+        .discount,
+        forward=MarketData(spot=100.0, rate=0.02, dividend_yield=0.01)
+        .to_context()
+        .forward,
+    )
+
+    strike = np.array([92.0, 100.0, 111.0], dtype=np.float64)
+
+    np.testing.assert_allclose(
+        smile.price_at(kind=OptionType.CALL, strike=strike, market=market),
+        essvi_implied_price(
+            kind=OptionType.CALL,
+            strike=strike,
+            params=params,
+            T=0.75,
+            market=market,
+        ),
+        rtol=0.0,
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        surface.price(kind=OptionType.PUT, strike=strike, T=0.75, market=market),
+        essvi_implied_price(
+            kind=OptionType.PUT,
+            strike=strike,
+            params=params,
+            T=0.75,
+            market=market,
+        ),
+        rtol=0.0,
+        atol=1e-12,
+    )
 
 
 def test_nearly_flat_smile_is_even_when_eta_is_zero() -> None:

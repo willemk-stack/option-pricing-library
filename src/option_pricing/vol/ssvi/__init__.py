@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .math import (
+    essvi_implied_price,
     essvi_total_variance,
     essvi_total_variance_dk,
     essvi_total_variance_dk_dT,
@@ -22,6 +23,7 @@ from .models import (
     PsiTermStructure,
     ThetaTermStructure,
 )
+from .objective import ESSVIPriceObjective, SSVIObjective
 from .surface import ESSVIImpliedSurface, ESSVISmileSlice
 
 __all__ = [
@@ -31,11 +33,14 @@ __all__ = [
     "PsiTermStructure",
     "EtaTermStructure",
     "ESSVITermStructures",
+    "ESSVIPriceObjective",
     "ESSVISmileSlice",
     "ESSVIImpliedSurface",
+    "SSVIObjective",
     "radicant_D",
     "radicant_dT",
     "radicant_dTT",
+    "essvi_implied_price",
     "essvi_total_variance",
     "essvi_total_variance_dk",
     "essvi_total_variance_dkk",
