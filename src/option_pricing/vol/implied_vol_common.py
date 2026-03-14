@@ -81,7 +81,8 @@ def _bounds(
     Parameters
     ----------
     spec : OptionSpec
-        Option specification (kind, strike, expiry).
+        Option specification (kind, strike, expiry), where ``expiry`` is the
+        absolute expiry in the same units as ``t``.
     market : MarketData
         Market observables (spot, rate, dividend yield).
     t : float
@@ -139,7 +140,8 @@ def _validate_bounds(
     price : float
         Market option price to validate.
     spec : OptionSpec
-        Option specification (kind, strike, expiry).
+        Option specification (kind, strike, expiry), where ``expiry`` is the
+        absolute expiry in the same units as ``t``.
     market : MarketData
         Market observables (spot, rate, dividend yield).
     t : float

@@ -24,7 +24,8 @@ class ImpliedVolResult:
     bounds : tuple[float, float]
         No-arbitrage bounds ``(lb, ub)`` for the option price.
     tau : float
-        Time to expiry used in inversion, ``tau = spec.expiry - t``.
+        Time to expiry used in inversion, ``tau = spec.expiry - t`` in the
+        legacy flat-input API where ``spec.expiry`` is the absolute expiry.
 
     Notes
     -----

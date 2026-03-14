@@ -32,5 +32,6 @@ They are organized from the simplest workflows to the more advanced volatility a
 - Rates and dividend yields are treated as continuously compounded.
 - Times are in years.
 - `PricingInputs` uses absolute expiry `T` together with valuation time `t`, so `tau = T - t`.
+- When `t=0`, `OptionSpec.expiry` and `tau` have the same numeric value in the flat-input workflow.
 - Instrument objects such as `VanillaOption` use `expiry` to mean time-to-expiry directly.
 - Strike, spot, and forward inputs must be positive where log-moneyness is used.

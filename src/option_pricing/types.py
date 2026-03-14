@@ -114,7 +114,12 @@ class OptionSpec:
     strike
         Strike price.
     expiry
-        Time to expiry (tau).
+        Expiry time in years.
+
+        In the legacy :class:`PricingInputs` workflow this is interpreted as the
+        absolute expiry ``T`` and the remaining time is computed as
+        ``tau = expiry - t``. With the default ``t=0``, this is numerically equal
+        to time-to-expiry.
     """
 
     kind: OptionType
@@ -153,6 +158,11 @@ class PricingInputs[SpecT: OptionSpec]:
         Implied volatility.
     t
         Current valuation time (default: 0.0).
+
+    Notes
+    -----
+    ``PricingInputs`` follows the legacy flat-input convention where
+    ``spec.expiry`` is the absolute expiry ``T`` and ``tau = T - t``.
     """
 
     spec: SpecT
@@ -177,12 +187,12 @@ class PricingInputs[SpecT: OptionSpec]:
 
     @property
     def T(self) -> float:
-        """Absolute expiry time from option spec."""
+        """Absolute expiry time ``T`` from the option spec."""
         return self.spec.expiry
 
     @property
     def tau(self) -> float:
-        """Time to expiry from current valuation time t."""
+        """Remaining time to expiry ``tau = T - t``."""
         tau = float(self.T - self.t)
         if tau <= 0.0:
             raise ValueError("Need expiry > t")

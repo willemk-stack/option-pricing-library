@@ -9,7 +9,9 @@ from ...numerics.pde import LinearParabolicPDE1D
 from ...numerics.pde.boundary import RobinBC, RobinBCSide
 from ...numerics.pde.domain import Coord
 from ...types import DigitalSpec, OptionType, PricingInputs
+from ...typing import ArrayLike, FloatArray
 from ...vol.local_vol_surface import LocalVolSurface
+from .local_vol_time import solver_tau_to_surface_expiry
 from .pde_wiring import PDEWiring1D
 
 
@@ -49,6 +51,8 @@ def local_vol_pde_wiring(
     sigma2_floor: float = 1e-14,
     sigma2_cap: float | None = None,
 ) -> PDEWiring1D:
+    """Build the digital local-vol PDE with an explicit solver-time adapter."""
+
     coord = Coord(coord)
 
     r = float(p.market.rate)
@@ -65,9 +69,15 @@ def local_vol_pde_wiring(
 
     bc = _bc_constr_digital(kind=kind, r=r, Q=Q)
 
+    def local_var(S: ArrayLike, tau: float) -> FloatArray:
+        return lv.local_var(
+            S,
+            solver_tau_to_surface_expiry(solver_tau=float(tau)),
+        )
+
     coeffs = local_vol_pde_coeffs(
         coord=coord,
-        local_var=lv.local_var,
+        local_var=local_var,
         r=r,
         q=q,
         tau_floor=tau_floor,

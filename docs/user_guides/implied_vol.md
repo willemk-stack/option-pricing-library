@@ -108,4 +108,5 @@ That makes it easier to log iteration counts, final residuals, and the active pr
 
 - This guide is for Black-Scholes implied volatility only.
 - The option spec is still given as `OptionSpec(kind, strike, expiry)` with absolute expiry `T` and valuation time `t`.
+- In the common `t=0` case, that means the `expiry` number is also the same as `tau` numerically.
 - For building whole smiles and surfaces from implied vols, see [Volatility surface](vol_surface.md) and [SVI](svi.md).

@@ -13,6 +13,7 @@ def main() -> None:
     )
 
     market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.0)
+    # In PricingInputs-based workflows, expiry is the absolute expiry T.
     spec = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)
 
     cfg = ImpliedVolConfig(

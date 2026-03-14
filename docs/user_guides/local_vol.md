@@ -168,6 +168,7 @@ lv_bad = LocalVolSurface.from_implied(surface_grid)
 ## Notes
 
 - The cleanest workflow is usually: market quotes -> `VolSurface.from_svi(...)` -> `LocalVolSurface.from_implied(...)` -> `local_vol_price_pde_european(...)`.
+- The PDE solver advances in time-to-expiry `tau`, and `LocalVolSurface.local_var(K, T)` uses the same expiry variable in this codebase. The PDE wiring therefore passes solver time through directly instead of reversing it as `T_total - tau`.
 - For a more time-consistent implied surface with explicit `w_T`, use the eSSVI workflow in [eSSVI](essvi.md) and feed `ESSVISmoothedSurface` into `LocalVolSurface.from_implied(...)`.
 - For the implied-surface step, see [Volatility surface](vol_surface.md) and [SVI](svi.md).
 - For PDE controls, see [PDE pricing](pde_pricing.md).

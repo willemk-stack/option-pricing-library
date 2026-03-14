@@ -31,6 +31,7 @@ print(market.fwd(1.0))
 Important time convention:
 
 - `MarketData.df(T, t=...)` and `MarketData.fwd(T, t=...)` work with absolute times
+- `PricingInputs` interprets `OptionSpec.expiry` as the absolute expiry `T`
 - `PricingInputs.tau` converts from `(t, T)` to time-to-expiry automatically
 
 ## Convert flat inputs into curves-first inputs

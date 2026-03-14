@@ -34,7 +34,7 @@ inst = VanillaOption(
 Important difference from `PricingInputs`:
 
 - `VanillaOption.expiry` means **time-to-expiry**
-- `OptionSpec.expiry` in `PricingInputs` is usually an absolute expiry `T`
+- `OptionSpec.expiry` in the legacy `PricingInputs` API means the absolute expiry `T`
 
 ## Price the same instrument with multiple pricers
 
