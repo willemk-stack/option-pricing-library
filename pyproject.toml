@@ -50,6 +50,12 @@ fix = true
 select = ["E", "F", "I", "B", "UP"]
 ignore = ["E501"]                   # remove for line-length checks
 
+[tool.ruff.lint.per-file-ignores]
+"demos/06_surface_noarb_svi_repair.ipynb" = ["E402"]
+"demos/07_essvi_smooth_surface_for_dupire.ipynb" = ["E402"]
+"demos/08_localvol_pde_repricing.ipynb" = ["E402"]
+"demos/09_surface_to_localvol_pde_integration.ipynb" = ["E402"]
+
 
 [tool.ruff.lint.isort]
 known-first-party = ["option_pricing"]
