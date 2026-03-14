@@ -22,6 +22,7 @@ They are organized from the simplest workflows to the more advanced volatility a
 
 - [Implied volatility](implied_vol.md) - invert Black-Scholes prices to implied vol.
 - [Volatility surface](vol_surface.md) - build, query, and sanity-check grid-based or SVI-based surfaces.
+- [eSSVI](essvi.md) - build analytic eSSVI surfaces, calibrate nodes, and project a smooth Dupire-ready surface.
 - [SVI](svi.md) - calibrate analytic SVI slices and inspect fit diagnostics.
 - [SVI repair](svi_repair.md) - detect and repair butterfly-arbitrage issues in a slice.
 - [Local volatility](local_vol.md) - derive a local-vol surface from a differentiable implied surface and use it in PDE pricing.

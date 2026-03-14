@@ -4,10 +4,12 @@ This guide shows how to derive a local-vol surface from a differentiable implied
 
 ## Important limitation
 
-`LocalVolSurface` is currently marked as a **demo-grade** bridge from an implied surface to a local-vol surface.
-In particular, it uses piecewise-linear interpolation in total variance across expiry, so the time derivative `w_T` is only piecewise constant.
+`LocalVolSurface` supports two different implied-surface paths.
 
-That means the workflow is useful for experiments and demos, but you should expect it to evolve in future versions.
+For a generic expiry stack such as `VolSurface.from_svi(...)`, it is still a **demo-grade** bridge from implied vol to local vol.
+In that path, the time derivative `w_T` comes from piecewise-linear interpolation in total variance across expiry, so `w_T` is only piecewise constant.
+
+For a continuous time-differentiable implied surface such as `ESSVISmoothedSurface`, the object can consume analytic `w`, `w_y`, `w_yy`, and `w_T` directly. That is the preferred route for Dupire-oriented work.
 
 ## Why SVI is the usual starting point
 
@@ -19,6 +21,8 @@ That means the workflow is useful for experiments and demos, but you should expe
 
 A plain grid surface built with `VolSurface.from_grid(...)` does **not** provide those derivatives.
 An SVI-based surface does.
+
+That said, SVI is only one route. If you need a smoother time-consistent surface, the eSSVI workflow is the stronger choice.
 
 ## Build an implied SVI surface first
 
@@ -79,6 +83,27 @@ with warnings.catch_warnings():
         discount=ctx.df,
     )
 ```
+
+## Preferred Dupire path: smooth eSSVI projection
+
+If you have calibrated eSSVI nodes, project them first and pass the resulting `ESSVISmoothedSurface` into `LocalVolSurface`:
+
+```python
+from option_pricing.vol import LocalVolSurface, project_essvi_nodes
+
+projection = project_essvi_nodes(fit.nodes)
+if projection.surface is None:
+    raise ValueError(projection.diag.message)
+
+ctx = market.to_context()
+localvol = LocalVolSurface.from_implied(
+    projection.surface,
+    forward=ctx.fwd,
+    discount=ctx.df,
+)
+```
+
+That path avoids the piecewise-constant-in-time `w_T` approximation used by the generic slice-stack interpolation route.
 
 ## Query local volatility
 
@@ -143,5 +168,6 @@ lv_bad = LocalVolSurface.from_implied(surface_grid)
 ## Notes
 
 - The cleanest workflow is usually: market quotes -> `VolSurface.from_svi(...)` -> `LocalVolSurface.from_implied(...)` -> `local_vol_price_pde_european(...)`.
+- For a more time-consistent implied surface with explicit `w_T`, use the eSSVI workflow in [eSSVI](essvi.md) and feed `ESSVISmoothedSurface` into `LocalVolSurface.from_implied(...)`.
 - For the implied-surface step, see [Volatility surface](vol_surface.md) and [SVI](svi.md).
 - For PDE controls, see [PDE pricing](pde_pricing.md).

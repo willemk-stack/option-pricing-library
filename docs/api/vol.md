@@ -23,7 +23,34 @@
       members:
         - LocalVolSurface
 
+## eSSVI toolbox
+
+The main eSSVI entrypoints are re-exported from `option_pricing.vol` and grouped under `option_pricing.vol.ssvi`.
+
+::: option_pricing.vol.ssvi
+    options:
+      members:
+        - ThetaTermStructure
+        - PsiTermStructure
+        - EtaTermStructure
+        - ESSVITermStructures
+        - ESSVINodeSet
+        - ESSVIImpliedSurface
+        - ESSVINodalSurface
+        - ESSVISmoothedSurface
+        - ESSVICalibrationConfig
+        - ESSVIFitResult
+        - ESSVIProjectionConfig
+        - ESSVIProjectionResult
+        - build_theta_term_from_quotes
+        - calibrate_essvi
+        - project_essvi_nodes
+        - evaluate_essvi_constraints
+        - validate_essvi_nodes
+        - validate_essvi_continuous
+
 ## Notes
 
 - Implied-vol inversion configuration lives in `ImpliedVolConfig` on the [Public API](public.md) page.
-- `LocalVolSurface` is currently a demo-grade bridge from an implied surface to a local-vol surface.
+- The eSSVI objects are available from `option_pricing.vol`, not from the package root `option_pricing`.
+- `LocalVolSurface` remains demo-grade for generic slice-stack interpolation, but it can also consume a time-differentiable surface such as `ESSVISmoothedSurface`.

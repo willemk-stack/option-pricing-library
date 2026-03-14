@@ -27,7 +27,7 @@ This project is designed as a **typed, test-backed quant library** rather than a
 Core strengths:
 
 - **Multiple pricing engines** for vanilla options: Black–Scholes, Monte Carlo, and CRR binomial trees
-- **Volatility tooling**: implied-vol inversion, smiles, surfaces, no-arbitrage checks, SVI fitting and repair
+- **Volatility tooling**: implied-vol inversion, smiles, surfaces, no-arbitrage checks, SVI fitting and repair, eSSVI calibration / projection
 - **Advanced numerics**: local-vol extraction, diagnostics, and finite-difference PDE pricing
 - **Validation-first approach**: analytic baselines, convergence checks, stress tests, and CI-executed notebooks
 - **Layered API design**: simple flat-input workflows, instrument-based workflows, and curves-first pricing contexts
@@ -41,14 +41,14 @@ API Reference: [📘 /api](https://willemk-stack.github.io/option-pricing-librar
 
 ### Flagship capstones
 
-#### Capstone 1 — Vol surfaces, no-arbitrage diagnostics, and SVI
+#### Capstone 1 — Vol surfaces, no-arbitrage diagnostics, SVI, and eSSVI
 
-**quotes / smiles → surface construction → arbitrage diagnostics → SVI fitting / repair**
+**quotes / smiles → surface construction → arbitrage diagnostics → SVI fitting / repair → eSSVI calibration / projection**
 
 Start here:
 
-- **User guides:** `docs/user_guides/vol_surface.md`, `docs/user_guides/svi.md`, `docs/user_guides/svi_repair.md`
-- **Representative tests:** `tests/test_surface_svi_and_localvol.py`, `tests/test_svi.py`, `tests/test_svi_repair.py`, `tests/test_arbitrage.py`
+- **User guides:** `docs/user_guides/vol_surface.md`, `docs/user_guides/essvi.md`, `docs/user_guides/svi.md`, `docs/user_guides/svi_repair.md`
+- **Representative tests:** `tests/test_surface_svi_and_localvol.py`, `tests/test_svi.py`, `tests/test_svi_repair.py`, `tests/test_arbitrage.py`, `tests/test_essvi_calibrate.py`, `tests/test_essvi_surface.py`
 
 #### Capstone 2 — Local Vol + PDE Pricing + Diagnostics
 
@@ -298,6 +298,7 @@ print(f"f(root)={rr.f_at_root:.3e}  bracket={rr.bracket}  bounds={res.bounds}")
 - **Smile** and **VolSurface** objects with interpolation support
 - **Static no-arbitrage diagnostics** for surfaces
 - **SVI fitting and repair** workflows
+- **eSSVI calibration, validation, and smooth-surface projection** workflows
 - **Local-vol extraction and diagnostics** from surfaces
 - **Convergence and model-validation utilities**
 
@@ -311,7 +312,7 @@ print(f"f(root)={rr.f_at_root:.3e}  bracket={rr.bracket}  bounds={res.bounds}")
 | **`market/`** | Spot, rates, dividends, curves, and pricing contexts |
 | **`pricers/`** | Public pricing entry points for analytic, tree, Monte Carlo, and PDE workflows |
 | **`models/`** | Model-specific internals such as Black–Scholes and local-vol components |
-| **`vol/`** | Implied vol, smiles, surfaces, SVI, and local-vol extraction |
+| **`vol/`** | Implied vol, smiles, surfaces, SVI/eSSVI tooling, and local-vol extraction |
 | **`numerics/`** | Root-finding, finite differences, tridiagonal solvers, and PDE building blocks |
 | **`diagnostics/`** | Arbitrage checks, convergence studies, repricing, and validation helpers |
 | **`viz/`** | Plotting helpers for surfaces, diagnostics, and reports |

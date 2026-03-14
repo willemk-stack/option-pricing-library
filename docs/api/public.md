@@ -60,3 +60,11 @@ These names are re-exported from the package root:
 - `Smile`
 
 See the dedicated [Volatility](vol.md) page for the canonical class documentation.
+
+The broader volatility namespace `option_pricing.vol` also exposes the eSSVI toolbox, including:
+
+- `ESSVIImpliedSurface`
+- `ESSVINodalSurface`
+- `ESSVISmoothedSurface`
+- `calibrate_essvi`
+- `project_essvi_nodes`
