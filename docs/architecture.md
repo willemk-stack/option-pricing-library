@@ -62,7 +62,15 @@ Dependency direction (audit)
   <figcaption>Dependencies flow downward and right; diagnostics sit below the pricing stack.</figcaption>
 </figure>
 
-## Flagship end-to-end workflow (surface -> local vol -> PDE -> validation)
+## Flagship demo suite (surface -> eSSVI bridge -> local vol -> PDE)
+
+The repo now presents this workflow as a **split demo suite** rather than one hero notebook:
+
+- `demos/06_surface_noarb_svi_repair.ipynb` for static-surface engineering
+- `demos/07_essvi_smooth_surface_for_dupire.ipynb` for the smooth Dupire bridge
+- `demos/08_localvol_pde_repricing.ipynb` for local-vol/PDE numerics
+- `demos/09_surface_to_localvol_pde_integration.ipynb` for the integration proof
+- `demos/05_pde_pricing_and_diagnostics.ipynb` as the PDE-only appendix
 
 1) Quotes -> smiles -> surface
   - Build surface from quotes: `VolSurface.from_grid(rows, forward=...)`
@@ -102,7 +110,7 @@ Dependency direction (audit)
 <figure markdown class="diagram" style="--diagram-max-width: 1100px">
   ![Surface to local-vol to PDE workflow](assets/diagrams/workflow_surface_to_pde.light.svg){ .diagram-img .diagram-light }
   ![Surface to local-vol to PDE workflow](assets/diagrams/workflow_surface_to_pde.dark.svg){ .diagram-img .diagram-dark }
-  <figcaption>Two surface construction paths converge into local-vol, then feed PDE pricing and repricing.</figcaption>
+<figcaption>SVI owns the static-surface story; the smoothed eSSVI path is the preferred Dupire handoff into local-vol and PDE repricing.</figcaption>
 </figure>
 
 ## Key domain objects (definitions)
@@ -152,7 +160,12 @@ Strongest tests (8 to 12)
 Showcase notebooks executed in CI
 
 - CI runs pytest -q demos --nbmake
-- Showcase demos: demos/05_pde_pricing_and_diagnostics.ipynb, demos/06_vol_surfaces_localvol_pde.ipynb
+- Showcase demos:
+  - `demos/05_pde_pricing_and_diagnostics.ipynb`
+  - `demos/06_surface_noarb_svi_repair.ipynb`
+  - `demos/07_essvi_smooth_surface_for_dupire.ipynb`
+  - `demos/08_localvol_pde_repricing.ipynb`
+  - `demos/09_surface_to_localvol_pde_integration.ipynb`
 
 <figure markdown class="diagram">
   ![Validation stack](assets/diagrams/validation_stack.light.svg){ .diagram-img .diagram-light }

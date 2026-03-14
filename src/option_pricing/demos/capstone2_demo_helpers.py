@@ -1,4 +1,4 @@
-"""Notebook helpers for the Capstone 2 demo dashboard."""
+"""Notebook helpers for the integration demo dashboard."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ else:
 
 @dataclass
 class DemoDashboard:
-    """Stateful dashboard helper for the Capstone 2 notebook."""
+    """Stateful dashboard helper for the integration demo notebook."""
 
     _demo_profile: str = "quick"
     _seed: int = 7
@@ -106,7 +106,6 @@ class DemoDashboard:
                 "RUN_LOCALVOL_CONVERGENCE_SWEEP": self._show_advanced,
                 "RUN_LOCALVOL_REPRICING": True,
                 "RUN_EXPLICIT_SVI_REPAIR_DEMO": True,
-                "RUN_GJ_EXAMPLE51_SANITY_CHECK": self._show_advanced,
             },
         }
 
@@ -312,3 +311,6 @@ class DemoDashboard:
         display(run_out)
 
         apply_state(quiet=False)
+
+
+IntegrationDemoDashboard = DemoDashboard

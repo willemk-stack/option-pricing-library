@@ -25,7 +25,8 @@ from option_pricing.pricers.pde_pricer import local_vol_price_pde_european
 from option_pricing.types import MarketData, OptionSpec, OptionType, PricingInputs
 from option_pricing.vol.implied_vol_scalar import implied_vol_bs
 from option_pricing.vol.local_vol_surface import LocalVolSurface
-from option_pricing.vol.surface_core import VolSurface
+
+from .pricing import surface_iv_from_strikes
 
 
 @dataclass(frozen=True)
@@ -74,10 +75,13 @@ def localvol_pde_single_option_convergence_sweep(
     if K <= 0.0:
         raise ValueError("strike must be > 0")
 
-    assert isinstance(lv.implied, VolSurface), "PDE repricing requires VolSurface"
-
     target_iv = float(
-        np.asarray(lv.implied.iv(np.array([K], dtype=float), T)).reshape(-1)[0]
+        surface_iv_from_strikes(
+            lv.implied,
+            strikes=np.array([K], dtype=float),
+            T=T,
+            forward=lv.forward,
+        ).reshape(-1)[0]
     )
     target_price = float(
         bs_price_from_ctx(
@@ -146,8 +150,6 @@ def localvol_pde_repricing_grid(
     if target != "black76_from_implied":
         raise ValueError(f"Unsupported target={target!r}")
 
-    assert isinstance(lv.implied, VolSurface), "PDE repricing requires VolSurface"
-
     Ks = _as_1d_float(strikes)
     Ts = _as_1d_float(expiries)
     if np.any(Ks <= 0.0):
@@ -168,7 +170,13 @@ def localvol_pde_repricing_grid(
     t_total0 = perf_counter()
 
     for T in Ts:
-        target_iv_vec = np.asarray(lv.implied.iv(Ks, float(T)), dtype=float).reshape(-1)
+        F = float(lv.forward(float(T)))
+        target_iv_vec = surface_iv_from_strikes(
+            lv.implied,
+            strikes=Ks,
+            T=float(T),
+            forward=lv.forward,
+        ).reshape(-1)
         if target_iv_vec.shape != Ks.shape:
             raise ValueError("lv.implied.iv returned unexpected shape")
 
@@ -233,6 +241,8 @@ def localvol_pde_repricing_grid(
                 {
                     "T": float(T),
                     "K": float(K),
+                    "F": float(F),
+                    "y": float(np.log(K / F)),
                     "target_iv": float(target_iv),
                     "target_price": float(target_price),
                     "pde_price": float(pde_price),

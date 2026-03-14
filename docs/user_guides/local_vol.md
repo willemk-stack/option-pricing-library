@@ -11,7 +11,7 @@ In that path, the time derivative `w_T` comes from piecewise-linear interpolatio
 
 For a continuous time-differentiable implied surface such as `ESSVISmoothedSurface`, the object can consume analytic `w`, `w_y`, `w_yy`, and `w_T` directly. That is the preferred route for Dupire-oriented work.
 
-## Why SVI is the usual starting point
+## Why SVI is a common starting point
 
 `LocalVolSurface` needs each expiry slice to provide:
 
@@ -22,7 +22,7 @@ For a continuous time-differentiable implied surface such as `ESSVISmoothedSurfa
 A plain grid surface built with `VolSurface.from_grid(...)` does **not** provide those derivatives.
 An SVI-based surface does.
 
-That said, SVI is only one route. If you need a smoother time-consistent surface, the eSSVI workflow is the stronger choice.
+That said, SVI is only one route. If you need a smoother time-consistent surface, the eSSVI workflow is the stronger choice and is now the preferred Dupire-oriented path in the docs and flagship demos.
 
 ## Build an implied SVI surface first
 
@@ -167,7 +167,8 @@ lv_bad = LocalVolSurface.from_implied(surface_grid)
 
 ## Notes
 
-- The cleanest workflow is usually: market quotes -> `VolSurface.from_svi(...)` -> `LocalVolSurface.from_implied(...)` -> `local_vol_price_pde_european(...)`.
+- The fastest demo-grade workflow is usually: market quotes -> `VolSurface.from_svi(...)` -> `LocalVolSurface.from_implied(...)` -> `local_vol_price_pde_european(...)`.
+- The preferred Dupire-oriented workflow is: market prices -> `calibrate_essvi(...)` -> `project_essvi_nodes(...)` -> `ESSVISmoothedSurface` -> `LocalVolSurface.from_implied(...)` -> `local_vol_price_pde_european(...)`.
 - The PDE solver advances in time-to-expiry `tau`, and `LocalVolSurface.local_var(K, T)` uses the same expiry variable in this codebase. The PDE wiring therefore passes solver time through directly instead of reversing it as `T_total - tau`.
 - For a more time-consistent implied surface with explicit `w_T`, use the eSSVI workflow in [eSSVI](essvi.md) and feed `ESSVISmoothedSurface` into `LocalVolSurface.from_implied(...)`.
 - For the implied-surface step, see [Volatility surface](vol_surface.md) and [SVI](svi.md).

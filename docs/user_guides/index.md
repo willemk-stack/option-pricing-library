@@ -27,6 +27,13 @@ They are organized from the simplest workflows to the more advanced volatility a
 - [SVI repair](svi_repair.md) - detect and repair butterfly-arbitrage issues in a slice.
 - [Local volatility](local_vol.md) - derive a local-vol surface from a differentiable implied surface and use it in PDE pricing.
 
+## Flagship demos
+
+- [Decision guide](flagship_capstone2_page.md) - choose the right flagship notebook for surface engineering, the eSSVI bridge, or local-vol/PDE numerics.
+- [Surface flagship](flagship_surface.md) - the SVI/no-arbitrage/repair story for static-surface engineering.
+- [eSSVI bridge](flagship_essvi_bridge.md) - the smooth term-structure handoff into Dupire-ready local vol.
+- [Local vol + PDE flagship](flagship_localvol_pde.md) - the numerics-heavy local-vol diagnostics, PDE repricing, and convergence story.
+
 ## Conventions used throughout
 
 - Rates and dividend yields are treated as continuously compounded.

@@ -12,6 +12,27 @@ def _default_black76() -> Black76Module:
     return _bs
 
 
+def surface_iv_from_strikes(
+    surface,
+    *,
+    strikes,
+    T,
+    forward,
+):
+    from option_pricing.vol.surface_core import VolSurface
+
+    K = np.asarray(strikes, dtype=float)
+    tau = float(T)
+    if isinstance(surface, VolSurface):
+        return np.asarray(surface.iv(K, tau), dtype=float)
+
+    F = float(forward(tau))
+    if F <= 0.0:
+        raise ValueError(f"forward(T) must be > 0, got {F} at T={tau}")
+    y = np.log(K / F)
+    return np.asarray(surface.iv(y, tau), dtype=float)
+
+
 def build_surface_from_iv_function(
     *,
     expiries,
@@ -84,7 +105,12 @@ def call_prices_from_surface_on_strikes(
     for i, T in enumerate(Ts):
         F = float(forward(T))
         dfT = float(df(T))
-        iv[i, :] = np.asarray(surface.iv(K, float(T)), dtype=float)
+        iv[i, :] = surface_iv_from_strikes(
+            surface,
+            strikes=K,
+            T=float(T),
+            forward=forward,
+        )
         calls[i, :] = bs_model.black76_call_price_vec(
             forward=F, strikes=K, sigma=iv[i, :], tau=T, df=dfT
         )

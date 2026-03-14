@@ -39,51 +39,43 @@ API Reference: [📘 /api](https://willemk-stack.github.io/option-pricing-librar
 
 ## Best places to start
 
-### Flagship capstones
+### Core demos
 
-#### Capstone 1 — Vol surfaces, no-arbitrage diagnostics, SVI, and eSSVI
+The repo now presents its strongest volatility and numerics signals through a **split demo suite**:
 
-**quotes / smiles → surface construction → arbitrage diagnostics → SVI fitting / repair → eSSVI calibration / projection**
+- **Surface diagnostics:** `demos/06_surface_noarb_svi_repair.ipynb`
+  - best for static-surface engineering, no-arbitrage diagnostics, SVI fitting, repair, and interpolation judgment
+- **eSSVI bridge:** `demos/07_essvi_smooth_surface_for_dupire.ipynb`
+  - best for the smooth Dupire-ready term-structure handoff and analytic `w_T`
+- **Local vol + PDE diagnostics:** `demos/08_localvol_pde_repricing.ipynb`
+  - best for diagnostics-first local vol, PDE repricing, and convergence
+- **Integration proof:** `demos/09_surface_to_localvol_pde_integration.ipynb`
+  - keeps the full workflow connected without making one notebook carry every story
+- **PDE appendix:** `demos/05_pde_pricing_and_diagnostics.ipynb`
+  - isolates solver credibility before talking about surfaces
 
-Start here:
+How to position them publicly:
 
-- **User guides:** `docs/user_guides/vol_surface.md`, `docs/user_guides/essvi.md`, `docs/user_guides/svi.md`, `docs/user_guides/svi_repair.md`
-- **Representative tests:** `tests/test_surface_svi_and_localvol.py`, `tests/test_svi.py`, `tests/test_svi_repair.py`, `tests/test_arbitrage.py`, `tests/test_essvi_calibrate.py`, `tests/test_essvi_surface.py`
-
-#### Capstone 2 — Local Vol + PDE Pricing + Diagnostics
-
-**surface quotes → implied surface → local-vol diagnostics → PDE pricing → convergence / repricing checks**
+- **SVI** = static-surface engineering
+- **eSSVI** = smooth term structure and preferred Dupire handoff
+- **Local vol + PDE** = numerical engineering and validation
 
 ![Capstone 2 poster LV PDE pricing](./docs/assets/readme/poster_capstone_wide.png)
 
-Why it stands out:
-
-- **Local volatility is treated as a numerical engineering problem**, not just a formula.
-- **Diagnostics are first-class outputs**: invalid masks, denominator failures, unstable regions.
-- **The PDE stack is validated**, not just implemented: analytic baselines, convergence checks, and discontinuous-payoff remedies.
-- **The workflow is end-to-end**: surface construction, local-vol extraction, pricing, and validation are connected in one pipeline.
-
-![Workflow diagram](.docs/assets/diagrams/workflow_surface_to_pde.dark.svg)
 Validated by:
 
 - constant-vol recovery tests for Dupire local volatility
 - vanilla PDE checks against Black–Scholes baselines
 - digital-option convergence and remedy tests
 - QuantLib comparison tests for local-vol digital pricing
+- explicit seam / `w_T` diagnostics explaining the slice-stack path's time-boundary artifacts
 
 Start here:
 
-- **Showcase demo:** `demos/06_vol_surfaces_localvol_pde.ipynb`
-- **PDE-focused demo:** `demos/05_pde_pricing_and_diagnostics.ipynb`
-- **User guides:** `docs/user_guides/local_vol.md`, `docs/user_guides/pde_pricing.md`
-- **Representative tests:**
-  - `tests/test_dupire_constant_vol.py`
-  - `tests/test_localvol_pde_vanilla_vs_bs.py`
-  - `tests/test_localvol_digital_vs_quantlib.py`
-  - `tests/test_localvol_digital_convergence_sweep.py`
-  - `tests/test_convergence_remedies_digital.py`
-
-**What this demonstrates:** end-to-end surface construction, local-vol extraction, PDE pricing, and numerical validation in a single workflow.
+- **Decision guide:** `docs/user_guides/flagship_capstone2_page.md`
+- **Surface docs:** `docs/user_guides/flagship_surface.md`
+- **eSSVI bridge docs:** `docs/user_guides/flagship_essvi_bridge.md`
+- **Local vol + PDE docs:** `docs/user_guides/flagship_localvol_pde.md`
 
 ---
 
@@ -330,7 +322,14 @@ print(f"f(root)={rr.f_at_root:.3e}  bracket={rr.bracket}  bounds={res.bounds}")
 | `demos/03_binomial_convergence.ipynb` | CRR tree convergence |
 | `demos/04_implied_volatility.ipynb` | Implied-volatility inversion |
 | `demos/05_pde_pricing_and_diagnostics.ipynb` | PDE pricing, stability, and convergence diagnostics |
-| `demos/06_vol_surfaces_localvol_pde.ipynb` | End-to-end surface → local vol → PDE showcase |
+| `demos/06_surface_noarb_svi_repair.ipynb` | Surface diagnostics, SVI calibration/repair, and interpolation choices |
+| `demos/07_essvi_smooth_surface_for_dupire.ipynb` | eSSVI calibration, smooth projection, and Dupire-oriented handoff |
+| `demos/08_localvol_pde_repricing.ipynb` | Local-vol diagnostics, PDE repricing, and convergence |
+| `demos/09_surface_to_localvol_pde_integration.ipynb` | Compact end-to-end integration: surface -> eSSVI bridge -> local vol -> PDE |
+
+---
+
+Suggested portfolio reading order: `06`, `08`, `07`, with `09` as a compact integration appendix.
 
 ---
 
