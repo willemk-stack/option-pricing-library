@@ -15,7 +15,6 @@ from .math import (
     essvi_total_variance_dk_dT,
     essvi_total_variance_dkk,
     essvi_total_variance_dT,
-    essvi_total_variance_dTT,
     essvi_w_and_derivs,
 )
 from .models import ESSVITermStructures
@@ -144,9 +143,6 @@ class ESSVIImpliedSurface:
 
     def d2w_dy_dT(self, y: ArrayLike, T: float) -> np.ndarray:
         return essvi_total_variance_dk_dT(y=y, params=self.params, T=T)
-
-    def d2w_dT2(self, y: ArrayLike, T: float) -> np.ndarray:
-        return essvi_total_variance_dTT(y=y, params=self.params, T=T)
 
     @overload
     def price(

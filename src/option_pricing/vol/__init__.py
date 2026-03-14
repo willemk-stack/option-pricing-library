@@ -43,11 +43,22 @@ from .smile_interpolated import (
 
 # eSSVI surfaces
 from .ssvi import (
+    ATMThetaDiagnostics,
+    ESSVICalibrationConfig,
+    ESSVIConstraintReport,
+    ESSVIFitDiagnostics,
+    ESSVIFitResult,
     ESSVIImpliedSurface,
     ESSVITermStructures,
+    ESSVIValidationReport,
     EtaTermStructure,
     PsiTermStructure,
+    SampledThetaTermStructure,
     ThetaTermStructure,
+    build_theta_term_from_quotes,
+    calibrate_essvi,
+    evaluate_essvi_constraints,
+    validate_essvi_surface,
 )
 from .surface_core import VolSurface
 from .vol_types import DifferentiableSmileSlice, GridSmileSlice, SmileSlice
@@ -74,11 +85,22 @@ __all__ = [
     "SmileSlice",
     "DifferentiableSmileSlice",
     "GridSmileSlice",
+    "ATMThetaDiagnostics",
+    "SampledThetaTermStructure",
+    "ESSVICalibrationConfig",
+    "ESSVIFitDiagnostics",
+    "ESSVIFitResult",
+    "ESSVIConstraintReport",
+    "ESSVIValidationReport",
     "ThetaTermStructure",
     "PsiTermStructure",
     "EtaTermStructure",
     "ESSVITermStructures",
     "ESSVIImpliedSurface",
+    "build_theta_term_from_quotes",
+    "calibrate_essvi",
+    "evaluate_essvi_constraints",
+    "validate_essvi_surface",
     # Local vol objects
     "LocalVolSurface",
     "local_vol_from_call_grid",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -38,35 +39,54 @@ class ESSVIPriceObjective:
     y: NDArray[np.float64]
     T: NDArray[np.float64]
     price_mkt: NDArray[np.float64]
-    weights: NDArray[np.float64]
     market: MarketData | PricingContext
+    sqrt_weights: NDArray[np.float64] | None = None
     is_call: NDArray[np.bool_] | None = None
+    weights: NDArray[np.float64] | None = None
 
     def __post_init__(self) -> None:
         y = _as_float_vector("y", self.y)
         T = _as_float_vector("T", self.T)
         price_mkt = _as_float_vector("price_mkt", self.price_mkt)
-        weights = _as_float_vector("weights", self.weights)
+        sqrt_weights = self._resolve_sqrt_weights(y)
 
-        if not (y.size == T.size == price_mkt.size == weights.size):
-            raise ValueError("y, T, price_mkt, and weights must have the same size.")
+        if not (y.size == T.size == price_mkt.size == sqrt_weights.size):
+            raise ValueError(
+                "y, T, price_mkt, and sqrt_weights must have the same size."
+            )
         if np.any(T <= 0.0):
             raise ValueError("T must be > 0.")
         if np.any(price_mkt < 0.0):
             raise ValueError("price_mkt must be >= 0.")
-        if np.any(weights < 0.0):
-            raise ValueError("weights must be >= 0.")
+        if np.any(sqrt_weights < 0.0):
+            raise ValueError("sqrt_weights must be >= 0.")
 
         self.y = y
         self.T = T
         self.price_mkt = price_mkt
-        self.weights = weights
+        self.sqrt_weights = sqrt_weights
 
         if self.is_call is not None:
             is_call = np.asarray(self.is_call, dtype=np.bool_).reshape(-1)
             if is_call.size != y.size:
                 raise ValueError("is_call must have the same size as y.")
             self.is_call = is_call
+
+    def _resolve_sqrt_weights(self, y: NDArray[np.float64]) -> NDArray[np.float64]:
+        if self.sqrt_weights is not None and self.weights is not None:
+            raise ValueError("Pass either sqrt_weights or weights, not both.")
+        if self.sqrt_weights is None and self.weights is None:
+            return np.ones_like(y, dtype=np.float64)
+        if self.sqrt_weights is not None:
+            return _as_float_vector("sqrt_weights", self.sqrt_weights)
+        assert self.weights is not None
+        warnings.warn(
+            "'weights' is deprecated for ESSVIPriceObjective; use 'sqrt_weights' "
+            "because the residual is sqrt_weights * price_error.",
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
+        return _as_float_vector("weights", self.weights)
 
     def _ctx(self) -> PricingContext:
         return _to_ctx(self.market)
@@ -112,7 +132,10 @@ class ESSVIPriceObjective:
 
     def residual(self, params: ESSVITermStructures) -> NDArray[np.float64]:
         model = self.model_prices(params)
-        return np.asarray(self.weights * (model - self.price_mkt), dtype=np.float64)
+        assert self.sqrt_weights is not None
+        return np.asarray(
+            self.sqrt_weights * (model - self.price_mkt), dtype=np.float64
+        )
 
 
 SSVIObjective = ESSVIPriceObjective

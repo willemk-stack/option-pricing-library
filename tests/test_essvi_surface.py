@@ -22,7 +22,6 @@ from option_pricing.vol.ssvi import (
     essvi_total_variance_dk_dT,
     essvi_total_variance_dkk,
     essvi_total_variance_dT,
-    essvi_total_variance_dTT,
 )
 
 
@@ -93,31 +92,16 @@ def test_derived_parameters_and_maturity_derivatives_match_ratio_formulas() -> N
     dtheta = params.dtheta_dT(T)
     dpsi = params.dpsi_dT(T)
     deta = params.deta_dT(T)
-    d2theta = params.d2theta_dT2(T)
-    d2psi = params.d2psi_dT2(T)
-    d2eta = params.d2eta_dT2(T)
 
     expected_rho = eta / psi
     expected_phi = psi / theta
     expected_drho = (deta * psi - eta * dpsi) / (psi * psi)
     expected_dphi = (dpsi * theta - psi * dtheta) / (theta * theta)
-    expected_d2rho = (d2eta * psi - eta * d2psi) / (psi * psi) - 2.0 * (
-        (deta * psi - eta * dpsi) * dpsi
-    ) / (psi * psi * psi)
-    expected_d2phi = (d2psi * theta - psi * d2theta) / (theta * theta) - 2.0 * (
-        (dpsi * theta - psi * dtheta) * dtheta
-    ) / (theta * theta * theta)
 
     np.testing.assert_allclose(params.rho(T), expected_rho, rtol=0.0, atol=1e-12)
     np.testing.assert_allclose(params.phi(T), expected_phi, rtol=0.0, atol=1e-12)
     np.testing.assert_allclose(params.drho_dT(T), expected_drho, rtol=0.0, atol=1e-12)
     np.testing.assert_allclose(params.dphi_dT(T), expected_dphi, rtol=0.0, atol=1e-12)
-    np.testing.assert_allclose(
-        params.d2rho_dT2(T), expected_d2rho, rtol=0.0, atol=1e-12
-    )
-    np.testing.assert_allclose(
-        params.d2phi_dT2(T), expected_d2phi, rtol=0.0, atol=1e-12
-    )
 
 
 def test_log_maturity_term_structure_reports_T_derivatives() -> None:
@@ -153,7 +137,6 @@ def test_analytic_essvi_derivatives_match_finite_differences() -> None:
     h_y = 1e-6
     h_y2 = 1e-5
     h_T = 1e-6
-    h_T2 = 1e-5
 
     fd_dk = (
         essvi_total_variance(y=y + h_y, params=params, T=T)
@@ -172,10 +155,6 @@ def test_analytic_essvi_derivatives_match_finite_differences() -> None:
         essvi_total_variance_dk(y=y, params=params, T=T + h_T)
         - essvi_total_variance_dk(y=y, params=params, T=T - h_T)
     ) / (2.0 * h_T)
-    fd_dTT = (
-        essvi_total_variance_dT(y=y, params=params, T=T + h_T2)
-        - essvi_total_variance_dT(y=y, params=params, T=T - h_T2)
-    ) / (2.0 * h_T2)
 
     np.testing.assert_allclose(
         essvi_total_variance_dk(y=y, params=params, T=T),
@@ -198,12 +177,6 @@ def test_analytic_essvi_derivatives_match_finite_differences() -> None:
     np.testing.assert_allclose(
         essvi_total_variance_dk_dT(y=y, params=params, T=T),
         fd_dk_dT,
-        rtol=0.0,
-        atol=2e-5,
-    )
-    np.testing.assert_allclose(
-        essvi_total_variance_dTT(y=y, params=params, T=T),
-        fd_dTT,
         rtol=0.0,
         atol=2e-5,
     )
@@ -479,6 +452,22 @@ def test_validation_and_division_guards_raise_on_invalid_inputs() -> None:
 
     with pytest.raises(ValueError, match="T must be finite and > 0"):
         invalid.validate(0.0)
+
+    lee_bad = ESSVITermStructures(
+        theta_term=ThetaTermStructure.constant(0.08),
+        psi_term=PsiTermStructure.constant(3.95),
+        eta_term=EtaTermStructure.constant(0.10),
+    )
+    with pytest.raises(ValueError, match=r"psi\(T\) \+ \|eta\(T\)\| < 4"):
+        lee_bad.validate(1.0)
+
+    calendar_bad = ESSVITermStructures(
+        theta_term=ThetaTermStructure.constant(0.04),
+        psi_term=PsiTermStructure.constant(0.8),
+        eta_term=EtaTermStructure.constant(0.1),
+    )
+    with pytest.raises(ValueError, match=r"<= 4 \* theta\(T\)"):
+        calendar_bad.validate(1.0)
 
 
 def test_local_vol_surface_accepts_analytic_essvi_surface() -> None:

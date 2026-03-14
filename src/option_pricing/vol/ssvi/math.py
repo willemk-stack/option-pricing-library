@@ -136,34 +136,6 @@ def _surface_state_with_T_derivs(
     )
 
 
-def _surface_state_with_second_T_derivs(
-    y: ArrayLike,
-    params: ESSVITermStructures,
-    T: ArrayLike,
-) -> tuple[np.ndarray, ...]:
-    y_arr, theta, psi, eta, dtheta, dpsi, deta = _surface_state_with_T_derivs(
-        y=y,
-        params=params,
-        T=T,
-    )
-    d2theta = _as_float_array(params.d2theta_dT2(T))
-    d2psi = _as_float_array(params.d2psi_dT2(T))
-    d2eta = _as_float_array(params.d2eta_dT2(T))
-    arrays = np.broadcast_arrays(
-        y_arr,
-        theta,
-        psi,
-        eta,
-        dtheta,
-        dpsi,
-        deta,
-        d2theta,
-        d2psi,
-        d2eta,
-    )
-    return tuple(np.asarray(arr, dtype=np.float64) for arr in arrays)
-
-
 def _radicant_from_state(
     y: np.ndarray,
     theta: np.ndarray,
@@ -349,49 +321,6 @@ def essvi_total_variance_dk_dT(
         + psi * dpsi * y_arr * y_arr
     )
     return np.asarray(0.5 * (deta + A_T / D - (A * B) / (D * D * D)), dtype=np.float64)
-
-
-def radicant_dTT(y: ArrayLike, params: ESSVITermStructures, T: ArrayLike) -> np.ndarray:
-    (
-        y_arr,
-        theta,
-        psi,
-        eta,
-        dtheta,
-        dpsi,
-        deta,
-        d2theta,
-        d2psi,
-        d2eta,
-    ) = _surface_state_with_second_T_derivs(y=y, params=params, T=T)
-    D = _radicant_from_state(y_arr, theta, psi, eta, eps=params.eps)
-    _guard_nonzero("D", D, params.eps)
-    B = (
-        theta * dtheta
-        + (dtheta * eta + theta * deta) * y_arr
-        + psi * dpsi * y_arr * y_arr
-    )
-    C = (
-        dtheta * dtheta
-        + theta * d2theta
-        + (d2theta * eta + 2.0 * dtheta * deta + theta * d2eta) * y_arr
-        + (dpsi * dpsi + psi * d2psi) * y_arr * y_arr
-    )
-    return np.asarray(C / D - (B * B) / (D * D * D), dtype=np.float64)
-
-
-def essvi_total_variance_dTT(
-    y: ArrayLike,
-    params: ESSVITermStructures,
-    T: ArrayLike,
-) -> np.ndarray:
-    y_arr, _, _, _, _, _, _, d2theta, _, d2eta = _surface_state_with_second_T_derivs(
-        y=y,
-        params=params,
-        T=T,
-    )
-    d2D = radicant_dTT(y=y_arr, params=params, T=T)
-    return np.asarray(0.5 * (d2theta + d2eta * y_arr + d2D), dtype=np.float64)
 
 
 def essvi_w_and_derivs(

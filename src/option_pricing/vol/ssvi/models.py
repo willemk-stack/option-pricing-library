@@ -165,6 +165,7 @@ class ESSVITermStructures:
         theta = self.theta(T)
         psi = self.psi(T)
         eta = self.eta(T)
+        abs_eta = np.abs(eta)
 
         if np.any(~np.isfinite(theta)) or np.any(theta <= 0.0):
             raise ValueError("theta(T) must be finite and > 0.")
@@ -172,9 +173,15 @@ class ESSVITermStructures:
             raise ValueError("psi(T) must be finite and > 0.")
         if np.any(~np.isfinite(eta)):
             raise ValueError("eta(T) must be finite.")
-        if np.any(np.abs(eta) >= psi):
+        if np.any(abs_eta >= psi):
             raise ValueError(
                 "eSSVI requires |eta(T)| < psi(T), equivalently |rho(T)| < 1."
+            )
+        if np.any(psi + abs_eta >= 4.0 - self.eps):
+            raise ValueError("eSSVI requires psi(T) + |eta(T)| < 4.")
+        if np.any(psi * (psi + abs_eta) > 4.0 * theta - self.eps):
+            raise ValueError(
+                "eSSVI requires psi(T) * (psi(T) + |eta(T)|) <= 4 * theta(T)."
             )
 
     def theta(self, T: ArrayLike) -> np.ndarray:
@@ -194,15 +201,6 @@ class ESSVITermStructures:
 
     def deta_dT(self, T: ArrayLike) -> np.ndarray:
         return np.asarray(self.eta_term.dT(T), dtype=np.float64)
-
-    def d2theta_dT2(self, T: ArrayLike) -> np.ndarray:
-        return np.asarray(self.theta_term.d2T2(T), dtype=np.float64)
-
-    def d2psi_dT2(self, T: ArrayLike) -> np.ndarray:
-        return np.asarray(self.psi_term.d2T2(T), dtype=np.float64)
-
-    def d2eta_dT2(self, T: ArrayLike) -> np.ndarray:
-        return np.asarray(self.eta_term.d2T2(T), dtype=np.float64)
 
     def rho(self, T: ArrayLike) -> np.ndarray:
         return _safe_divide(self.eta(T), self.psi(T), name="rho(T)", eps=self.eps)
@@ -227,39 +225,3 @@ class ESSVITermStructures:
         numerator = dpsi * theta - psi * dtheta
         denominator = theta * theta
         return _safe_divide(numerator, denominator, name="dphi_dT(T)", eps=self.eps)
-
-    def d2rho_dT2(self, T: ArrayLike) -> np.ndarray:
-        psi = self.psi(T)
-        eta = self.eta(T)
-        dpsi = self.dpsi_dT(T)
-        deta = self.deta_dT(T)
-        d2psi = self.d2psi_dT2(T)
-        d2eta = self.d2eta_dT2(T)
-
-        first_num = d2eta * psi - eta * d2psi
-        first_den = psi * psi
-        second_num = 2.0 * (deta * psi - eta * dpsi) * dpsi
-        second_den = psi * psi * psi
-        return np.asarray(
-            _safe_divide(first_num, first_den, name="d2rho_dT2(T)", eps=self.eps)
-            - _safe_divide(second_num, second_den, name="d2rho_dT2(T)", eps=self.eps),
-            dtype=np.float64,
-        )
-
-    def d2phi_dT2(self, T: ArrayLike) -> np.ndarray:
-        theta = self.theta(T)
-        psi = self.psi(T)
-        dtheta = self.dtheta_dT(T)
-        dpsi = self.dpsi_dT(T)
-        d2theta = self.d2theta_dT2(T)
-        d2psi = self.d2psi_dT2(T)
-
-        first_num = d2psi * theta - psi * d2theta
-        first_den = theta * theta
-        second_num = 2.0 * (dpsi * theta - psi * dtheta) * dtheta
-        second_den = theta * theta * theta
-        return np.asarray(
-            _safe_divide(first_num, first_den, name="d2phi_dT2(T)", eps=self.eps)
-            - _safe_divide(second_num, second_den, name="d2phi_dT2(T)", eps=self.eps),
-            dtype=np.float64,
-        )

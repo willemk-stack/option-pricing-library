@@ -57,14 +57,14 @@ def test_essvi_price_objective_uses_explicit_option_side() -> None:
     market = MarketData(spot=100.0, rate=0.02, dividend_yield=0.01)
     T = np.array([0.5, 0.75, 1.0], dtype=np.float64)
     y = np.array([-0.2, 0.0, 0.15], dtype=np.float64)
-    weights = np.array([1.0, 2.0, 0.5], dtype=np.float64)
+    sqrt_weights = np.array([1.0, 2.0, 0.5], dtype=np.float64)
     is_call = np.array([False, True, True], dtype=np.bool_)
 
     objective = ESSVIPriceObjective(
         y=y,
         T=T,
         price_mkt=np.zeros_like(y),
-        weights=weights,
+        sqrt_weights=sqrt_weights,
         market=market,
         is_call=is_call,
     )
@@ -95,7 +95,7 @@ def test_essvi_price_objective_defaults_to_otm_side_from_y() -> None:
         y=y,
         T=T,
         price_mkt=np.zeros_like(y),
-        weights=np.ones_like(y),
+        sqrt_weights=np.ones_like(y),
         market=market,
     )
 
@@ -121,13 +121,13 @@ def test_essvi_price_objective_residual_applies_weights() -> None:
     market = MarketData(spot=100.0, rate=0.02, dividend_yield=0.0)
     T = np.array([0.35, 0.7], dtype=np.float64)
     y = np.array([-0.1, 0.2], dtype=np.float64)
-    weights = np.array([2.0, 0.5], dtype=np.float64)
+    sqrt_weights = np.array([2.0, 0.5], dtype=np.float64)
 
     base_objective = ESSVIPriceObjective(
         y=y,
         T=T,
         price_mkt=np.zeros_like(y),
-        weights=np.ones_like(y),
+        sqrt_weights=np.ones_like(y),
         market=market,
     )
     model = base_objective.model_prices(params)
@@ -137,11 +137,11 @@ def test_essvi_price_objective_residual_applies_weights() -> None:
         y=y,
         T=T,
         price_mkt=price_mkt,
-        weights=weights,
+        sqrt_weights=sqrt_weights,
         market=market,
     )
 
-    expected = weights * (model - price_mkt)
+    expected = sqrt_weights * (model - price_mkt)
     np.testing.assert_allclose(objective.residual(params), expected, atol=1e-12)
 
 
@@ -153,15 +153,30 @@ def test_essvi_price_objective_validates_inputs() -> None:
             y=np.array([0.0, 0.1], dtype=np.float64),
             T=np.array([0.5], dtype=np.float64),
             price_mkt=np.array([1.0, 2.0], dtype=np.float64),
-            weights=np.array([1.0, 1.0], dtype=np.float64),
+            sqrt_weights=np.array([1.0, 1.0], dtype=np.float64),
             market=market,
         )
 
-    with pytest.raises(ValueError, match="weights must be >= 0"):
+    with pytest.raises(ValueError, match="sqrt_weights must be >= 0"):
         ESSVIPriceObjective(
             y=np.array([0.0], dtype=np.float64),
             T=np.array([0.5], dtype=np.float64),
             price_mkt=np.array([1.0], dtype=np.float64),
-            weights=np.array([-1.0], dtype=np.float64),
+            sqrt_weights=np.array([-1.0], dtype=np.float64),
             market=market,
         )
+
+
+def test_essvi_price_objective_supports_deprecated_weights_alias() -> None:
+    market = MarketData(spot=100.0, rate=0.02, dividend_yield=0.0)
+
+    with pytest.deprecated_call():
+        objective = ESSVIPriceObjective(
+            y=np.array([0.0], dtype=np.float64),
+            T=np.array([0.5], dtype=np.float64),
+            price_mkt=np.array([1.0], dtype=np.float64),
+            weights=np.array([2.0], dtype=np.float64),
+            market=market,
+        )
+
+    np.testing.assert_allclose(objective.sqrt_weights, np.array([2.0]))
