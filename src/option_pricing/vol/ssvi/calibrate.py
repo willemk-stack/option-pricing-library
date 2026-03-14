@@ -14,21 +14,19 @@ from ...market.curves import PricingContext
 from ...types import MarketData, OptionSpec, OptionType
 from ...typing import ArrayLike
 from ...vol.implied_vol_scalar import implied_vol_bs
-from ..svi.transforms import sigmoid, softplus, softplus_inv
+from ..svi.transforms import logit, softplus_inv
+from .math import _black76_price_broadcast
+from .mingone import (
+    compute_p_sequence,
+    reconstruct_nodes_from_global_params,
+)
 from .models import (
     DEFAULT_NUMERICAL_TOL,
-    ESSVITermStructures,
-    EtaTermStructure,
-    PsiTermStructure,
+    ESSVINodeSet,
+    MingoneGlobalParams,
     ThetaTermStructure,
 )
-from .objective import ESSVIPriceObjective
-from .validation import (
-    ESSVIConstraintReport,
-    ESSVIValidationReport,
-    evaluate_essvi_constraints,
-    validate_essvi_surface,
-)
+from .validation import ESSVINodeConstraintReport, validate_essvi_nodes
 
 
 def _as_float_vector(
@@ -81,24 +79,6 @@ def _call_mask(y: np.ndarray, is_call: NDArray[np.bool_] | None) -> np.ndarray:
     if out.size != y.size:
         raise ValueError("is_call must have the same size as y.")
     return out
-
-
-def _validation_expiries(expiries: np.ndarray) -> np.ndarray:
-    exp = np.unique(np.asarray(expiries, dtype=np.float64))
-    if exp.size == 1:
-        return exp
-    mids = 0.5 * (exp[:-1] + exp[1:])
-    return np.unique(np.concatenate([exp, mids])).astype(np.float64)
-
-
-def _constraint_grid(expiries: np.ndarray, n: int) -> np.ndarray:
-    exp = np.unique(np.asarray(expiries, dtype=np.float64))
-    if exp.size == 1:
-        return exp
-    if n < 2:
-        return exp
-    dense = np.linspace(float(exp[0]), float(exp[-1]), int(n), dtype=np.float64)
-    return np.unique(np.concatenate([exp, dense])).astype(np.float64)
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,23 +144,13 @@ class SampledThetaTermStructure(ThetaTermStructure):
 
 
 @dataclass(frozen=True, slots=True)
-class ESSVICalibrationConfig:
+class ESSVIGlobalCalibrationConfig:
     objective: Literal["price"] = "price"
     max_nfev: int = 4_000
     atm_y_tol: float = 1e-8
-    constraint_grid_size: int = 41
     constraint_tol: float = 1e-10
     invalid_residual_value: float = 1e6
-    use_soft_constraints: bool = False
-    soft_constraint_weight: float = 10.0
-    soft_constraint_scale: float = 1.0
-    a_psi_bounds: tuple[float, float] = (-20.0, 4.0)
-    b_psi_bounds: tuple[float, float] = (-4.0, 4.0)
-    a_eta_bounds: tuple[float, float] = (-4.0, 4.0)
-    b_eta_bounds: tuple[float, float] = (-4.0, 4.0)
-    validation_y_min: float = -2.5
-    validation_y_max: float = 2.5
-    validation_ny: int = 81
+    rho_cap: float = 0.95
     strict_validation: bool = False
     iv_cfg: ImpliedVolConfig | None = None
 
@@ -191,42 +161,19 @@ class ESSVICalibrationConfig:
             raise ValueError("max_nfev must be > 0.")
         if self.atm_y_tol < 0.0:
             raise ValueError("atm_y_tol must be >= 0.")
-        if self.constraint_grid_size <= 0:
-            raise ValueError("constraint_grid_size must be > 0.")
         if self.constraint_tol < 0.0:
             raise ValueError("constraint_tol must be >= 0.")
         if self.invalid_residual_value <= 0.0:
             raise ValueError("invalid_residual_value must be > 0.")
-        if self.soft_constraint_weight < 0.0:
-            raise ValueError("soft_constraint_weight must be >= 0.")
-        if self.soft_constraint_scale <= 0.0:
-            raise ValueError("soft_constraint_scale must be > 0.")
-        if self.validation_ny < 3:
-            raise ValueError("validation_ny must be >= 3.")
-        if self.validation_y_min >= self.validation_y_max:
-            raise ValueError("validation_y_min must be < validation_y_max.")
+        if not (0.0 < self.rho_cap < 1.0):
+            raise ValueError("rho_cap must lie in (0, 1).")
 
     @property
-    def bounds(self) -> tuple[np.ndarray, np.ndarray]:
-        lb = np.array(
-            [
-                self.a_psi_bounds[0],
-                self.b_psi_bounds[0],
-                self.a_eta_bounds[0],
-                self.b_eta_bounds[0],
-            ],
-            dtype=np.float64,
-        )
-        ub = np.array(
-            [
-                self.a_psi_bounds[1],
-                self.b_psi_bounds[1],
-                self.a_eta_bounds[1],
-                self.b_eta_bounds[1],
-            ],
-            dtype=np.float64,
-        )
-        return lb, ub
+    def model_eps(self) -> float:
+        return float(max(DEFAULT_NUMERICAL_TOL, self.constraint_tol))
+
+
+ESSVICalibrationConfig = ESSVIGlobalCalibrationConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,18 +185,17 @@ class ESSVIFitDiagnostics:
     cost: float
     x0: np.ndarray
     x_opt: np.ndarray
-    T_pivot: float
     theta: ATMThetaDiagnostics
-    constraint_grid: np.ndarray
-    constraint_report: ESSVIConstraintReport
-    validation: ESSVIValidationReport
+    node_validation: ESSVINodeConstraintReport
+    price_rmse: float
+    max_abs_price_error: float
     invalid_candidate_count: int
     last_invalid_reason: str | None
 
 
 @dataclass(frozen=True, slots=True)
 class ESSVIFitResult:
-    params: ESSVITermStructures
+    nodes: ESSVINodeSet
     diag: ESSVIFitDiagnostics
 
 
@@ -304,14 +250,7 @@ def _market_snapshot(
             strike=float(strike_i),
             expiry=float(tau),
         )
-        implied_vol[i] = float(
-            implied_vol_bs(
-                float(price_i),
-                spec,
-                market,
-                cfg=iv_cfg,
-            )
-        )
+        implied_vol[i] = float(implied_vol_bs(float(price_i), spec, market, cfg=iv_cfg))
 
     total_variance = np.asarray(T_arr * implied_vol * implied_vol, dtype=np.float64)
     return _MarketSnapshot(
@@ -463,267 +402,297 @@ def build_theta_term_from_quotes(
     )
 
 
-def _eta_guess(y: np.ndarray, w: np.ndarray, theta: float) -> float:
-    nonzero = np.abs(y) > 1e-10
-    if not np.any(nonzero):
-        return 0.0
-    order = np.argsort(np.abs(y[nonzero]))
-    y_use = y[nonzero][order][: min(4, order.size)]
-    w_use = w[nonzero][order][: min(4, order.size)]
-    denom = float(np.dot(y_use, y_use))
-    if denom <= 0.0:
-        return 0.0
-    return float(np.dot(y_use, w_use - theta) / denom)
-
-
-def _psi_guess(
-    y: np.ndarray,
-    w: np.ndarray,
-    *,
-    theta: float,
-    eta: float,
-    tol: float,
-) -> float:
-    abs_eta = abs(float(eta))
-    psi_floor = abs_eta + 1e-3
-    disc = max(abs_eta * abs_eta + 16.0 * float(theta) - 4.0 * float(tol), 0.0)
-    psi_cap = min(
-        4.0 - abs_eta - float(tol),
-        0.5 * (-abs_eta + float(np.sqrt(disc))),
-    )
-    if psi_cap <= psi_floor:
-        return psi_floor
-
-    nonzero = np.abs(y) > 1e-10
-    if not np.any(nonzero):
-        return float(np.clip(0.5 * (psi_floor + psi_cap), psi_floor, psi_cap))
-
-    y_use = y[nonzero]
-    w_use = w[nonzero]
-    D = 2.0 * w_use - float(theta) - float(eta) * y_use
-    psi_sq = (D * D - theta * theta - 2.0 * theta * eta * y_use) / (y_use * y_use)
-    psi_candidates = np.sqrt(np.maximum(psi_sq, 0.0))
-    psi_candidates = psi_candidates[
-        np.isfinite(psi_candidates) & (psi_candidates > 0.0)
-    ]
-    if psi_candidates.size == 0:
-        psi0 = 0.5 * (psi_floor + psi_cap)
-    else:
-        psi0 = float(np.median(psi_candidates))
-    return float(np.clip(psi0, psi_floor, 0.95 * psi_cap))
-
-
-def _linear_fit(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
-    if x.size == 1:
-        return float(y[0]), 0.0
-    X = np.column_stack([np.ones_like(x), x])
-    beta, *_ = np.linalg.lstsq(X, y, rcond=None)
-    return float(beta[0]), float(beta[1])
-
-
-def _centered_logT(T: np.ndarray, T_pivot: float) -> np.ndarray:
-    return np.asarray(
-        np.log(np.asarray(T, dtype=np.float64) / float(T_pivot)),
-        dtype=np.float64,
+def _pack_raw_vector(params: MingoneGlobalParams) -> np.ndarray:
+    return np.concatenate(
+        [
+            np.asarray(params.rho_raw, dtype=np.float64),
+            np.array([float(params.theta1_raw)], dtype=np.float64),
+            np.asarray(params.a_raw, dtype=np.float64),
+            np.asarray(params.c_raw, dtype=np.float64),
+        ]
     )
 
 
-def _build_parametric_terms(
-    *,
+def _unpack_raw_vector(
     x: np.ndarray,
-    theta_term: ThetaTermStructure,
-    T_pivot: float,
-    eps: float,
-) -> ESSVITermStructures:
-    a_psi, b_psi, a_eta, b_eta = map(float, x)
-    log_pivot = float(np.log(T_pivot))
-
-    def psi_value(log_T: ArrayLike) -> np.ndarray:
-        log_T_arr = np.asarray(log_T, dtype=np.float64)
-        z = a_psi + b_psi * (log_T_arr - log_pivot)
-        return np.asarray(softplus(z) + eps, dtype=np.float64)
-
-    def psi_first(log_T: ArrayLike) -> np.ndarray:
-        log_T_arr = np.asarray(log_T, dtype=np.float64)
-        z = a_psi + b_psi * (log_T_arr - log_pivot)
-        return np.asarray(sigmoid(z) * b_psi, dtype=np.float64)
-
-    def eta_value(log_T: ArrayLike) -> np.ndarray:
-        log_T_arr = np.asarray(log_T, dtype=np.float64)
-        return np.asarray(a_eta + b_eta * (log_T_arr - log_pivot), dtype=np.float64)
-
-    def eta_first(log_T: ArrayLike) -> np.ndarray:
-        log_T_arr = np.asarray(log_T, dtype=np.float64)
-        return np.full_like(log_T_arr, b_eta, dtype=np.float64)
-
-    return ESSVITermStructures(
-        theta_term=theta_term,
-        psi_term=PsiTermStructure(
-            value=psi_value,
-            first_derivative=psi_first,
-            input_variable="log_T",
-        ),
-        eta_term=EtaTermStructure(
-            value=eta_value,
-            first_derivative=eta_first,
-            input_variable="log_T",
-        ),
-        eps=eps,
-    )
-
-
-def _safe_initial_guess(
-    theta_diag: ATMThetaDiagnostics,
     *,
-    theta_term: ThetaTermStructure,
-    T_pivot: float,
-    cfg: ESSVICalibrationConfig,
-    constraint_grid: np.ndarray,
-    snapshot: _MarketSnapshot,
-    model_eps: float,
-) -> np.ndarray:
-    expiries = theta_diag.expiries
-    x_nodes = _centered_logT(expiries, T_pivot)
-    eta_nodes = np.empty_like(expiries)
-    psi_nodes = np.empty_like(expiries)
-
-    for i, tau in enumerate(expiries):
-        mask = np.isclose(snapshot.T, tau, rtol=0.0, atol=1e-12)
-        y_slice = snapshot.y[mask]
-        w_slice = snapshot.total_variance[mask]
-        theta_i = float(theta_diag.theta_isotonic[i])
-        eta_nodes[i] = _eta_guess(y_slice, w_slice, theta_i)
-        psi_nodes[i] = _psi_guess(
-            y_slice,
-            w_slice,
-            theta=theta_i,
-            eta=float(eta_nodes[i]),
-            tol=cfg.constraint_tol,
+    expiries: np.ndarray,
+    cfg: ESSVIGlobalCalibrationConfig,
+) -> MingoneGlobalParams:
+    n = int(expiries.size)
+    x_arr = np.asarray(x, dtype=np.float64).reshape(-1)
+    expected = 3 * n
+    if x_arr.size != expected:
+        raise ValueError(
+            f"Expected optimizer vector of size {expected}, got {x_arr.size}."
         )
 
-    raw_psi = np.asarray(
-        softplus_inv(np.maximum(psi_nodes - model_eps, model_eps)),
+    rho_raw = x_arr[:n]
+    theta1_raw = float(x_arr[n])
+    a_raw = x_arr[n + 1 : n + 1 + max(n - 1, 0)]
+    c_raw = x_arr[n + 1 + max(n - 1, 0) :]
+    return MingoneGlobalParams(
+        expiries=expiries,
+        rho_raw=np.asarray(rho_raw, dtype=np.float64),
+        theta1_raw=theta1_raw,
+        a_raw=np.asarray(a_raw, dtype=np.float64),
+        c_raw=np.asarray(c_raw, dtype=np.float64),
+        rho_cap=cfg.rho_cap,
+        eps=cfg.model_eps,
+    )
+
+
+def _initial_nodes_from_theta(
+    theta_diag: ATMThetaDiagnostics, *, cfg: ESSVIGlobalCalibrationConfig
+) -> ESSVINodeSet:
+    expiries = np.asarray(theta_diag.expiries, dtype=np.float64)
+    theta_iso = np.asarray(theta_diag.theta_isotonic, dtype=np.float64)
+    n = int(expiries.size)
+
+    rho = np.zeros(n, dtype=np.float64)
+    p = compute_p_sequence(rho)
+    psi = np.empty(n, dtype=np.float64)
+    theta = np.empty(n, dtype=np.float64)
+
+    theta[0] = max(float(theta_iso[0]), cfg.model_eps)
+    psi[0] = 0.5 * min(4.0, 2.0 * np.sqrt(max(theta[0], cfg.model_eps)))
+
+    for i in range(1, n):
+        a_lower = max(
+            float(theta_iso[i]),
+            theta[i - 1] * p[i] + cfg.model_eps,
+            0.25 * psi[i - 1] * psi[i - 1] * (1.0 + abs(rho[i])) + cfg.model_eps,
+        )
+        theta[i] = float(a_lower)
+        A = float(psi[i - 1] * p[i])
+        C = float(
+            min(
+                psi[i - 1] * theta[i] / theta[i - 1],
+                min(
+                    4.0 / (1.0 + abs(rho[i])),
+                    np.sqrt((4.0 * theta[i]) / (1.0 + abs(rho[i]))),
+                ),
+            )
+        )
+        if C <= A + cfg.model_eps:
+            theta[i] = float((A * A * (1.0 + abs(rho[i])) / 4.0) + cfg.model_eps)
+            C = float(
+                min(
+                    psi[i - 1] * theta[i] / theta[i - 1],
+                    min(
+                        4.0 / (1.0 + abs(rho[i])),
+                        np.sqrt((4.0 * theta[i]) / (1.0 + abs(rho[i]))),
+                    ),
+                )
+            )
+        psi[i] = float(A + 0.5 * (C - A))
+
+    return ESSVINodeSet(
+        expiries=expiries,
+        theta=theta,
+        psi=psi,
+        rho=rho,
+        eps=cfg.model_eps,
+    )
+
+
+def _initial_raw_guess(
+    theta_diag: ATMThetaDiagnostics, *, cfg: ESSVIGlobalCalibrationConfig
+) -> np.ndarray:
+    nodes0 = _initial_nodes_from_theta(theta_diag, cfg=cfg)
+    p = compute_p_sequence(nodes0.rho)
+    theta1_raw = float(
+        softplus_inv(max(nodes0.theta[0] - cfg.model_eps, cfg.model_eps))
+    )
+    if nodes0.expiries.size > 1:
+        a = nodes0.theta[1:] - nodes0.theta[:-1] * p[1:]
+        a_raw = np.asarray(
+            softplus_inv(np.maximum(a - cfg.model_eps, cfg.model_eps)), dtype=np.float64
+        )
+    else:
+        a_raw = np.empty((0,), dtype=np.float64)
+    c_raw = np.full(nodes0.expiries.size, logit(0.5), dtype=np.float64)
+    params0 = MingoneGlobalParams(
+        expiries=nodes0.expiries,
+        rho_raw=np.zeros_like(nodes0.rho),
+        theta1_raw=theta1_raw,
+        a_raw=a_raw,
+        c_raw=c_raw,
+        rho_cap=cfg.rho_cap,
+        eps=cfg.model_eps,
+    )
+    return _pack_raw_vector(params0)
+
+
+def _nodal_model_prices(
+    snapshot: _MarketSnapshot,
+    nodes: ESSVINodeSet,
+    expiry_index: np.ndarray,
+    *,
+    eps: float,
+) -> np.ndarray:
+    theta = np.asarray(nodes.theta[expiry_index], dtype=np.float64)
+    psi = np.asarray(nodes.psi[expiry_index], dtype=np.float64)
+    eta = np.asarray(nodes.eta[expiry_index], dtype=np.float64)
+
+    radicand = (
+        theta * theta
+        + 2.0 * theta * eta * snapshot.y
+        + psi * psi * snapshot.y * snapshot.y
+    )
+    if np.any(radicand < -eps):
+        raise ValueError("Nodal eSSVI radicand became negative during calibration.")
+    radicand = np.where((radicand < 0.0) & (radicand >= -eps), 0.0, radicand)
+    w = np.asarray(
+        0.5 * (theta + eta * snapshot.y + np.sqrt(radicand)), dtype=np.float64
+    )
+    sigma = np.asarray(np.sqrt(np.maximum(w / snapshot.T, 0.0)), dtype=np.float64)
+
+    call_model = _black76_price_broadcast(
+        kind=OptionType.CALL,
+        forward=snapshot.forward,
+        strike=snapshot.strike,
+        sigma=sigma,
+        T=snapshot.T,
+        df=snapshot.df,
+        eps=eps,
+    )
+    put_model = np.asarray(
+        call_model - snapshot.df * (snapshot.forward - snapshot.strike),
         dtype=np.float64,
     )
-    a_psi, b_psi = _linear_fit(x_nodes, raw_psi)
-    a_eta, b_eta = _linear_fit(x_nodes, eta_nodes)
-
-    lb, ub = cfg.bounds
-    x0 = np.clip(
-        np.array([a_psi, b_psi, a_eta, b_eta], dtype=np.float64),
-        lb,
-        ub,
+    return np.asarray(
+        np.where(snapshot.is_call, call_model, put_model), dtype=np.float64
     )
 
-    params0 = _build_parametric_terms(
-        x=x0,
-        theta_term=theta_term,
-        T_pivot=T_pivot,
-        eps=model_eps,
-    )
-    if evaluate_essvi_constraints(params0, constraint_grid, tol=cfg.constraint_tol).ok:
-        return x0
 
-    theta_min = float(np.min(theta_diag.theta_isotonic))
-    psi_safe = max(0.05, 0.5 * np.sqrt(max(theta_min, 1e-8)))
-    fallback = np.array(
-        [float(softplus_inv(max(psi_safe - model_eps, model_eps))), 0.0, 0.0, 0.0],
-        dtype=np.float64,
-    )
-    return np.clip(fallback, lb, ub)
-
-
-class _ESSVICalibrationObjective:
+class _ESSVIGlobalCalibrationObjective:
     def __init__(
         self,
         *,
         snapshot: _MarketSnapshot,
-        market: MarketData | PricingContext,
-        theta_term: ThetaTermStructure,
-        T_pivot: float,
-        constraint_grid: np.ndarray,
-        cfg: ESSVICalibrationConfig,
+        expiries: np.ndarray,
+        cfg: ESSVIGlobalCalibrationConfig,
     ) -> None:
         self.snapshot = snapshot
-        self.market = market
-        self.theta_term = theta_term
-        self.T_pivot = float(T_pivot)
-        self.constraint_grid = np.asarray(constraint_grid, dtype=np.float64)
+        self.expiries = np.asarray(expiries, dtype=np.float64)
         self.cfg = cfg
-        self.model_eps = max(DEFAULT_NUMERICAL_TOL, float(cfg.constraint_tol))
-        self.price_objective = ESSVIPriceObjective(
-            y=snapshot.y,
-            T=snapshot.T,
-            price_mkt=snapshot.price_mkt,
-            market=market,
-            sqrt_weights=snapshot.sqrt_weights,
-            is_call=snapshot.is_call,
-        )
+        self.expiry_index = np.searchsorted(self.expiries, snapshot.T)
         self.invalid_candidate_count = 0
         self.last_invalid_reason: str | None = None
-        self._soft_block_size = 0
-        if cfg.use_soft_constraints:
-            self._soft_block_size = 5 * self.constraint_grid.size
         self._bad_vector = np.full(
-            snapshot.y.size + self._soft_block_size,
+            snapshot.y.size,
             float(cfg.invalid_residual_value),
             dtype=np.float64,
         )
 
-    def params_from_vector(self, x: np.ndarray) -> ESSVITermStructures:
-        return _build_parametric_terms(
-            x=np.asarray(x, dtype=np.float64),
-            theta_term=self.theta_term,
-            T_pivot=self.T_pivot,
-            eps=self.model_eps,
-        )
-
-    def _soft_penalties(self, report: ESSVIConstraintReport) -> np.ndarray:
-        if not self.cfg.use_soft_constraints:
-            return np.empty((0,), dtype=np.float64)
-        scale = max(float(self.cfg.soft_constraint_scale), 1e-12)
-        lam = np.sqrt(float(self.cfg.soft_constraint_weight))
-        deficits = [
-            np.maximum(-report.theta_margin, 0.0),
-            np.maximum(-report.psi_margin, 0.0),
-            np.maximum(-report.rho_margin, 0.0),
-            np.maximum(-report.lee_margin, 0.0),
-            np.maximum(-report.calendar_margin, 0.0),
-        ]
-        return np.concatenate(
-            [
-                lam * np.asarray(deficit / scale, dtype=np.float64)
-                for deficit in deficits
-            ]
-        )
+    def nodes_from_vector(self, x: np.ndarray) -> ESSVINodeSet:
+        params = _unpack_raw_vector(x, expiries=self.expiries, cfg=self.cfg)
+        return reconstruct_nodes_from_global_params(params)
 
     def residual(self, x: np.ndarray) -> np.ndarray:
         try:
-            params = self.params_from_vector(np.asarray(x, dtype=np.float64))
-            constraint_report = evaluate_essvi_constraints(
-                params,
-                self.constraint_grid,
-                tol=self.cfg.constraint_tol,
-            )
-            if not constraint_report.ok:
+            nodes = self.nodes_from_vector(np.asarray(x, dtype=np.float64))
+            node_report = validate_essvi_nodes(nodes, tol=self.cfg.constraint_tol)
+            if not node_report.ok:
                 self.invalid_candidate_count += 1
-                self.last_invalid_reason = constraint_report.message
+                self.last_invalid_reason = node_report.message
                 return self._bad_vector.copy()
 
-            residual = self.price_objective.residual(params)
-            if self.cfg.use_soft_constraints:
-                residual = np.concatenate(
-                    [residual, self._soft_penalties(constraint_report)]
-                )
+            model = _nodal_model_prices(
+                self.snapshot,
+                nodes,
+                self.expiry_index,
+                eps=self.cfg.model_eps,
+            )
+            residual = np.asarray(
+                self.snapshot.sqrt_weights * (model - self.snapshot.price_mkt),
+                dtype=np.float64,
+            )
             if np.any(~np.isfinite(residual)):
                 self.invalid_candidate_count += 1
                 self.last_invalid_reason = "Non-finite residual."
                 return self._bad_vector.copy()
-            return np.asarray(residual, dtype=np.float64)
+            return residual
         except Exception as exc:
             self.invalid_candidate_count += 1
             self.last_invalid_reason = str(exc)
             return self._bad_vector.copy()
+
+
+def calibrate_essvi_global(
+    *,
+    y: NDArray[np.float64],
+    T: NDArray[np.float64],
+    price_mkt: NDArray[np.float64],
+    market: MarketData | PricingContext,
+    sqrt_weights: NDArray[np.float64] | None = None,
+    weights: NDArray[np.float64] | None = None,
+    is_call: NDArray[np.bool_] | None = None,
+    cfg: ESSVIGlobalCalibrationConfig | None = None,
+) -> ESSVIFitResult:
+    cfg = ESSVIGlobalCalibrationConfig() if cfg is None else cfg
+    snapshot = _market_snapshot(
+        y=y,
+        T=T,
+        price_mkt=price_mkt,
+        market=market,
+        sqrt_weights=sqrt_weights,
+        weights=weights,
+        is_call=is_call,
+        iv_cfg=cfg.iv_cfg,
+    )
+    _, theta_diag = _theta_term_from_total_variance(
+        y=snapshot.y,
+        T=snapshot.T,
+        total_variance=snapshot.total_variance,
+        atm_y_tol=cfg.atm_y_tol,
+    )
+
+    unique_T = np.unique(snapshot.T)
+    x0 = _initial_raw_guess(theta_diag, cfg=cfg)
+
+    objective = _ESSVIGlobalCalibrationObjective(
+        snapshot=snapshot,
+        expiries=unique_T,
+        cfg=cfg,
+    )
+    res = least_squares(
+        fun=objective.residual,
+        x0=x0,
+        loss="linear",
+        x_scale="jac",
+        max_nfev=int(cfg.max_nfev),
+    )
+    if not res.success or not np.all(np.isfinite(res.x)):
+        raise ValueError(f"ESSVI global calibration failed: {res.message}")
+
+    x_opt = np.asarray(res.x, dtype=np.float64)
+    nodes = objective.nodes_from_vector(x_opt)
+    node_validation = validate_essvi_nodes(
+        nodes, strict=cfg.strict_validation, tol=cfg.constraint_tol
+    )
+    fitted_prices = _nodal_model_prices(
+        snapshot, nodes, objective.expiry_index, eps=cfg.model_eps
+    )
+    price_error = np.asarray(fitted_prices - snapshot.price_mkt, dtype=np.float64)
+
+    diag = ESSVIFitDiagnostics(
+        success=bool(res.success),
+        status=int(res.status),
+        message=str(res.message),
+        nfev=int(res.nfev),
+        cost=float(res.cost),
+        x0=np.asarray(x0, dtype=np.float64),
+        x_opt=x_opt,
+        theta=theta_diag,
+        node_validation=node_validation,
+        price_rmse=float(np.sqrt(np.mean(price_error * price_error))),
+        max_abs_price_error=float(np.max(np.abs(price_error))),
+        invalid_candidate_count=int(objective.invalid_candidate_count),
+        last_invalid_reason=objective.last_invalid_reason,
+    )
+    return ESSVIFitResult(nodes=nodes, diag=diag)
 
 
 def calibrate_essvi(
@@ -735,10 +704,9 @@ def calibrate_essvi(
     sqrt_weights: NDArray[np.float64] | None = None,
     weights: NDArray[np.float64] | None = None,
     is_call: NDArray[np.bool_] | None = None,
-    cfg: ESSVICalibrationConfig | None = None,
+    cfg: ESSVIGlobalCalibrationConfig | None = None,
 ) -> ESSVIFitResult:
-    cfg = ESSVICalibrationConfig() if cfg is None else cfg
-    snapshot = _market_snapshot(
+    return calibrate_essvi_global(
         y=y,
         T=T,
         price_mkt=price_mkt,
@@ -746,86 +714,37 @@ def calibrate_essvi(
         sqrt_weights=sqrt_weights,
         weights=weights,
         is_call=is_call,
-        iv_cfg=cfg.iv_cfg,
-    )
-    theta_term, theta_diag = _theta_term_from_total_variance(
-        y=snapshot.y,
-        T=snapshot.T,
-        total_variance=snapshot.total_variance,
-        atm_y_tol=cfg.atm_y_tol,
-    )
-
-    unique_T = np.unique(snapshot.T)
-    T_pivot = float(np.exp(np.mean(np.log(unique_T))))
-    constraint_grid = _constraint_grid(unique_T, cfg.constraint_grid_size)
-    model_eps = max(DEFAULT_NUMERICAL_TOL, float(cfg.constraint_tol))
-    x0 = _safe_initial_guess(
-        theta_diag,
-        theta_term=theta_term,
-        T_pivot=T_pivot,
         cfg=cfg,
-        constraint_grid=constraint_grid,
-        snapshot=snapshot,
-        model_eps=model_eps,
     )
 
-    objective = _ESSVICalibrationObjective(
-        snapshot=snapshot,
+
+def calibrate_essvi_smooth(
+    *,
+    y: NDArray[np.float64],
+    T: NDArray[np.float64],
+    price_mkt: NDArray[np.float64],
+    market: MarketData | PricingContext,
+    sqrt_weights: NDArray[np.float64] | None = None,
+    weights: NDArray[np.float64] | None = None,
+    is_call: NDArray[np.bool_] | None = None,
+    cfg: ESSVIGlobalCalibrationConfig | None = None,
+):
+    from .smooth_projection import ESSVIProjectionConfig, project_essvi_nodes
+
+    warnings.warn(
+        "calibrate_essvi_smooth is a compatibility helper. It now calibrates "
+        "global Mingone nodes first and then applies the explicit projection stage.",
+        category=DeprecationWarning,
+        stacklevel=2,
+    )
+    fit = calibrate_essvi_global(
+        y=y,
+        T=T,
+        price_mkt=price_mkt,
         market=market,
-        theta_term=theta_term,
-        T_pivot=T_pivot,
-        constraint_grid=constraint_grid,
+        sqrt_weights=sqrt_weights,
+        weights=weights,
+        is_call=is_call,
         cfg=cfg,
     )
-    lb, ub = cfg.bounds
-    res = least_squares(
-        fun=objective.residual,
-        x0=x0,
-        bounds=(lb, ub),
-        loss="linear",
-        x_scale="jac",
-        max_nfev=int(cfg.max_nfev),
-    )
-
-    if not res.success or not np.all(np.isfinite(res.x)):
-        raise ValueError(f"ESSVI calibration failed: {res.message}")
-
-    x_opt = np.asarray(res.x, dtype=np.float64)
-    params = objective.params_from_vector(x_opt)
-    constraint_report = evaluate_essvi_constraints(
-        params,
-        constraint_grid,
-        tol=cfg.constraint_tol,
-    )
-    y_validation = np.linspace(
-        float(cfg.validation_y_min),
-        float(cfg.validation_y_max),
-        int(cfg.validation_ny),
-        dtype=np.float64,
-    )
-    validation = validate_essvi_surface(
-        params,
-        market,
-        expiries=_validation_expiries(unique_T),
-        y_grid=y_validation,
-        strict=cfg.strict_validation,
-        tol=cfg.constraint_tol,
-    )
-
-    diag = ESSVIFitDiagnostics(
-        success=bool(res.success),
-        status=int(res.status),
-        message=str(res.message),
-        nfev=int(res.nfev),
-        cost=float(res.cost),
-        x0=np.asarray(x0, dtype=np.float64),
-        x_opt=x_opt,
-        T_pivot=T_pivot,
-        theta=theta_diag,
-        constraint_grid=constraint_grid,
-        constraint_report=constraint_report,
-        validation=validation,
-        invalid_candidate_count=int(objective.invalid_candidate_count),
-        last_invalid_reason=objective.last_invalid_reason,
-    )
-    return ESSVIFitResult(params=params, diag=diag)
+    return project_essvi_nodes(fit.nodes, cfg=ESSVIProjectionConfig())

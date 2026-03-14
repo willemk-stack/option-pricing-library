@@ -104,25 +104,37 @@ def gatheral_local_var_diagnostics(
         | (~np.isfinite(terms.w_yy))
         | (~np.isfinite(terms.w_T))
     )
-    reason |= np.where(nonfinite, np.uint32(LVInvalidReason.NONFINITE_INPUT), 0)
+    reason |= np.where(
+        nonfinite, np.uint32(LVInvalidReason.NONFINITE_INPUT), np.uint32(0)
+    )
 
     w_small = terms.w <= eps_w
-    reason |= np.where(w_small, np.uint32(LVInvalidReason.W_TOO_SMALL), 0)
+    reason |= np.where(w_small, np.uint32(LVInvalidReason.W_TOO_SMALL), np.uint32(0))
 
     denom_nonfinite = ~np.isfinite(terms.denom)
-    reason |= np.where(denom_nonfinite, np.uint32(LVInvalidReason.DENOM_NONFINITE), 0)
+    reason |= np.where(
+        denom_nonfinite, np.uint32(LVInvalidReason.DENOM_NONFINITE), np.uint32(0)
+    )
 
     denom_small = np.abs(terms.denom) <= eps_denom
-    reason |= np.where(denom_small, np.uint32(LVInvalidReason.DENOM_TOO_SMALL), 0)
+    reason |= np.where(
+        denom_small, np.uint32(LVInvalidReason.DENOM_TOO_SMALL), np.uint32(0)
+    )
 
     denom_nonpos = terms.denom <= 0.0
-    reason |= np.where(denom_nonpos, np.uint32(LVInvalidReason.DENOM_NONPOSITIVE), 0)
+    reason |= np.where(
+        denom_nonpos, np.uint32(LVInvalidReason.DENOM_NONPOSITIVE), np.uint32(0)
+    )
 
     lv_nonfinite = ~np.isfinite(terms.local_var_raw)
-    reason |= np.where(lv_nonfinite, np.uint32(LVInvalidReason.LOCALVAR_NONFINITE), 0)
+    reason |= np.where(
+        lv_nonfinite, np.uint32(LVInvalidReason.LOCALVAR_NONFINITE), np.uint32(0)
+    )
 
     lv_neg = terms.local_var_raw < 0.0
-    reason |= np.where(lv_neg, np.uint32(LVInvalidReason.LOCALVAR_NEGATIVE), 0)
+    reason |= np.where(
+        lv_neg, np.uint32(LVInvalidReason.LOCALVAR_NEGATIVE), np.uint32(0)
+    )
 
     invalid = reason != 0
 

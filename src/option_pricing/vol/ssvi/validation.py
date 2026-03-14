@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -9,7 +10,8 @@ from ...types import MarketData
 from ...typing import ArrayLike
 from ..arbitrage import CalendarVarianceReport, SurfaceNoArbReport, check_surface_noarb
 from ..surface_core import VolSurface
-from .models import ESSVITermStructures
+from .mingone import compute_Apsi_Cpsi, compute_p_sequence
+from .models import ESSVINodeSet, ESSVITermStructures
 from .surface import ESSVISmileSlice
 
 
@@ -51,8 +53,43 @@ class ESSVIConstraintReport:
     psi_margin: np.ndarray
     rho_margin: np.ndarray
     lee_margin: np.ndarray
-    calendar_margin: np.ndarray
+    gj_butterfly_margin: np.ndarray
     bad_indices: np.ndarray
+    violations: tuple[str, ...]
+    message: str
+
+    @property
+    def calendar_margin(self) -> np.ndarray:
+        warnings.warn(
+            "ESSVIConstraintReport.calendar_margin is deprecated; use "
+            "gj_butterfly_margin instead.",
+            category=DeprecationWarning,
+            stacklevel=2,
+        )
+        return np.asarray(self.gj_butterfly_margin, dtype=np.float64)
+
+
+@dataclass(frozen=True, slots=True)
+class ESSVINodeConstraintReport:
+    ok: bool
+    expiries: np.ndarray
+    theta: np.ndarray
+    psi: np.ndarray
+    rho: np.ndarray
+    eta: np.ndarray
+    p: np.ndarray
+    theta_margin: np.ndarray
+    psi_margin: np.ndarray
+    rho_margin: np.ndarray
+    lee_margin: np.ndarray
+    gj_butterfly_margin: np.ndarray
+    theta_increase_margin: np.ndarray
+    psi_lower_margin: np.ndarray
+    psi_upper_margin: np.ndarray
+    g_plus_margin: np.ndarray
+    g_minus_margin: np.ndarray
+    bad_node_indices: np.ndarray
+    bad_pair_indices: np.ndarray
     violations: tuple[str, ...]
     message: str
 
@@ -91,7 +128,7 @@ def evaluate_essvi_constraints(
             psi_margin=nan,
             rho_margin=nan,
             lee_margin=nan,
-            calendar_margin=nan,
+            gj_butterfly_margin=nan,
             bad_indices=bad,
             violations=("evaluation_error",),
             message=f"Constraint evaluation failed: {exc}",
@@ -102,14 +139,14 @@ def evaluate_essvi_constraints(
     psi_margin = psi
     rho_margin = psi - abs_eta
     lee_margin = (4.0 - float(tol)) - (psi + abs_eta)
-    calendar_margin = (4.0 * theta - float(tol)) - psi * (psi + abs_eta)
+    gj_butterfly_margin = (4.0 * theta - float(tol)) - psi * (psi + abs_eta)
 
     masks = {
         "theta_positive": (~np.isfinite(theta)) | (theta_margin <= 0.0),
         "psi_positive": (~np.isfinite(psi)) | (psi_margin <= 0.0),
         "rho_constraint": (~np.isfinite(eta)) | (rho_margin <= 0.0),
         "lee_constraint": lee_margin <= 0.0,
-        "calendar_constraint": calendar_margin < 0.0,
+        "gj_butterfly_constraint": gj_butterfly_margin < 0.0,
     }
 
     bad_mask = np.zeros_like(T, dtype=bool)
@@ -122,14 +159,7 @@ def evaluate_essvi_constraints(
 
     bad_indices = np.flatnonzero(bad_mask).astype(np.int64)
     ok = bad_indices.size == 0
-    if ok:
-        message = "OK"
-    else:
-        message = (
-            "Violations found: "
-            + ", ".join(violations)
-            + f" at {bad_indices.size} maturity points."
-        )
+    message = "OK" if ok else f"Violations found: {', '.join(violations)}."
 
     return ESSVIConstraintReport(
         ok=ok,
@@ -141,14 +171,113 @@ def evaluate_essvi_constraints(
         psi_margin=psi_margin,
         rho_margin=rho_margin,
         lee_margin=lee_margin,
-        calendar_margin=calendar_margin,
+        gj_butterfly_margin=gj_butterfly_margin,
         bad_indices=bad_indices,
         violations=tuple(violations),
         message=message,
     )
 
 
-def validate_essvi_surface(
+def validate_essvi_nodes(
+    nodes: ESSVINodeSet,
+    *,
+    strict: bool = False,
+    tol: float = 1e-10,
+) -> ESSVINodeConstraintReport:
+    theta = np.asarray(nodes.theta, dtype=np.float64)
+    psi = np.asarray(nodes.psi, dtype=np.float64)
+    rho = np.asarray(nodes.rho, dtype=np.float64)
+    eta = np.asarray(nodes.eta, dtype=np.float64)
+
+    p = compute_p_sequence(rho)
+    A, C = compute_Apsi_Cpsi(theta, rho, psi)
+
+    theta_margin = theta
+    psi_margin = psi
+    rho_margin = 1.0 - np.abs(rho)
+    lee_margin = (4.0 - float(tol)) - (psi + np.abs(eta))
+    gj_butterfly_margin = (4.0 * theta - float(tol)) - psi * (psi + np.abs(eta))
+
+    theta_increase_margin = (
+        np.diff(theta) if theta.size > 1 else np.empty((0,), dtype=np.float64)
+    )
+    psi_lower_margin = (
+        psi[1:] - A[1:] if psi.size > 1 else np.empty((0,), dtype=np.float64)
+    )
+    psi_upper_margin = (
+        C[1:] - psi[1:] if psi.size > 1 else np.empty((0,), dtype=np.float64)
+    )
+    g_plus_margin = (
+        np.diff(nodes.g_plus) if psi.size > 1 else np.empty((0,), dtype=np.float64)
+    )
+    g_minus_margin = (
+        np.diff(nodes.g_minus) if psi.size > 1 else np.empty((0,), dtype=np.float64)
+    )
+
+    node_masks = {
+        "theta_positive": theta_margin <= 0.0,
+        "psi_positive": psi_margin <= 0.0,
+        "rho_constraint": rho_margin <= 0.0,
+        "lee_constraint": lee_margin <= 0.0,
+        "gj_butterfly_constraint": gj_butterfly_margin < 0.0,
+    }
+    pair_masks = {
+        "theta_increase": theta_increase_margin <= 0.0,
+        "psi_lower": psi_lower_margin <= 0.0,
+        "psi_upper": psi_upper_margin <= 0.0,
+        "g_plus_monotone": g_plus_margin <= 0.0,
+        "g_minus_monotone": g_minus_margin <= 0.0,
+    }
+
+    bad_node_mask = np.zeros_like(theta, dtype=bool)
+    violations: list[str] = []
+    for name, mask in node_masks.items():
+        mask_arr = np.asarray(mask, dtype=bool)
+        if np.any(mask_arr):
+            bad_node_mask |= mask_arr
+            violations.append(name)
+
+    bad_pair_mask = np.zeros(max(theta.size - 1, 0), dtype=bool)
+    for name, mask in pair_masks.items():
+        mask_arr = np.asarray(mask, dtype=bool)
+        if np.any(mask_arr):
+            bad_pair_mask |= mask_arr
+            violations.append(name)
+
+    bad_node_indices = np.flatnonzero(bad_node_mask).astype(np.int64)
+    bad_pair_indices = np.flatnonzero(bad_pair_mask).astype(np.int64)
+    ok = bad_node_indices.size == 0 and bad_pair_indices.size == 0
+    message = "OK" if ok else f"Violations found: {', '.join(violations)}."
+
+    report = ESSVINodeConstraintReport(
+        ok=ok,
+        expiries=np.asarray(nodes.expiries, dtype=np.float64),
+        theta=theta,
+        psi=psi,
+        rho=rho,
+        eta=eta,
+        p=p,
+        theta_margin=theta_margin,
+        psi_margin=psi_margin,
+        rho_margin=rho_margin,
+        lee_margin=lee_margin,
+        gj_butterfly_margin=gj_butterfly_margin,
+        theta_increase_margin=np.asarray(theta_increase_margin, dtype=np.float64),
+        psi_lower_margin=np.asarray(psi_lower_margin, dtype=np.float64),
+        psi_upper_margin=np.asarray(psi_upper_margin, dtype=np.float64),
+        g_plus_margin=np.asarray(g_plus_margin, dtype=np.float64),
+        g_minus_margin=np.asarray(g_minus_margin, dtype=np.float64),
+        bad_node_indices=bad_node_indices,
+        bad_pair_indices=bad_pair_indices,
+        violations=tuple(violations),
+        message=message,
+    )
+    if strict and not report.ok:
+        raise ValueError(report.message)
+    return report
+
+
+def validate_essvi_continuous(
     params: ESSVITermStructures,
     market: MarketData | PricingContext,
     *,
@@ -227,3 +356,27 @@ def validate_essvi_surface(
     if strict and not report.ok:
         raise ValueError(report.message)
     return report
+
+
+def validate_essvi_surface(
+    params: ESSVITermStructures,
+    market: MarketData | PricingContext,
+    *,
+    expiries: ArrayLike | None = None,
+    y_grid: ArrayLike | None = None,
+    strict: bool = False,
+    tol: float = 1e-10,
+) -> ESSVIValidationReport:
+    warnings.warn(
+        "validate_essvi_surface is deprecated; use validate_essvi_continuous.",
+        category=DeprecationWarning,
+        stacklevel=2,
+    )
+    return validate_essvi_continuous(
+        params,
+        market,
+        expiries=expiries,
+        y_grid=y_grid,
+        strict=strict,
+        tol=tol,
+    )

@@ -33,8 +33,10 @@ from .vol_types import DifferentiableSmileSlice, TimeDifferentiableImpliedSurfac
 class LocalVolSurface:
     """Local-vol surface computed from an implied surface in total variance.
 
-    This is a *minimal* implementation intended for demos while I work on a
-    time-consistent parameterization (e.g. SSVI/eSSVI).
+    For nodal implied surfaces, this class falls back to piecewise-time
+    interpolation and is best treated as a research/audit tool. For Dupire
+    production usage, prefer a continuous time-differentiable implied surface
+    such as ``ESSVISmoothedSurface``.
 
     Requirements
     ------------
@@ -72,10 +74,10 @@ class LocalVolSurface:
 
         if is_svi_like:
             warnings.warn(
-                "LocalVolSurface is currently derived from per-expiry SVI slices with piecewise-linear "
-                "time interpolation in total variance. This is demo-grade and can be numerically unstable "
-                "(e.g., banding from discontinuous w_T). It will be replaced by a time-consistent SSVI/eSSVI "
-                "implementation in a future version.",
+                "LocalVolSurface is currently derived from per-expiry slices with piecewise-linear "
+                "time interpolation in total variance. This is numerically fragile for Dupire use "
+                "(for example, banding from discontinuous w_T). Prefer a time-differentiable implied "
+                "surface such as ESSVISmoothedSurface when available.",
                 category=FutureWarning,  # or UserWarning
                 stacklevel=2,
             )

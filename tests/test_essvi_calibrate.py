@@ -6,15 +6,23 @@ import pytest
 from option_pricing.types import MarketData, OptionType
 from option_pricing.vol.ssvi import (
     ESSVICalibrationConfig,
+    ESSVINodalSurface,
+    ESSVINodeSet,
     ESSVITermStructures,
     EtaTermStructure,
+    MingoneGlobalParams,
     PsiTermStructure,
     ThetaTermStructure,
     build_theta_term_from_quotes,
     calibrate_essvi,
+    compute_Apsi_Cpsi,
     essvi_implied_price,
     essvi_total_variance,
     evaluate_essvi_constraints,
+    interpolate_nodes,
+    project_essvi_nodes,
+    reconstruct_nodes_from_global_params,
+    validate_essvi_nodes,
     validate_essvi_surface,
 )
 from option_pricing.vol.svi.transforms import softplus
@@ -250,9 +258,9 @@ def test_calibrate_essvi_recovers_synthetic_price_surface() -> None:
         cfg=ESSVICalibrationConfig(strict_validation=True),
     )
 
-    assert result.diag.validation.ok
-    assert result.diag.constraint_report.ok
-    objective_price = essvi_implied_price(
+    assert result.diag.node_validation.ok
+    fitted_surface = ESSVINodalSurface(result.nodes)
+    objective_price = fitted_surface.price(
         kind=OptionType.CALL,
         strike=np.asarray(
             [
@@ -263,7 +271,6 @@ def test_calibrate_essvi_recovers_synthetic_price_surface() -> None:
         ),
         forward=np.asarray([market.fwd(float(tau)) for tau in T], dtype=np.float64),
         df=np.asarray([market.df(float(tau)) for tau in T], dtype=np.float64),
-        params=result.params,
         T=T,
     )
     put_price = objective_price - np.asarray(
@@ -285,3 +292,73 @@ def test_calibrate_essvi_recovers_synthetic_price_surface() -> None:
     )
     fitted_price = np.where(is_call, objective_price, put_price)
     np.testing.assert_allclose(fitted_price, price_mkt, atol=5e-4)
+
+    projection = project_essvi_nodes(result.nodes)
+    assert projection.success
+    assert projection.surface is not None
+    y_probe = np.array([-0.2, 0.0, 0.2], dtype=np.float64)
+    w, w_y, w_yy, w_T = projection.surface.w_and_derivs(y_probe, 0.75)
+    assert np.all(np.isfinite(w))
+    assert np.all(np.isfinite(w_y))
+    assert np.all(np.isfinite(w_yy))
+    assert np.all(np.isfinite(w_T))
+
+
+def test_reconstruct_nodes_from_global_params_produces_admissible_nodes() -> None:
+    params = MingoneGlobalParams(
+        expiries=np.array([0.25, 0.5, 1.0], dtype=np.float64),
+        rho_raw=np.array([0.1, -0.2, 0.15], dtype=np.float64),
+        theta1_raw=-2.5,
+        a_raw=np.array([-2.0, -1.7], dtype=np.float64),
+        c_raw=np.array([0.0, -0.4, 0.6], dtype=np.float64),
+        rho_cap=0.95,
+    )
+
+    nodes = reconstruct_nodes_from_global_params(params)
+    report = validate_essvi_nodes(nodes, strict=True)
+    A, C = compute_Apsi_Cpsi(nodes.theta, nodes.rho, nodes.psi)
+
+    assert report.ok
+    assert np.all(nodes.theta > 0.0)
+    assert np.all(nodes.psi > 0.0)
+    assert np.all(np.abs(nodes.rho) < 1.0)
+    assert np.all(A[1:] < nodes.psi[1:])
+    assert np.all(nodes.psi < C + 1e-12)
+
+
+def test_interpolate_nodes_is_linear_in_theta_psi_and_chi() -> None:
+    nodes = ESSVINodeSet(
+        expiries=np.array([0.5, 1.5], dtype=np.float64),
+        theta=np.array([0.04, 0.10], dtype=np.float64),
+        psi=np.array([0.18, 0.24], dtype=np.float64),
+        rho=np.array([-0.25, 0.10], dtype=np.float64),
+    )
+
+    state_mid = interpolate_nodes(nodes, 1.0)
+    chi = nodes.psi * nodes.rho
+    np.testing.assert_allclose(np.asarray(state_mid.theta), 0.07, atol=1e-12)
+    np.testing.assert_allclose(np.asarray(state_mid.psi), 0.21, atol=1e-12)
+    np.testing.assert_allclose(
+        np.asarray(state_mid.eta),
+        0.5 * (chi[0] + chi[1]),
+        atol=1e-12,
+    )
+
+    state_left = interpolate_nodes(nodes, 0.25)
+    np.testing.assert_allclose(
+        np.asarray(state_left.theta), 0.5 * nodes.theta[0], atol=1e-12
+    )
+    np.testing.assert_allclose(
+        np.asarray(state_left.psi), 0.5 * nodes.psi[0], atol=1e-12
+    )
+    np.testing.assert_allclose(np.asarray(state_left.rho), nodes.rho[0], atol=1e-12)
+
+    state_right = interpolate_nodes(nodes, 2.0)
+    expected_theta = nodes.theta[-1] + (
+        (nodes.theta[-1] - nodes.theta[-2]) / (nodes.expiries[-1] - nodes.expiries[-2])
+    ) * (2.0 - nodes.expiries[-1])
+    np.testing.assert_allclose(
+        np.asarray(state_right.theta), expected_theta, atol=1e-12
+    )
+    np.testing.assert_allclose(np.asarray(state_right.psi), nodes.psi[-1], atol=1e-12)
+    np.testing.assert_allclose(np.asarray(state_right.rho), nodes.rho[-1], atol=1e-12)

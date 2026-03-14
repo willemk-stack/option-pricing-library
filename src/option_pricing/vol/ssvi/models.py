@@ -225,3 +225,103 @@ class ESSVITermStructures:
         numerator = dpsi * theta - psi * dtheta
         denominator = theta * theta
         return _safe_divide(numerator, denominator, name="dphi_dT(T)", eps=self.eps)
+
+
+@dataclass(frozen=True, slots=True)
+class ESSVINodeSet:
+    """Discrete eSSVI node representation on calibrated expiries."""
+
+    expiries: np.ndarray
+    theta: np.ndarray
+    psi: np.ndarray
+    rho: np.ndarray
+    eps: float = DEFAULT_NUMERICAL_TOL
+
+    def __post_init__(self) -> None:
+        expiries = _as_float_array(self.expiries).reshape(-1)
+        theta = _as_float_array(self.theta).reshape(-1)
+        psi = _as_float_array(self.psi).reshape(-1)
+        rho = _as_float_array(self.rho).reshape(-1)
+
+        if expiries.size == 0:
+            raise ValueError("ESSVINodeSet requires at least one expiry.")
+        if not (expiries.size == theta.size == psi.size == rho.size):
+            raise ValueError("expiries, theta, psi, and rho must have the same size.")
+        if np.any(~np.isfinite(expiries)) or np.any(expiries <= 0.0):
+            raise ValueError("expiries must be finite and > 0.")
+        if np.any(np.diff(expiries) <= 0.0):
+            raise ValueError("expiries must be strictly increasing.")
+        if np.any(~np.isfinite(theta)) or np.any(theta <= 0.0):
+            raise ValueError("theta nodes must be finite and > 0.")
+        if np.any(~np.isfinite(psi)) or np.any(psi <= 0.0):
+            raise ValueError("psi nodes must be finite and > 0.")
+        if np.any(~np.isfinite(rho)):
+            raise ValueError("rho nodes must be finite.")
+        if np.any(np.abs(rho) >= 1.0 - float(self.eps)):
+            raise ValueError("|rho| must be strictly less than 1 at every node.")
+        if self.eps <= 0.0:
+            raise ValueError("eps must be > 0.")
+
+        object.__setattr__(self, "expiries", expiries)
+        object.__setattr__(self, "theta", theta)
+        object.__setattr__(self, "psi", psi)
+        object.__setattr__(self, "rho", rho)
+
+    @property
+    def eta(self) -> np.ndarray:
+        return np.asarray(self.psi * self.rho, dtype=np.float64)
+
+    @property
+    def g_plus(self) -> np.ndarray:
+        return np.asarray(self.psi * (1.0 + self.rho), dtype=np.float64)
+
+    @property
+    def g_minus(self) -> np.ndarray:
+        return np.asarray(self.psi * (1.0 - self.rho), dtype=np.float64)
+
+
+@dataclass(frozen=True, slots=True)
+class MingoneGlobalParams:
+    """Unconstrained global optimizer variables for Mingone eSSVI calibration."""
+
+    expiries: np.ndarray
+    rho_raw: np.ndarray
+    theta1_raw: float
+    a_raw: np.ndarray
+    c_raw: np.ndarray
+    rho_cap: float = 0.95
+    eps: float = DEFAULT_NUMERICAL_TOL
+
+    def __post_init__(self) -> None:
+        expiries = _as_float_array(self.expiries).reshape(-1)
+        rho_raw = _as_float_array(self.rho_raw).reshape(-1)
+        a_raw = _as_float_array(self.a_raw).reshape(-1)
+        c_raw = _as_float_array(self.c_raw).reshape(-1)
+
+        if expiries.size == 0:
+            raise ValueError("MingoneGlobalParams requires at least one expiry.")
+        if np.any(~np.isfinite(expiries)) or np.any(expiries <= 0.0):
+            raise ValueError("expiries must be finite and > 0.")
+        if np.any(np.diff(expiries) <= 0.0):
+            raise ValueError("expiries must be strictly increasing.")
+        if rho_raw.size != expiries.size:
+            raise ValueError("rho_raw must have the same length as expiries.")
+        if c_raw.size != expiries.size:
+            raise ValueError("c_raw must have the same length as expiries.")
+        if a_raw.size != max(expiries.size - 1, 0):
+            raise ValueError("a_raw must have length len(expiries) - 1.")
+        if not np.isfinite(float(self.theta1_raw)):
+            raise ValueError("theta1_raw must be finite.")
+        if not np.isfinite(float(self.rho_cap)) or not (0.0 < self.rho_cap < 1.0):
+            raise ValueError("rho_cap must be finite and lie in (0, 1).")
+        if self.eps <= 0.0:
+            raise ValueError("eps must be > 0.")
+
+        object.__setattr__(self, "expiries", expiries)
+        object.__setattr__(self, "rho_raw", rho_raw)
+        object.__setattr__(self, "a_raw", a_raw)
+        object.__setattr__(self, "c_raw", c_raw)
+
+    @property
+    def size(self) -> int:
+        return int(self.expiries.size)
