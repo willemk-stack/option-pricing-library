@@ -7,6 +7,8 @@ The two central ideas are:
 - a **smile** at one expiry, represented in total variance
 - a **surface** across expiries, interpolated in total variance
 
+For a continuous analytic parameter surface, the library also provides dedicated eSSVI objects. Those are covered in [eSSVI](essvi.md).
+
 ## Core objects
 
 ```python
@@ -20,6 +22,8 @@ A `Smile` stores:
 - `w = T * iv^2`: total variance on that grid
 
 A `VolSurface` stores multiple smile slices plus a `forward(T)` callable.
+
+`VolSurface` is the generic container for grid-based or per-expiry smile stacks. If you need analytic time derivatives such as `w_T`, use `ESSVIImpliedSurface` or `ESSVISmoothedSurface` instead of wrapping eSSVI data into `VolSurface`.
 
 ## Build a simple grid-based surface from `(T, K, iv)` points
 
@@ -87,6 +91,18 @@ surface_svi = VolSurface.from_svi(
 
 That gives you analytic per-expiry slices instead of grid-interpolated smiles.
 
+## Use eSSVI for a continuous analytic surface
+
+`VolSurface` is not the only surface path in the library.
+
+If you want a continuous parameter surface with explicit eSSVI constraints and analytic derivatives in both log-moneyness and time, use the dedicated eSSVI types:
+
+- `ESSVIImpliedSurface` for direct term-structure parameterizations
+- `ESSVINodalSurface` for exact calibrated-node interpolation
+- `ESSVISmoothedSurface` for Dupire-oriented smooth projection
+
+Those workflows live in [eSSVI](essvi.md) because they are not just another `VolSurface.from_*` constructor; they expose their own calibration, projection, and validation helpers.
+
 ## Surface no-arbitrage sanity checks
 
 ```python
@@ -109,4 +125,5 @@ These checks are lightweight sanity checks for:
 
 - `VolSurface.from_grid(...)` is lightweight and dependency-light.
 - `VolSurface.from_svi(...)` is the right starting point if you plan to build a [Local volatility](local_vol.md) surface later.
+- For a time-differentiable implied surface that is better aligned with Dupire workflows, prefer the eSSVI path in [eSSVI](essvi.md).
 - For full SVI calibration details, see [SVI](svi.md).

@@ -92,4 +92,5 @@ See the recommended snippet above, or use the [Pricers](pricers.md) page for the
 
 - Times are expressed in years.
 - `PricingInputs` uses absolute expiry `T` together with valuation time `t`, and exposes `tau` as `T - t`.
+- With the default `t=0`, the numeric value of `expiry` happens to equal `tau` in the flat-input examples.
 - `PricingContext` and instrument-based pricers work directly with `tau` (time to expiry).

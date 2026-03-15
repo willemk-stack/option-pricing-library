@@ -24,6 +24,7 @@ def main() -> None:
     from option_pricing.config import MCConfig, RandomConfig
 
     market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.0)
+    # In PricingInputs, expiry is the absolute expiry T; with t=0 it equals tau numerically.
     spec = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)
     p = PricingInputs(spec=spec, market=market, sigma=0.20, t=0.0)
 

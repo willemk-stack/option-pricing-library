@@ -1,23 +1,53 @@
-"""Notebook helpers for the Capstone 2 demo dashboard."""
+"""Notebook helpers for the integration demo dashboard."""
 
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
-
-from IPython.display import (  # type: ignore[import-not-found]
-    Markdown,
-    clear_output,
-    display,
-)
+from importlib import import_module
+from typing import Any, cast
 
 from option_pricing.demos.capstone2 import run_capstone2
+
+DisplayFn = Callable[..., None]
+MarkdownFactory = Callable[[str], Any]
+
+
+def _fallback_display(*objects: Any) -> None:
+    for obj in objects:
+        print(obj)
+
+
+def _fallback_clear_output(*_args: Any, **_kwargs: Any) -> None:
+    return None
+
+
+def _fallback_markdown(text: str) -> str:
+    return text
+
+
+try:
+    _ipython_display = import_module("IPython.display")
+except Exception:
+    Markdown: MarkdownFactory = _fallback_markdown
+    clear_output: DisplayFn = _fallback_clear_output
+    display: DisplayFn = _fallback_display
+else:
+    Markdown = cast(
+        MarkdownFactory,
+        getattr(_ipython_display, "Markdown", _fallback_markdown),
+    )
+    clear_output = cast(
+        DisplayFn,
+        getattr(_ipython_display, "clear_output", _fallback_clear_output),
+    )
+    display = cast(DisplayFn, getattr(_ipython_display, "display", _fallback_display))
 
 
 @dataclass
 class DemoDashboard:
-    """Stateful dashboard helper for the Capstone 2 notebook."""
+    """Stateful dashboard helper for the integration demo notebook."""
 
     _demo_profile: str = "quick"
     _seed: int = 7
@@ -76,7 +106,6 @@ class DemoDashboard:
                 "RUN_LOCALVOL_CONVERGENCE_SWEEP": self._show_advanced,
                 "RUN_LOCALVOL_REPRICING": True,
                 "RUN_EXPLICIT_SVI_REPAIR_DEMO": True,
-                "RUN_GJ_EXAMPLE51_SANITY_CHECK": self._show_advanced,
             },
         }
 
@@ -282,3 +311,6 @@ class DemoDashboard:
         display(run_out)
 
         apply_state(quiet=False)
+
+
+IntegrationDemoDashboard = DemoDashboard

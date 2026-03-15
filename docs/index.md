@@ -9,6 +9,7 @@ The project started as a compact pricing library for textbook models, and now al
 - **Monte Carlo under GBM**
 - **Implied volatility inversion**
 - **Smile and surface construction**
+- **SVI and eSSVI calibration / validation workflows**
 - **No-arbitrage diagnostics**
 - **Local-volatility extraction and diagnostics**
 - **Finite-difference PDE pricing and convergence checks**
@@ -43,7 +44,7 @@ Use `PricingContext`, the volatility modules, and PDE tooling when you need term
 
 ## Flagship capstones
 
-### Capstone 1 — Volatility surfaces, no-arbitrage, and SVI
+### Capstone 1 — Volatility surfaces, no-arbitrage, SVI, and eSSVI
 
 This capstone focuses on building and validating implied-volatility structures:
 
@@ -52,8 +53,9 @@ This capstone focuses on building and validating implied-volatility structures:
 - surface interpolation
 - no-arbitrage diagnostics
 - SVI fitting and repair workflows
+- eSSVI calibration, validation, and smooth-surface projection
 
-A good place to begin is the vol-surface demo and the user guides around surfaces and diagnostics.
+A good place to begin is the vol-surface guide, the [eSSVI guide](user_guides/essvi.md), and the related surface diagnostics pages.
 
 ### Capstone 2 — Local Vol + PDE Pricing + Diagnostics
 

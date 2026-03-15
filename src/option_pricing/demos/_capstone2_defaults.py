@@ -1,4 +1,4 @@
-"""Defaults for the Capstone 2 demo recipe."""
+"""Defaults for the flagship demo suite."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from option_pricing.pricers.pde.domain import BSDomainConfig, BSDomainPolicy
 
 
 def get_capstone2_defaults(seed: int) -> dict[str, Any]:
-    """Return default configs for the Capstone 2 demo.
+    """Return default configs for the flagship demo suite.
 
     Parameters
     ----------
@@ -39,7 +39,8 @@ def get_capstone2_defaults(seed: int) -> dict[str, Any]:
         sigma_level=0.24,
         sigma_term_slope=0.02,
         noise_mode="absolute",
-        noise_level=0.006,
+        # Keep the shared quotes mostly clean so both SVI and eSSVI stories read well.
+        noise_level=0.001,
         noise_dist="normal",
         noise_smooth_window=1,
         outlier_prob=0.0,
@@ -106,6 +107,22 @@ def get_capstone2_defaults(seed: int) -> dict[str, Any]:
 
     lv_sweep_grids = [(101, 201), (151, 301), (201, 401), (251, 501)]
 
+    essvi_calibration_cfg = dict(
+        strict_validation=True,
+        max_nfev=2_000,
+    )
+    essvi_projection_cfg = dict(
+        validation_nt=31,
+        validation_y_min=-0.50,
+        validation_y_max=0.50,
+        validation_ny=41,
+        dupire_nt=21,
+        dupire_y_min=-0.50,
+        dupire_y_max=0.50,
+        dupire_ny=31,
+        strict_validation=False,
+    )
+
     return {
         "ENFORCE_ARB_FREE_LATENT_TRUTH": True,
         "SYNTH_MAX_ROUNDS": 8,
@@ -120,4 +137,6 @@ def get_capstone2_defaults(seed: int) -> dict[str, Any]:
         "LV_DOMAIN_CFG": lv_domain_cfg,
         "LV_PDE_SOLVER_CFG": lv_pde_solver_cfg,
         "LV_SWEEP_GRIDS": lv_sweep_grids,
+        "ESSVI_CALIBRATION_CFG": essvi_calibration_cfg,
+        "ESSVI_PROJECTION_CFG": essvi_projection_cfg,
     }

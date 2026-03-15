@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..numerics.interpolation import FritschCarlson
+from ..numerics.interpolation import FritschCarlson, linear_interp_factory
 from ..typing import ArrayLike, FloatArray
 
 
@@ -62,21 +62,6 @@ def _u_split_index(w: np.ndarray, *, eps: float | None = None) -> int | None:
     return int(k_best)
 
 
-def _linear_interp_factory(
-    x: np.ndarray, y: np.ndarray
-) -> Callable[[np.ndarray], np.ndarray]:
-    """1D linear interpolation with flat extrapolation."""
-    y0 = float(y[0])
-    y1 = float(y[-1])
-
-    def plin(xq: np.ndarray) -> np.ndarray:
-        xq_in = np.asarray(xq, dtype=np.float64)
-        out = np.interp(xq_in, x, y, left=y0, right=y1)
-        return np.asarray(out, dtype=np.float64)
-
-    return plin
-
-
 def _stitch_two(
     xk: float,
     left_interp: Callable[[np.ndarray], np.ndarray],
@@ -116,16 +101,17 @@ def _make_w_interpolator(
     """
     # Fail-safe: if non-finite, fallback to linear
     if not (np.all(np.isfinite(x)) and np.all(np.isfinite(w))):
-        return _linear_interp_factory(x, w)
+        return linear_interp_factory(x, w)
 
     # Fritsch-Carlson needs at least 3 points (finite-diff stencil). For
     # 2-point smiles we still want a sensible interpolator.
     if x.size < 3:
-        return _linear_interp_factory(x, w)
+        return linear_interp_factory(x, w)
 
     # Case 1: monotone overall -> single FC
     if _is_monotone(w):
-        return FritschCarlson(x, w)
+        w_interp, _ = FritschCarlson(x, w)
+        return w_interp
 
     # Case 2a: robust U-shape split
     k = _u_split_index(w)
@@ -133,16 +119,15 @@ def _make_w_interpolator(
         xL, wL = x[: k + 1], w[: k + 1]
         xR, wR = x[k:], w[k:]
         if _is_monotone(wL) and _is_monotone(wR):
-            pL = (
-                FritschCarlson(xL, wL)
-                if xL.size >= 3
-                else _linear_interp_factory(xL, wL)
-            )
-            pR = (
-                FritschCarlson(xR, wR)
-                if xR.size >= 3
-                else _linear_interp_factory(xR, wR)
-            )
+            if xL.size >= 3:
+                pL, _ = FritschCarlson(xL, wL)
+            else:
+                pL = linear_interp_factory(xL, wL)
+
+            if xR.size >= 3:
+                pR, _ = FritschCarlson(xR, wR)
+            else:
+                pR = linear_interp_factory(xR, wR)
             return _stitch_two(float(x[k]), pL, pR)
 
     # Case 2b: fallback split at global minimum
@@ -151,20 +136,19 @@ def _make_w_interpolator(
         xL, wL = x[: k2 + 1], w[: k2 + 1]
         xR, wR = x[k2:], w[k2:]
         if _is_monotone(wL) and _is_monotone(wR):
-            pL = (
-                FritschCarlson(xL, wL)
-                if xL.size >= 3
-                else _linear_interp_factory(xL, wL)
-            )
-            pR = (
-                FritschCarlson(xR, wR)
-                if xR.size >= 3
-                else _linear_interp_factory(xR, wR)
-            )
+            if xL.size >= 3:
+                pL, _ = FritschCarlson(xL, wL)
+            else:
+                pL = linear_interp_factory(xL, wL)
+
+            if xR.size >= 3:
+                pR, _ = FritschCarlson(xR, wR)
+            else:
+                pR = linear_interp_factory(xR, wR)
             return _stitch_two(float(x[k2]), pL, pR)
 
     # Fallback: linear interp with flat extrapolation
-    return _linear_interp_factory(x, w)
+    return linear_interp_factory(x, w)
 
 
 @dataclass(frozen=True, slots=True)

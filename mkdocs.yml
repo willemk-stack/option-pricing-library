@@ -121,10 +121,15 @@ nav:
       - Diagnostics: user_guides/diagnostics.md
       - Implied volatility: user_guides/implied_vol.md
       - Volatility surface: user_guides/vol_surface.md
+      - eSSVI: user_guides/essvi.md
       - SVI: user_guides/svi.md
       - SVI repair: user_guides/svi_repair.md
       - Local volatility: user_guides/local_vol.md
-      - Flagship: user_guides/flagship_capstone2_page.md
+      - Flagship demos:
+          - Decision guide: user_guides/flagship_capstone2_page.md
+          - Surface flagship: user_guides/flagship_surface.md
+          - eSSVI bridge: user_guides/flagship_essvi_bridge.md
+          - Local vol + PDE flagship: user_guides/flagship_localvol_pde.md
 
   - Notes:
       - Overview: notes/index.md

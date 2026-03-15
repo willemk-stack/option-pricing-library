@@ -1,247 +1,44 @@
-# Capstone 2 — Local Volatility + PDE Pricing
+# Flagship demos
 
-This capstone turns a volatility surface into a **validated numerical pricing pipeline**:
+The repo now presents its strongest volatility and numerics signals through a **split demo suite**, not a single catch-all capstone.
 
-**surface quotes → implied surface → local vol diagnostics → PDE pricing → convergence / repricing checks**
+That split is intentional:
 
-It is the main numerics-focused project in the repo and is designed to show three things at once:
+- **SVI** is the flagship for **static-surface engineering**: per-slice fitting, no-arbitrage diagnostics, butterfly repair, and interpolation judgment.
+- **eSSVI** is the flagship bridge for a **Dupire-ready smooth term structure**: nodal calibration, explicit projection, and analytic `w_T`.
+- **Local vol + PDE** is the flagship for **numerical engineering**: diagnostics-first local vol, PDE repricing, and convergence evidence.
 
-1. **Modeling depth** — local volatility derived from an implied-vol surface.
-2. **Numerical engineering** — finite-difference PDE pricing with stability controls.
-3. **Validation discipline** — convergence checks, failure-mode diagnostics, and baseline comparisons.
+## Decision guide
 
----
+| If you need to show... | Start here | Why |
+| --- | --- | --- |
+| Static no-arb diagnostics, SVI fitting, and repair | `demos/06_surface_noarb_svi_repair.ipynb` | This is the cleanest surface-engineering story in the repo. |
+| Why a smooth eSSVI projection is the preferred Dupire handoff | `demos/07_essvi_smooth_surface_for_dupire.ipynb` | It makes the `w_T` / term-structure argument explicit. |
+| Local-vol diagnostics, PDE repricing, and convergence | `demos/08_localvol_pde_repricing.ipynb` | This is the numerics flagship. |
+| PDE credibility before talking about surfaces | `demos/05_pde_pricing_and_diagnostics.ipynb` | It isolates the solver story. |
+| The full workflow connected end to end | `demos/09_surface_to_localvol_pde_integration.ipynb` | This is the integration proof, not the main flagship. |
 
-## Why this capstone matters
+## Public positioning
 
-Many student projects stop after fitting an implied-vol smile or building a pricing function. This capstone goes further:
+- Use **SVI** when the claim is: "this library can engineer and repair a static implied surface."
+- Use **eSSVI** when the claim is: "this library can produce a smoother Dupire-oriented implied surface with analytic time derivatives."
+- Use **LocalVolSurface + PDE** when the claim is: "this library treats local vol and PDE pricing as a validation-heavy numerical workflow."
 
-- it treats **derivative stability** as a first-class problem,
-- it exposes **diagnostics instead of hiding them**,
-- it validates the PDE stack against known baselines,
-- and it shows an end-to-end pricing workflow rather than a disconnected collection of modules.
+## Recommended path through the suite
 
-That is the difference between “I implemented a formula” and “I built a numerical pricing pipeline.”
+1. Read the [Surface flagship](flagship_surface.md) page and run `demos/06_surface_noarb_svi_repair.ipynb`.
+2. Move to the [eSSVI bridge](flagship_essvi_bridge.md) page and run `demos/07_essvi_smooth_surface_for_dupire.ipynb`.
+3. Finish with the [Local vol + PDE flagship](flagship_localvol_pde.md) page and run `demos/08_localvol_pde_repricing.ipynb`.
 
----
+Keep `demos/09_surface_to_localvol_pde_integration.ipynb` for interview walkthroughs, end-to-end sanity checks, or when you want to prove the pieces connect without forcing every reader through the whole stack first.
 
-## The pipeline
+## Published visuals
 
-### 1. Build an implied-vol surface
+The canonical publish path now lives in one script:
 
-Start from either:
-
-- a grid-based `VolSurface`, or
-- an SVI-based `VolSurface` when derivative information is needed.
-
-For the local-vol workflow, the **SVI route is the intended one**, because Dupire-style local-vol extraction depends on stable total-variance derivatives.
-
-### 2. Derive local volatility
-
-The local-vol bridge constructs a `LocalVolSurface` from the implied surface and exposes:
-
-- local variance / local vol queries,
-- invalid masks,
-- denominator and stability diagnostics,
-- pointwise reports explaining unreliable regions.
-
-This is important because local volatility is not just a formula application. It is highly sensitive to interpolation and numerical differentiation choices.
-
-### 3. Price under a PDE
-
-Once a `LocalVolSurface` is available, the PDE pricers can price:
-
-- European vanilla options under Black–Scholes,
-- European vanilla options under local vol,
-- digital options through lower-level PDE pathways.
-
-The PDE stack supports the main controls you would expect in a serious numerical project:
-
-- configurable domain policies,
-- clustered grids,
-- Crank–Nicolson-style workflows,
-- Rannacher-style remedies for discontinuous payoffs,
-- explicit grid-resolution controls (`Nx`, `Nt`).
-
-### 4. Validate the result
-
-This capstone is not complete unless the result is checked.
-
-The intended validation story is:
-
-- **constant-vol recovery** for local vol,
-- **PDE vs analytic Black–Scholes** in regimes where closed form is available,
-- **digital payoff convergence** under grid refinement,
-- **repricing consistency** from surface → local vol → PDE,
-- **diagnostics-first handling** of unstable regions.
-
----
-
-## What to run first
-
-If you want the shortest path to the full story, start here:
-
-### Main showcase notebook
-
-- `demos/06_vol_surfaces_localvol_pde.ipynb`
-
-This is the best current end-to-end capstone demo. It already presents the strongest narrative:
-
-- synthetic quotes,
-- raw grid vs SVI surfaces,
-- repair-aware surface construction,
-- no-arbitrage diagnostics,
-- local-vol diagnostics,
-- PDE convergence / stability checks,
-- repricing checks.
-
-### Supporting PDE notebook
-
-- `demos/05_pde_pricing_and_diagnostics.ipynb`
-
-Use this when you want the PDE side explained more directly before returning to the full local-vol pipeline.
-
----
-
-## Recommended talk track
-
-If you are presenting this in an interview or portfolio review, the cleanest sequence is:
-
-### A. Start with the problem
-
-> Local volatility is attractive because it matches the implied surface, but it is numerically fragile. PDE pricing is flexible, but only if the solver and the surface are stable.
-
-### B. Show the engineering judgment
-
-Emphasize that the project does **not** treat local vol as a black box. Instead it explicitly handles:
-
-- derivative sensitivity,
-- unstable denominators,
-- invalid regions,
-- repair-aware smile construction,
-- convergence and boundary effects.
-
-### C. Show the proof
-
-Then point to the concrete evidence:
-
-- constant-vol sanity checks,
-- PDE-vs-analytic baselines,
-- digital convergence tests,
-- local-vol repricing diagnostics,
-- notebook plots that expose failure modes.
-
-### D. End with limits
-
-A strong ending is:
-
-> This is a research-grade / portfolio-grade local-vol and PDE workflow. The next step is to harden interpolation and move toward real-data calibration.
-
-That makes you sound credible rather than overclaiming.
-
----
-
-## Validation map
-
-A good flagship page should not just say “tested”; it should show where the evidence lives.
-
-### Surface / local-vol validation
-
-Relevant tests include:
-
-- `tests/test_dupire_constant_vol.py`
-- `tests/test_surface_svi_and_localvol.py`
-- `tests/test_localvol_pde_vanilla_vs_bs.py`
-- `tests/test_localvol_digital_vs_bs.py`
-- `tests/test_localvol_digital_vs_quantlib.py`
-- `tests/test_localvol_digital_convergence_sweep.py`
-- `tests/test_localvol_digital_worst_cases.py`
-
-### PDE / discontinuous-payoff validation
-
-Relevant tests include:
-
-- `tests/test_pde_pricer.py`
-- `tests/test_convergence_remedies_digital.py`
-- `tests/test_fd_diff.py`
-- `tests/test_fd_stencils.py`
-- `tests/test_tridiag_solvers.py`
-
-### Diagnostics / surface-reporting support
-
-Relevant tests include:
-
-- `tests/test_diagnostics_vol_surface_report.py`
-- `tests/test_svi.py`
-- `tests/test_svi_repair.py`
-
----
-
-## Minimal code path
-
-The core user-facing idea is intentionally compact:
-
-```python
-from option_pricing.vol import LocalVolSurface, VolSurface
-from option_pricing.pricers.pde_pricer import local_vol_price_pde_european
-
-surface_svi = VolSurface.from_svi(rows, forward=forward)
-localvol = LocalVolSurface.from_implied(surface_svi, forward=forward, discount=df)
-
-price = local_vol_price_pde_european(
-    p,
-    lv=localvol,
-    Nx=201,
-    Nt=201,
-)
+```bash
+python scripts/build_visual_artifacts.py all --profile publish
 ```
 
-The key point is that the simple API sits on top of a much richer diagnostics and validation layer.
-
----
-
-## Why this stands out
-
-This capstone is strongest when it is presented as **numerical judgment**, not just feature count.
-
-What makes it different from an ordinary student repo:
-
-- it acknowledges that **Dupire is fragile**,
-- it treats **diagnostics as outputs**,
-- it includes **grid-convergence and discontinuity remedies**,
-- it connects **surface modeling** to **actual pricing**,
-- and it gives a believable path toward more advanced calibration work later.
-
-That combination is exactly what makes the project interview-worthy.
-
----
-
-## Known limits
-
-To keep the presentation honest, say these explicitly:
-
-- local-vol extraction is highly interpolation-sensitive,
-- the bridge from implied surface to local vol should be treated as evolving,
-- synthetic-data workflows are excellent for validation but are not a substitute for a full real-market calibration pipeline,
-- the next major step is real-data surface handling or a stronger calibration model such as Heston.
-
----
-
-## Suggested README placement
-
-This page works best if the README links to it from a capstone section like:
-
-- **Capstone 1:** Implied vol + surface + no-arb + SVI
-- **Capstone 2:** Local vol + PDE pricing + convergence + diagnostics
-
-and then links directly to:
-
-- this page,
-- `demos/06_vol_surfaces_localvol_pde.ipynb`,
-- the most convincing validation tests.
-
----
-
-## One-sentence portfolio summary
-
-> A portfolio-grade local-vol and finite-difference PDE capstone that connects implied-surface modeling, numerical diagnostics, and validated pricing in one reproducible workflow.
+That command writes the versioned data bundle to `out/visual_bundles/profile_publish_seed_7/`
+and refreshes the committed figure presets under `docs/assets/generated/`.

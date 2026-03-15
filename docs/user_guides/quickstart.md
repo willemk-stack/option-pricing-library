@@ -22,9 +22,10 @@ p = PricingInputs(
 
 A few conventions matter right away:
 
-- `expiry` is an absolute time `T`
+- In `PricingInputs`, `OptionSpec.expiry` is the absolute expiry time `T`
 - `t` is the valuation time
 - `tau = T - t` is computed for you via `p.tau`
+- with the default `t=0`, the numeric value of `expiry` happens to equal `tau`
 - rates are continuously compounded
 
 ## 2) Price the same option three ways

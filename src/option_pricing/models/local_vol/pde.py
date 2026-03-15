@@ -68,7 +68,8 @@ def local_vol_pde_coeffs(
     coord:
         "S" or "LOG_S" (or an Enum-like object with .name).
     local_var:
-        Callable returning *local variance* sigma_loc^2(S, tau).
+        Callable returning *local variance* sigma_loc^2(S, tau), where ``tau`` is
+        the solver time-to-expiry variable used by the PDE stack.
         (For a Dupire/Gatheral surface, passing K=S is standard.)
     r, q:
         Flat short rate and dividend yield.

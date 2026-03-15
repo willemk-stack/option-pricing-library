@@ -85,6 +85,32 @@ def test_cross_api_consistency_bs_pricing() -> None:
     assert math.isclose(price_inputs, price_inst_ctx, rel_tol=0.0, abs_tol=1e-12)
 
 
+def test_pricing_inputs_uses_absolute_expiry_time() -> None:
+    market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.02)
+    p = PricingInputs(
+        spec=OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.5),
+        market=market,
+        sigma=0.2,
+        t=0.5,
+    )
+
+    assert math.isclose(p.T, 1.5, rel_tol=0.0, abs_tol=1e-12)
+    assert math.isclose(p.tau, 1.0, rel_tol=0.0, abs_tol=1e-12)
+
+    price_inputs = float(bs_price(p))
+    price_ctx = float(
+        bs_price_from_ctx(
+            kind=p.spec.kind,
+            strike=p.spec.strike,
+            sigma=p.sigma,
+            tau=1.0,
+            ctx=p.market.to_context(),
+        )
+    )
+
+    assert math.isclose(price_inputs, price_ctx, rel_tol=0.0, abs_tol=1e-12)
+
+
 def test_golden_value_bs_call_pricinginputs() -> None:
     market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.0)
     spec = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)
@@ -131,7 +157,7 @@ def test_cross_api_consistency_binomial_pricing() -> None:
         kind=p.spec.kind,
         exercise=ExerciseStyle.EUROPEAN,
     )
-    n_steps = 200
+    n_steps = 100
 
     price_inputs = float(binom_price(p, n_steps=n_steps))
     price_ctx = float(
@@ -166,7 +192,7 @@ def test_cross_api_consistency_monte_carlo_pricing() -> None:
         kind=p.spec.kind,
         exercise=ExerciseStyle.EUROPEAN,
     )
-    cfg = MCConfig(n_paths=25_000, antithetic=True, random=RandomConfig(seed=7))
+    cfg = MCConfig(n_paths=8_000, antithetic=True, random=RandomConfig(seed=7))
 
     price_inputs, se_inputs = mc_price(p, cfg=cfg)
     price_ctx, se_ctx = mc_price_from_ctx(

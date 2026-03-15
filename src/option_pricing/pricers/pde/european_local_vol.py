@@ -11,6 +11,7 @@ from ...numerics.pde.domain import Coord
 from ...types import OptionSpec, OptionType, PricingInputs
 from ...typing import ArrayLike, FloatArray
 from ...vol.local_vol_surface import LocalVolSurface
+from .local_vol_time import solver_tau_to_surface_expiry
 from .pde_wiring import PDEWiring1D
 
 
@@ -54,7 +55,12 @@ def local_vol_pde_wiring(
     sigma2_floor: float = 1e-14,
     sigma2_cap: float | None = None,
 ) -> PDEWiring1D:
-    """Build a fully specified 1D local-vol PDE (coeffs + BC + terminal)."""
+    """Build a fully specified 1D local-vol PDE (coeffs + BC + terminal).
+
+    The PDE solver advances forward in ``tau = expiry - t`` from the terminal
+    payoff. ``LocalVolSurface.local_var`` is parameterized by calendar time, so
+    the surface query uses ``t = expiry - tau``.
+    """
 
     coord = Coord(coord)
 
@@ -73,10 +79,17 @@ def local_vol_pde_wiring(
     S_min = float(to_S(x_lb))
     S_max = float(to_S(x_ub))
 
-    # LocalVolSurface is defined as sigma_loc(K,T). Under Dupire this is used as
-    # sigma_loc(S,T) by plugging S into the K slot.
+    # LocalVolSurface is defined as sigma_loc(K, t). Under Dupire this is used
+    # as sigma_loc(S, t) by plugging S into the strike slot and mapping solver
+    # tau back to calendar time along the PDE march.
     def local_var(S: ArrayLike, tau: float) -> FloatArray:
-        return lv.local_var(S, float(tau))
+        return lv.local_var(
+            S,
+            solver_tau_to_surface_expiry(
+                option_expiry=float(p.spec.expiry),
+                solver_tau=float(tau),
+            ),
+        )
 
     coeffs = local_vol_pde_coeffs(
         coord=coord,

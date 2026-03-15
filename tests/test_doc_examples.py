@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+pytestmark = pytest.mark.slow
 
 EXAMPLE_SCRIPTS = [
     ROOT / "examples" / "quickstart.py",
@@ -33,12 +34,15 @@ def _run_markdown_python_blocks(path: Path) -> None:
         exec(compile(code, str(path), "exec"), ns, ns)
 
 
-def test_run_examples_smoke(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("script", EXAMPLE_SCRIPTS, ids=lambda path: path.stem)
+def test_run_examples_smoke(
+    script: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("OP_FAST_EXAMPLES", "1")
-    for script in EXAMPLE_SCRIPTS:
-        runpy.run_path(str(script), run_name="__main__")
+    runpy.run_path(str(script), run_name="__main__")
 
 
-def test_run_doc_snippets_smoke() -> None:
-    for doc in DOC_SNIPPETS:
-        _run_markdown_python_blocks(doc)
+@pytest.mark.parametrize("doc", DOC_SNIPPETS, ids=lambda path: path.stem)
+def test_run_doc_snippets_smoke(doc: Path) -> None:
+    _run_markdown_python_blocks(doc)

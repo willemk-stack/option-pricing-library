@@ -26,6 +26,62 @@ from option_pricing.types import MarketData, OptionSpec, OptionType, PricingInpu
 from option_pricing.vol.implied_vol_scalar import implied_vol_bs
 from option_pricing.vol.local_vol_surface import LocalVolSurface
 
+from .pricing import surface_iv_from_strikes
+
+
+def _price_localvol_pde_single(
+    *,
+    lv: LocalVolSurface,
+    market: MarketData,
+    strike: float,
+    expiry: float,
+    solver_cfg: dict[str, Any],
+    Nx: int,
+    Nt: int,
+    kind: OptionType,
+) -> tuple[float, float]:
+    spec = OptionSpec(kind=kind, strike=float(strike), expiry=float(expiry))
+    sigma_seed = 0.2
+    try:
+        target_iv = float(
+            surface_iv_from_strikes(
+                lv.implied,
+                strikes=np.array([float(strike)], dtype=float),
+                T=float(expiry),
+                forward=lv.forward,
+            ).reshape(-1)[0]
+        )
+        if np.isfinite(target_iv) and target_iv > 0.0:
+            sigma_seed = target_iv
+    except Exception:  # pragma: no cover - defensive fallback only
+        pass
+
+    p = PricingInputs(
+        spec=spec,
+        market=market,
+        sigma=max(float(sigma_seed), 1e-4),
+    )
+
+    t0 = perf_counter()
+    price_raw = local_vol_price_pde_european(
+        p,
+        lv=lv,
+        Nx=int(Nx),
+        Nt=int(Nt),
+        return_solution=False,
+        **solver_cfg,
+    )
+    runtime_ms = 1e3 * (perf_counter() - t0)
+    return float(cast(float, price_raw)), float(runtime_ms)
+
+
+def _default_reference_grid(
+    grids: list[tuple[int, int]] | tuple[tuple[int, int], ...],
+) -> tuple[int, int]:
+    max_nx = max(int(Nx) for Nx, _ in grids)
+    max_nt = max(int(Nt) for _, Nt in grids)
+    return 2 * max_nx - 1, 2 * max_nt - 1
+
 
 @dataclass(frozen=True)
 class LocalVolRepricingResult:
@@ -58,12 +114,14 @@ def localvol_pde_single_option_convergence_sweep(
     grids: list[tuple[int, int]] | tuple[tuple[int, int], ...],
     solver_cfg: dict[str, Any],
     kind: OptionType = OptionType.CALL,
+    reference_grid: tuple[int, int] | None = None,
 ) -> LocalVolConvergenceSweepResult:
     """Run a single-option local-vol PDE convergence sweep.
 
-    This is intentionally lightweight and demo-facing: it uses the implied-vol
-    surface embedded in ``lv`` to define the Black-76 target price, then records
-    price error and runtime across a grid sweep.
+    The sweep compares each coarse-grid solve against a finer-grid PDE reference
+    for the *same* local-vol model and contract. This isolates numerical grid
+    refinement error from the separate repricing diagnostic against the implied
+    surface.
     """
 
     T = float(expiry)
@@ -74,9 +132,14 @@ def localvol_pde_single_option_convergence_sweep(
         raise ValueError("strike must be > 0")
 
     target_iv = float(
-        np.asarray(lv.implied.iv(np.array([K], dtype=float), T)).reshape(-1)[0]
+        surface_iv_from_strikes(
+            lv.implied,
+            strikes=np.array([K], dtype=float),
+            T=T,
+            forward=lv.forward,
+        ).reshape(-1)[0]
     )
-    target_price = float(
+    implied_target_price = float(
         bs_price_from_ctx(
             kind=kind,
             strike=K,
@@ -86,30 +149,43 @@ def localvol_pde_single_option_convergence_sweep(
         )
     )
 
-    spec = OptionSpec(kind=kind, strike=K, expiry=T)
-    p = PricingInputs(spec=spec, market=market, sigma=max(target_iv, 1e-4))
+    reference_nx, reference_nt = (
+        _default_reference_grid(grids) if reference_grid is None else reference_grid
+    )
+    if int(reference_nx) <= 0 or int(reference_nt) <= 0:
+        raise ValueError("reference_grid entries must be > 0")
+
+    reference_price, reference_runtime_ms = _price_localvol_pde_single(
+        lv=lv,
+        market=market,
+        strike=K,
+        expiry=T,
+        solver_cfg=solver_cfg,
+        Nx=int(reference_nx),
+        Nt=int(reference_nt),
+        kind=kind,
+    )
 
     rows: list[dict[str, Any]] = []
     for Nx, Nt in grids:
-        t0 = perf_counter()
-        price_raw = local_vol_price_pde_european(
-            p,
+        price, runtime_ms = _price_localvol_pde_single(
             lv=lv,
+            market=market,
+            strike=K,
+            expiry=T,
+            solver_cfg=solver_cfg,
             Nx=int(Nx),
             Nt=int(Nt),
-            return_solution=False,
-            **solver_cfg,
+            kind=kind,
         )
-        price = float(cast(float, price_raw))
-        runtime_ms = 1e3 * (perf_counter() - t0)
         rows.append(
             {
                 "Nx": int(Nx),
                 "Nt": int(Nt),
                 "grid_points": int(Nx) * int(Nt),
-                "pde_price": price,
-                "target_price": target_price,
-                "abs_error": abs(price - target_price),
+                "pde_price": float(price),
+                "reference_price": float(reference_price),
+                "abs_error": abs(float(price) - float(reference_price)),
                 "runtime_ms": float(runtime_ms),
             }
         )
@@ -120,7 +196,11 @@ def localvol_pde_single_option_convergence_sweep(
         "expiry": T,
         "kind": str(kind.value),
         "target_iv": float(target_iv),
-        "target_price": float(target_price),
+        "implied_target_price": float(implied_target_price),
+        "reference_Nx": int(reference_nx),
+        "reference_Nt": int(reference_nt),
+        "reference_price": float(reference_price),
+        "reference_runtime_ms": float(reference_runtime_ms),
         "solver_cfg": dict(solver_cfg),
     }
     return LocalVolConvergenceSweepResult(grid=grid, meta=meta)
@@ -163,7 +243,13 @@ def localvol_pde_repricing_grid(
     t_total0 = perf_counter()
 
     for T in Ts:
-        target_iv_vec = np.asarray(lv.implied.iv(Ks, float(T)), dtype=float).reshape(-1)
+        F = float(lv.forward(float(T)))
+        target_iv_vec = surface_iv_from_strikes(
+            lv.implied,
+            strikes=Ks,
+            T=float(T),
+            forward=lv.forward,
+        ).reshape(-1)
         if target_iv_vec.shape != Ks.shape:
             raise ValueError("lv.implied.iv returned unexpected shape")
 
@@ -228,6 +314,8 @@ def localvol_pde_repricing_grid(
                 {
                     "T": float(T),
                     "K": float(K),
+                    "F": float(F),
+                    "y": float(np.log(K / F)),
                     "target_iv": float(target_iv),
                     "target_price": float(target_price),
                     "pde_price": float(pde_price),

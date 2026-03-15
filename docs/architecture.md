@@ -6,7 +6,7 @@ This page summarizes the architecture and design choices for option_pricing.
 
 - Provide a typed, test-backed quant library rather than a notebook-only collection
 - Support multiple pricing engines (Black-Scholes, CRR binomial, Monte Carlo, PDE) behind a coherent API
-- Treat volatility tooling as first-class (implied vol inversion, smiles/surfaces, no-arb checks, SVI fit/repair)
+- Treat volatility tooling as first-class (implied vol inversion, smiles/surfaces, no-arb checks, SVI fit/repair, eSSVI calibration/projection)
 - Make local-vol + PDE workflows diagnostics-heavy (invalid masks, denominator failures, stability cues)
 - Preserve layered APIs: flat inputs for quick use, instrument-based for clarity, curves-first for term structures
 - Emphasize validation and convergence (analytic baselines, remedies for discontinuities, repricing consistency, CI-executed notebooks)
@@ -26,6 +26,12 @@ The package re-exports public symbols from __init__.py, including:
 - Implied vol: `implied_vol_bs`, `implied_vol_bs_result`
 - Vol objects: VolSurface, Smile
 
+The volatility namespace `option_pricing.vol` additionally exposes the eSSVI stack:
+
+- Term structures: `ThetaTermStructure`, `PsiTermStructure`, `EtaTermStructure`, `ESSVITermStructures`
+- Surface objects: `ESSVIImpliedSurface`, `ESSVINodalSurface`, `ESSVISmoothedSurface`
+- Calibration and validation: `calibrate_essvi`, `project_essvi_nodes`, `validate_essvi_continuous`, `validate_essvi_nodes`
+
 Canonical vs convenience vs advanced paths
 
 - Canonical: instrument-based pricing (VanillaOption + `bs_price_instrument`, `mc_price_instrument`, `binom_price_instrument`)
@@ -40,7 +46,7 @@ Layer responsibilities
 - Market / curves: discount and forward curves, curves-first context (`PricingContext`, `FlatDiscountCurve`, `FlatCarryForwardCurve`)
 - Models: coefficient builders for BS and local-vol PDEs (`bs_pde_coeffs`, `local_vol_pde_coeffs`)
 - Numerics: grids, PDE operators, solvers, remedies (GridConfig, `solve_pde_1d`, LinearParabolicPDE1D, ICRemedy)
-- Volatility: implied vol inversion, smiles/surfaces, no-arb checks, local-vol extraction (VolSurface, Smile, `check_surface_noarb`, `LocalVolSurface`, `local_vol_from_call_grid`)
+- Volatility: implied vol inversion, smiles/surfaces, no-arb checks, SVI/eSSVI calibration, local-vol extraction (VolSurface, Smile, `ESSVIImpliedSurface`, `ESSVINodalSurface`, `ESSVISmoothedSurface`, `check_surface_noarb`, `LocalVolSurface`, `local_vol_from_call_grid`)
 - Pricers: public engines (BS / MC / CRR / PDE)
 - Diagnostics: surface diagnostics and repricing audits
 
@@ -56,7 +62,15 @@ Dependency direction (audit)
   <figcaption>Dependencies flow downward and right; diagnostics sit below the pricing stack.</figcaption>
 </figure>
 
-## Flagship end-to-end workflow (surface -> local vol -> PDE -> validation)
+## Flagship demo suite (surface -> eSSVI bridge -> local vol -> PDE)
+
+The repo now presents this workflow as a **split demo suite** rather than one hero notebook:
+
+- `demos/06_surface_noarb_svi_repair.ipynb` for static-surface engineering
+- `demos/07_essvi_smooth_surface_for_dupire.ipynb` for the smooth Dupire bridge
+- `demos/08_localvol_pde_repricing.ipynb` for local-vol/PDE numerics
+- `demos/09_surface_to_localvol_pde_integration.ipynb` for the integration proof
+- `demos/05_pde_pricing_and_diagnostics.ipynb` as the PDE-only appendix
 
 1) Quotes -> smiles -> surface
   - Build surface from quotes: `VolSurface.from_grid(rows, forward=...)`
@@ -68,19 +82,27 @@ Dependency direction (audit)
   - SVI repair hooks: `repair_butterfly_raw`, `repair_butterfly_jw_optimal`, `repair_butterfly_with_fallback`
   - Diagnostics table: `svi_fit_table(surface)`
 
-3) Local vol extraction
+3) eSSVI calibration + projection
+  - Direct parameter surface: `ESSVIImpliedSurface(params)`
+  - Market calibration: `calibrate_essvi(...)` -> `ESSVIFitResult`
+  - Exact nodal interpolation: `ESSVINodalSurface(fit.nodes)`
+  - Smooth Dupire-oriented projection: `project_essvi_nodes(fit.nodes)` -> `ESSVIProjectionResult`
+  - Validation: `evaluate_essvi_constraints`, `validate_essvi_nodes`, `validate_essvi_continuous`
+
+4) Local vol extraction
   - Gatheral (from implied surface): `LocalVolSurface.from_implied(...)`, `LocalVolSurface.local_var(...)`, `LocalVolSurface.local_var_diagnostics(...)`
+  - Preferred continuous-time surface for Dupire: `ESSVISmoothedSurface`
   - Dupire (from call price grids): `local_vol_from_call_grid(...)` and diagnostics `local_vol_from_call_grid_diagnostics(...)`
   - Diagnostics reason codes: `LVInvalidReason`, `GatheralLVReport`, `DupireLVReport`
 
-4) PDE wiring + solve
+5) PDE wiring + solve
   - Domain selection: BSDomainConfig, `bs_compute_bounds`
   - PDE wiring: `bs_pde_wiring` and `local_vol_pde_wiring` for vanilla options
   - Solver: `solve_pde_1d(problem, grid_cfg=..., method=..., advection=...)`
   - Convergence remedies for discontinuous payoffs: `ICRemedy`, `ic_cell_average`, `ic_l2_projection`
   - Rannacher time stepping: `RannacherCN1D`
 
-5) Repricing and validation loop
+6) Repricing and validation loop
   - Repricing grid: `localvol_pde_repricing_grid(...)` compares PDE prices to implied Black-76 targets
   - Convergence sweep: `localvol_pde_single_option_convergence_sweep(...)`
   - CI notebook execution: pytest -q demos --nbmake
@@ -88,7 +110,7 @@ Dependency direction (audit)
 <figure markdown class="diagram" style="--diagram-max-width: 1100px">
   ![Surface to local-vol to PDE workflow](assets/diagrams/workflow_surface_to_pde.light.svg){ .diagram-img .diagram-light }
   ![Surface to local-vol to PDE workflow](assets/diagrams/workflow_surface_to_pde.dark.svg){ .diagram-img .diagram-dark }
-  <figcaption>Two surface construction paths converge into local-vol, then feed PDE pricing and repricing.</figcaption>
+<figcaption>SVI owns the static-surface story; the smoothed eSSVI path is the preferred Dupire handoff into local-vol and PDE repricing.</figcaption>
 </figure>
 
 ## Key domain objects (definitions)
@@ -98,6 +120,7 @@ Dependency direction (audit)
 - `VanillaOption`, `DigitalOption`, ExerciseStyle (instrument layer)
 - `VolSurface`, `Smile` (implied vol objects)
 - `SVIParams`, `SVISmile`, `SVIFitResult` (SVI model objects)
+- `ESSVITermStructures`, `ESSVINodeSet`, `ESSVIImpliedSurface`, `ESSVINodalSurface`, `ESSVISmoothedSurface` (eSSVI model objects)
 - `LocalVolSurface`, `LocalVolResult`, `GatheralLVReport`, `DupireLVReport` (local-vol objects + diagnostics)
 - `GridConfig`, `PDESolution1D`, `LinearParabolicPDE1D` (PDE numerics core)
 
@@ -137,7 +160,12 @@ Strongest tests (8 to 12)
 Showcase notebooks executed in CI
 
 - CI runs pytest -q demos --nbmake
-- Showcase demos: demos/05_pde_pricing_and_diagnostics.ipynb, demos/06_vol_surfaces_localvol_pde.ipynb
+- Showcase demos:
+  - `demos/05_pde_pricing_and_diagnostics.ipynb`
+  - `demos/06_surface_noarb_svi_repair.ipynb`
+  - `demos/07_essvi_smooth_surface_for_dupire.ipynb`
+  - `demos/08_localvol_pde_repricing.ipynb`
+  - `demos/09_surface_to_localvol_pde_integration.ipynb`
 
 <figure markdown class="diagram">
   ![Validation stack](assets/diagrams/validation_stack.light.svg){ .diagram-img .diagram-light }
@@ -147,6 +175,6 @@ Showcase notebooks executed in CI
 
 ## Optional refactors / maintenance risks (repo-grounded)
 
-- Local-vol surface is explicitly demo-grade for SVI-derived slices with piecewise-linear w_T interpolation and warns about banding/instability; consider prioritizing the planned time-consistent SSVI/eSSVI implementation
+- The generic SVI-derived local-vol path still uses piecewise-linear time interpolation and can show banding/instability; the eSSVI smooth-projection path is now the time-differentiable alternative the docs should steer users toward
 - Diagnostics depend on pandas/matplotlib in tests; matplotlib is optional and skipped via pytest.importorskip
 - QuantLib cross-check is optional and skipped when QuantLib is missing

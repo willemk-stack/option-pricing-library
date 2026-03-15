@@ -41,6 +41,13 @@ class DifferentiableSmileSlice(SmileSlice, Protocol):
 
 
 @runtime_checkable
+class TimeDifferentiableImpliedSurface(Protocol):
+    def w_and_derivs(
+        self, y: FloatArray, T: float
+    ) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]: ...
+
+
+@runtime_checkable
 class GridSmileSlice(SmileSlice, Protocol):
     @property
     def y(self) -> FloatArray: ...
