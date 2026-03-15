@@ -42,3 +42,27 @@ def test_exact_nodal_surface_remains_available_as_fallback() -> None:
     assert np.all(
         np.isfinite(fallback.w(np.array([-0.3, 0.0, 0.3], dtype=np.float64), 0.8))
     )
+
+
+def test_projected_surface_matches_nodal_short_end_extension() -> None:
+    nodes = _sample_nodes()
+    projection = project_essvi_nodes(nodes)
+
+    assert projection.success
+    assert projection.surface is not None
+
+    T_short = 0.10
+    y = np.array([-0.2, 0.0, 0.2], dtype=np.float64)
+    smooth_w = projection.surface.w(y, T_short)
+    nodal_w = projection.fallback_surface.w(y, T_short)
+
+    assert np.allclose(smooth_w, nodal_w, rtol=1.0e-8, atol=1.0e-10)
+
+    lv = LocalVolSurface.from_implied(
+        projection.surface,
+        forward=lambda _T: 100.0,
+    )
+    sigma = lv.local_vol(np.array([100.0], dtype=np.float64), T_short)
+
+    assert np.all(np.isfinite(sigma))
+    assert float(sigma[0]) > 0.0

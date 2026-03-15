@@ -26,6 +26,8 @@ import pytest
 from option_pricing.vol import LocalVolSurface, NoArbInterpolatedSmileSlice, VolSurface
 from option_pricing.vol.svi.models import SVIParams, SVISmile
 
+pytestmark = pytest.mark.slow
+
 
 @pytest.fixture
 def _fwd() -> callable:

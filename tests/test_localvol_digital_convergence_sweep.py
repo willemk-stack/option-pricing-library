@@ -1,58 +1,11 @@
 from __future__ import annotations
 
-import warnings
-
 import numpy as np
+import pytest
 
+from tests._localvol_test_utils import build_skewed_svi_localvol_surface
 
-def _build_skewed_svi_localvol_surface(
-    *,
-    S0: float,
-    r: float,
-    q: float,
-    sigma_atm: float,
-    expiries: np.ndarray,
-):
-    """Build a LocalVolSurface from moderately skewed SVI smiles.
-
-    This is intentionally *not* flat-in-y: we want to exercise the full
-    SVI -> implied surface -> Dupire/Gatheral local-vol pipeline.
-    """
-    from option_pricing.types import MarketData
-    from option_pricing.vol import LocalVolSurface, VolSurface
-    from option_pricing.vol.svi import SVIParams, SVISmile
-
-    ctx = MarketData(spot=S0, rate=r, dividend_yield=q).to_context()
-
-    smiles: list[SVISmile] = []
-    for Ti in expiries:
-        Ti = float(Ti)
-
-        # Moderate equity-like skew. Enforce w(0,T)=sigma_atm^2*T.
-        b = 0.10 * Ti
-        svi_sig = 0.30
-        rho = -0.40
-        m = 0.0
-
-        w_atm = (sigma_atm * sigma_atm) * Ti
-        # Since w(0)=a + b*hypot(0,svi_sig)=a + b*svi_sig, set a accordingly.
-        a = max(1e-10, float(w_atm - b * svi_sig))
-
-        smiles.append(
-            SVISmile(T=Ti, params=SVIParams(a=a, b=b, rho=rho, m=m, sigma=svi_sig))
-        )
-
-    implied = VolSurface(
-        expiries=np.asarray(expiries, dtype=float),
-        smiles=tuple(smiles),
-        forward=ctx.fwd,
-    )
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=FutureWarning)
-        lv = LocalVolSurface.from_implied(implied, forward=ctx.fwd, discount=ctx.df)
-
-    return ctx, lv
+pytestmark = pytest.mark.slow
 
 
 def _price_localvol_digital_pde(
@@ -162,7 +115,7 @@ def test_localvol_digital_convergence_sweep_over_strikes_and_maturities() -> Non
     # A reasonably smooth (but not flat) local-vol surface derived from SVI
     expiries = np.asarray([0.10, 0.25, 0.50, 1.00, 2.00], dtype=float)
     sigma_atm = 0.25
-    ctx, lv = _build_skewed_svi_localvol_surface(
+    ctx, lv = build_skewed_svi_localvol_surface(
         S0=S0, r=r, q=q, sigma_atm=sigma_atm, expiries=expiries
     )
 

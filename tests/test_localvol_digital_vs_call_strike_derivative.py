@@ -1,55 +1,8 @@
 from __future__ import annotations
 
-import warnings
-
 import numpy as np
 
-
-def _build_skewed_svi_localvol_surface(
-    *,
-    S0: float,
-    r: float,
-    q: float,
-    sigma_atm: float,
-    expiries: np.ndarray,
-):
-    """Helper: build a LocalVolSurface from a moderately skewed SVI implied surface."""
-    from option_pricing.types import MarketData
-    from option_pricing.vol import LocalVolSurface, VolSurface
-    from option_pricing.vol.svi import SVIParams, SVISmile
-
-    ctx = MarketData(spot=S0, rate=r, dividend_yield=q).to_context()
-
-    smiles: list[SVISmile] = []
-    for Ti in expiries:
-        Ti = float(Ti)
-
-        # Moderate equity-like skew. Enforce w(0,T)=sigma_atm^2*T.
-        b = 0.10 * Ti
-        svi_sig = 0.30
-        rho = -0.40
-        m = 0.0
-
-        w_atm = (sigma_atm * sigma_atm) * Ti
-        # Since w(0)=a + b*hypot(0,svi_sig)=a + b*svi_sig, set a accordingly.
-        a = max(1e-10, float(w_atm - b * svi_sig))
-
-        smiles.append(
-            SVISmile(T=Ti, params=SVIParams(a=a, b=b, rho=rho, m=m, sigma=svi_sig))
-        )
-
-    implied = VolSurface(
-        expiries=np.asarray(expiries, dtype=float),
-        smiles=tuple(smiles),
-        forward=ctx.fwd,
-    )
-
-    # Local-vol surface derived from SVI
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=FutureWarning)
-        lv = LocalVolSurface.from_implied(implied, forward=ctx.fwd, discount=ctx.df)
-
-    return ctx, lv
+from tests._localvol_test_utils import build_skewed_svi_localvol_surface
 
 
 def _solve_pde_from_wiring(
@@ -149,7 +102,7 @@ def test_localvol_digital_matches_minus_strike_derivative_of_call() -> None:
     # --- local-vol surface (SVI) ---
     expiries = np.asarray([0.25, T, 1.25], dtype=float)
     sigma_atm = 0.25
-    _, lv = _build_skewed_svi_localvol_surface(
+    _, lv = build_skewed_svi_localvol_surface(
         S0=S0, r=r, q=q, sigma_atm=sigma_atm, expiries=expiries
     )
 

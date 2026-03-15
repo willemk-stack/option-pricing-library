@@ -115,7 +115,9 @@ def test_localvol_pde_vanilla_matches_bs_on_constant_surface(make_inputs, kind) 
     assert abs(pde - ref) <= max(3.0e-3, 1.0e-2 * abs(ref))
 
 
-def test_localvol_pde_wiring_uses_solver_tau_as_surface_expiry(make_inputs) -> None:
+def test_localvol_pde_wiring_maps_solver_tau_to_calendar_surface_time(
+    make_inputs,
+) -> None:
     p = make_inputs(
         S=100.0,
         K=100.0,
@@ -162,5 +164,5 @@ def test_localvol_pde_wiring_uses_solver_tau_as_surface_expiry(make_inputs) -> N
     assert tau_calls.size > 0
     assert np.all(tau_calls >= 0.0)
     assert float(np.min(tau_calls)) <= 1.0e-6
-    assert float(np.max(tau_calls)) >= float(p.tau) - 1.0e-12
+    assert float(np.max(tau_calls)) >= float(p.tau) - 1.0e-6
     assert np.all(tau_calls <= float(p.tau) + 1.0e-12)

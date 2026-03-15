@@ -25,6 +25,9 @@ from .validation import (
 
 def _validation_expiries(expiries: np.ndarray, n: int) -> np.ndarray:
     exp = np.unique(np.asarray(expiries, dtype=np.float64))
+    if exp.size:
+        short = exp[0] * np.asarray([0.25, 0.5, 0.75], dtype=np.float64)
+        exp = np.unique(np.concatenate([short, exp])).astype(np.float64)
     if exp.size == 1 or n <= exp.size:
         return exp
     dense = np.linspace(float(exp[0]), float(exp[-1]), int(n), dtype=np.float64)
@@ -68,6 +71,39 @@ def _build_log_term(
             deriv_fn(np.asarray(log_T, dtype=np.float64)), dtype=np.float64
         ),
     )
+
+
+def _build_term_with_origin_anchor(
+    expiries: np.ndarray,
+    values: np.ndarray,
+) -> tuple[Callable[[ArrayLike], ArrayLike], Callable[[ArrayLike], ArrayLike]]:
+    log_value, log_deriv = _build_log_term(expiries, values)
+    first_expiry = float(np.asarray(expiries, dtype=np.float64)[0])
+    first_value = float(np.asarray(values, dtype=np.float64)[0])
+    short_slope = first_value / first_expiry
+
+    def value_fn(T: ArrayLike) -> np.ndarray:
+        T_arr = np.asarray(T, dtype=np.float64)
+        out = np.empty_like(T_arr, dtype=np.float64)
+        short_mask = T_arr < first_expiry
+        if np.any(short_mask):
+            out[short_mask] = short_slope * T_arr[short_mask]
+        if np.any(~short_mask):
+            out[~short_mask] = log_value(np.log(T_arr[~short_mask]))
+        return out
+
+    def deriv_fn(T: ArrayLike) -> np.ndarray:
+        T_arr = np.asarray(T, dtype=np.float64)
+        out = np.empty_like(T_arr, dtype=np.float64)
+        short_mask = T_arr < first_expiry
+        if np.any(short_mask):
+            out[short_mask] = short_slope
+        if np.any(~short_mask):
+            long_T = T_arr[~short_mask]
+            out[~short_mask] = log_deriv(np.log(long_T)) / long_T
+        return out
+
+    return value_fn, deriv_fn
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,9 +192,15 @@ def project_essvi_nodes(
                 "g_minus nodes must be nondecreasing for monotone projection."
             )
 
-        theta_value, theta_first = _build_log_term(nodes.expiries, nodes.theta)
-        g_plus_value, g_plus_first = _build_log_term(nodes.expiries, nodes.g_plus)
-        g_minus_value, g_minus_first = _build_log_term(nodes.expiries, nodes.g_minus)
+        theta_value, theta_first = _build_term_with_origin_anchor(
+            nodes.expiries, nodes.theta
+        )
+        g_plus_value, g_plus_first = _build_term_with_origin_anchor(
+            nodes.expiries, nodes.g_plus
+        )
+        g_minus_value, g_minus_first = _build_term_with_origin_anchor(
+            nodes.expiries, nodes.g_minus
+        )
 
         def psi_value(log_T):
             return 0.5 * (g_plus_value(log_T) + g_minus_value(log_T))
@@ -176,17 +218,17 @@ def project_essvi_nodes(
             theta_term=ThetaTermStructure(
                 value=theta_value,
                 first_derivative=theta_first,
-                input_variable="log_T",
+                input_variable="T",
             ),
             psi_term=PsiTermStructure(
                 value=psi_value,
                 first_derivative=psi_first,
-                input_variable="log_T",
+                input_variable="T",
             ),
             eta_term=EtaTermStructure(
                 value=eta_value,
                 first_derivative=eta_first,
-                input_variable="log_T",
+                input_variable="T",
             ),
             eps=nodes.eps,
         )

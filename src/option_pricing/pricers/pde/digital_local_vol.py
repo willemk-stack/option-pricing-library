@@ -51,7 +51,7 @@ def local_vol_pde_wiring(
     sigma2_floor: float = 1e-14,
     sigma2_cap: float | None = None,
 ) -> PDEWiring1D:
-    """Build the digital local-vol PDE with an explicit solver-time adapter."""
+    """Build the digital local-vol PDE with a calendar-time surface adapter."""
 
     coord = Coord(coord)
 
@@ -72,7 +72,10 @@ def local_vol_pde_wiring(
     def local_var(S: ArrayLike, tau: float) -> FloatArray:
         return lv.local_var(
             S,
-            solver_tau_to_surface_expiry(solver_tau=float(tau)),
+            solver_tau_to_surface_expiry(
+                option_expiry=float(p.spec.expiry),
+                solver_tau=float(tau),
+            ),
         )
 
     coeffs = local_vol_pde_coeffs(

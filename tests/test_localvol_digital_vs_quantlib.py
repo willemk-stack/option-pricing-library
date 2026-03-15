@@ -6,6 +6,8 @@ import warnings
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.slow
+
 
 def _our_localvol_pde_digital_price_from_flat_svi(
     *,

@@ -237,6 +237,20 @@ def build_localvol_pde_demo_artifacts(
         tables["repricing_summary"] = repricing.summary
     if convergence is not None:
         tables["convergence_grid"] = convergence.grid
+        tables["convergence_reference"] = pd.DataFrame(
+            [
+                {
+                    "strike": float(convergence.meta["strike"]),
+                    "expiry": float(convergence.meta["expiry"]),
+                    "reference_Nx": int(convergence.meta["reference_Nx"]),
+                    "reference_Nt": int(convergence.meta["reference_Nt"]),
+                    "reference_price": float(convergence.meta["reference_price"]),
+                    "reference_runtime_ms": float(
+                        convergence.meta["reference_runtime_ms"]
+                    ),
+                }
+            ]
+        )
 
     if lv_compare is not None:
         tables["lv_compare_summary"] = pd.DataFrame([lv_compare.summary])

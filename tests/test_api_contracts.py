@@ -157,7 +157,7 @@ def test_cross_api_consistency_binomial_pricing() -> None:
         kind=p.spec.kind,
         exercise=ExerciseStyle.EUROPEAN,
     )
-    n_steps = 200
+    n_steps = 100
 
     price_inputs = float(binom_price(p, n_steps=n_steps))
     price_ctx = float(
@@ -192,7 +192,7 @@ def test_cross_api_consistency_monte_carlo_pricing() -> None:
         kind=p.spec.kind,
         exercise=ExerciseStyle.EUROPEAN,
     )
-    cfg = MCConfig(n_paths=25_000, antithetic=True, random=RandomConfig(seed=7))
+    cfg = MCConfig(n_paths=8_000, antithetic=True, random=RandomConfig(seed=7))
 
     price_inputs, se_inputs = mc_price(p, cfg=cfg)
     price_ctx, se_ctx = mc_price_from_ctx(

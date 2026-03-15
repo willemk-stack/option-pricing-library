@@ -222,7 +222,10 @@ def test_validate_essvi_surface_reports_and_strict_mode() -> None:
     expiries = np.array([0.25, 0.5, 1.0], dtype=np.float64)
     valid = _log_term_params(T_pivot=float(np.exp(np.mean(np.log(expiries)))))
 
-    report = validate_essvi_surface(valid, market, expiries=expiries)
+    with pytest.deprecated_call(
+        match="validate_essvi_surface is deprecated; use validate_essvi_continuous."
+    ):
+        report = validate_essvi_surface(valid, market, expiries=expiries)
     assert report.ok
 
     invalid = ESSVITermStructures(
@@ -230,11 +233,17 @@ def test_validate_essvi_surface_reports_and_strict_mode() -> None:
         psi_term=PsiTermStructure.constant(3.95),
         eta_term=EtaTermStructure.constant(0.10),
     )
-    report_bad = validate_essvi_surface(invalid, market, expiries=expiries)
+    with pytest.deprecated_call(
+        match="validate_essvi_surface is deprecated; use validate_essvi_continuous."
+    ):
+        report_bad = validate_essvi_surface(invalid, market, expiries=expiries)
     assert not report_bad.ok
 
-    with pytest.raises(ValueError):
-        validate_essvi_surface(invalid, market, expiries=expiries, strict=True)
+    with pytest.deprecated_call(
+        match="validate_essvi_surface is deprecated; use validate_essvi_continuous."
+    ):
+        with pytest.raises(ValueError):
+            validate_essvi_surface(invalid, market, expiries=expiries, strict=True)
 
 
 def test_calibrate_essvi_recovers_synthetic_price_surface() -> None:
