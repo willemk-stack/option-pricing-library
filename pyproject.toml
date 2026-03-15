@@ -29,7 +29,7 @@ dev = [
     "pandas-stubs==2.2.3.241126",
 ]
 notebooks = ["jupyter", "matplotlib", "pandas", "ipywidgets"]
-plot = ["matplotlib"]
+plot = ["matplotlib", "pandas"]
 docs = [
     "mkdocs",
     "mkdocs-material",
