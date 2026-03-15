@@ -31,3 +31,14 @@ That split is intentional:
 3. Finish with the [Local vol + PDE flagship](flagship_localvol_pde.md) page and run `demos/08_localvol_pde_repricing.ipynb`.
 
 Keep `demos/09_surface_to_localvol_pde_integration.ipynb` for interview walkthroughs, end-to-end sanity checks, or when you want to prove the pieces connect without forcing every reader through the whole stack first.
+
+## Published visuals
+
+The canonical publish path now lives in one script:
+
+```bash
+python scripts/build_visual_artifacts.py all --profile publish
+```
+
+That command writes the versioned data bundle to `out/visual_bundles/profile_publish_seed_7/`
+and refreshes the committed figure presets under `docs/assets/generated/`.

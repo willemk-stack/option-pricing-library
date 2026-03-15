@@ -153,41 +153,58 @@ def _dupire_reason_codes(
     eps_gamma_rel: float,
 ) -> np.ndarray:
     reason = np.zeros_like(terms.local_var_raw, dtype=np.uint32)
+    zero = np.uint32(0)
 
     inputs = (
         ~np.isfinite(call)
         | ~np.isfinite(strikes[None, :])
         | ~np.isfinite(taus[:, None])
     )
-    reason |= np.where(inputs, np.uint32(LVInvalidReason.NONFINITE_INPUT), 0)
+    reason |= np.where(inputs, np.uint32(LVInvalidReason.NONFINITE_INPUT), zero)
 
     denom = terms.denominator
     curvature = terms.curvature
     local_var = terms.local_var_raw
 
     denom_nonfinite = ~np.isfinite(denom)
-    reason |= np.where(denom_nonfinite, np.uint32(LVInvalidReason.DENOM_NONFINITE), 0)
+    reason |= np.where(
+        denom_nonfinite,
+        np.uint32(LVInvalidReason.DENOM_NONFINITE),
+        zero,
+    )
 
     denom_scale = np.nanmax(np.abs(denom))
     if not np.isfinite(denom_scale) or denom_scale == 0.0:
         denom_scale = 1.0
     denom_small = np.abs(denom) <= eps_rel * denom_scale
-    reason |= np.where(denom_small, np.uint32(LVInvalidReason.DENOM_TOO_SMALL), 0)
+    reason |= np.where(denom_small, np.uint32(LVInvalidReason.DENOM_TOO_SMALL), zero)
 
     denom_nonpos = denom <= 0.0
-    reason |= np.where(denom_nonpos, np.uint32(LVInvalidReason.DENOM_NONPOSITIVE), 0)
+    reason |= np.where(
+        denom_nonpos,
+        np.uint32(LVInvalidReason.DENOM_NONPOSITIVE),
+        zero,
+    )
 
     curv_scale = np.nanmax(np.abs(curvature))
     if not np.isfinite(curv_scale) or curv_scale == 0.0:
         curv_scale = 1.0
     curv_small = np.abs(curvature) <= eps_gamma_rel * curv_scale
-    reason |= np.where(curv_small, np.uint32(LVInvalidReason.CURVATURE_TOO_SMALL), 0)
+    reason |= np.where(
+        curv_small,
+        np.uint32(LVInvalidReason.CURVATURE_TOO_SMALL),
+        zero,
+    )
 
     lv_nonfinite = ~np.isfinite(local_var)
-    reason |= np.where(lv_nonfinite, np.uint32(LVInvalidReason.LOCALVAR_NONFINITE), 0)
+    reason |= np.where(
+        lv_nonfinite,
+        np.uint32(LVInvalidReason.LOCALVAR_NONFINITE),
+        zero,
+    )
 
     lv_neg = local_var < 0.0
-    reason |= np.where(lv_neg, np.uint32(LVInvalidReason.LOCALVAR_NEGATIVE), 0)
+    reason |= np.where(lv_neg, np.uint32(LVInvalidReason.LOCALVAR_NEGATIVE), zero)
 
     if trim_t > 0:
         reason[:trim_t, :] |= np.uint32(LVInvalidReason.TRIM_T)

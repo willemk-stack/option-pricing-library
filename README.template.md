@@ -9,13 +9,19 @@ It supports **analytic Black–Scholes(-Merton)** pricing, **CRR binomial trees*
 [![Docs](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
-![IV Heatmap banner](./docs/assets/readme/hero_iv_heatmap_banner.png)
+![IV Heatmap banner](./docs/assets/generated/poster/hero_essvi_surface.png)
 
 > **Note:** This file is **auto-generated** from `README.template.md` and snippets in `examples/`.  
 > To edit, modify the template or example sources, then run:
 >
 > ```bash
 > python scripts/render_readme.py
+> ```
+>
+> Publish the canonical visual bundle with:
+>
+> ```bash
+> python scripts/build_visual_artifacts.py all --profile publish
 > ```
 
 ---
@@ -60,7 +66,7 @@ How to position them publicly:
 - **eSSVI** = smooth term structure and preferred Dupire handoff
 - **Local vol + PDE** = numerical engineering and validation
 
-![Capstone 2 poster LV PDE pricing](./docs/assets/readme/poster_capstone_wide.png)
+![Capstone 2 poster LV PDE pricing](./docs/assets/generated/poster/poster_essvi_localvol_pde.png)
 
 Validated by:
 

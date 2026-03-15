@@ -9,13 +9,19 @@ It supports **analytic Black–Scholes(-Merton)** pricing, **CRR binomial trees*
 [![Docs](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
-![IV Heatmap banner](./docs/assets/readme/hero_iv_heatmap_banner.png)
+![IV Heatmap banner](./docs/assets/generated/poster/hero_essvi_surface.png)
 
 > **Note:** This file is **auto-generated** from `README.template.md` and snippets in `examples/`.  
 > To edit, modify the template or example sources, then run:
 >
 > ```bash
 > python scripts/render_readme.py
+> ```
+>
+> Publish the canonical visual bundle with:
+>
+> ```bash
+> python scripts/build_visual_artifacts.py all --profile publish
 > ```
 
 ---
@@ -39,15 +45,15 @@ API Reference: [📘 /api](https://willemk-stack.github.io/option-pricing-librar
 
 ## Best places to start
 
-### Core demos
+### Flagship demos
 
 The repo now presents its strongest volatility and numerics signals through a **split demo suite**:
 
-- **Surface diagnostics:** `demos/06_surface_noarb_svi_repair.ipynb`
+- **Surface flagship:** `demos/06_surface_noarb_svi_repair.ipynb`
   - best for static-surface engineering, no-arbitrage diagnostics, SVI fitting, repair, and interpolation judgment
 - **eSSVI bridge:** `demos/07_essvi_smooth_surface_for_dupire.ipynb`
   - best for the smooth Dupire-ready term-structure handoff and analytic `w_T`
-- **Local vol + PDE diagnostics:** `demos/08_localvol_pde_repricing.ipynb`
+- **Local vol + PDE flagship:** `demos/08_localvol_pde_repricing.ipynb`
   - best for diagnostics-first local vol, PDE repricing, and convergence
 - **Integration proof:** `demos/09_surface_to_localvol_pde_integration.ipynb`
   - keeps the full workflow connected without making one notebook carry every story
@@ -60,7 +66,7 @@ How to position them publicly:
 - **eSSVI** = smooth term structure and preferred Dupire handoff
 - **Local vol + PDE** = numerical engineering and validation
 
-![Capstone 2 poster LV PDE pricing](./docs/assets/readme/poster_capstone_wide.png)
+![Capstone 2 poster LV PDE pricing](./docs/assets/generated/poster/poster_essvi_localvol_pde.png)
 
 Validated by:
 
@@ -322,14 +328,10 @@ print(f"f(root)={rr.f_at_root:.3e}  bracket={rr.bracket}  bounds={res.bounds}")
 | `demos/03_binomial_convergence.ipynb` | CRR tree convergence |
 | `demos/04_implied_volatility.ipynb` | Implied-volatility inversion |
 | `demos/05_pde_pricing_and_diagnostics.ipynb` | PDE pricing, stability, and convergence diagnostics |
-| `demos/06_surface_noarb_svi_repair.ipynb` | Surface diagnostics, SVI calibration/repair, and interpolation choices |
-| `demos/07_essvi_smooth_surface_for_dupire.ipynb` | eSSVI calibration, smooth projection, and Dupire-oriented handoff |
-| `demos/08_localvol_pde_repricing.ipynb` | Local-vol diagnostics, PDE repricing, and convergence |
-| `demos/09_surface_to_localvol_pde_integration.ipynb` | Compact end-to-end integration: surface -> eSSVI bridge -> local vol -> PDE |
-
----
-
-Suggested portfolio reading order: `06`, `08`, `07`, with `09` as a compact integration appendix.
+| `demos/06_surface_noarb_svi_repair.ipynb` | Surface flagship: no-arb diagnostics, SVI fitting, repair, and interpolation judgment |
+| `demos/07_essvi_smooth_surface_for_dupire.ipynb` | eSSVI bridge: nodal calibration, smooth projection, and Dupire-ready handoff |
+| `demos/08_localvol_pde_repricing.ipynb` | Numerics flagship: local-vol diagnostics, PDE repricing, and convergence |
+| `demos/09_surface_to_localvol_pde_integration.ipynb` | Integration proof: surface -> eSSVI bridge -> local vol -> PDE |
 
 ---
 
