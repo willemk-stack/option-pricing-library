@@ -51,7 +51,7 @@ jobs:
       - name: Build docs figures
         env:
           MPLBACKEND: Agg
-        run: python scripts/make_docs_figures.py
+        run: python scripts/build_visual_artifacts.py all --profile ci
 
       - name: Build site
         run: mkdocs build --strict --site-dir site
