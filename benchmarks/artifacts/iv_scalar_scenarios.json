@@ -1,0 +1,32 @@
+[
+  {
+    "scenario":"ATM 1Y",
+    "strike":100.0,
+    "tau":1.0,
+    "runtime_ms":0.6194000016,
+    "min_ms":0.6063999972,
+    "mean_ms":0.6666111116,
+    "median_ms":0.6194000016,
+    "std_ms":0.1113551507
+  },
+  {
+    "scenario":"ATM 2W",
+    "strike":100.0,
+    "tau":0.02,
+    "runtime_ms":0.6140000041,
+    "min_ms":0.6043999965,
+    "mean_ms":0.6254444452,
+    "median_ms":0.6140000041,
+    "std_ms":0.0345414438
+  },
+  {
+    "scenario":"OTM 1Y",
+    "strike":140.0,
+    "tau":1.0,
+    "runtime_ms":0.6113999989,
+    "min_ms":0.5955000015,
+    "mean_ms":0.612022221,
+    "median_ms":0.6113999989,
+    "std_ms":0.0100328105
+  }
+]

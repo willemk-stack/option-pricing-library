@@ -7,28 +7,19 @@ hide:
 # Option Pricing Library
 
 <div class="portfolio-hero">
-  <p class="hero-kicker">Start with the strongest proof</p>
-  <p class="hero-copy">This repo already has the depth. The goal of this docs front door is to get you from the library overview to the best engineering evidence quickly: surface repair, eSSVI smoothing, and local-vol/PDE validation.</p>
+  <p class="hero-kicker">Typed pricing, surface repair, and validated numerics</p>
+  <p class="hero-copy">This library prices vanilla options, repairs noisy implied-vol surfaces, smooths the Dupire handoff with eSSVI, and validates the local-vol/PDE workflow with repricing and convergence evidence.</p>
   <div class="cta-row cta-row--trio">
-    <a class="md-button md-button--primary" href="user_guides/flagship_capstone2_page/">Read the decision guide</a>
-    <a class="md-button" href="user_guides/instruments/">Start with the instrument API</a>
-    <a class="md-button" href="api/">Browse the API reference</a>
+    <a class="md-button md-button--primary" href="user_guides/decision_guide/">Read the proof path</a>
+    <a class="md-button" href="user_guides/instruments/">Start with the recommended API</a>
+    <a class="md-button" href="performance/">Review performance evidence</a>
   </div>
 </div>
 
 <figure class="figure-frame">
-  <img src="assets/generated/showcase/reviewer_proof_panel.svg" alt="Reviewer proof panel showing the static surface to eSSVI to local-vol to PDE workflow, four published proof metrics, and supporting tracked visuals" />
-  <figcaption>One panel to scan before opening the split proof pages: surface repair, eSSVI smoothing, local-vol diagnostics, and PDE repricing evidence.</figcaption>
+  <img src="assets/generated/showcase/reviewer_proof_panel.svg" alt="Reviewer proof panel showing surface repair, eSSVI smoothing, local-vol extraction, and PDE repricing with tracked evidence callouts" />
+  <figcaption>The fastest single scan: quoted-to-repaired surface evidence, smooth Dupire handoff evidence, and local-vol/PDE validation evidence in one panel.</figcaption>
 </figure>
-
-## Recommended path
-
-1. [Decision guide](user_guides/flagship_capstone2_page.md)
-2. [Surface flagship](user_guides/flagship_surface.md)
-3. [eSSVI bridge](user_guides/flagship_essvi_bridge.md)
-4. [Local vol + PDE flagship](user_guides/flagship_localvol_pde.md)
-
-If you want the cleanest public API first, start with [Instruments](user_guides/instruments.md). The flat `PricingInputs` workflow remains available as the [convenience quickstart](user_guides/quickstart.md).
 
 ## Validation snapshot
 
@@ -67,27 +58,27 @@ If you want the cleanest public API first, start with [Instruments](user_guides/
   </div>
 </div>
 
-## What the library is strongest at today
-
-- **Vanilla pricing engines**: Black-Scholes(-Merton), CRR binomial trees, Monte Carlo under GBM
-- **Volatility engineering**: implied-vol inversion, smiles, surfaces, no-arbitrage checks, SVI fitting and repair
-- **Smooth Dupire handoff**: eSSVI calibration, validation, and explicit projection
-- **Numerical validation**: local-vol diagnostics, PDE repricing, convergence checks, and CI-run notebooks
-
 ## First clicks
 
-- [Installation](installation.md)
-- [Instruments](user_guides/instruments.md)
-- [Convenience quickstart](user_guides/quickstart.md)
-- [Flagship demos](user_guides/flagship_capstone2_page.md)
-- [Architecture](architecture.md)
-- [Performance](performance.md)
-- [Future work](roadmap.md)
+| If you want to review... | Open this |
+| --- | --- |
+| The strongest end-to-end proof path | [Decision guide](user_guides/decision_guide.md) |
+| The recommended public API | [Instruments](user_guides/instruments.md) |
+| The measured runtime and scaling story | [Performance evidence](performance.md) |
+| The system design and module boundaries | [Architecture](architecture.md) |
+| The generated API reference | [API reference](api/index.md) |
 
-## Documentation map
+## What makes this repo credible quickly
 
-- [Quickstart](user_guides/instruments.md) for the recommended instrument workflow
-- [Flagship demos](user_guides/flagship_capstone2_page.md) for the portfolio-grade proof path
-- [API reference](api/index.md) for the public surface
-- [Notes index](notes/index.md) for background and theory
-- [Future work](roadmap.md) for what is exploratory next
+- The public API is typed and layered rather than notebook-only.
+- The surface workflow shows quoted data, repair diagnostics, and fit stress instead of a single polished chart.
+- The eSSVI handoff page shows why the time-derivative problem matters before local-vol extraction begins.
+- The local-vol/PDE page publishes repricing and convergence evidence, and the benchmark page publishes runtime/error tradeoffs from committed artifacts.
+
+## Continue by intent
+
+- [Installation](installation.md) for a local checkout or editable setup
+- [Guides](user_guides/index.md) for the API and workflow map
+- [Performance evidence](performance.md) for committed benchmark plots and summaries
+- [Architecture](architecture.md) for package structure and dependency direction
+- [Future work](roadmap.md) for what is still exploratory

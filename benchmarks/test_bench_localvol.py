@@ -30,8 +30,14 @@ def _make_call_grid(
     return np.asarray(rows, dtype=float)
 
 
+@pytest.mark.parametrize("strike_coordinate", ["logK", "K"])
 @pytest.mark.parametrize("nT,nK", [(31, 61), (61, 121), (121, 241)])
-def test_bench_local_vol_dupire_scaling(benchmark, nT: int, nK: int) -> None:
+def test_bench_local_vol_dupire_scaling(
+    benchmark,
+    nT: int,
+    nK: int,
+    strike_coordinate: str,
+) -> None:
     market = MarketData(spot=100.0, rate=0.01, dividend_yield=0.0)
     strikes = np.linspace(60.0, 140.0, nK, dtype=float)
     taus = np.linspace(0.1, 2.0, nT, dtype=float)
@@ -47,7 +53,11 @@ def test_bench_local_vol_dupire_scaling(benchmark, nT: int, nK: int) -> None:
 
     def _run() -> object:
         report = local_vol_from_call_grid_diagnostics(
-            call=call, strikes=strikes, taus=taus, market=market
+            call=call,
+            strikes=strikes,
+            taus=taus,
+            market=market,
+            strike_coordinate=strike_coordinate,
         )
         _ = float(np.mean(report.invalid))
         return report

@@ -1,0 +1,78 @@
+{
+  "environment": {
+    "timestamp_utc": "2026-03-16T18:57:24.909322+00:00",
+    "platform": "Windows-11-10.0.26200",
+    "python_executable": "C:\\Program Files\\ParaView 6.1.0\\bin\\pvpython.exe",
+    "cpu_count": 16,
+    "processor": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+    "versions": {
+      "python": "3.12.7",
+      "numpy": "1.26.4",
+      "pandas": "2.0.3",
+      "scipy": "1.17.1"
+    }
+  },
+  "pytest_benchmark": null,
+  "families": {
+    "iv": {
+      "scaling": {
+        "csv": "benchmarks/artifacts/iv_scaling.csv",
+        "json": "benchmarks/artifacts/iv_scaling.json"
+      },
+      "scalar_scenarios": {
+        "csv": "benchmarks/artifacts/iv_scalar_scenarios.csv",
+        "json": "benchmarks/artifacts/iv_scalar_scenarios.json"
+      },
+      "speedup": {
+        "csv": "benchmarks/artifacts/iv_speedup.csv",
+        "json": "benchmarks/artifacts/iv_speedup.json"
+      },
+      "figure": "docs/assets/generated/benchmarks/iv_scaling.png",
+      "max_speedup_x": 445.9929265794368
+    },
+    "pde": {
+      "snapshot": {
+        "csv": "benchmarks/artifacts/pde_runtime_error_tradeoff.csv",
+        "json": "benchmarks/artifacts/pde_runtime_error_tradeoff.json"
+      },
+      "figure": "docs/assets/generated/benchmarks/pde_runtime_error_tradeoff.png",
+      "localvol_reference_grid": {
+        "Nx": 601,
+        "Nt": 601
+      }
+    },
+    "digital": {
+      "snapshot": {
+        "csv": "benchmarks/artifacts/digital_remedies_tradeoff.csv",
+        "json": "benchmarks/artifacts/digital_remedies_tradeoff.json"
+      },
+      "stability": {
+        "csv": "benchmarks/artifacts/digital_remedies_stability.csv",
+        "json": "benchmarks/artifacts/digital_remedies_stability.json"
+      },
+      "figure": "docs/assets/generated/benchmarks/digital_remedies_tradeoff.png"
+    },
+    "localvol": {
+      "snapshot": {
+        "csv": "benchmarks/artifacts/localvol_scaling.csv",
+        "json": "benchmarks/artifacts/localvol_scaling.json"
+      },
+      "figure": "docs/assets/generated/benchmarks/localvol_scaling.png"
+    },
+    "macro": {
+      "snapshot": {
+        "csv": "benchmarks/artifacts/macro_pipeline_summary.csv",
+        "json": "benchmarks/artifacts/macro_pipeline_summary.json"
+      },
+      "figure": "docs/assets/generated/benchmarks/macro_pipeline_summary.png"
+    },
+    "tree": {
+      "snapshot": {
+        "csv": "benchmarks/artifacts/tree_scaling.csv",
+        "json": "benchmarks/artifacts/tree_scaling.json"
+      },
+      "figure": "docs/assets/generated/benchmarks/tree_scaling.png"
+    }
+  },
+  "overview_asset": "docs/assets/generated/benchmarks/benchmark_overview.svg"
+}

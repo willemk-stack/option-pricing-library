@@ -47,7 +47,10 @@ def test_bench_pde_core_scaling(benchmark, Nx: int, Nt: int, method: str) -> Non
 
 
 @pytest.mark.parametrize("Nx,Nt", [(201, 201), (401, 401)])
-@pytest.mark.parametrize("ic_remedy", [ICRemedy.NONE, ICRemedy.L2_PROJ])
+@pytest.mark.parametrize(
+    "ic_remedy",
+    [ICRemedy.NONE, ICRemedy.CELL_AVG, ICRemedy.L2_PROJ],
+)
 def test_bench_pde_digital_ic_remedies(
     benchmark, Nx: int, Nt: int, ic_remedy: ICRemedy
 ) -> None:

@@ -34,6 +34,38 @@ def test_bench_iv_slice_scaling(benchmark, nK: int) -> None:
     )
 
 
+@pytest.mark.parametrize("nK", [21, 61, 201])
+def test_bench_iv_scalar_loop_slice_baseline(benchmark, nK: int) -> None:
+    market = MarketData(spot=100.0, rate=0.01, dividend_yield=0.0)
+    tau = 0.5
+    sigma = 0.2
+
+    strikes = np.linspace(60.0, 140.0, nK, dtype=float)
+    prices = black76_call_price_vec(
+        forward=market.forward(tau),
+        strikes=strikes,
+        sigma=sigma,
+        tau=tau,
+        df=market.df(tau),
+    )
+
+    def _run() -> np.ndarray:
+        vols = []
+        for strike, price in zip(strikes, prices, strict=False):
+            spec = OptionSpec(kind=OptionType.CALL, strike=float(strike), expiry=tau)
+            vols.append(
+                implied_vol_bs_result(
+                    float(price),
+                    spec,
+                    market,
+                    sigma0=sigma,
+                ).vol
+            )
+        return np.asarray(vols, dtype=float)
+
+    benchmark(_run)
+
+
 @pytest.mark.parametrize(
     "strike,tau",
     [(100.0, 1.0), (100.0, 0.02), (140.0, 1.0)],

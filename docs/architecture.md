@@ -1,6 +1,8 @@
-# Architecture & Design
+# Architecture
 
-This page summarizes the architecture and design choices for option_pricing.
+option_pricing is structured as a typed library first: public pricing APIs at the top, volatility models and PDE numerics underneath, and diagnostics at the edge where they can inspect the workflow without polluting the core engines.
+
+If you are reviewing the repo rather than just installing it, pair this page with the [Decision guide](user_guides/decision_guide.md) and [Performance evidence](performance.md). Together they show what the library does, how the pieces fit, and where the measured proof lives.
 
 ## Design goals
 
@@ -11,7 +13,7 @@ This page summarizes the architecture and design choices for option_pricing.
 - Preserve layered APIs: flat inputs for quick use, instrument-based for clarity, curves-first for term structures
 - Emphasize validation and convergence (analytic baselines, remedies for discontinuities, repricing consistency, CI-executed notebooks)
 
-## Public API map (canonical vs convenience)
+## Public API map
 
 Recommended public entry point: instrument-based API
 VanillaOption + instrument pricers are the recommended entry point
@@ -32,7 +34,7 @@ The volatility namespace `option_pricing.vol` additionally exposes the eSSVI sta
 - Surface objects: `ESSVIImpliedSurface`, `ESSVINodalSurface`, `ESSVISmoothedSurface`
 - Calibration and validation: `calibrate_essvi`, `project_essvi_nodes`, `validate_essvi_continuous`, `validate_essvi_nodes`
 
-Canonical vs convenience vs advanced paths
+Recommended paths
 
 - Canonical: instrument-based pricing (VanillaOption + `bs_price_instrument`, `mc_price_instrument`, `binom_price_instrument`)
 - Convenience / legacy: flat input path (`PricingInputs`, `bs_price`, `mc_price`, `binom_price`)
@@ -57,14 +59,14 @@ Dependency direction (audit)
 - No `option_pricing.diagnostics` imports appear in core pricing modules beyond the diagnostics package itself
 
 <figure markdown class="diagram">
-  ![Layered architecture](assets/diagrams/architecture_layers.light.svg){ .diagram-img .diagram-light }
-  ![Layered architecture](assets/diagrams/architecture_layers.dark.svg){ .diagram-img .diagram-dark }
+  ![Layered architecture](../assets/diagrams/architecture_layers.light.svg){ .diagram-img .diagram-light }
+  ![Layered architecture](../assets/diagrams/architecture_layers.dark.svg){ .diagram-img .diagram-dark }
   <figcaption>Dependencies flow downward and right; diagnostics sit below the pricing stack.</figcaption>
 </figure>
 
-## Flagship demo suite (surface -> eSSVI bridge -> local vol -> PDE)
+## Proof workflow (surface -> eSSVI -> local vol -> PDE)
 
-The repo now presents this workflow as a **split demo suite** rather than one hero notebook:
+The strongest reviewer-facing workflow is split across focused notebooks and pages instead of one overloaded notebook:
 
 - `demos/06_surface_noarb_svi_repair.ipynb` for static-surface engineering
 - `demos/07_essvi_smooth_surface_for_dupire.ipynb` for the smooth Dupire bridge
@@ -108,9 +110,9 @@ The repo now presents this workflow as a **split demo suite** rather than one he
   - CI notebook execution: pytest -q demos --nbmake
 
 <figure markdown class="diagram" style="--diagram-max-width: 1100px">
-  ![Surface to local-vol to PDE workflow](assets/diagrams/workflow_surface_to_pde.light.svg){ .diagram-img .diagram-light }
-  ![Surface to local-vol to PDE workflow](assets/diagrams/workflow_surface_to_pde.dark.svg){ .diagram-img .diagram-dark }
-<figcaption>SVI owns the static-surface story; the smoothed eSSVI path is the preferred Dupire handoff into local-vol and PDE repricing.</figcaption>
+  ![Surface to local-vol to PDE workflow](../assets/diagrams/workflow_surface_to_pde.light.svg){ .diagram-img .diagram-light }
+  ![Surface to local-vol to PDE workflow](../assets/diagrams/workflow_surface_to_pde.dark.svg){ .diagram-img .diagram-dark }
+<figcaption>SVI owns the static-surface repair story; the smoothed eSSVI path is the preferred Dupire handoff into local-vol and PDE repricing.</figcaption>
 </figure>
 
 ## Key domain objects (definitions)
@@ -168,8 +170,8 @@ Showcase notebooks executed in CI
   - `demos/09_surface_to_localvol_pde_integration.ipynb`
 
 <figure markdown class="diagram">
-  ![Validation stack](assets/diagrams/validation_stack.light.svg){ .diagram-img .diagram-light }
-  ![Validation stack](assets/diagrams/validation_stack.dark.svg){ .diagram-img .diagram-dark }
+  ![Validation stack](../assets/diagrams/validation_stack.light.svg){ .diagram-img .diagram-light }
+  ![Validation stack](../assets/diagrams/validation_stack.dark.svg){ .diagram-img .diagram-dark }
   <figcaption>Validation layers from analytic baselines to local-vol PDE and cross-checks.</figcaption>
 </figure>
 

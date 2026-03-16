@@ -4,57 +4,12 @@ hide:
   - toc
 ---
 
-# Flagship demos
+# Decision guide
 
-The repo now presents its strongest volatility and numerics signals through a **split demo suite**, not a single catch-all capstone.
+This compatibility page keeps the old path working. The current entrypoint is [Decision guide](decision_guide.md).
 
-That split is intentional:
-
-- **SVI** is the flagship for **static-surface engineering**: per-slice fitting, no-arbitrage diagnostics, butterfly repair, and interpolation judgment.
-- **eSSVI** is the flagship bridge for a **Dupire-ready smooth term structure**: nodal calibration, explicit projection, and analytic `w_T`.
-- **Local vol + PDE** is the flagship for **numerical engineering**: diagnostics-first local vol, PDE repricing, and convergence evidence.
-
-<div class="portfolio-hero">
-  <p class="hero-kicker">Read in this order</p>
-  <p class="hero-copy">Start with the static surface story, then move into the smooth eSSVI handoff, and finish with the local-vol/PDE numerics proof.</p>
-  <div class="cta-row cta-row--trio">
-    <a class="md-button md-button--primary" href="../flagship_surface/">Surface flagship</a>
-    <a class="md-button" href="../flagship_essvi_bridge/">eSSVI bridge</a>
-    <a class="md-button" href="../flagship_localvol_pde/">Local vol + PDE flagship</a>
-  </div>
+<div class="cta-row cta-row--trio">
+  <a class="md-button md-button--primary" href="../decision_guide/">Open the current guide</a>
+  <a class="md-button" href="../surface_workflow/">Surface repair workflow</a>
+  <a class="md-button" href="../localvol_pde_validation/">Local-vol and PDE validation</a>
 </div>
-
-## Decision guide
-
-| If you need to show... | Guide | Notebook | Why |
-| --- | --- | --- | --- |
-| Static no-arb diagnostics, SVI fitting, and repair | [Surface flagship](flagship_surface.md) | [06_surface_noarb_svi_repair.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/06_surface_noarb_svi_repair.ipynb) | This is the cleanest surface-engineering story in the repo. |
-| Why a smooth eSSVI projection is the preferred Dupire handoff | [eSSVI bridge](flagship_essvi_bridge.md) | [07_essvi_smooth_surface_for_dupire.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/07_essvi_smooth_surface_for_dupire.ipynb) | It makes the `w_T` / term-structure argument explicit. |
-| Local-vol diagnostics, PDE repricing, and convergence | [Local vol + PDE flagship](flagship_localvol_pde.md) | [08_localvol_pde_repricing.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/08_localvol_pde_repricing.ipynb) | This is the numerics flagship. |
-| PDE credibility before talking about surfaces | [PDE pricing guide](pde_pricing.md) | [05_pde_pricing_and_diagnostics.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/05_pde_pricing_and_diagnostics.ipynb) | It isolates the solver story. |
-| The full workflow connected end to end | [Architecture overview](../architecture.md) | [09_surface_to_localvol_pde_integration.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/09_surface_to_localvol_pde_integration.ipynb) | This is the integration proof, not the main flagship. |
-
-## Public positioning
-
-- Use **SVI** when the claim is: "this library can engineer and repair a static implied surface."
-- Use **eSSVI** when the claim is: "this library can produce a smoother Dupire-oriented implied surface with analytic time derivatives."
-- Use **LocalVolSurface + PDE** when the claim is: "this library treats local vol and PDE pricing as a validation-heavy numerical workflow."
-
-## Recommended path through the suite
-
-1. Read the [Surface flagship](flagship_surface.md) page and run `demos/06_surface_noarb_svi_repair.ipynb`.
-2. Move to the [eSSVI bridge](flagship_essvi_bridge.md) page and run `demos/07_essvi_smooth_surface_for_dupire.ipynb`.
-3. Finish with the [Local vol + PDE flagship](flagship_localvol_pde.md) page and run `demos/08_localvol_pde_repricing.ipynb`.
-
-Keep `demos/09_surface_to_localvol_pde_integration.ipynb` for interview walkthroughs, end-to-end sanity checks, or when you want to prove the pieces connect without forcing every reader through the whole stack first.
-
-## Rebuild the visuals locally
-
-The canonical publish path now lives in one script:
-
-```bash
-python scripts/build_visual_artifacts.py all --profile publish
-```
-
-That command writes the versioned data bundle to `out/visual_bundles/profile_publish_seed_7/`
-and refreshes the committed figure presets under `docs/assets/generated/`.

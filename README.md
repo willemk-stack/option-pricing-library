@@ -1,85 +1,55 @@
 # option_pricing
 
-Typed Python library for **vanilla option pricing, implied-volatility workflows, volatility surfaces, local-vol diagnostics, and finite-difference PDE pricing**.
-
-It supports **analytic Black–Scholes(-Merton)** pricing, **CRR binomial trees** for European and American vanilla options, **Monte Carlo under GBM**, and more advanced **surface / local-vol / PDE** workflows — with both **instruments-based** and **flat-input** APIs.
+Typed Python library for vanilla option pricing, implied-volatility workflows, surface repair, smooth Dupire handoff, local-vol diagnostics, and finite-difference PDE pricing.
 
 [![Tests](https://github.com/willemk-stack/option-pricing-library/actions/workflows/tests.yaml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/tests.yaml)
 [![Codecov](https://codecov.io/gh/willemk-stack/option-pricing-library/branch/main/graph/badge.svg)](https://codecov.io/gh/willemk-stack/option-pricing-library)
 [![Docs](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
-![Reviewer proof panel: static surface to eSSVI smoothing to local vol to PDE repricing with published seam-jump, invalid-count, repricing, and error callouts](./docs/assets/generated/showcase/reviewer_proof_panel.svg)
+This repo is strongest where quant libraries often get vague: the surface-repair-to-local-vol-to-PDE path is implemented, instrumented, benchmarked, and documented with visible evidence.
 
-This panel is the fastest way to see the repo's strongest reviewer-facing evidence before opening the proof pages below.
+- What it does: Black-Scholes, CRR trees, Monte Carlo, implied-vol inversion, surface repair, eSSVI smoothing, local-vol extraction, and PDE pricing behind one typed package.
+- Why it is technically strong: the hard steps stay inspectable through no-arbitrage checks, SVI repair tables, eSSVI seam diagnostics, invalid-mask reports, repricing sweeps, and convergence plots.
+- Where the proof is: the proof-path pages, the benchmark page, and the architecture diagrams linked below.
 
----
+![Reviewer proof panel: static surface repair, eSSVI smoothing, local-vol extraction, and PDE repricing with tracked proof callouts](./docs/assets/generated/showcase/reviewer_proof_panel.svg)
 
-## Why this repo
+## Proof at a glance
 
-This project is designed as a **typed, test-backed quant library** rather than a notebook-only collection of pricing code.
+| Area | Evidence already in the repo | Open |
+| --- | --- | --- |
+| Surface repair | Quoted-vs-repaired surfaces plus per-expiry SVI residuals and slice repair status | [Surface repair workflow](https://willemk-stack.github.io/option-pricing-library/user_guides/surface_workflow/) |
+| Smooth Dupire handoff | Worst observed seam jump reduced from `8.07e-2` to `8.17e-5`, with `projection_dupire_invalid_count = 0` on the published projection | [eSSVI smooth handoff](https://willemk-stack.github.io/option-pricing-library/user_guides/essvi_smooth_handoff/) |
+| Local-vol and PDE validation | `154` options repriced, mean abs price error `8.1e-4`, max abs IV error `18.7 bp` on the published sweep | [Local-vol and PDE validation](https://willemk-stack.github.io/option-pricing-library/user_guides/localvol_pde_validation/) |
+| Performance evidence | Vectorized implied-vol inversion reaches `446x` speedup at `801` strikes, and the benchmark page publishes runtime/error and remedy tradeoffs | [Performance evidence](https://willemk-stack.github.io/option-pricing-library/performance/) |
 
-Core strengths:
+![Benchmark overview: committed IV scaling, PDE runtime-versus-error, macro stage budget, and benchmark callouts derived from published artifacts](./docs/assets/generated/benchmarks/benchmark_overview.svg)
 
-- **Multiple pricing engines** for vanilla options: Black–Scholes, Monte Carlo, and CRR binomial trees
-- **Volatility tooling**: implied-vol inversion, smiles, surfaces, no-arbitrage checks, SVI fitting and repair, eSSVI calibration / projection
-- **Advanced numerics**: local-vol extraction, diagnostics, and finite-difference PDE pricing
-- **Validation-first approach**: analytic baselines, convergence checks, stress tests, and CI-executed notebooks
-- **Layered API design**: simple flat-input workflows, instrument-based workflows, and curves-first pricing contexts
+The benchmark overview is generated from committed benchmark artifacts, not presentation-only screenshots. Reproduction commands and environment notes live on the [Performance evidence page](https://willemk-stack.github.io/option-pricing-library/performance/).
 
-Docs: [📘 willemk-stack.github.io/option-pricing-library](https://willemk-stack.github.io/option-pricing-library)  
-API Reference: [📘 /api](https://willemk-stack.github.io/option-pricing-library/api/)
+## Start here
 
----
+| If you want to review... | Open this first |
+| --- | --- |
+| The strongest end-to-end engineering proof | [Decision guide](https://willemk-stack.github.io/option-pricing-library/user_guides/decision_guide/) |
+| The recommended public API | [Instruments guide](https://willemk-stack.github.io/option-pricing-library/user_guides/instruments/) |
+| The system design and module boundaries | [Architecture](https://willemk-stack.github.io/option-pricing-library/architecture/) |
+| Measured scaling and numerical tradeoffs | [Performance evidence](https://willemk-stack.github.io/option-pricing-library/performance/) |
+| The generated API surface | [API reference](https://willemk-stack.github.io/option-pricing-library/api/) |
 
-## Best places to start
+## What this library is strongest at
 
-### Recommended path
+- Typed public API layers: instrument-based pricing, flat-input convenience helpers, and curves-first workflows.
+- Surface engineering: implied-vol inversion, smile and surface objects, no-arbitrage checks, analytic SVI fitting, and repair.
+- Smooth Dupire handoff: nodal eSSVI calibration, smooth projection, seam diagnostics, and local-vol extraction.
+- Numerical validation: repricing grids, convergence studies, digital-payoff remedies, and committed benchmark artifacts.
 
-1. [Decision guide](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_capstone2_page/)
-2. [Surface flagship](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_surface/)
-3. [eSSVI bridge](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_essvi_bridge/)
-4. [Local vol + PDE flagship](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_localvol_pde/)
+## Architecture and trust signals
 
-### Flagship demos
-
-The repo now presents its strongest volatility and numerics signals through a **split demo suite**:
-
-- **Surface flagship:** [Docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_surface/) | [Notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/06_surface_noarb_svi_repair.ipynb)
-  - best for static-surface engineering, no-arbitrage diagnostics, SVI fitting, repair, and interpolation judgment
-- **eSSVI bridge:** [Docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_essvi_bridge/) | [Notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/07_essvi_smooth_surface_for_dupire.ipynb)
-  - best for the smooth Dupire-ready term-structure handoff and analytic `w_T`
-- **Local vol + PDE flagship:** [Docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_localvol_pde/) | [Notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/08_localvol_pde_repricing.ipynb)
-  - best for diagnostics-first local vol, PDE repricing, and convergence
-- **Integration proof:** [Notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/09_surface_to_localvol_pde_integration.ipynb)
-  - keeps the full workflow connected without making one notebook carry every story
-- **PDE appendix:** [Notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/05_pde_pricing_and_diagnostics.ipynb)
-  - isolates solver credibility before talking about surfaces
-
-How to position them publicly:
-
-- **SVI** = static-surface engineering
-- **eSSVI** = smooth term structure and preferred Dupire handoff
-- **Local vol + PDE** = numerical engineering and validation
-
-![Capstone 2 poster LV PDE pricing](./docs/assets/generated/poster/poster_essvi_localvol_pde.png)
-
-Validated by:
-
-- constant-vol recovery tests for Dupire local volatility
-- vanilla PDE checks against Black–Scholes baselines
-- digital-option convergence and remedy tests
-- QuantLib comparison tests for local-vol digital pricing
-- explicit seam / `w_T` diagnostics explaining the slice-stack path's time-boundary artifacts
-
-Start here:
-
-- **Decision guide:** [Published docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_capstone2_page/)
-- **Surface docs:** [Published docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_surface/)
-- **eSSVI bridge docs:** [Published docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_essvi_bridge/)
-- **Local vol + PDE docs:** [Published docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_localvol_pde/)
-
----
+- [Architecture](https://willemk-stack.github.io/option-pricing-library/architecture/) shows the package split across instruments, market objects, pricers, volatility tooling, numerics, and diagnostics.
+- [Performance evidence](https://willemk-stack.github.io/option-pricing-library/performance/) publishes the measured IV, PDE, local-vol, digital-remedy, macro-pipeline, and tree benchmark families.
+- The proof notebooks under `demos/` are executed in CI with `nbmake`, so the public workflow pages are tied to checked code rather than static screenshots.
 
 ## Installation
 
@@ -89,37 +59,47 @@ Install directly from GitHub:
 pip install "git+https://github.com/willemk-stack/option-pricing-library.git"
 ```
 
-Local editable checkout:
+For a local editable checkout:
 
 ```bash
+python -m venv .venv
+# Windows
+.\.venv\Scripts\activate
+# macOS / Linux
+# source .venv/bin/activate
+
+python -m pip install --upgrade pip
 pip install -e .
 ```
+
+Supported extras from `pyproject.toml`:
+
+- `pip install -e ".[plot]"` for plotting helpers used by diagnostics and docs figures
+- `pip install -e ".[notebooks]"` for the demo notebook environment
+- `pip install -e ".[dev]"` for tests, benchmarks, linting, formatting, and typing
+- `pip install -e ".[docs]"` for MkDocs and API-reference generation
 
 Python requirement:
 
 - **Python 3.12+**
 
----
-
 ## API styles
 
 The repo supports three complementary ways to work:
 
-- **Flat-input API** for quick experiments and tutorial-style usage (`PricingInputs`)
-- **Instrument-based API** to separate contracts from pricing engines (`VanillaOption`, `ExerciseStyle`)
-- **Curves-first API** for discount / forward curve workflows (`PricingContext`)
+- **Instrument-based API** for the clearest public workflow (`VanillaOption`, `ExerciseStyle`, instrument pricers)
+- **Flat-input API** for compact examples and quick checks (`PricingInputs`)
+- **Curves-first API** for discount/forward curves and surface-aware workflows (`PricingContext`)
 
 ### Recommended API path
 
-- **Recommended API**: instrument-based workflow (`VanillaOption` + instrument pricers). This is the intended public entry point for most users and keeps contracts separate from pricing methods.
-- **Convenience API**: flat-input workflow (`PricingInputs`). Use this for compact tutorials, tests, and quick checks.
-- **Advanced API**: curves-first + surface / PDE workflows (`PricingContext`, vol, diagnostics). Use this when you need term structures, surfaces, or local-vol / PDE pipelines.
-
----
+- **Recommended API**: instrument-based workflow (`VanillaOption` + instrument pricers). This keeps contracts separate from pricing methods.
+- **Convenience API**: flat-input workflow (`PricingInputs`). Use this for concise tutorials, tests, and smoke checks.
+- **Advanced API**: curves-first plus surfaces, local vol, and PDE (`PricingContext`, vol, diagnostics). Use this when you need term structures or the full surface-to-PDE path.
 
 ## Quick example (recommended instrument workflow)
 
-Instruments cleanly separate *what you're pricing* (the contract) from *how it's priced* (the pricer and model).
+Instruments separate what is being priced from how it is priced.
 
 ```python
 from option_pricing import (
@@ -142,23 +122,14 @@ inst = VanillaOption(
 market = MarketData(spot=100.0, rate=0.02, dividend_yield=0.0)
 sigma = 0.2
 
-# Analytic (BS)
 bs_price_instrument(inst, market=market, sigma=sigma)
-
-# Monte Carlo
 mc_price_instrument(inst, market=market, sigma=sigma)
-
-# Binomial tree (European / American)
 binom_price_instrument(inst, market=market, sigma=sigma, n_steps=200)
 ```
 
-Both APIs share the same pricing engines underneath; the flat-input versions simply wrap instruments internally.
-
----
+The flat-input functions call the same pricing engines underneath; they are a convenience layer, not a separate implementation.
 
 ## Compact flat-input example
-
-The convenient `PricingInputs` workflow is a good starting point for quick pricing checks and tutorials:
 
 ```python
 from option_pricing import (
@@ -187,8 +158,6 @@ print("MC:", price_mc, "(SE=", se, ")")
 
 print("CRR:", binom_price(p, n_steps=500))
 ```
-
----
 
 ## Curves-first example (`PricingContext`)
 
@@ -243,8 +212,6 @@ print(
 )
 ```
 
----
-
 ## Implied volatility example
 
 ```python
@@ -273,13 +240,11 @@ print(f"Converged: {rr.converged}  iters={rr.iterations}  method={rr.method}")
 print(f"f(root)={rr.f_at_root:.3e}  bracket={rr.bracket}  bounds={res.bounds}")
 ```
 
----
-
 ## What is implemented
 
 ### Pricing engines
 
-- **Black–Scholes(-Merton)** price and Greeks
+- **Black-Scholes(-Merton)** price and Greeks
 - **CRR binomial tree** for European and American vanilla options
 - **Monte Carlo under GBM** with optional variance-reduction features
 - **Finite-difference PDE pricing** for selected advanced workflows
@@ -290,11 +255,9 @@ print(f"f(root)={rr.f_at_root:.3e}  bracket={rr.bracket}  bounds={res.bounds}")
 - **Smile** and **VolSurface** objects with interpolation support
 - **Static no-arbitrage diagnostics** for surfaces
 - **SVI fitting and repair** workflows
-- **eSSVI calibration, validation, and smooth-surface projection** workflows
-- **Local-vol extraction and diagnostics** from surfaces
-- **Convergence and model-validation utilities**
-
----
+- **eSSVI calibration, validation, and smooth-surface projection**
+- **Local-vol extraction and diagnostics** from differentiable implied surfaces
+- **Convergence and repricing validation utilities**
 
 ## Project layout
 
@@ -303,29 +266,21 @@ print(f"f(root)={rr.f_at_root:.3e}  bracket={rr.bracket}  bounds={res.bounds}")
 | **`instruments/`** | Contracts, payoffs, and exercise-style abstractions |
 | **`market/`** | Spot, rates, dividends, curves, and pricing contexts |
 | **`pricers/`** | Public pricing entry points for analytic, tree, Monte Carlo, and PDE workflows |
-| **`models/`** | Model-specific internals such as Black–Scholes and local-vol components |
+| **`models/`** | Model-specific internals such as Black-Scholes and local-vol components |
 | **`vol/`** | Implied vol, smiles, surfaces, SVI/eSSVI tooling, and local-vol extraction |
 | **`numerics/`** | Root-finding, finite differences, tridiagonal solvers, and PDE building blocks |
-| **`diagnostics/`** | Arbitrage checks, convergence studies, repricing, and validation helpers |
-| **`viz/`** | Plotting helpers for surfaces, diagnostics, and reports |
+| **`diagnostics/`** | Arbitrage checks, convergence studies, repricing audits, and reports |
+| **`viz/`** | Plotting helpers for surfaces, diagnostics, and published figures |
 
----
-
-## Demos and notebooks
+## Proof notebooks
 
 | File | Topic |
 | --- | --- |
-| `demos/01_black_scholes_and_greeks.ipynb` | Analytic pricing + Greeks |
-| `demos/02_monte_carlo_pricing_and_error.ipynb` | Monte Carlo pricing + standard errors |
-| `demos/03_binomial_convergence.ipynb` | CRR tree convergence |
-| `demos/04_implied_volatility.ipynb` | Implied-volatility inversion |
-| `demos/05_pde_pricing_and_diagnostics.ipynb` | PDE pricing, stability, and convergence diagnostics |
-| `demos/06_surface_noarb_svi_repair.ipynb` | Surface flagship: no-arb diagnostics, SVI fitting, repair, and interpolation judgment |
-| `demos/07_essvi_smooth_surface_for_dupire.ipynb` | eSSVI bridge: nodal calibration, smooth projection, and Dupire-ready handoff |
-| `demos/08_localvol_pde_repricing.ipynb` | Numerics flagship: local-vol diagnostics, PDE repricing, and convergence |
-| `demos/09_surface_to_localvol_pde_integration.ipynb` | Integration proof: surface -> eSSVI bridge -> local vol -> PDE |
-
----
+| `demos/06_surface_noarb_svi_repair.ipynb` | Surface repair, no-arbitrage checks, SVI fitting, and repair |
+| `demos/07_essvi_smooth_surface_for_dupire.ipynb` | Nodal eSSVI calibration, smooth projection, and Dupire handoff |
+| `demos/08_localvol_pde_repricing.ipynb` | Local-vol diagnostics, PDE repricing, and convergence |
+| `demos/09_surface_to_localvol_pde_integration.ipynb` | End-to-end integration path from surface to PDE |
+| `demos/05_pde_pricing_and_diagnostics.ipynb` | PDE-only diagnostics and digital-remedy appendix |
 
 ## Validation and development
 
@@ -355,19 +310,11 @@ pytest -q
 mypy
 ```
 
-The repo also includes:
-
-- GitHub Actions for tests and docs
-- README freshness checks
-- CI notebook execution via `nbmake`
-
----
+The repo also includes GitHub Actions for tests and docs, README freshness checks, and CI notebook execution via `nbmake`.
 
 ## Future work
 
 See the published Future work page: [docs/roadmap.md](https://willemk-stack.github.io/option-pricing-library/roadmap/)
-
----
 
 ## License
 
