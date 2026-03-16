@@ -95,7 +95,7 @@ class ImpliedVolConfig:
     Attributes
     ----------
     root_method
-        Root-finding method from :class:`~option_pricing.numerics.root_finding.RootMethod`
+        Root-finding method from `RootMethod`
         (default: BRACKETED_NEWTON).
     sigma_lo
         Lower volatility bound (default: 1e-8).
@@ -104,9 +104,9 @@ class ImpliedVolConfig:
     bounds_eps
         Slack for bracket bounds (default: 1e-12).
     seed_strategy
-        Initial guess strategy from :class:`SeedStrategy` (default: HEURISTIC).
+        Initial guess strategy from `SeedStrategy` (default: HEURISTIC).
     numerics
-        Numerical solver configuration (:class:`NumericsConfig`).
+        Numerical solver configuration (`NumericsConfig`).
     """
 
     root_method: RootMethod = RootMethod.BRACKETED_NEWTON
@@ -140,7 +140,7 @@ class MCConfig:
     antithetic
         Use antithetic variates for variance reduction (default: False).
     random
-        Random number generator configuration (:class:`RandomConfig`).
+        Random number generator configuration (`RandomConfig`).
     rng
         Optional pre-constructed numpy RandomGenerator. If None, one is
         created from the random config.

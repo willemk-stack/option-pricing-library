@@ -2,6 +2,18 @@
 
 This page describes the v1 benchmark suite built on `pytest-benchmark`. The goal is to track scaling and identify regressions in the most frequently used numerics.
 
+## Benchmark snapshot
+
+<div class="placeholder-card">
+  <p class="snapshot-label">Placeholder: benchmark chart/table to add later</p>
+  <p class="hero-copy">There is not yet a committed benchmark artifact in this docs bundle, so this section is intentionally a placeholder rather than a guessed chart.</p>
+  <p class="hero-copy">When you are ready to replace it, use one of these sources:</p>
+  <p class="metric-key">Local run</p>
+  <pre><code>RUN_BENCHMARKS=1 pytest benchmarks -q --benchmark-only --benchmark-json benchmarks.json</code></pre>
+  <p class="metric-key">CI workflow</p>
+  <p><code>.github/workflows/benchmarks.yml</code></p>
+</div>
+
 ## What is benchmarked
 
 - Implied vol: vectorized slice inversion and scalar inversion scenarios.

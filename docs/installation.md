@@ -7,6 +7,20 @@
 
 Optional extras are available for plotting and notebook workflows.
 
+## Install from GitHub
+
+For a portfolio-style install without cloning the repo first:
+
+```bash
+pip install "git+https://github.com/willemk-stack/option-pricing-library.git"
+```
+
+Quick smoke test:
+
+```bash
+python -c "import option_pricing; print(option_pricing.__name__)"
+```
+
 ## Install from a local checkout
 
 From the repository root:
@@ -24,7 +38,7 @@ pip install -e .
 
 Editable install (`-e`) is the nicest setup while you’re iterating on the library.
 
-## Optional extras
+## Optional extras for local development
 
 If your `pyproject.toml` defines extras (recommended), you can install them like:
 
@@ -35,7 +49,7 @@ pip install -e ".[plot]"
 # Notebook workflow (jupyter + matplotlib + pandas)
 pip install -e ".[notebooks]"
 
-# Dev tools (pytest, ruff, black, mypy, …)
+# Dev tools (pytest, ruff, black, mypy, ...)
 pip install -e ".[dev]"
 ```
 

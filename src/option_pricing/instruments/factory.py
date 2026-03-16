@@ -1,7 +1,7 @@
 """Small conversion helpers.
 
-The library historically used :class:`~option_pricing.types.OptionSpec` and
-:class:`~option_pricing.types.PricingInputs` as the primary user inputs.
+The library historically used `OptionSpec` and `PricingInputs` as the primary
+user inputs.
 
 As the codebase grows, it is useful to split "what is being priced" (an
 instrument) from "how it is priced" (a pricer). The functions here provide a
@@ -22,7 +22,7 @@ def from_option_spec(
     tau: float | None = None,
     exercise: ExerciseStyle = ExerciseStyle.EUROPEAN,
 ) -> VanillaOption:
-    """Convert an :class:`~option_pricing.types.OptionSpec` to a :class:`VanillaOption`.
+    """Convert an `OptionSpec` to a `VanillaOption`.
 
     Parameters
     ----------
@@ -37,7 +37,7 @@ def from_option_spec(
     Notes
     -----
     ``OptionSpec.expiry`` is historically an absolute expiry time ``T`` used with
-    a valuation time ``t`` in :class:`PricingInputs`. The instruments package, by
+    a valuation time ``t`` in `PricingInputs`. The instruments package, by
     contrast, uses a single number interpreted as **time to expiry**.
     """
     expiry = float(spec.expiry if tau is None else tau)
@@ -52,7 +52,7 @@ def from_option_spec(
 def from_pricing_inputs(
     p: PricingInputs, *, exercise: ExerciseStyle = ExerciseStyle.EUROPEAN
 ) -> VanillaOption:
-    """Convert :class:`~option_pricing.types.PricingInputs` to a :class:`VanillaOption`.
+    """Convert `PricingInputs` to a `VanillaOption`.
 
     Uses ``p.tau`` for time-to-expiry.
     """

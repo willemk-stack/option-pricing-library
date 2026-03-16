@@ -47,9 +47,7 @@ def main() -> None:
         ),
     )
 
-    cfg_mc = MCConfig(
-        n_paths=_mc_paths(200_000), antithetic=True, random=RandomConfig(seed=0)
-    )
+    cfg_mc = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=0))
     price_mc, se = mc_price_from_ctx(
         kind=OptionType.CALL, strike=K, sigma=sigma, tau=tau, ctx=ctx, cfg=cfg_mc
     )

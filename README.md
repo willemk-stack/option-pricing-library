@@ -11,19 +11,6 @@ It supports **analytic Black–Scholes(-Merton)** pricing, **CRR binomial trees*
 
 ![IV Heatmap banner](./docs/assets/generated/poster/hero_essvi_surface.png)
 
-> **Note:** This file is **auto-generated** from `README.template.md` and snippets in `examples/`.  
-> To edit, modify the template or example sources, then run:
->
-> ```bash
-> python scripts/render_readme.py
-> ```
->
-> Publish the canonical visual bundle with:
->
-> ```bash
-> python scripts/build_visual_artifacts.py all --profile publish
-> ```
-
 ---
 
 ## Why this repo
@@ -45,19 +32,26 @@ API Reference: [📘 /api](https://willemk-stack.github.io/option-pricing-librar
 
 ## Best places to start
 
+### Recommended path
+
+1. [Decision guide](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_capstone2_page/)
+2. [Surface flagship](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_surface/)
+3. [eSSVI bridge](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_essvi_bridge/)
+4. [Local vol + PDE flagship](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_localvol_pde/)
+
 ### Flagship demos
 
 The repo now presents its strongest volatility and numerics signals through a **split demo suite**:
 
-- **Surface flagship:** `demos/06_surface_noarb_svi_repair.ipynb`
+- **Surface flagship:** [Docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_surface/) | [Notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/06_surface_noarb_svi_repair.ipynb)
   - best for static-surface engineering, no-arbitrage diagnostics, SVI fitting, repair, and interpolation judgment
-- **eSSVI bridge:** `demos/07_essvi_smooth_surface_for_dupire.ipynb`
+- **eSSVI bridge:** [Docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_essvi_bridge/) | [Notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/07_essvi_smooth_surface_for_dupire.ipynb)
   - best for the smooth Dupire-ready term-structure handoff and analytic `w_T`
-- **Local vol + PDE flagship:** `demos/08_localvol_pde_repricing.ipynb`
+- **Local vol + PDE flagship:** [Docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_localvol_pde/) | [Notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/08_localvol_pde_repricing.ipynb)
   - best for diagnostics-first local vol, PDE repricing, and convergence
-- **Integration proof:** `demos/09_surface_to_localvol_pde_integration.ipynb`
+- **Integration proof:** [Notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/09_surface_to_localvol_pde_integration.ipynb)
   - keeps the full workflow connected without making one notebook carry every story
-- **PDE appendix:** `demos/05_pde_pricing_and_diagnostics.ipynb`
+- **PDE appendix:** [Notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/05_pde_pricing_and_diagnostics.ipynb)
   - isolates solver credibility before talking about surfaces
 
 How to position them publicly:
@@ -78,25 +72,25 @@ Validated by:
 
 Start here:
 
-- **Decision guide:** `docs/user_guides/flagship_capstone2_page.md`
-- **Surface docs:** `docs/user_guides/flagship_surface.md`
-- **eSSVI bridge docs:** `docs/user_guides/flagship_essvi_bridge.md`
-- **Local vol + PDE docs:** `docs/user_guides/flagship_localvol_pde.md`
+- **Decision guide:** [Published docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_capstone2_page/)
+- **Surface docs:** [Published docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_surface/)
+- **eSSVI bridge docs:** [Published docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_essvi_bridge/)
+- **Local vol + PDE docs:** [Published docs](https://willemk-stack.github.io/option-pricing-library/user_guides/flagship_localvol_pde/)
 
 ---
 
 ## Installation
 
-Core library:
+Install directly from GitHub:
+
+```bash
+pip install "git+https://github.com/willemk-stack/option-pricing-library.git"
+```
+
+Local editable checkout:
 
 ```bash
 pip install -e .
-```
-
-Development (tests, notebooks, linting, docs):
-
-```bash
-pip install -e ".[dev,docs]"
 ```
 
 Python requirement:
@@ -121,45 +115,9 @@ The repo supports three complementary ways to work:
 
 ---
 
-## Quick example (convenience API)
+## Quick example (recommended instrument workflow)
 
-The convenient `PricingInputs` workflow is a good starting point for quick pricing checks and tutorials:
-
-```python
-from option_pricing import (
-    MarketData,
-    OptionSpec,
-    OptionType,
-    PricingInputs,
-    binom_price,
-    bs_greeks,
-    bs_price,
-    mc_price,
-)
-from option_pricing.config import MCConfig, RandomConfig
-
-market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.0)
-# In PricingInputs, expiry is the absolute expiry T; with t=0 it equals tau numerically.
-spec = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)
-p = PricingInputs(spec=spec, market=market, sigma=0.20, t=0.0)
-
-print("BS:", bs_price(p))
-print("Greeks:", bs_greeks(p))
-
-cfg_mc = MCConfig(
-    n_paths=_mc_paths(200_000), antithetic=True, random=RandomConfig(seed=0)
-)
-price_mc, se = mc_price(p, cfg=cfg_mc)
-print("MC:", price_mc, "(SE=", se, ")")
-
-print("CRR:", binom_price(p, n_steps=500))
-```
-
----
-
-## Instrument workflow
-
-Instruments cleanly separate *what you’re pricing* (the contract) from *how it’s priced* (the pricer and model).
+Instruments cleanly separate *what you're pricing* (the contract) from *how it's priced* (the pricer and model).
 
 ```python
 from option_pricing import (
@@ -193,6 +151,40 @@ binom_price_instrument(inst, market=market, sigma=sigma, n_steps=200)
 ```
 
 Both APIs share the same pricing engines underneath; the flat-input versions simply wrap instruments internally.
+
+---
+
+## Compact flat-input example
+
+The convenient `PricingInputs` workflow is a good starting point for quick pricing checks and tutorials:
+
+```python
+from option_pricing import (
+    MarketData,
+    OptionSpec,
+    OptionType,
+    PricingInputs,
+    binom_price,
+    bs_greeks,
+    bs_price,
+    mc_price,
+)
+from option_pricing.config import MCConfig, RandomConfig
+
+market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.0)
+# In PricingInputs, expiry is the absolute expiry T; with t=0 it equals tau numerically.
+spec = OptionSpec(kind=OptionType.CALL, strike=100.0, expiry=1.0)
+p = PricingInputs(spec=spec, market=market, sigma=0.20, t=0.0)
+
+print("BS:", bs_price(p))
+print("Greeks:", bs_greeks(p))
+
+cfg_mc = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=0))
+price_mc, se = mc_price(p, cfg=cfg_mc)
+print("MC:", price_mc, "(SE=", se, ")")
+
+print("CRR:", binom_price(p, n_steps=500))
+```
 
 ---
 
@@ -235,9 +227,7 @@ print(
     ),
 )
 
-cfg_mc = MCConfig(
-    n_paths=_mc_paths(200_000), antithetic=True, random=RandomConfig(seed=0)
-)
+cfg_mc = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=0))
 price_mc, se = mc_price_from_ctx(
     kind=OptionType.CALL, strike=K, sigma=sigma, tau=tau, ctx=ctx, cfg=cfg_mc
 )
@@ -337,6 +327,23 @@ print(f"f(root)={rr.f_at_root:.3e}  bracket={rr.bracket}  bounds={res.bounds}")
 
 ## Validation and development
 
+<details>
+<summary>Contributor notes</summary>
+
+This file is auto-generated from `README.template.md` and snippets in `examples/`.
+
+```bash
+python scripts/render_readme.py
+```
+
+Refresh the committed visual bundle with:
+
+```bash
+python scripts/build_visual_artifacts.py all --profile publish
+```
+
+</details>
+
 Development checks:
 
 ```bash
@@ -354,9 +361,9 @@ The repo also includes:
 
 ---
 
-## Roadmap
+## Future work
 
-See the MkDocs roadmap: [docs/roadmap.md](./docs/roadmap.md)
+See the published Future work page: [docs/roadmap.md](https://willemk-stack.github.io/option-pricing-library/roadmap/)
 
 ---
 
