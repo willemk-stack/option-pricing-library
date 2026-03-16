@@ -14,20 +14,20 @@ This page shows the static-surface problem the library handles well: noisy optio
 </div>
 
 <figure markdown class="diagram">
-  ![Comparison of quoted implied-vol data and repaired SVI surface values across strikes and expiries](../../assets/generated/static/quote_surface_compare.light.png){ .diagram-img .diagram-light }
-  ![Comparison of quoted implied-vol data and repaired SVI surface values across strikes and expiries](../../assets/generated/static/quote_surface_compare.dark.png){ .diagram-img .diagram-dark }
+  ![Comparison of quoted implied-vol data and repaired SVI surface values across strikes and expiries](../assets/generated/static/quote_surface_compare.light.png){ .diagram-img .diagram-light }
+  ![Comparison of quoted implied-vol data and repaired SVI surface values across strikes and expiries](../assets/generated/static/quote_surface_compare.dark.png){ .diagram-img .diagram-dark }
   <figcaption>Quoted structure remains visible next to the repaired SVI fit, so the surface regularization is inspectable rather than hidden behind one polished plot.</figcaption>
 </figure>
 
 <div class="snapshot-grid">
   <figure markdown class="diagram" style="--diagram-max-width: 720px">
-    ![Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity](../../assets/generated/static/svi_repaired_surface_heatmap.light.png){ .diagram-img .diagram-light }
-    ![Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity](../../assets/generated/static/svi_repaired_surface_heatmap.dark.png){ .diagram-img .diagram-dark }
+    ![Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity](../assets/generated/static/svi_repaired_surface_heatmap.light.png){ .diagram-img .diagram-light }
+    ![Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity](../assets/generated/static/svi_repaired_surface_heatmap.dark.png){ .diagram-img .diagram-dark }
     <figcaption>The repaired surface heatmap makes maturity continuity and remaining stress regions visible before any local-vol step is considered.</figcaption>
   </figure>
   <figure markdown class="diagram" style="--diagram-max-width: 720px">
-    ![Repaired SVI smile slices for multiple expiries plotted against log-moneyness](../../assets/generated/static/svi_smile_slices.light.png){ .diagram-img .diagram-light }
-    ![Repaired SVI smile slices for multiple expiries plotted against log-moneyness](../../assets/generated/static/svi_smile_slices.dark.png){ .diagram-img .diagram-dark }
+    ![Repaired SVI smile slices for multiple expiries plotted against log-moneyness](../assets/generated/static/svi_smile_slices.light.png){ .diagram-img .diagram-light }
+    ![Repaired SVI smile slices for multiple expiries plotted against log-moneyness](../assets/generated/static/svi_smile_slices.dark.png){ .diagram-img .diagram-dark }
     <figcaption>Per-expiry slices keep fit quality and repair behavior visible slice by slice, which is what a reviewer needs to inspect.</figcaption>
   </figure>
 </div>
