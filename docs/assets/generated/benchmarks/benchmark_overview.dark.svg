@@ -1,0 +1,73 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc">
+  <title id="title">Benchmark overview for the option pricing library</title>
+  <desc id="desc">Reviewer-facing benchmark summary showing IV scaling, PDE cost versus accuracy, macro pipeline stage budget, and concise measured callouts for digital remedies, local-vol extraction, and tree scaling.</desc>
+  <defs>
+    <linearGradient id="headerBg" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#18263C" />
+      <stop offset="100%" stop-color="#101B2D" />
+    </linearGradient>
+    <clipPath id="ivThumb">
+      <rect x="74" y="264" width="452" height="290" rx="20" ry="20" />
+    </clipPath>
+    <clipPath id="pdeThumb">
+      <rect x="574" y="264" width="452" height="290" rx="20" ry="20" />
+    </clipPath>
+    <clipPath id="macroThumb">
+      <rect x="1074" y="264" width="452" height="290" rx="20" ry="20" />
+    </clipPath>
+  </defs>
+
+  <rect width="1600" height="1080" fill="#08101F" />
+  <rect x="28" y="28" width="1544" height="1024" rx="34" ry="34" fill="#0F172A" stroke="#314056" stroke-width="2" />
+
+  <text x="72" y="108" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="54" font-weight="700" fill="#E5EDF7">Benchmark overview</text>
+  <text x="72" y="148" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="24" fill="#A8B5C7">Compressed reviewer scan of the repo's measured scaling, cost-versus-accuracy, and end-to-end stage budget story.</text>
+  <text x="72" y="182" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" fill="#A8B5C7">Built from committed benchmark outputs under benchmarks/artifacts and docs/assets/generated/benchmarks.</text>
+
+  <rect x="72" y="220" width="1456" height="360" rx="28" ry="28" fill="url(#headerBg)" stroke="#314056" stroke-width="2" />
+  <text x="102" y="254" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1" fill="#8CC9FF">PRIMARY PANELS</text>
+
+  <rect x="74" y="264" width="452" height="290" rx="20" ry="20" fill="#23344A" />
+  <image x="74" y="264" width="452" height="290" href="./iv_scaling.dark.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#ivThumb)" />
+  <rect x="92" y="282" width="186" height="30" rx="15" ry="15" fill="#020617" opacity="0.84" />
+  <text x="110" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">IV inversion scaling</text>
+  <text x="74" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#E5EDF7">801-strike slice: 1.12 ms vectorized vs 498 ms scalar loop</text>
+  <text x="74" y="636" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Measured max speedup at that size: 446x, with zero observed vol difference vs the scalar loop.</text>
+
+  <rect x="574" y="264" width="452" height="290" rx="20" ry="20" fill="#23344A" />
+  <image x="574" y="264" width="452" height="290" href="./pde_runtime_error_tradeoff.dark.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#pdeThumb)" />
+  <rect x="592" y="282" width="176" height="30" rx="15" ry="15" fill="#020617" opacity="0.84" />
+  <text x="610" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">PDE cost / accuracy</text>
+  <text x="574" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#E5EDF7">Vanilla BS PDE, Rannacher: 401x401 -&gt; 801x801 cuts abs error</text>
+  <text x="574" y="634" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#E5EDF7">9.12e-04 -&gt; 2.28e-04 while runtime rises 290 ms -&gt; 986 ms.</text>
+
+  <rect x="1074" y="264" width="452" height="290" rx="20" ry="20" fill="#23344A" />
+  <image x="1074" y="264" width="452" height="290" href="./macro_pipeline_summary.dark.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#macroThumb)" />
+  <rect x="1092" y="282" width="196" height="30" rx="15" ry="15" fill="#020617" opacity="0.84" />
+  <text x="1110" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">Macro stage budget</text>
+  <text x="1074" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#E5EDF7">Surface fit dominates the integrated path budget across tested sizes.</text>
+  <text x="1074" y="634" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Surface-fit medians: 260 ms / 370 ms / 782 ms for small / medium / large scenarios.</text>
+
+  <text x="72" y="712" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1" fill="#8CC9FF">ADDITIONAL MEASURED CALLOUTS</text>
+
+  <rect x="72" y="734" width="452" height="224" rx="24" ry="24" fill="#0F172A" stroke="#314056" stroke-width="2" />
+  <text x="98" y="770" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#E5EDF7">Digital payoff remedies</text>
+  <text x="98" y="818" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="#8CC9FF">1.18e-02 -&gt; 1.43e-05</text>
+  <text x="98" y="850" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Grid-to-grid price spread, Rannacher + none vs Rannacher + L2 projection.</text>
+  <text x="98" y="882" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Best measured abs error with L2 projection: 1.43e-06.</text>
+
+  <rect x="574" y="734" width="452" height="224" rx="24" ry="24" fill="#0F172A" stroke="#314056" stroke-width="2" />
+  <text x="600" y="770" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#E5EDF7">Local-vol extraction</text>
+  <text x="600" y="818" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="#91E0D7">0.0% interior invalid share</text>
+  <text x="600" y="850" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Largest tested 121x241 grids stayed interior-valid for both coordinate choices.</text>
+  <text x="600" y="882" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Median runtime: K = 1.33 ms, logK = 1.31 ms.</text>
+
+  <rect x="1076" y="734" width="450" height="224" rx="24" ry="24" fill="#0F172A" stroke="#314056" stroke-width="2" />
+  <text x="1102" y="770" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#E5EDF7">Tree framing</text>
+  <text x="1102" y="818" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="#8CC9FF">19.7 s</text>
+  <text x="1102" y="850" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">5000-step CRR runtime in the committed snapshot.</text>
+  <text x="1102" y="882" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Absolute error vs Black-Scholes at that depth: 3.96e-04.</text>
+
+  <text x="72" y="1012" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">This asset summarizes the committed benchmark bundle. Use the performance page for the full figures, conditions, and reproducibility notes.</text>
+</svg>
+

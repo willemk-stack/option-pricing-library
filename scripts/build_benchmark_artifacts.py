@@ -36,7 +36,14 @@ from option_pricing.types import (
     OptionType,
     PricingInputs,
 )
-from option_pricing.viz.publishing import publishing_style, save_figure
+from option_pricing.viz.publishing import (
+    PUBLISHING_THEMES,
+    copy_light_variant,
+    publishing_palette,
+    publishing_style,
+    save_figure,
+    themed_asset_paths,
+)
 from option_pricing.vol.implied_vol_scalar import implied_vol_bs_result
 from option_pricing.vol.implied_vol_slice import implied_vol_black76_slice
 from option_pricing.vol.local_vol_dupire import local_vol_from_call_grid_diagnostics
@@ -472,38 +479,40 @@ def _run_iv_family(
         .reset_index()
     )
 
-    with publishing_style() as plt:
-        fig, (ax_scaling, ax_scalar) = plt.subplots(
-            1,
-            2,
-            figsize=(10.5, 4.2),
-            constrained_layout=True,
-        )
-        for implementation, sub in scaling.groupby("implementation", sort=False):
-            ax_scaling.plot(
-                sub["n_strikes"].to_numpy(),
-                sub["runtime_ms"].to_numpy(),
-                marker="o",
-                linewidth=2,
-                label=implementation.replace("_", " "),
+    def render(theme: str):
+        with publishing_style(theme=theme) as plt:
+            fig, (ax_scaling, ax_scalar) = plt.subplots(
+                1,
+                2,
+                figsize=(10.5, 4.2),
+                constrained_layout=True,
             )
-        ax_scaling.set_xscale("log")
-        ax_scaling.set_yscale("log")
-        ax_scaling.set_xlabel("Slice size (number of strikes)")
-        ax_scaling.set_ylabel("Median runtime (ms)")
-        ax_scaling.set_title("Slice inversion scaling")
-        ax_scaling.legend()
+            for implementation, sub in scaling.groupby("implementation", sort=False):
+                ax_scaling.plot(
+                    sub["n_strikes"].to_numpy(),
+                    sub["runtime_ms"].to_numpy(),
+                    marker="o",
+                    linewidth=2,
+                    label=implementation.replace("_", " "),
+                )
+            ax_scaling.set_xscale("log")
+            ax_scaling.set_yscale("log")
+            ax_scaling.set_xlabel("Slice size (number of strikes)")
+            ax_scaling.set_ylabel("Median runtime (ms)")
+            ax_scaling.set_title("Slice inversion scaling")
+            ax_scaling.legend()
 
-        ax_scalar.bar(
-            scalar_df["scenario"].to_list(),
-            scalar_df["runtime_ms"].to_numpy(),
-            color=["#1f77b4", "#ff7f0e", "#2ca02c"],
-        )
-        ax_scalar.set_ylabel("Median runtime (ms)")
-        ax_scalar.set_title("Scalar inversion latency")
-        ax_scalar.tick_params(axis="x", labelrotation=15)
+            ax_scalar.bar(
+                scalar_df["scenario"].to_list(),
+                scalar_df["runtime_ms"].to_numpy(),
+                color=["#1f77b4", "#ff7f0e", "#2ca02c"],
+            )
+            ax_scalar.set_ylabel("Median runtime (ms)")
+            ax_scalar.set_title("Scalar inversion latency")
+            ax_scalar.tick_params(axis="x", labelrotation=15)
+            return fig
 
-    figure_path = save_figure(fig, plot_dir / "iv_scaling.png", dpi=180)
+    figure_path = _save_themed_plot(plot_dir / "iv_scaling.png", dpi=180, render=render)
 
     scaling_files = _write_frame(
         scaling, stem="iv_scaling", artifacts_dir=artifacts_dir
@@ -664,45 +673,48 @@ def _run_pde_family(
         [pd.DataFrame(vanilla_rows), pd.DataFrame(localvol_rows)],
         ignore_index=True,
     )
-    with publishing_style() as plt:
-        fig, (ax_tradeoff, ax_conv) = plt.subplots(
-            1,
-            2,
-            figsize=(10.8, 4.3),
-            constrained_layout=True,
-        )
-        for series, sub in frame.groupby("series", sort=False):
-            ax_tradeoff.plot(
-                sub["runtime_ms"].to_numpy(),
-                sub["abs_error"].to_numpy(),
-                marker="o",
-                linewidth=2,
-                label=series,
-            )
-            ax_conv.plot(
-                sub["grid_points"].to_numpy(),
-                sub["abs_error"].to_numpy(),
-                marker="o",
-                linewidth=2,
-                label=series,
-            )
-        ax_tradeoff.set_xscale("log")
-        ax_tradeoff.set_yscale("log")
-        ax_tradeoff.set_xlabel("Median runtime (ms)")
-        ax_tradeoff.set_ylabel("Absolute error")
-        ax_tradeoff.set_title("Cost vs accuracy")
-        ax_tradeoff.legend()
 
-        ax_conv.set_xscale("log")
-        ax_conv.set_yscale("log")
-        ax_conv.set_xlabel("Grid points (Nx * Nt)")
-        ax_conv.set_ylabel("Absolute error")
-        ax_conv.set_title("Grid refinement")
+    def render(theme: str):
+        with publishing_style(theme=theme) as plt:
+            fig, (ax_tradeoff, ax_conv) = plt.subplots(
+                1,
+                2,
+                figsize=(10.8, 4.3),
+                constrained_layout=True,
+            )
+            for series, sub in frame.groupby("series", sort=False):
+                ax_tradeoff.plot(
+                    sub["runtime_ms"].to_numpy(),
+                    sub["abs_error"].to_numpy(),
+                    marker="o",
+                    linewidth=2,
+                    label=series,
+                )
+                ax_conv.plot(
+                    sub["grid_points"].to_numpy(),
+                    sub["abs_error"].to_numpy(),
+                    marker="o",
+                    linewidth=2,
+                    label=series,
+                )
+            ax_tradeoff.set_xscale("log")
+            ax_tradeoff.set_yscale("log")
+            ax_tradeoff.set_xlabel("Median runtime (ms)")
+            ax_tradeoff.set_ylabel("Absolute error")
+            ax_tradeoff.set_title("Cost vs accuracy")
+            ax_tradeoff.legend()
 
-    figure_path = save_figure(
-        fig,
+            ax_conv.set_xscale("log")
+            ax_conv.set_yscale("log")
+            ax_conv.set_xlabel("Grid points (Nx * Nt)")
+            ax_conv.set_ylabel("Absolute error")
+            ax_conv.set_title("Grid refinement")
+            return fig
+
+    figure_path = _save_themed_plot(
         plot_dir / "pde_runtime_error_tradeoff.png",
         dpi=180,
+        render=render,
     )
     files = _write_frame(
         frame.sort_values(["family", "grid_points"]),
@@ -815,48 +827,51 @@ def _run_digital_family(
         .sort_values("refinement_spread")
         .reset_index(drop=True)
     )
-    with publishing_style() as plt:
-        fig, (ax_tradeoff, ax_stability) = plt.subplots(
-            1,
-            2,
-            figsize=(10.8, 4.3),
-            constrained_layout=True,
-        )
-        for label, sub in frame.groupby("config", sort=False):
-            ax_tradeoff.plot(
-                sub["runtime_ms"].to_numpy(),
-                sub["abs_error"].to_numpy(),
-                marker="o",
-                linewidth=2,
-                label=label,
-            )
-            ax_stability.plot(
-                sub["grid_points"].to_numpy(),
-                sub["monotonicity_breaks"].to_numpy(),
-                marker="o",
-                linewidth=2,
-                label=label,
-            )
-        ax_tradeoff.set_xscale("log")
-        ax_tradeoff.set_yscale("log")
-        ax_tradeoff.set_xlabel("Median runtime (ms)")
-        ax_tradeoff.set_ylabel("Absolute error")
-        ax_tradeoff.set_title("Digital remedy tradeoff")
-        ax_tradeoff.legend()
 
-        ax_stability.bar(
-            spread["config"].to_list(),
-            spread["refinement_spread"].to_numpy(),
-            color=["#55a868", "#4c72b0", "#ccb974", "#c44e52"],
-        )
-        ax_stability.set_ylabel("Price spread across tested grids")
-        ax_stability.set_title("Grid-refinement stability")
-        ax_stability.tick_params(axis="x", labelrotation=20)
+    def render(theme: str):
+        with publishing_style(theme=theme) as plt:
+            fig, (ax_tradeoff, ax_stability) = plt.subplots(
+                1,
+                2,
+                figsize=(10.8, 4.3),
+                constrained_layout=True,
+            )
+            for label, sub in frame.groupby("config", sort=False):
+                ax_tradeoff.plot(
+                    sub["runtime_ms"].to_numpy(),
+                    sub["abs_error"].to_numpy(),
+                    marker="o",
+                    linewidth=2,
+                    label=label,
+                )
+                ax_stability.plot(
+                    sub["grid_points"].to_numpy(),
+                    sub["monotonicity_breaks"].to_numpy(),
+                    marker="o",
+                    linewidth=2,
+                    label=label,
+                )
+            ax_tradeoff.set_xscale("log")
+            ax_tradeoff.set_yscale("log")
+            ax_tradeoff.set_xlabel("Median runtime (ms)")
+            ax_tradeoff.set_ylabel("Absolute error")
+            ax_tradeoff.set_title("Digital remedy tradeoff")
+            ax_tradeoff.legend()
 
-    figure_path = save_figure(
-        fig,
+            ax_stability.bar(
+                spread["config"].to_list(),
+                spread["refinement_spread"].to_numpy(),
+                color=["#55a868", "#4c72b0", "#ccb974", "#c44e52"],
+            )
+            ax_stability.set_ylabel("Price spread across tested grids")
+            ax_stability.set_title("Grid-refinement stability")
+            ax_stability.tick_params(axis="x", labelrotation=20)
+            return fig
+
+    figure_path = _save_themed_plot(
         plot_dir / "digital_remedies_tradeoff.png",
         dpi=180,
+        render=render,
     )
     files = _write_frame(
         frame,
@@ -928,41 +943,48 @@ def _run_localvol_family(
             )
 
     frame = pd.DataFrame(rows).sort_values(["strike_coordinate", "grid_points"])
-    with publishing_style() as plt:
-        fig, (ax_runtime, ax_invalid) = plt.subplots(
-            1,
-            2,
-            figsize=(10.6, 4.2),
-            constrained_layout=True,
-        )
-        for label, sub in frame.groupby("strike_coordinate", sort=False):
-            ax_runtime.plot(
-                sub["grid_points"].to_numpy(),
-                sub["runtime_ms"].to_numpy(),
-                marker="o",
-                linewidth=2,
-                label=label,
-            )
-            ax_invalid.plot(
-                sub["grid_points"].to_numpy(),
-                100.0 * sub["interior_invalid_share"].to_numpy(),
-                marker="o",
-                linewidth=2,
-                label=label,
-            )
-        ax_runtime.set_xscale("log")
-        ax_runtime.set_yscale("log")
-        ax_runtime.set_xlabel("Grid points (nT * nK)")
-        ax_runtime.set_ylabel("Median runtime (ms)")
-        ax_runtime.set_title("Dupire extraction scaling")
-        ax_runtime.legend()
 
-        ax_invalid.set_xscale("log")
-        ax_invalid.set_xlabel("Grid points (nT * nK)")
-        ax_invalid.set_ylabel("Interior invalid share (%)")
-        ax_invalid.set_title("Validity diagnostic")
+    def render(theme: str):
+        with publishing_style(theme=theme) as plt:
+            fig, (ax_runtime, ax_invalid) = plt.subplots(
+                1,
+                2,
+                figsize=(10.6, 4.2),
+                constrained_layout=True,
+            )
+            for label, sub in frame.groupby("strike_coordinate", sort=False):
+                ax_runtime.plot(
+                    sub["grid_points"].to_numpy(),
+                    sub["runtime_ms"].to_numpy(),
+                    marker="o",
+                    linewidth=2,
+                    label=label,
+                )
+                ax_invalid.plot(
+                    sub["grid_points"].to_numpy(),
+                    100.0 * sub["interior_invalid_share"].to_numpy(),
+                    marker="o",
+                    linewidth=2,
+                    label=label,
+                )
+            ax_runtime.set_xscale("log")
+            ax_runtime.set_yscale("log")
+            ax_runtime.set_xlabel("Grid points (nT * nK)")
+            ax_runtime.set_ylabel("Median runtime (ms)")
+            ax_runtime.set_title("Dupire extraction scaling")
+            ax_runtime.legend()
 
-    figure_path = save_figure(fig, plot_dir / "localvol_scaling.png", dpi=180)
+            ax_invalid.set_xscale("log")
+            ax_invalid.set_xlabel("Grid points (nT * nK)")
+            ax_invalid.set_ylabel("Interior invalid share (%)")
+            ax_invalid.set_title("Validity diagnostic")
+            return fig
+
+    figure_path = _save_themed_plot(
+        plot_dir / "localvol_scaling.png",
+        dpi=180,
+        render=render,
+    )
     files = _write_frame(frame, stem="localvol_scaling", artifacts_dir=artifacts_dir)
     return {
         "snapshot": files,
@@ -1099,22 +1121,31 @@ def _run_macro_pipeline_family(
     pivot = frame.pivot(index="scenario", columns="stage", values="runtime_ms").loc[
         ["small", "medium", "large"]
     ]
-    with publishing_style() as plt:
-        fig, ax = plt.subplots(1, 1, figsize=(9.2, 4.5), constrained_layout=True)
-        bottom = np.zeros(len(pivot), dtype=float)
-        colors = ["#4c72b0", "#55a868", "#c44e52", "#8172b3", "#ccb974"]
-        for color, stage in zip(colors, pivot.columns, strict=False):
-            vals = pivot[stage].to_numpy(dtype=float)
-            ax.bar(pivot.index.to_list(), vals, bottom=bottom, label=stage, color=color)
-            bottom += vals
-        ax.set_ylabel("Median runtime (ms)")
-        ax.set_title("End-to-end macro pipeline stage budget")
-        ax.legend(ncol=2)
 
-    figure_path = save_figure(
-        fig,
+    def render(theme: str):
+        with publishing_style(theme=theme) as plt:
+            fig, ax = plt.subplots(1, 1, figsize=(9.2, 4.5), constrained_layout=True)
+            bottom = np.zeros(len(pivot), dtype=float)
+            colors = ["#4c72b0", "#55a868", "#c44e52", "#8172b3", "#ccb974"]
+            for color, stage in zip(colors, pivot.columns, strict=False):
+                vals = pivot[stage].to_numpy(dtype=float)
+                ax.bar(
+                    pivot.index.to_list(),
+                    vals,
+                    bottom=bottom,
+                    label=stage,
+                    color=color,
+                )
+                bottom += vals
+            ax.set_ylabel("Median runtime (ms)")
+            ax.set_title("End-to-end macro pipeline stage budget")
+            ax.legend(ncol=2)
+            return fig
+
+    figure_path = _save_themed_plot(
         plot_dir / "macro_pipeline_summary.png",
         dpi=180,
+        render=render,
     )
     files = _write_frame(
         frame.sort_values(["scenario", "stage"]),
@@ -1177,39 +1208,46 @@ def _run_tree_family(
         )
 
     frame = pd.DataFrame(rows).sort_values("n_steps")
-    with publishing_style() as plt:
-        fig, (ax_runtime, ax_error) = plt.subplots(
-            1,
-            2,
-            figsize=(10.4, 4.2),
-            constrained_layout=True,
-        )
-        ax_runtime.plot(
-            frame["n_steps"].to_numpy(),
-            frame["runtime_ms"].to_numpy(),
-            marker="o",
-            linewidth=2,
-        )
-        ax_runtime.set_xscale("log")
-        ax_runtime.set_yscale("log")
-        ax_runtime.set_xlabel("Tree steps")
-        ax_runtime.set_ylabel("Median runtime (ms)")
-        ax_runtime.set_title("CRR runtime scaling")
 
-        ax_error.plot(
-            frame["n_steps"].to_numpy(),
-            frame["abs_error"].to_numpy(),
-            marker="o",
-            linewidth=2,
-            color="#c44e52",
-        )
-        ax_error.set_xscale("log")
-        ax_error.set_yscale("log")
-        ax_error.set_xlabel("Tree steps")
-        ax_error.set_ylabel("Absolute error vs Black-Scholes")
-        ax_error.set_title("CRR convergence")
+    def render(theme: str):
+        with publishing_style(theme=theme) as plt:
+            fig, (ax_runtime, ax_error) = plt.subplots(
+                1,
+                2,
+                figsize=(10.4, 4.2),
+                constrained_layout=True,
+            )
+            ax_runtime.plot(
+                frame["n_steps"].to_numpy(),
+                frame["runtime_ms"].to_numpy(),
+                marker="o",
+                linewidth=2,
+            )
+            ax_runtime.set_xscale("log")
+            ax_runtime.set_yscale("log")
+            ax_runtime.set_xlabel("Tree steps")
+            ax_runtime.set_ylabel("Median runtime (ms)")
+            ax_runtime.set_title("CRR runtime scaling")
 
-    figure_path = save_figure(fig, plot_dir / "tree_scaling.png", dpi=180)
+            ax_error.plot(
+                frame["n_steps"].to_numpy(),
+                frame["abs_error"].to_numpy(),
+                marker="o",
+                linewidth=2,
+                color="#c44e52",
+            )
+            ax_error.set_xscale("log")
+            ax_error.set_yscale("log")
+            ax_error.set_xlabel("Tree steps")
+            ax_error.set_ylabel("Absolute error vs Black-Scholes")
+            ax_error.set_title("CRR convergence")
+            return fig
+
+    figure_path = _save_themed_plot(
+        plot_dir / "tree_scaling.png",
+        dpi=180,
+        render=render,
+    )
     files = _write_frame(frame, stem="tree_scaling", artifacts_dir=artifacts_dir)
     return {
         "snapshot": files,
@@ -1276,6 +1314,15 @@ def _fmt_sci(value: float) -> str:
     return f"{float(value):.2e}"
 
 
+def _save_themed_plot(out_path: Path, *, dpi: int, render) -> Path:
+    variants = themed_asset_paths(out_path)
+    for theme in PUBLISHING_THEMES:
+        fig = render(theme)
+        save_figure(fig, variants.path_for(theme), dpi=dpi)
+    copy_light_variant(variants)
+    return variants.base
+
+
 def _build_benchmark_overview_asset(
     *,
     artifacts_dir: Path,
@@ -1323,14 +1370,53 @@ def _build_benchmark_overview_asset(
     fit_large = float(macro_pivot.loc["large", "surface_fit_ms"])
 
     tree_last = tree.loc[tree["n_steps"] == int(tree["n_steps"].max())].iloc[0]
-
-    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc">
+    variants = themed_asset_paths(plot_dir / "benchmark_overview.svg")
+    for theme in PUBLISHING_THEMES:
+        base_palette = publishing_palette(theme)
+        image_suffix = "dark" if theme == "dark" else "light"
+        if theme == "dark":
+            colors = {
+                "page_bg": "#08101F",
+                "card_bg": "#0F172A",
+                "card_stroke": "#314056",
+                "header_start": "#18263C",
+                "header_end": "#101B2D",
+                "panel_fill": "#1E2D43",
+                "section_fill": "#0F172A",
+                "section_stroke": "#314056",
+                "chip_fill": "#020617",
+                "chip_text": "#FFFFFF",
+                "accent": "#8CC9FF",
+                "success": "#91E0D7",
+                "text": base_palette["text"],
+                "muted": base_palette["muted_text"],
+                "thumb_fill": "#23344A",
+            }
+        else:
+            colors = {
+                "page_bg": "#EEF3F8",
+                "card_bg": "#FFFFFF",
+                "card_stroke": "#D7E0EA",
+                "header_start": "#F4F8FC",
+                "header_end": "#EAF1F7",
+                "panel_fill": "#DCE7F1",
+                "section_fill": "#F7FAFC",
+                "section_stroke": "#D8E4EE",
+                "chip_fill": "#0B1F33",
+                "chip_text": "#FFFFFF",
+                "accent": "#0B5CAB",
+                "success": "#0F766E",
+                "text": base_palette["text"],
+                "muted": base_palette["muted_text"],
+                "thumb_fill": "#DCE7F1",
+            }
+        svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc">
   <title id="title">Benchmark overview for the option pricing library</title>
   <desc id="desc">Reviewer-facing benchmark summary showing IV scaling, PDE cost versus accuracy, macro pipeline stage budget, and concise measured callouts for digital remedies, local-vol extraction, and tree scaling.</desc>
   <defs>
     <linearGradient id="headerBg" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#F4F8FC" />
-      <stop offset="100%" stop-color="#EAF1F7" />
+      <stop offset="0%" stop-color="{colors["header_start"]}" />
+      <stop offset="100%" stop-color="{colors["header_end"]}" />
     </linearGradient>
     <clipPath id="ivThumb">
       <rect x="74" y="264" width="452" height="290" rx="20" ry="20" />
@@ -1343,64 +1429,64 @@ def _build_benchmark_overview_asset(
     </clipPath>
   </defs>
 
-  <rect width="1600" height="1080" fill="#EEF3F8" />
-  <rect x="28" y="28" width="1544" height="1024" rx="34" ry="34" fill="#FFFFFF" stroke="#D7E0EA" stroke-width="2" />
+  <rect width="1600" height="1080" fill="{colors["page_bg"]}" />
+  <rect x="28" y="28" width="1544" height="1024" rx="34" ry="34" fill="{colors["card_bg"]}" stroke="{colors["card_stroke"]}" stroke-width="2" />
 
-  <text x="72" y="108" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="54" font-weight="700" fill="#0B1F33">Benchmark overview</text>
-  <text x="72" y="148" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="24" fill="#486074">Compressed reviewer scan of the repo's measured scaling, cost-versus-accuracy, and end-to-end stage budget story.</text>
-  <text x="72" y="182" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" fill="#60758A">Built from committed benchmark outputs under benchmarks/artifacts and docs/assets/generated/benchmarks.</text>
+  <text x="72" y="108" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="54" font-weight="700" fill="{colors["text"]}">Benchmark overview</text>
+  <text x="72" y="148" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="24" fill="{colors["muted"]}">Compressed reviewer scan of the repo's measured scaling, cost-versus-accuracy, and end-to-end stage budget story.</text>
+  <text x="72" y="182" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" fill="{colors["muted"]}">Built from committed benchmark outputs under benchmarks/artifacts and docs/assets/generated/benchmarks.</text>
 
-  <rect x="72" y="220" width="1456" height="360" rx="28" ry="28" fill="url(#headerBg)" stroke="#D8E4EE" stroke-width="2" />
-  <text x="102" y="254" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1" fill="#0B5CAB">PRIMARY PANELS</text>
+  <rect x="72" y="220" width="1456" height="360" rx="28" ry="28" fill="url(#headerBg)" stroke="{colors["card_stroke"]}" stroke-width="2" />
+  <text x="102" y="254" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1" fill="{colors["accent"]}">PRIMARY PANELS</text>
 
-  <rect x="74" y="264" width="452" height="290" rx="20" ry="20" fill="#DCE7F1" />
-  <image x="74" y="264" width="452" height="290" href="./iv_scaling.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#ivThumb)" />
-  <rect x="92" y="282" width="186" height="30" rx="15" ry="15" fill="#0B1F33" opacity="0.84" />
-  <text x="110" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">IV inversion scaling</text>
-  <text x="74" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#0B1F33">801-strike slice: {_fmt_runtime_ms(iv_vec_ms)} vectorized vs {_fmt_runtime_ms(iv_scalar_ms)} scalar loop</text>
-  <text x="74" y="636" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#5A7185">Measured max speedup at that size: {iv_speedup_801:.0f}x, with zero observed vol difference vs the scalar loop.</text>
+  <rect x="74" y="264" width="452" height="290" rx="20" ry="20" fill="{colors["thumb_fill"]}" />
+  <image x="74" y="264" width="452" height="290" href="./iv_scaling.{image_suffix}.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#ivThumb)" />
+  <rect x="92" y="282" width="186" height="30" rx="15" ry="15" fill="{colors["chip_fill"]}" opacity="0.84" />
+  <text x="110" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="{colors["chip_text"]}">IV inversion scaling</text>
+  <text x="74" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">801-strike slice: {_fmt_runtime_ms(iv_vec_ms)} vectorized vs {_fmt_runtime_ms(iv_scalar_ms)} scalar loop</text>
+  <text x="74" y="636" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Measured max speedup at that size: {iv_speedup_801:.0f}x, with zero observed vol difference vs the scalar loop.</text>
 
-  <rect x="574" y="264" width="452" height="290" rx="20" ry="20" fill="#DCE7F1" />
-  <image x="574" y="264" width="452" height="290" href="./pde_runtime_error_tradeoff.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#pdeThumb)" />
-  <rect x="592" y="282" width="176" height="30" rx="15" ry="15" fill="#0B1F33" opacity="0.84" />
-  <text x="610" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">PDE cost / accuracy</text>
-  <text x="574" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#0B1F33">Vanilla BS PDE, Rannacher: 401x401 -&gt; 801x801 cuts abs error</text>
-  <text x="574" y="634" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#0B1F33">{_fmt_sci(float(pde_401["abs_error"]))} -&gt; {_fmt_sci(float(pde_801["abs_error"]))} while runtime rises {_fmt_runtime_ms(float(pde_401["runtime_ms"]))} -&gt; {_fmt_runtime_ms(float(pde_801["runtime_ms"]))}.</text>
+  <rect x="574" y="264" width="452" height="290" rx="20" ry="20" fill="{colors["thumb_fill"]}" />
+  <image x="574" y="264" width="452" height="290" href="./pde_runtime_error_tradeoff.{image_suffix}.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#pdeThumb)" />
+  <rect x="592" y="282" width="176" height="30" rx="15" ry="15" fill="{colors["chip_fill"]}" opacity="0.84" />
+  <text x="610" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="{colors["chip_text"]}">PDE cost / accuracy</text>
+  <text x="574" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">Vanilla BS PDE, Rannacher: 401x401 -&gt; 801x801 cuts abs error</text>
+  <text x="574" y="634" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">{_fmt_sci(float(pde_401["abs_error"]))} -&gt; {_fmt_sci(float(pde_801["abs_error"]))} while runtime rises {_fmt_runtime_ms(float(pde_401["runtime_ms"]))} -&gt; {_fmt_runtime_ms(float(pde_801["runtime_ms"]))}.</text>
 
-  <rect x="1074" y="264" width="452" height="290" rx="20" ry="20" fill="#DCE7F1" />
-  <image x="1074" y="264" width="452" height="290" href="./macro_pipeline_summary.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#macroThumb)" />
-  <rect x="1092" y="282" width="196" height="30" rx="15" ry="15" fill="#0B1F33" opacity="0.84" />
-  <text x="1110" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">Macro stage budget</text>
-  <text x="1074" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#0B1F33">Surface fit dominates the integrated path budget across tested sizes.</text>
-  <text x="1074" y="634" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#5A7185">Surface-fit medians: {_fmt_runtime_ms(fit_small)} / {_fmt_runtime_ms(fit_medium)} / {_fmt_runtime_ms(fit_large)} for small / medium / large scenarios.</text>
+  <rect x="1074" y="264" width="452" height="290" rx="20" ry="20" fill="{colors["thumb_fill"]}" />
+  <image x="1074" y="264" width="452" height="290" href="./macro_pipeline_summary.{image_suffix}.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#macroThumb)" />
+  <rect x="1092" y="282" width="196" height="30" rx="15" ry="15" fill="{colors["chip_fill"]}" opacity="0.84" />
+  <text x="1110" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="{colors["chip_text"]}">Macro stage budget</text>
+  <text x="1074" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">Surface fit dominates the integrated path budget across tested sizes.</text>
+  <text x="1074" y="634" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Surface-fit medians: {_fmt_runtime_ms(fit_small)} / {_fmt_runtime_ms(fit_medium)} / {_fmt_runtime_ms(fit_large)} for small / medium / large scenarios.</text>
 
-  <text x="72" y="712" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1" fill="#0B5CAB">ADDITIONAL MEASURED CALLOUTS</text>
+  <text x="72" y="712" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1" fill="{colors["accent"]}">ADDITIONAL MEASURED CALLOUTS</text>
 
-  <rect x="72" y="734" width="452" height="224" rx="24" ry="24" fill="#F7FAFC" stroke="#D8E4EE" stroke-width="2" />
-  <text x="98" y="770" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#0B1F33">Digital payoff remedies</text>
-  <text x="98" y="818" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="#0B5CAB">{_fmt_sci(float(digital_none["refinement_spread"]))} -&gt; {_fmt_sci(float(digital_l2["refinement_spread"]))}</text>
-  <text x="98" y="850" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#5A7185">Grid-to-grid price spread, Rannacher + none vs Rannacher + L2 projection.</text>
-  <text x="98" y="882" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#5A7185">Best measured abs error with L2 projection: {_fmt_sci(float(digital_l2["best_abs_error"]))}.</text>
+  <rect x="72" y="734" width="452" height="224" rx="24" ry="24" fill="{colors["section_fill"]}" stroke="{colors["section_stroke"]}" stroke-width="2" />
+  <text x="98" y="770" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">Digital payoff remedies</text>
+  <text x="98" y="818" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="{colors["accent"]}">{_fmt_sci(float(digital_none["refinement_spread"]))} -&gt; {_fmt_sci(float(digital_l2["refinement_spread"]))}</text>
+  <text x="98" y="850" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Grid-to-grid price spread, Rannacher + none vs Rannacher + L2 projection.</text>
+  <text x="98" y="882" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Best measured abs error with L2 projection: {_fmt_sci(float(digital_l2["best_abs_error"]))}.</text>
 
-  <rect x="574" y="734" width="452" height="224" rx="24" ry="24" fill="#F7FAFC" stroke="#D8E4EE" stroke-width="2" />
-  <text x="600" y="770" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#0B1F33">Local-vol extraction</text>
-  <text x="600" y="818" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="#0F766E">0.0% interior invalid share</text>
-  <text x="600" y="850" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#5A7185">Largest tested 121x241 grids stayed interior-valid for both coordinate choices.</text>
-  <text x="600" y="882" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#5A7185">Median runtime: K = {_fmt_runtime_ms(float(localvol_k["runtime_ms"]))}, logK = {_fmt_runtime_ms(float(localvol_logk["runtime_ms"]))}.</text>
+  <rect x="574" y="734" width="452" height="224" rx="24" ry="24" fill="{colors["section_fill"]}" stroke="{colors["section_stroke"]}" stroke-width="2" />
+  <text x="600" y="770" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">Local-vol extraction</text>
+  <text x="600" y="818" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="{colors["success"]}">0.0% interior invalid share</text>
+  <text x="600" y="850" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Largest tested 121x241 grids stayed interior-valid for both coordinate choices.</text>
+  <text x="600" y="882" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Median runtime: K = {_fmt_runtime_ms(float(localvol_k["runtime_ms"]))}, logK = {_fmt_runtime_ms(float(localvol_logk["runtime_ms"]))}.</text>
 
-  <rect x="1076" y="734" width="450" height="224" rx="24" ry="24" fill="#F7FAFC" stroke="#D8E4EE" stroke-width="2" />
-  <text x="1102" y="770" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#0B1F33">Tree framing</text>
-  <text x="1102" y="818" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="#0B5CAB">{_fmt_runtime_ms(float(tree_last["runtime_ms"]))}</text>
-  <text x="1102" y="850" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#5A7185">5000-step CRR runtime in the committed snapshot.</text>
-  <text x="1102" y="882" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#5A7185">Absolute error vs Black-Scholes at that depth: {_fmt_sci(float(tree_last["abs_error"]))}.</text>
+  <rect x="1076" y="734" width="450" height="224" rx="24" ry="24" fill="{colors["section_fill"]}" stroke="{colors["section_stroke"]}" stroke-width="2" />
+  <text x="1102" y="770" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">Tree framing</text>
+  <text x="1102" y="818" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="{colors["accent"]}">{_fmt_runtime_ms(float(tree_last["runtime_ms"]))}</text>
+  <text x="1102" y="850" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">5000-step CRR runtime in the committed snapshot.</text>
+  <text x="1102" y="882" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Absolute error vs Black-Scholes at that depth: {_fmt_sci(float(tree_last["abs_error"]))}.</text>
 
-  <text x="72" y="1012" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#60758A">This asset summarizes the committed benchmark bundle. Use the performance page for the full figures, conditions, and reproducibility notes.</text>
+  <text x="72" y="1012" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">This asset summarizes the committed benchmark bundle. Use the performance page for the full figures, conditions, and reproducibility notes.</text>
 </svg>
 """
+        variants.path_for(theme).write_text(svg, encoding="utf-8")
 
-    out_path = plot_dir / "benchmark_overview.svg"
-    out_path.write_text(svg, encoding="utf-8")
-    return str(out_path.relative_to(ROOT)).replace("\\", "/")
+    copy_light_variant(variants)
+    return str(variants.base.relative_to(ROOT)).replace("\\", "/")
 
 
 def main(argv: list[str] | None = None) -> int:
