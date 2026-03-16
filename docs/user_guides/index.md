@@ -7,8 +7,16 @@ They are organized from the simplest workflows to the more advanced volatility a
 
 - [Installation](../installation.md) - install the package and verify the environment.
 - [Instruments](instruments.md) - recommended public entry point for most users.
+- [Decision guide](flagship_capstone2_page.md) - fastest route to the strongest surface, eSSVI, and local-vol/PDE proof.
 - [Quickstart](quickstart.md) - compact walkthrough using the convenience `PricingInputs` API.
 - [Market APIs](market_api.md) - understand flat `MarketData` versus curves-first `PricingContext`.
+
+## Flagship demos
+
+- [Decision guide](flagship_capstone2_page.md) - choose the right flagship notebook for surface engineering, the eSSVI bridge, or local-vol/PDE numerics.
+- [Surface flagship](flagship_surface.md) - the SVI/no-arbitrage/repair story for static-surface engineering.
+- [eSSVI bridge](flagship_essvi_bridge.md) - the smooth term-structure handoff into Dupire-ready local vol.
+- [Local vol + PDE flagship](flagship_localvol_pde.md) - the numerics-heavy local-vol diagnostics, PDE repricing, and convergence story.
 
 ## Vanilla pricing
 
@@ -26,13 +34,6 @@ They are organized from the simplest workflows to the more advanced volatility a
 - [SVI](svi.md) - calibrate analytic SVI slices and inspect fit diagnostics.
 - [SVI repair](svi_repair.md) - detect and repair butterfly-arbitrage issues in a slice.
 - [Local volatility](local_vol.md) - derive a local-vol surface from a differentiable implied surface and use it in PDE pricing.
-
-## Flagship demos
-
-- [Decision guide](flagship_capstone2_page.md) - choose the right flagship notebook for surface engineering, the eSSVI bridge, or local-vol/PDE numerics.
-- [Surface flagship](flagship_surface.md) - the SVI/no-arbitrage/repair story for static-surface engineering.
-- [eSSVI bridge](flagship_essvi_bridge.md) - the smooth term-structure handoff into Dupire-ready local vol.
-- [Local vol + PDE flagship](flagship_localvol_pde.md) - the numerics-heavy local-vol diagnostics, PDE repricing, and convergence story.
 
 ## Conventions used throughout
 

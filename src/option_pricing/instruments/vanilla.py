@@ -2,8 +2,8 @@
 
 This module provides two small building blocks:
 
-- :class:`VanillaPayoff` : a vectorized terminal payoff (call/put)
-- :class:`VanillaOption` : an instrument wrapper bundling expiry + exercise + payoff
+- `VanillaPayoff`: a vectorized terminal payoff (call/put)
+- `VanillaOption`: an instrument wrapper bundling expiry + exercise + payoff
 """
 
 from __future__ import annotations
@@ -123,7 +123,7 @@ class VanillaOption:
         Returns
         -------
         TerminalPayoff
-            A callable :class:`VanillaPayoff` object.
+            A callable `VanillaPayoff` object.
         """
         return VanillaPayoff(kind=self.kind, strike=self.strike)
 

@@ -26,7 +26,7 @@ class MarketData:
 
     Primarily a convenience structure for common Black-Scholes and binomial tree scenarios.
     For richer market structures (term structures, stochastic rates), use
-    :class:`~option_pricing.market.curves.PricingContext` instead.
+    `PricingContext` instead.
 
     Attributes
     ----------
@@ -85,11 +85,11 @@ class MarketData:
         return self.spot * math.exp((self.rate - self.dividend_yield) * tau)
 
     def fwd(self, T: float, t: float = 0.0) -> float:
-        """Alias for :meth:`forward`."""
+        """Alias for `forward`."""
         return self.forward(T, t)
 
     def to_context(self) -> PricingContext:
-        """Convert to a :class:`~option_pricing.market.curves.PricingContext`.
+        """Convert to a `PricingContext`.
 
         Returns
         -------
@@ -116,7 +116,7 @@ class OptionSpec:
     expiry
         Expiry time in years.
 
-        In the legacy :class:`PricingInputs` workflow this is interpreted as the
+        In the legacy `PricingInputs` workflow this is interpreted as the
         absolute expiry ``T`` and the remaining time is computed as
         ``tau = expiry - t``. With the default ``t=0``, this is numerically equal
         to time-to-expiry.
@@ -131,7 +131,7 @@ class OptionSpec:
 class DigitalSpec(OptionSpec):
     """Specification of a digital (binary) option.
 
-    Extends :class:`OptionSpec` with a fixed payout amount.
+    Extends `OptionSpec` with a fixed payout amount.
 
     Attributes
     ----------
@@ -151,9 +151,9 @@ class PricingInputs[SpecT: OptionSpec]:
     Attributes
     ----------
     spec
-        Option specification (:class:`OptionSpec` or subclass).
+        Option specification (`OptionSpec` or subclass).
     market
-        Market data (:class:`MarketData`).
+        Market data (`MarketData`).
     sigma
         Implied volatility.
     t

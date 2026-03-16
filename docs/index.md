@@ -1,117 +1,93 @@
+---
+hide:
+  - navigation
+  - toc
+---
+
 # Option Pricing Library
 
-A typed Python library for **vanilla option pricing**, **implied-volatility workflows**, **volatility surfaces**, and **finite-difference PDE pricing**.
+<div class="portfolio-hero">
+  <p class="hero-kicker">Start with the strongest proof</p>
+  <p class="hero-copy">This repo already has the depth. The goal of this docs front door is to get you from the library overview to the best engineering evidence quickly: surface repair, eSSVI smoothing, and local-vol/PDE validation.</p>
+  <div class="cta-row cta-row--trio">
+    <a class="md-button md-button--primary" href="user_guides/flagship_capstone2_page/">Read the decision guide</a>
+    <a class="md-button" href="user_guides/instruments/">Start with the instrument API</a>
+    <a class="md-button" href="api/">Browse the API reference</a>
+  </div>
+</div>
 
-The project started as a compact pricing library for textbook models, and now also includes a stronger numerics stack for:
+<figure class="figure-frame">
+  <img src="assets/generated/poster/hero_essvi_surface.png" alt="Smoothed eSSVI surface" />
+  <figcaption>The flagship path is: repair a static surface, smooth the term structure, then validate the local-vol/PDE handoff.</figcaption>
+</figure>
 
-- **Black–Scholes(-Merton)** analytic pricing and Greeks
-- **CRR binomial tree** pricing
-- **Monte Carlo under GBM**
-- **Implied volatility inversion**
-- **Smile and surface construction**
-- **SVI and eSSVI calibration / validation workflows**
-- **No-arbitrage diagnostics**
-- **Local-volatility extraction and diagnostics**
-- **Finite-difference PDE pricing and convergence checks**
+## Recommended path
 
-## Best places to start
+1. [Decision guide](user_guides/flagship_capstone2_page.md)
+2. [Surface flagship](user_guides/flagship_surface.md)
+3. [eSSVI bridge](user_guides/flagship_essvi_bridge.md)
+4. [Local vol + PDE flagship](user_guides/flagship_localvol_pde.md)
 
-### New to the library
+If you want the cleanest public API first, start with [Instruments](user_guides/instruments.md). The flat `PricingInputs` workflow remains available as the [convenience quickstart](user_guides/quickstart.md).
+
+## Validation snapshot
+
+<div class="snapshot-grid">
+  <div class="snapshot-card">
+    <p class="snapshot-label">Seam control</p>
+    <p class="snapshot-copy">Worst observed <code>w_T</code> seam jump</p>
+    <p class="metric-pair">
+      <span class="metric-number">8.07e-2</span>
+      <span class="metric-arrow">&rarr;</span>
+      <span class="metric-number metric-number--good">8.17e-5</span>
+    </p>
+  </div>
+  <div class="snapshot-card">
+    <p class="snapshot-label">Dupire handoff</p>
+    <p class="snapshot-copy"><code>projection_dupire_invalid_count</code></p>
+    <p class="metric-line">
+      <span class="metric-number metric-number--good">0</span>
+    </p>
+  </div>
+  <div class="snapshot-card">
+    <p class="snapshot-label">PDE repricing</p>
+    <p class="snapshot-copy">Published repricing sweep</p>
+    <p class="metric-line">
+      <span class="metric-number">154</span>
+      <span class="metric-caption">options repriced</span>
+    </p>
+    <p class="metric-inline">
+      <span class="metric-key">Mean abs price error</span>
+      <span class="metric-value">8.1e-4</span>
+    </p>
+    <p class="metric-inline">
+      <span class="metric-key">Max abs IV error</span>
+      <span class="metric-value">18.7 bp</span>
+    </p>
+  </div>
+</div>
+
+## What the library is strongest at today
+
+- **Vanilla pricing engines**: Black-Scholes(-Merton), CRR binomial trees, Monte Carlo under GBM
+- **Volatility engineering**: implied-vol inversion, smiles, surfaces, no-arbitrage checks, SVI fitting and repair
+- **Smooth Dupire handoff**: eSSVI calibration, validation, and explicit projection
+- **Numerical validation**: local-vol diagnostics, PDE repricing, convergence checks, and CI-run notebooks
+
+## First clicks
+
 - [Installation](installation.md)
-- [Quickstart](user_guides/quickstart.md)
-- [API reference](api/index.md)
-
-### Flagship workflows
-- [Local volatility](user_guides/local_vol.md)
-- [PDE pricing](user_guides/pde_pricing.md)
-- [Roadmap](roadmap.md)
-
-### Theory and background
-- [Notes index](notes/index.md)
-
-## Recommended API path
-
-The library supports a few ways to work. The intended starting point for most users is the instrument-based workflow, with the other styles documented as convenience or advanced paths:
-
-### Recommended API: instrument-based workflow
-Use `VanillaOption` with the instrument pricers when you want the clearest separation between **what** is being priced and **how** it is priced. This is the intended public entry point for most users.
-
-### Convenience API: flat inputs
-Use `PricingInputs` and the flat-input pricers when you want compact examples, tutorials, or quick checks.
-
-### Advanced API: curves / surfaces / PDE modules
-Use `PricingContext`, the volatility modules, and PDE tooling when you need term structures, surface construction, local-vol extraction, or diagnostic-heavy workflows.
-
-## Flagship capstones
-
-### Capstone 1 — Volatility surfaces, no-arbitrage, SVI, and eSSVI
-
-This capstone focuses on building and validating implied-volatility structures:
-
-- implied-volatility inversion
-- smile construction
-- surface interpolation
-- no-arbitrage diagnostics
-- SVI fitting and repair workflows
-- eSSVI calibration, validation, and smooth-surface projection
-
-A good place to begin is the vol-surface guide, the [eSSVI guide](user_guides/essvi.md), and the related surface diagnostics pages.
-
-### Capstone 2 — Local Vol + PDE Pricing + Diagnostics
-
-This is the main numerics-focused capstone in the repo:
-
-**surface quotes → implied surface → local-vol diagnostics → PDE pricing → convergence / repricing checks**
-
-This part of the project is designed to show that local volatility is not treated as “just a formula,” but as a **numerical engineering workflow** with validation and diagnostics.
-
-It includes:
-- local-vol extraction from surfaces
-- instability and invalid-region diagnostics
-- PDE pricing under local volatility
-- convergence checks
-- discontinuous-payoff remedies
-- validation against analytic baselines and reference implementations
-
-Start here:
-- [Local volatility guide](user_guides/local_vol.md)
-- [PDE pricing guide](user_guides/pde_pricing.md)
-
-## Validation philosophy
-
-This library is meant to be **test-backed** and **numerically transparent**.
-
-That means the project emphasizes:
-- analytic cross-checks where available
-- convergence and stability checks
-- explicit diagnostics for surfaces and local volatility
-- notebook demos that illustrate the workflows end to end
+- [Instruments](user_guides/instruments.md)
+- [Convenience quickstart](user_guides/quickstart.md)
+- [Flagship demos](user_guides/flagship_capstone2_page.md)
+- [Architecture](architecture.md)
+- [Performance](performance.md)
+- [Future work](roadmap.md)
 
 ## Documentation map
 
-- **Getting started**
-  - [Installation](installation.md)
-  - [Quickstart](user_guides/quickstart.md)
-
-- **User guides**
-  - [Local volatility](user_guides/local_vol.md)
-  - [PDE pricing](user_guides/pde_pricing.md)
-
-- **Reference**
-  - [API reference](api/index.md)
-
-- **Background**
-  - [Notes index](notes/index.md)
-
-- **Project planning**
-  - [Roadmap](roadmap.md)
-
-## Scope
-
-The library is strongest today in:
-- vanilla pricing workflows
-- implied-volatility tooling
-- surface diagnostics
-- local-vol / PDE capstone work
-
-Some modules are still better understood as **advanced research / portfolio components** rather than fully productized end-user workflows. The roadmap calls out what is complete, what is experimental, and what comes next.
+- [Quickstart](user_guides/instruments.md) for the recommended instrument workflow
+- [Flagship demos](user_guides/flagship_capstone2_page.md) for the portfolio-grade proof path
+- [API reference](api/index.md) for the public surface
+- [Notes index](notes/index.md) for background and theory
+- [Future work](roadmap.md) for what is exploratory next

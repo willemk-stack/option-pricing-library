@@ -20,7 +20,7 @@ from ..typing import ArrayLike
 def bs_price_call_from_ctx(
     *, strike: float, sigma: float, tau: float, ctx: PricingContext
 ) -> float:
-    """European call price using (forward, discount) from a :class:`PricingContext`."""
+    """European call price using (forward, discount) from a `PricingContext`."""
     tau = float(tau)
     df = ctx.df(tau)
     F = ctx.fwd(tau)
@@ -32,7 +32,7 @@ def bs_price_call_from_ctx(
 def bs_price_put_from_ctx(
     *, strike: float, sigma: float, tau: float, ctx: PricingContext
 ) -> float:
-    """European put price using (forward, discount) from a :class:`PricingContext`."""
+    """European put price using (forward, discount) from a `PricingContext`."""
     tau = float(tau)
     df = ctx.df(tau)
     F = ctx.fwd(tau)
@@ -225,14 +225,14 @@ def bs_greeks_instrument_from_ctx(
 def bs_price_instrument(
     inst: VanillaOption, *, market: MarketData | PricingContext, sigma: float
 ) -> float:
-    """Convenience wrapper accepting flat :class:`~option_pricing.types.MarketData`."""
+    """Convenience wrapper accepting flat `MarketData`."""
     return bs_price_instrument_from_ctx(inst=inst, sigma=sigma, ctx=_to_ctx(market))
 
 
 def bs_greeks_instrument(
     inst: VanillaOption, *, market: MarketData | PricingContext, sigma: float
 ) -> dict[str, float]:
-    """Convenience wrapper accepting flat :class:`~option_pricing.types.MarketData`."""
+    """Convenience wrapper accepting flat `MarketData`."""
     return bs_greeks_instrument_from_ctx(inst=inst, sigma=sigma, ctx=_to_ctx(market))
 
 
@@ -247,7 +247,7 @@ def bs_price_call(p: PricingInputs) -> float:
     Parameters
     ----------
     p
-        Pricing inputs (:class:`~option_pricing.types.PricingInputs`).
+        Pricing inputs (`PricingInputs`).
 
     Returns
     -------
@@ -263,7 +263,7 @@ def bs_price_put(p: PricingInputs) -> float:
     Parameters
     ----------
     p
-        Pricing inputs (:class:`~option_pricing.types.PricingInputs`).
+        Pricing inputs (`PricingInputs`).
 
     Returns
     -------
@@ -279,7 +279,7 @@ def bs_price(p: PricingInputs) -> float:
     Parameters
     ----------
     p
-        Pricing inputs (:class:`~option_pricing.types.PricingInputs`).
+        Pricing inputs (`PricingInputs`).
 
     Returns
     -------
@@ -297,7 +297,7 @@ def bs_call_greeks(p: PricingInputs) -> dict[str, float]:
     Parameters
     ----------
     p
-        Pricing inputs (:class:`~option_pricing.types.PricingInputs`).
+        Pricing inputs (`PricingInputs`).
 
     Returns
     -------
@@ -313,7 +313,7 @@ def bs_put_greeks(p: PricingInputs) -> dict[str, float]:
     Parameters
     ----------
     p
-        Pricing inputs (:class:`~option_pricing.types.PricingInputs`).
+        Pricing inputs (`PricingInputs`).
 
     Returns
     -------
@@ -329,7 +329,7 @@ def bs_greeks(p: PricingInputs) -> dict[str, float]:
     Parameters
     ----------
     p
-        Pricing inputs (:class:`~option_pricing.types.PricingInputs`).
+        Pricing inputs (`PricingInputs`).
 
     Returns
     -------

@@ -1,3 +1,9 @@
+---
+hide:
+  - navigation
+  - toc
+---
+
 # Flagship demos
 
 The repo now presents its strongest volatility and numerics signals through a **split demo suite**, not a single catch-all capstone.
@@ -8,15 +14,25 @@ That split is intentional:
 - **eSSVI** is the flagship bridge for a **Dupire-ready smooth term structure**: nodal calibration, explicit projection, and analytic `w_T`.
 - **Local vol + PDE** is the flagship for **numerical engineering**: diagnostics-first local vol, PDE repricing, and convergence evidence.
 
+<div class="portfolio-hero">
+  <p class="hero-kicker">Read in this order</p>
+  <p class="hero-copy">Start with the static surface story, then move into the smooth eSSVI handoff, and finish with the local-vol/PDE numerics proof.</p>
+  <div class="cta-row cta-row--trio">
+    <a class="md-button md-button--primary" href="../flagship_surface/">Surface flagship</a>
+    <a class="md-button" href="../flagship_essvi_bridge/">eSSVI bridge</a>
+    <a class="md-button" href="../flagship_localvol_pde/">Local vol + PDE flagship</a>
+  </div>
+</div>
+
 ## Decision guide
 
-| If you need to show... | Start here | Why |
-| --- | --- | --- |
-| Static no-arb diagnostics, SVI fitting, and repair | `demos/06_surface_noarb_svi_repair.ipynb` | This is the cleanest surface-engineering story in the repo. |
-| Why a smooth eSSVI projection is the preferred Dupire handoff | `demos/07_essvi_smooth_surface_for_dupire.ipynb` | It makes the `w_T` / term-structure argument explicit. |
-| Local-vol diagnostics, PDE repricing, and convergence | `demos/08_localvol_pde_repricing.ipynb` | This is the numerics flagship. |
-| PDE credibility before talking about surfaces | `demos/05_pde_pricing_and_diagnostics.ipynb` | It isolates the solver story. |
-| The full workflow connected end to end | `demos/09_surface_to_localvol_pde_integration.ipynb` | This is the integration proof, not the main flagship. |
+| If you need to show... | Guide | Notebook | Why |
+| --- | --- | --- | --- |
+| Static no-arb diagnostics, SVI fitting, and repair | [Surface flagship](flagship_surface.md) | [06_surface_noarb_svi_repair.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/06_surface_noarb_svi_repair.ipynb) | This is the cleanest surface-engineering story in the repo. |
+| Why a smooth eSSVI projection is the preferred Dupire handoff | [eSSVI bridge](flagship_essvi_bridge.md) | [07_essvi_smooth_surface_for_dupire.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/07_essvi_smooth_surface_for_dupire.ipynb) | It makes the `w_T` / term-structure argument explicit. |
+| Local-vol diagnostics, PDE repricing, and convergence | [Local vol + PDE flagship](flagship_localvol_pde.md) | [08_localvol_pde_repricing.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/08_localvol_pde_repricing.ipynb) | This is the numerics flagship. |
+| PDE credibility before talking about surfaces | [PDE pricing guide](pde_pricing.md) | [05_pde_pricing_and_diagnostics.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/05_pde_pricing_and_diagnostics.ipynb) | It isolates the solver story. |
+| The full workflow connected end to end | [Architecture overview](../architecture.md) | [09_surface_to_localvol_pde_integration.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/09_surface_to_localvol_pde_integration.ipynb) | This is the integration proof, not the main flagship. |
 
 ## Public positioning
 
@@ -32,7 +48,7 @@ That split is intentional:
 
 Keep `demos/09_surface_to_localvol_pde_integration.ipynb` for interview walkthroughs, end-to-end sanity checks, or when you want to prove the pieces connect without forcing every reader through the whole stack first.
 
-## Published visuals
+## Rebuild the visuals locally
 
 The canonical publish path now lives in one script:
 

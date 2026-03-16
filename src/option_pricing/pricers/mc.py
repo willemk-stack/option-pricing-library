@@ -227,12 +227,12 @@ class McGBMModel:
 
 
 def _rng_from_random_config(rc: RandomConfig) -> np.random.Generator:
-    """Construct a NumPy RNG from a :class:`~option_pricing.config.RandomConfig`.
+    """Construct a NumPy RNG from a `RandomConfig`.
 
     Notes
     -----
-    - ``pcg64`` uses :func:`numpy.random.default_rng`.
-    - ``mt19937`` uses :class:`numpy.random.MT19937`.
+    - ``pcg64`` uses `numpy.random.default_rng`.
+    - ``mt19937`` uses `numpy.random.MT19937`.
     - ``sobol`` is not provided by NumPy; raise to make the limitation explicit.
     """
     seed = int(rc.seed)
@@ -315,7 +315,7 @@ def mc_price_instrument_from_ctx(
 ) -> tuple[float, float]:
     """Monte Carlo GBM pricer for a terminal-payoff instrument.
 
-    This is the instrument-based equivalent of :func:`mc_price_from_ctx`.
+    This is the instrument-based equivalent of `mc_price_from_ctx`.
 
     Notes
     -----
@@ -354,7 +354,7 @@ def mc_price_instrument(
     sigma: float,
     cfg: MCConfig | None = None,
 ) -> tuple[float, float]:
-    """Convenience wrapper accepting flat :class:`~option_pricing.types.MarketData`."""
+    """Convenience wrapper accepting flat `MarketData`."""
     return mc_price_instrument_from_ctx(
         ctx=_to_ctx(market), inst=inst, sigma=sigma, cfg=cfg
     )
@@ -368,7 +368,7 @@ def mc_price(
     """
     Price a European vanilla option using Monte Carlo simulation under a GBM model.
 
-    This function builds a :class:`McGBMModel` from the market/model inputs in ``p``,
+    This function builds a `McGBMModel` from the market/model inputs in ``p``,
     simulates terminal prices, evaluates the corresponding vanilla payoff, and
     returns the Monte Carlo estimator along with its sampling uncertainty.
 

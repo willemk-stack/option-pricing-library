@@ -3,6 +3,198 @@
     max-width: 1200px;
 }
 
+/* Portfolio landing helpers */
+.portfolio-hero {
+    margin: 1rem auto 1.5rem;
+    max-width: 58rem;
+    padding: 1.25rem 1.35rem;
+    border-radius: 20px;
+    border: 1px solid var(--md-default-fg-color--lightest);
+    background:
+        radial-gradient(circle at top right, rgba(66, 133, 244, 0.12), transparent 38%),
+        linear-gradient(145deg, rgba(13, 27, 42, 0.03), rgba(65, 90, 119, 0.08));
+}
+
+.portfolio-hero h2,
+.portfolio-hero h3 {
+    margin-top: 0;
+}
+
+.hero-kicker,
+.snapshot-label {
+    margin: 0 0 0.45rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #0b5cab;
+}
+
+.hero-copy,
+.snapshot-copy {
+    margin: 0;
+}
+
+.hero-copy+.hero-copy {
+    margin-top: 0.65rem;
+}
+
+.cta-row {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    width: 100%;
+}
+
+.cta-row--duo {
+    max-width: 46rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cta-row--trio {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cta-row .md-button {
+    width: 100%;
+    min-width: 0;
+    min-height: 3.5rem;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.85rem 1.15rem;
+    border-radius: 16px;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.3;
+    white-space: normal;
+    text-wrap: balance;
+    box-sizing: border-box;
+}
+
+.cta-row .md-button:not(.md-button--primary) {
+    background: rgba(11, 92, 171, 0.06);
+    border-color: rgba(11, 92, 171, 0.28);
+    color: #4f7cff;
+}
+
+.cta-row .md-button--primary {
+    box-shadow: 0 10px 20px rgba(79, 124, 255, 0.18);
+}
+
+@media screen and (max-width: 44.984375em) {
+    .cta-row--duo,
+    .cta-row--trio {
+        grid-template-columns: 1fr;
+        max-width: none;
+    }
+}
+
+.snapshot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0 1.5rem;
+}
+
+.snapshot-card,
+.placeholder-card {
+    padding: 1rem 1.05rem;
+    border-radius: 18px;
+    border: 1px solid var(--md-default-fg-color--lightest);
+    background: rgba(65, 90, 119, 0.06);
+}
+
+.snapshot-card h3,
+.placeholder-card h3 {
+    margin-top: 0;
+}
+
+.snapshot-card {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.placeholder-card {
+    border-style: dashed;
+    background: rgba(255, 193, 7, 0.08);
+}
+
+.metric-pair,
+.metric-line {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0.9rem 0 0;
+}
+
+.metric-inline {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    margin: 0.55rem 0 0;
+    font-size: 0.95rem;
+}
+
+.metric-key,
+.metric-caption {
+    color: var(--md-default-fg-color--light);
+}
+
+.metric-value {
+    font-weight: 700;
+    color: #0b5cab;
+}
+
+.metric-arrow {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--md-default-fg-color--light);
+}
+
+.metric-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.28rem 0.65rem;
+    border-radius: 999px;
+    font-weight: 700;
+    color: #0b5cab;
+    background: rgba(11, 92, 171, 0.10);
+    border: 1px solid rgba(11, 92, 171, 0.14);
+}
+
+.metric-number--good {
+    color: #0f766e;
+    background: rgba(15, 118, 110, 0.12);
+    border-color: rgba(15, 118, 110, 0.18);
+}
+
+.figure-frame {
+    margin: 1.25rem auto;
+    padding: 0.8rem 0.9rem 0.7rem;
+    border-radius: 18px;
+    border: 1px solid var(--md-default-fg-color--lightest);
+    background: var(--md-default-bg-color);
+}
+
+.figure-frame img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+}
+
+.figure-frame figcaption {
+    margin-top: 0.6rem;
+    font-size: 0.9em;
+    opacity: 0.85;
+}
+
+.figure-frame--compact {
+    max-width: 720px;
+}
+
 /* Make API signatures a bit easier to scan */
 .doc-heading code {
     font-size: 0.95em;
@@ -69,6 +261,42 @@ figure.diagram img.diagram-dark {
 [data-md-color-scheme="slate"] figure.diagram {
     background: rgba(255, 255, 255, 0.03);
     border-color: rgba(255, 255, 255, 0.10);
+}
+
+[data-md-color-scheme="slate"] .portfolio-hero,
+[data-md-color-scheme="slate"] .snapshot-card,
+[data-md-color-scheme="slate"] .placeholder-card,
+[data-md-color-scheme="slate"] .figure-frame {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.10);
+}
+
+[data-md-color-scheme="slate"] .placeholder-card {
+    background: rgba(255, 193, 7, 0.10);
+}
+
+[data-md-color-scheme="slate"] .hero-kicker,
+[data-md-color-scheme="slate"] .snapshot-label,
+[data-md-color-scheme="slate"] .metric-value {
+    color: #8cc9ff;
+}
+
+[data-md-color-scheme="slate"] .metric-number {
+    color: #8cc9ff;
+    background: rgba(140, 201, 255, 0.12);
+    border-color: rgba(140, 201, 255, 0.16);
+}
+
+[data-md-color-scheme="slate"] .metric-number--good {
+    color: #91e0d7;
+    background: rgba(145, 224, 215, 0.12);
+    border-color: rgba(145, 224, 215, 0.18);
+}
+
+[data-md-color-scheme="slate"] .cta-row .md-button:not(.md-button--primary) {
+    background: rgba(79, 124, 255, 0.08);
+    border-color: rgba(79, 124, 255, 0.38);
+    color: #7f96ff;
 }
 
 figure.diagram figcaption {
