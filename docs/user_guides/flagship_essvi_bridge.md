@@ -6,7 +6,7 @@ hide:
 
 # eSSVI bridge
 
-This page covers the repo's **smooth implied-surface bridge** between static-surface engineering and Dupire-oriented numerics.
+This page shows why the repo uses a **smooth implied-surface bridge** between static-surface engineering and Dupire-oriented numerics.
 
 <div class="cta-row cta-row--duo">
   <a class="md-button md-button--primary" href="https://github.com/willemk-stack/option-pricing-library/blob/main/demos/07_essvi_smooth_surface_for_dupire.ipynb">Open the notebook</a>
@@ -14,9 +14,20 @@ This page covers the repo's **smooth implied-surface bridge** between static-sur
 </div>
 
 <figure class="figure-frame">
-  <img src="../../assets/generated/docs/docs_essvi_smoothness.png" alt="eSSVI smoothness figure" />
-  <figcaption>The bridge story is about smoothness: explicit projection gives a Dupire-ready term structure with controlled seam behavior.</figcaption>
+  <img src="../../assets/generated/dupire/essvi_smoothed_surface_heatmap.png" alt="Heatmap of the smoothed eSSVI implied-vol surface across log-moneyness and maturity" />
+  <figcaption>Primary proof for the bridge: the smoothed eSSVI surface gives the time-continuous structure the Dupire step needs, rather than handing local vol a stack of unrelated repaired slices.</figcaption>
 </figure>
+
+<div class="snapshot-grid">
+  <figure class="figure-frame figure-frame--compact">
+    <img src="../../assets/generated/dupire/localvol_gatheral_heatmap.png" alt="Heatmap of Gatheral local volatility extracted from the smoothed eSSVI surface" />
+    <figcaption>Once the surface is smoothed, the Gatheral local-vol field becomes a concrete engineering artifact that can be inspected for stability instead of treated as a hidden intermediate.</figcaption>
+  </figure>
+  <figure class="figure-frame figure-frame--compact">
+    <img src="../../assets/generated/dupire/gatheral_vs_dupire_diff_heatmap.png" alt="Heatmap of differences between Gatheral and call-grid Dupire local-vol estimates" />
+    <figcaption>The difference view shows where the two local-vol extraction paths agree and where the handoff still deserves scrutiny before pricing.</figcaption>
+  </figure>
+</div>
 
 ## Thesis
 

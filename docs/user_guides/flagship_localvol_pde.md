@@ -6,7 +6,7 @@ hide:
 
 # Local vol + PDE flagship
 
-This is the repo's main **numerics flagship**.
+This page is the repo's strongest **numerics proof path**.
 
 <div class="cta-row cta-row--trio">
   <a class="md-button md-button--primary" href="https://github.com/willemk-stack/option-pricing-library/blob/main/demos/08_localvol_pde_repricing.ipynb">Open the flagship notebook</a>
@@ -15,14 +15,20 @@ This is the repo's main **numerics flagship**.
 </div>
 
 <figure class="figure-frame">
-  <img src="../../assets/generated/numerics/pde_roundtrip_scatter.png" alt="PDE repricing scatter" />
-  <figcaption>The local-vol/PDE proof is about repricing accuracy and visible diagnostics, not just producing a local-vol surface.</figcaption>
+  <img src="../../assets/generated/numerics/pde_roundtrip_scatter.png" alt="Scatter plot comparing local-vol PDE repriced values with target Black-76 prices across the repricing grid" />
+  <figcaption>Primary proof for the numerics stack: the repricing cloud stays close to the identity line, so accuracy can be defended with visible error structure instead of a single summary claim.</figcaption>
 </figure>
 
-<figure class="figure-frame figure-frame--compact">
-  <img src="../../assets/generated/numerics/pde_convergence.png" alt="PDE convergence chart" />
-  <figcaption>Representative local-vol PDE convergence sweep for the published bundle.</figcaption>
-</figure>
+<div class="snapshot-grid">
+  <figure class="figure-frame figure-frame--compact">
+    <img src="../../assets/generated/numerics/pde_price_error_heatmap.png" alt="Heatmap of local-vol PDE pricing error across strike and maturity on the repricing grid" />
+    <figcaption>The price-error heatmap shows where the solver is most stressed, which is more useful in an interview than quoting an average error alone.</figcaption>
+  </figure>
+  <figure class="figure-frame figure-frame--compact">
+    <img src="../../assets/generated/numerics/pde_convergence.png" alt="Convergence plot for a representative local-vol PDE solve as the numerical grid is refined" />
+    <figcaption>The convergence sweep is the supporting solver check: it shows how the answer behaves under refinement instead of asking the reader to trust one mesh choice.</figcaption>
+  </figure>
+</div>
 
 ## Thesis
 

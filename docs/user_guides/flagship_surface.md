@@ -6,7 +6,7 @@ hide:
 
 # Surface flagship
 
-This is the notebook and doc path for the repo's **static-surface engineering** story.
+This page is the fastest way to inspect the repo's **static-surface engineering** proof.
 
 <div class="cta-row cta-row--duo">
   <a class="md-button md-button--primary" href="https://github.com/willemk-stack/option-pricing-library/blob/main/demos/06_surface_noarb_svi_repair.ipynb">Open the notebook</a>
@@ -14,9 +14,20 @@ This is the notebook and doc path for the repo's **static-surface engineering** 
 </div>
 
 <figure class="figure-frame">
-  <img src="../../assets/generated/docs/docs_surface_story_triptych.png" alt="Surface flagship summary figure" />
-  <figcaption>Static-surface engineering in one page: quote comparison, repaired surface shape, and smile behavior by expiry.</figcaption>
+  <img src="../../assets/generated/static/quote_surface_compare.png" alt="Comparison of quoted implied-vol data and repaired SVI surface values across strikes and expiries" />
+  <figcaption>Primary proof for the surface workflow: quoted structure stays visible alongside the repaired SVI fit, so a reviewer can see where the library preserves market shape versus where it regularizes noisy slices.</figcaption>
 </figure>
+
+<div class="snapshot-grid">
+  <figure class="figure-frame figure-frame--compact">
+    <img src="../../assets/generated/static/svi_repaired_surface_heatmap.png" alt="Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity" />
+    <figcaption>The repaired surface heatmap makes maturity-to-maturity continuity visible before any downstream local-vol handoff is considered.</figcaption>
+  </figure>
+  <figure class="figure-frame figure-frame--compact">
+    <img src="../../assets/generated/static/svi_smile_slices.png" alt="Repaired SVI smile slices for multiple expiries plotted against log-moneyness" />
+    <figcaption>Per-expiry smile slices keep the no-arbitrage and repair story inspectable slice by slice instead of hiding it inside one composite surface view.</figcaption>
+  </figure>
+</div>
 
 ## Thesis
 

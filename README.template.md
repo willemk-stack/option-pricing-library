@@ -9,7 +9,9 @@ It supports **analytic Black–Scholes(-Merton)** pricing, **CRR binomial trees*
 [![Docs](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
-![IV Heatmap banner](./docs/assets/generated/poster/hero_essvi_surface.png)
+![Reviewer proof panel: static surface to eSSVI smoothing to local vol to PDE repricing with published seam-jump, invalid-count, repricing, and error callouts](./docs/assets/generated/showcase/reviewer_proof_panel.svg)
+
+This panel is the fastest way to see the repo's strongest reviewer-facing evidence before opening the proof pages below.
 
 ---
 

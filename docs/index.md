@@ -17,8 +17,8 @@ hide:
 </div>
 
 <figure class="figure-frame">
-  <img src="assets/generated/poster/hero_essvi_surface.png" alt="Smoothed eSSVI surface" />
-  <figcaption>The flagship path is: repair a static surface, smooth the term structure, then validate the local-vol/PDE handoff.</figcaption>
+  <img src="assets/generated/showcase/reviewer_proof_panel.svg" alt="Reviewer proof panel showing the static surface to eSSVI to local-vol to PDE workflow, four published proof metrics, and supporting tracked visuals" />
+  <figcaption>One panel to scan before opening the split proof pages: surface repair, eSSVI smoothing, local-vol diagnostics, and PDE repricing evidence.</figcaption>
 </figure>
 
 ## Recommended path
