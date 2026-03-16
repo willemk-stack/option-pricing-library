@@ -5,7 +5,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from option_pricing.viz.publishing import publishing_style, save_figure
+from option_pricing.viz.publishing import (
+    PUBLISHING_THEMES,
+    copy_light_variant,
+    publishing_palette,
+    publishing_style,
+    save_figure,
+    style_colorbar,
+    themed_asset_paths,
+)
 
 from .bundle import load_bundle_dataframe
 from .config import get_visual_build_config
@@ -194,7 +202,12 @@ def _choose_smile_maturities(T_vals: np.ndarray, *, max_curves: int = 6) -> np.n
 
 
 def _surface_heatmap(
-    df: pd.DataFrame, *, spec: PlotSpec, out_path: Path, dpi: int
+    df: pd.DataFrame,
+    *,
+    spec: PlotSpec,
+    out_path: Path,
+    dpi: int,
+    theme: str,
 ) -> Path:
     x_col = str(spec.kwargs.get("x_col", "y"))
     value_col = str(spec.kwargs.get("value_col", "iv"))
@@ -205,7 +218,7 @@ def _surface_heatmap(
         raise ValueError(f"{spec.filename}: empty grid")
 
     figsize = (14, 3.8) if banner else (8.4, 5.2)
-    with publishing_style() as plt:
+    with publishing_style(theme=theme) as plt:
         fig, ax = plt.subplots(figsize=figsize)
         im = ax.imshow(
             Z,
@@ -223,14 +236,20 @@ def _surface_heatmap(
         ax.set_title(spec.title)
         ax.set_xlabel("Log-moneyness y" if x_col == "y" else "Strike K")
         ax.set_ylabel("Maturity T")
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label=value_col)
+        colorbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label=value_col)
+        style_colorbar(colorbar, theme=theme)
         return save_figure(fig, out_path, dpi=dpi)
 
 
 def _smile_slices(
-    df: pd.DataFrame, *, spec: PlotSpec, out_path: Path, dpi: int
+    df: pd.DataFrame,
+    *,
+    spec: PlotSpec,
+    out_path: Path,
+    dpi: int,
+    theme: str,
 ) -> Path:
-    with publishing_style() as plt:
+    with publishing_style(theme=theme) as plt:
         fig, ax = plt.subplots(figsize=(8.4, 5.2))
         for T in _choose_smile_maturities(df["T"].to_numpy(dtype=float)):
             g = df.loc[np.isclose(df["T"], T)].sort_values("y")
@@ -243,7 +262,12 @@ def _smile_slices(
 
 
 def _quote_compare(
-    df: pd.DataFrame, *, spec: PlotSpec, out_path: Path, dpi: int
+    df: pd.DataFrame,
+    *,
+    spec: PlotSpec,
+    out_path: Path,
+    dpi: int,
+    theme: str,
 ) -> Path:
     grouped = (
         df.groupby("T", as_index=False)
@@ -260,7 +284,7 @@ def _quote_compare(
         )
         .sort_values("T")
     )
-    with publishing_style() as plt:
+    with publishing_style(theme=theme) as plt:
         fig, ax = plt.subplots(figsize=(8.4, 5.2))
         ax.plot(grouped["T"], grouped["svi_mae_bp"], marker="o", label="SVI repaired")
         ax.plot(grouped["T"], grouped["nodal_mae_bp"], marker="o", label="eSSVI nodal")
@@ -283,13 +307,14 @@ def _localvol_heatmap(
     spec: PlotSpec,
     out_path: Path,
     dpi: int,
+    theme: str,
 ) -> Path:
     value_col = str(spec.kwargs.get("value_col", "sigma_loc"))
     cmap = str(spec.kwargs.get("cmap", "cividis"))
     clean = df.copy()
     clean.loc[clean["invalid"].astype(bool), value_col] = np.nan
     y_vals, T_vals, Z = _pivot_grid(clean, x="y", y="T", value=value_col)
-    with publishing_style() as plt:
+    with publishing_style(theme=theme) as plt:
         fig, ax = plt.subplots(figsize=(8.4, 5.2))
         im = ax.imshow(
             Z,
@@ -307,12 +332,18 @@ def _localvol_heatmap(
         ax.set_title(spec.title)
         ax.set_xlabel("Log-moneyness y")
         ax.set_ylabel("Maturity T")
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label=value_col)
+        colorbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label=value_col)
+        style_colorbar(colorbar, theme=theme)
         return save_figure(fig, out_path, dpi=dpi)
 
 
 def _diff_heatmap(
-    df: pd.DataFrame, *, spec: PlotSpec, out_path: Path, dpi: int
+    df: pd.DataFrame,
+    *,
+    spec: PlotSpec,
+    out_path: Path,
+    dpi: int,
+    theme: str,
 ) -> Path:
     value_col = str(spec.kwargs.get("value_col", "diff_sigma_loc"))
     cmap = str(spec.kwargs.get("cmap", "coolwarm"))
@@ -320,7 +351,7 @@ def _diff_heatmap(
     clean.loc[clean["invalid_union"].astype(bool), value_col] = np.nan
     K_vals, T_vals, Z = _pivot_grid(clean, x="K", y="T", value=value_col)
     vmax = float(np.nanmax(np.abs(Z))) if np.isfinite(Z).any() else 1.0
-    with publishing_style() as plt:
+    with publishing_style(theme=theme) as plt:
         fig, ax = plt.subplots(figsize=(8.4, 5.2))
         im = ax.imshow(
             Z,
@@ -340,21 +371,28 @@ def _diff_heatmap(
         ax.set_title(spec.title)
         ax.set_xlabel("Strike K")
         ax.set_ylabel("Maturity T")
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label=value_col)
+        colorbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label=value_col)
+        style_colorbar(colorbar, theme=theme)
         return save_figure(fig, out_path, dpi=dpi)
 
 
 def _repricing_scatter(
-    df: pd.DataFrame, *, spec: PlotSpec, out_path: Path, dpi: int
+    df: pd.DataFrame,
+    *,
+    spec: PlotSpec,
+    out_path: Path,
+    dpi: int,
+    theme: str,
 ) -> Path:
     x = df["target_price"].to_numpy(dtype=float)
     y = df["pde_price"].to_numpy(dtype=float)
-    with publishing_style() as plt:
+    palette = publishing_palette(theme)
+    with publishing_style(theme=theme) as plt:
         fig, ax = plt.subplots(figsize=(6.4, 6.4))
         ax.scatter(x, y, s=12, alpha=0.85)
         lo = float(min(np.min(x), np.min(y)))
         hi = float(max(np.max(x), np.max(y)))
-        ax.plot([lo, hi], [lo, hi], color="#222222", linewidth=1.1)
+        ax.plot([lo, hi], [lo, hi], color=palette["reference"], linewidth=1.1)
         ax.set_title(spec.title)
         ax.set_xlabel("Target price")
         ax.set_ylabel("PDE price")
@@ -362,14 +400,21 @@ def _repricing_scatter(
         return save_figure(fig, out_path, dpi=dpi)
 
 
-def _convergence(df: pd.DataFrame, *, spec: PlotSpec, out_path: Path, dpi: int) -> Path:
+def _convergence(
+    df: pd.DataFrame,
+    *,
+    spec: PlotSpec,
+    out_path: Path,
+    dpi: int,
+    theme: str,
+) -> Path:
     data = df.sort_values("grid_points").copy()
     gp = data["grid_points"].to_numpy(dtype=float)
     pde = data["pde_price"].to_numpy(dtype=float)
     ref = float(pde[-1])
     err_self = np.abs(pde[:-1] - ref)
     gp_self = gp[:-1]
-    with publishing_style() as plt:
+    with publishing_style(theme=theme) as plt:
         fig, ax = plt.subplots(figsize=(7.0, 4.8))
         ok = err_self > 0.0
         if ok.any():
@@ -393,10 +438,11 @@ def _price_error_heatmap(
     spec: PlotSpec,
     out_path: Path,
     dpi: int,
+    theme: str,
 ) -> Path:
     K_vals, T_vals, Z = _pivot_grid(df, x="K", y="T", value="price_error")
     vmax = float(np.nanmax(np.abs(Z))) if np.isfinite(Z).any() else 1.0
-    with publishing_style() as plt:
+    with publishing_style(theme=theme) as plt:
         fig, ax = plt.subplots(figsize=(8.4, 5.2))
         im = ax.imshow(
             Z,
@@ -416,7 +462,10 @@ def _price_error_heatmap(
         ax.set_title(spec.title)
         ax.set_xlabel("Strike K")
         ax.set_ylabel("Maturity T")
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="price_error")
+        colorbar = fig.colorbar(
+            im, ax=ax, fraction=0.046, pad=0.04, label="price_error"
+        )
+        style_colorbar(colorbar, theme=theme)
         return save_figure(fig, out_path, dpi=dpi)
 
 
@@ -426,6 +475,7 @@ def _poster_composite(
     spec: PlotSpec,
     out_path: Path,
     dpi: int,
+    theme: str,
 ) -> Path:
     surf = datasets["surface/essvi_smoothed_grid"]
     localvol = datasets["localvol/gatheral_grid"]
@@ -437,7 +487,8 @@ def _poster_composite(
     K_err, T_err, Z_err = _pivot_grid(repricing, x="K", y="T", value="price_error")
     vmax = float(np.nanmax(np.abs(Z_err))) if np.isfinite(Z_err).any() else 1.0
 
-    with publishing_style() as plt:
+    palette = publishing_palette(theme)
+    with publishing_style(theme=theme) as plt:
         fig, axs = plt.subplots(2, 2, figsize=(12.2, 8.6), constrained_layout=True)
 
         im0 = axs[0, 0].imshow(
@@ -456,7 +507,8 @@ def _poster_composite(
         axs[0, 0].set_title("Smoothed eSSVI Surface")
         axs[0, 0].set_xlabel("Log-moneyness y")
         axs[0, 0].set_ylabel("Maturity T")
-        fig.colorbar(im0, ax=axs[0, 0], fraction=0.046, pad=0.04)
+        colorbar0 = fig.colorbar(im0, ax=axs[0, 0], fraction=0.046, pad=0.04)
+        style_colorbar(colorbar0, theme=theme)
 
         im1 = axs[0, 1].imshow(
             Z_lv,
@@ -474,7 +526,8 @@ def _poster_composite(
         axs[0, 1].set_title("Gatheral Local Vol")
         axs[0, 1].set_xlabel("Log-moneyness y")
         axs[0, 1].set_ylabel("Maturity T")
-        fig.colorbar(im1, ax=axs[0, 1], fraction=0.046, pad=0.04)
+        colorbar1 = fig.colorbar(im1, ax=axs[0, 1], fraction=0.046, pad=0.04)
+        style_colorbar(colorbar1, theme=theme)
 
         im2 = axs[1, 0].imshow(
             Z_err,
@@ -494,14 +547,20 @@ def _poster_composite(
         axs[1, 0].set_title("PDE Price Error")
         axs[1, 0].set_xlabel("Strike K")
         axs[1, 0].set_ylabel("Maturity T")
-        fig.colorbar(im2, ax=axs[1, 0], fraction=0.046, pad=0.04)
+        colorbar2 = fig.colorbar(im2, ax=axs[1, 0], fraction=0.046, pad=0.04)
+        style_colorbar(colorbar2, theme=theme)
 
         x = repricing["target_price"].to_numpy(dtype=float)
         y = repricing["pde_price"].to_numpy(dtype=float)
         lo = float(min(np.min(x), np.min(y)))
         hi = float(max(np.max(x), np.max(y)))
         axs[1, 1].scatter(x, y, s=10, alpha=0.85)
-        axs[1, 1].plot([lo, hi], [lo, hi], color="#222222", linewidth=1.1)
+        axs[1, 1].plot(
+            [lo, hi],
+            [lo, hi],
+            color=palette["reference"],
+            linewidth=1.1,
+        )
         axs[1, 1].set_title("PDE Round-Trip Validation")
         axs[1, 1].set_xlabel("Target price")
         axs[1, 1].set_ylabel("PDE price")
@@ -515,6 +574,7 @@ def _story_triptych(
     spec: PlotSpec,
     out_path: Path,
     dpi: int,
+    theme: str,
 ) -> Path:
     svi = datasets["surface/svi_repaired_grid"]
     essvi = datasets["surface/essvi_smoothed_grid"]
@@ -525,7 +585,7 @@ def _story_triptych(
         lv.loc[~lv["invalid"].astype(bool)], x="y", y="T", value="sigma_loc"
     )
 
-    with publishing_style() as plt:
+    with publishing_style(theme=theme) as plt:
         fig, axs = plt.subplots(1, 3, figsize=(15.2, 4.6), constrained_layout=True)
         for ax, Z, x_vals, T_vals, title, cmap in [
             (axs[0], Z0, x0, T0, "SVI repaired", "viridis"),
@@ -548,14 +608,20 @@ def _story_triptych(
             ax.set_title(title)
             ax.set_xlabel("Log-moneyness y")
             ax.set_ylabel("Maturity T")
-            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            colorbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            style_colorbar(colorbar, theme=theme)
         return save_figure(fig, out_path, dpi=dpi)
 
 
 def _smoothness_compare(
-    df: pd.DataFrame, *, spec: PlotSpec, out_path: Path, dpi: int
+    df: pd.DataFrame,
+    *,
+    spec: PlotSpec,
+    out_path: Path,
+    dpi: int,
+    theme: str,
 ) -> Path:
-    with publishing_style() as plt:
+    with publishing_style(theme=theme) as plt:
         fig, ax = plt.subplots(figsize=(8.4, 5.0))
         ax.plot(
             df["T_knot"], df["max_abs_wT_jump_svi"], marker="o", label="SVI repaired"
@@ -574,61 +640,70 @@ def _smoothness_compare(
 
 
 RENDERERS = {
-    "surface_heatmap": lambda data, *, spec, out_path, dpi: _surface_heatmap(
+    "surface_heatmap": lambda data, *, spec, out_path, dpi, theme: _surface_heatmap(
         next(iter(data.values())),
         spec=spec,
         out_path=out_path,
         dpi=dpi,
+        theme=theme,
     ),
-    "smile_slices": lambda data, *, spec, out_path, dpi: _smile_slices(
+    "smile_slices": lambda data, *, spec, out_path, dpi, theme: _smile_slices(
         next(iter(data.values())),
         spec=spec,
         out_path=out_path,
         dpi=dpi,
+        theme=theme,
     ),
-    "quote_compare": lambda data, *, spec, out_path, dpi: _quote_compare(
+    "quote_compare": lambda data, *, spec, out_path, dpi, theme: _quote_compare(
         next(iter(data.values())),
         spec=spec,
         out_path=out_path,
         dpi=dpi,
+        theme=theme,
     ),
-    "localvol_heatmap": lambda data, *, spec, out_path, dpi: _localvol_heatmap(
+    "localvol_heatmap": lambda data, *, spec, out_path, dpi, theme: _localvol_heatmap(
         next(iter(data.values())),
         spec=spec,
         out_path=out_path,
         dpi=dpi,
+        theme=theme,
     ),
-    "diff_heatmap": lambda data, *, spec, out_path, dpi: _diff_heatmap(
+    "diff_heatmap": lambda data, *, spec, out_path, dpi, theme: _diff_heatmap(
         next(iter(data.values())),
         spec=spec,
         out_path=out_path,
         dpi=dpi,
+        theme=theme,
     ),
-    "repricing_scatter": lambda data, *, spec, out_path, dpi: _repricing_scatter(
+    "repricing_scatter": lambda data, *, spec, out_path, dpi, theme: _repricing_scatter(
         next(iter(data.values())),
         spec=spec,
         out_path=out_path,
         dpi=dpi,
+        theme=theme,
     ),
-    "convergence": lambda data, *, spec, out_path, dpi: _convergence(
+    "convergence": lambda data, *, spec, out_path, dpi, theme: _convergence(
         next(iter(data.values())),
         spec=spec,
         out_path=out_path,
         dpi=dpi,
+        theme=theme,
     ),
-    "price_error_heatmap": lambda data, *, spec, out_path, dpi: _price_error_heatmap(
+    "price_error_heatmap": lambda data, *, spec, out_path, dpi, theme: _price_error_heatmap(
         next(iter(data.values())),
         spec=spec,
         out_path=out_path,
         dpi=dpi,
+        theme=theme,
     ),
     "poster_composite": _poster_composite,
     "story_triptych": _story_triptych,
-    "smoothness_compare": lambda data, *, spec, out_path, dpi: _smoothness_compare(
+    "smoothness_compare": lambda data, *, spec, out_path, dpi, theme: _smoothness_compare(
         next(iter(data.values())),
         spec=spec,
         out_path=out_path,
         dpi=dpi,
+        theme=theme,
     ),
 }
 
@@ -652,9 +727,17 @@ def render_plot_preset(
             name: load_bundle_dataframe(manifest, name) for name in spec.datasets
         }
         renderer = RENDERERS[spec.renderer]
-        out_path = target_dir / spec.filename
-        path = renderer(datasets, spec=spec, out_path=out_path, dpi=render_dpi)
-        written.append(Path(path))
+        variants = themed_asset_paths(target_dir / spec.filename)
+        for theme in PUBLISHING_THEMES:
+            path = renderer(
+                datasets,
+                spec=spec,
+                out_path=variants.path_for(theme),
+                dpi=render_dpi,
+                theme=theme,
+            )
+            written.append(Path(path))
+        written.append(copy_light_variant(variants))
     return written
 
 

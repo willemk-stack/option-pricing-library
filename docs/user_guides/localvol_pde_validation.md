@@ -14,18 +14,21 @@ This page is the numerics proof page: it shows a local-vol workflow that is vali
   <a class="md-button" href="../../architecture/">See architecture</a>
 </div>
 
-<figure class="figure-frame">
-  <img src="../../assets/generated/numerics/pde_roundtrip_scatter.png" alt="Scatter plot comparing local-vol PDE repriced values with target Black-76 prices across the repricing grid" />
+<figure markdown class="diagram">
+  ![Scatter plot comparing local-vol PDE repriced values with target Black-76 prices across the repricing grid](../../assets/generated/numerics/pde_roundtrip_scatter.light.png){ .diagram-img .diagram-light }
+  ![Scatter plot comparing local-vol PDE repriced values with target Black-76 prices across the repricing grid](../../assets/generated/numerics/pde_roundtrip_scatter.dark.png){ .diagram-img .diagram-dark }
   <figcaption>The repricing cloud stays close to the identity line, so accuracy can be judged from visible structure rather than a single summary claim.</figcaption>
 </figure>
 
 <div class="snapshot-grid">
-  <figure class="figure-frame figure-frame--compact">
-    <img src="../../assets/generated/numerics/pde_price_error_heatmap.png" alt="Heatmap of local-vol PDE pricing error across strike and maturity on the repricing grid" />
+  <figure markdown class="diagram" style="--diagram-max-width: 720px">
+    ![Heatmap of local-vol PDE pricing error across strike and maturity on the repricing grid](../../assets/generated/numerics/pde_price_error_heatmap.light.png){ .diagram-img .diagram-light }
+    ![Heatmap of local-vol PDE pricing error across strike and maturity on the repricing grid](../../assets/generated/numerics/pde_price_error_heatmap.dark.png){ .diagram-img .diagram-dark }
     <figcaption>The price-error heatmap shows where the workflow is most stressed across strike and maturity.</figcaption>
   </figure>
-  <figure class="figure-frame figure-frame--compact">
-    <img src="../../assets/generated/numerics/pde_convergence.png" alt="Convergence plot for a representative local-vol PDE solve as the numerical grid is refined" />
+  <figure markdown class="diagram" style="--diagram-max-width: 720px">
+    ![Convergence plot for a representative local-vol PDE solve as the numerical grid is refined](../../assets/generated/numerics/pde_convergence.light.png){ .diagram-img .diagram-light }
+    ![Convergence plot for a representative local-vol PDE solve as the numerical grid is refined](../../assets/generated/numerics/pde_convergence.dark.png){ .diagram-img .diagram-dark }
     <figcaption>The convergence sweep makes the mesh tradeoff explicit instead of asking the reader to trust a single chosen grid.</figcaption>
   </figure>
 </div>

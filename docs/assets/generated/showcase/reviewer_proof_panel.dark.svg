@@ -1,0 +1,96 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Reviewer proof panel for the option pricing library</title>
+  <desc id="desc">Workflow strip from static surface to eSSVI smoothing to local vol to PDE repricing, four published proof metrics, and three thumbnails reused from tracked docs assets.</desc>
+  <defs>
+    <linearGradient id="headerBg" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#18263C" />
+      <stop offset="100%" stop-color="#101B2D" />
+    </linearGradient>
+    <clipPath id="thumbA">
+      <rect x="760" y="450" width="340" height="150" rx="20" ry="20" />
+    </clipPath>
+    <clipPath id="thumbB">
+      <rect x="1154" y="450" width="340" height="150" rx="20" ry="20" />
+    </clipPath>
+    <clipPath id="thumbC">
+      <rect x="760" y="628" width="734" height="178" rx="20" ry="20" />
+    </clipPath>
+  </defs>
+
+  <rect width="1600" height="900" fill="#08101F" />
+  <rect x="28" y="28" width="1544" height="844" rx="34" ry="34" fill="#0F172A" stroke="#314056" stroke-width="2" />
+
+  <text x="72" y="108" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="54" font-weight="700" fill="#E5EDF7">Reviewer proof panel</text>
+  <text x="72" y="148" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="24" fill="#A8B5C7">Fast scan of the repo's strongest surface, smoothing, local-vol, and PDE evidence.</text>
+  <text x="72" y="182" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" fill="#A8B5C7">Metrics are copied from the published eSSVI bridge and local vol + PDE proof pages.</text>
+
+  <rect x="72" y="222" width="1456" height="122" rx="28" ry="28" fill="url(#headerBg)" stroke="#314056" stroke-width="2" />
+  <text x="102" y="262" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1" fill="#8CC9FF">WORKFLOW</text>
+
+  <rect x="102" y="278" width="258" height="44" rx="18" ry="18" fill="#0F172A" stroke="#314056" />
+  <text x="126" y="307" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#E5EDF7">Static surface</text>
+  <text x="130" y="335" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Fit and repair noisy quotes</text>
+
+  <text x="382" y="308" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="28" font-weight="700" fill="#A8B5C7">-&gt;</text>
+
+  <rect x="430" y="278" width="270" height="44" rx="18" ry="18" fill="#0F172A" stroke="#314056" />
+  <text x="454" y="307" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#E5EDF7">eSSVI smoothing</text>
+  <text x="458" y="335" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Make w_T usable for Dupire</text>
+
+  <text x="722" y="308" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="28" font-weight="700" fill="#A8B5C7">-&gt;</text>
+
+  <rect x="770" y="278" width="214" height="44" rx="18" ry="18" fill="#0F172A" stroke="#314056" />
+  <text x="794" y="307" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#E5EDF7">Local vol</text>
+  <text x="798" y="335" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Inspect invalid masks early</text>
+
+  <text x="1006" y="308" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="28" font-weight="700" fill="#A8B5C7">-&gt;</text>
+
+  <rect x="1054" y="278" width="294" height="44" rx="18" ry="18" fill="#0F172A" stroke="#314056" />
+  <text x="1078" y="307" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#E5EDF7">PDE repricing</text>
+  <text x="1082" y="335" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Check round-trip error and convergence</text>
+
+  <text x="72" y="396" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1" fill="#8CC9FF">PUBLISHED PROOF METRICS</text>
+
+  <rect x="72" y="418" width="292" height="144" rx="24" ry="24" fill="#0F172A" stroke="#314056" stroke-width="2" />
+  <text x="96" y="452" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#E5EDF7">Seam jump</text>
+  <text x="96" y="500" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="#8CC9FF">0.080696 -&gt; 0.000082</text>
+  <text x="96" y="536" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Largest published w_T seam jump</text>
+
+  <rect x="388" y="418" width="292" height="144" rx="24" ry="24" fill="#0F172A" stroke="#314056" stroke-width="2" />
+  <text x="412" y="452" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#E5EDF7">Dupire invalids</text>
+  <text x="412" y="512" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="52" font-weight="700" fill="#91E0D7">0</text>
+  <text x="412" y="536" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">projection_dupire_invalid_count</text>
+
+  <rect x="72" y="586" width="292" height="144" rx="24" ry="24" fill="#0F172A" stroke="#314056" stroke-width="2" />
+  <text x="96" y="620" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#E5EDF7">Repriced options</text>
+  <text x="96" y="680" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="52" font-weight="700" fill="#8CC9FF">154</text>
+  <text x="96" y="704" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Published local-vol/PDE sweep size</text>
+
+  <rect x="388" y="586" width="292" height="144" rx="24" ry="24" fill="#0F172A" stroke="#314056" stroke-width="2" />
+  <text x="412" y="620" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#E5EDF7">Mean abs price error</text>
+  <text x="412" y="680" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="42" font-weight="700" fill="#8CC9FF">0.0008067</text>
+  <text x="412" y="704" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Published PDE repricing summary</text>
+
+  <text x="72" y="780" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1" fill="#8CC9FF">WHAT TO OPEN NEXT</text>
+  <text x="72" y="812" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" fill="#A8B5C7">Use the split proof pages for the full tables, notebook links, and diagnostics.</text>
+
+  <rect x="726" y="380" width="802" height="448" rx="28" ry="28" fill="#0F172A" stroke="#314056" stroke-width="2" />
+  <text x="760" y="416" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1" fill="#8CC9FF">SUPPORTING VISUALS REUSED FROM TRACKED ASSETS</text>
+
+  <rect x="760" y="450" width="340" height="150" rx="20" ry="20" fill="#23344A" />
+  <image x="760" y="450" width="340" height="150" href="../static/quote_surface_compare.dark.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#thumbA)" />
+  <rect x="776" y="466" width="174" height="30" rx="15" ry="15" fill="#020617" opacity="0.82" />
+  <text x="794" y="487" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">Quote-fit comparison</text>
+
+  <rect x="1154" y="450" width="340" height="150" rx="20" ry="20" fill="#23344A" />
+  <image x="1154" y="450" width="340" height="150" href="../dupire/essvi_smoothed_surface_heatmap.dark.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#thumbB)" />
+  <rect x="1170" y="466" width="198" height="30" rx="15" ry="15" fill="#020617" opacity="0.82" />
+  <text x="1188" y="487" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">Smoothed eSSVI surface</text>
+
+  <rect x="760" y="628" width="734" height="178" rx="20" ry="20" fill="#23344A" />
+  <image x="760" y="628" width="734" height="178" href="../poster/poster_essvi_localvol_pde.dark.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#thumbC)" />
+  <rect x="776" y="644" width="248" height="30" rx="15" ry="15" fill="#020617" opacity="0.82" />
+  <text x="794" y="665" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#FFFFFF">Local-vol and PDE proof collage</text>
+  <text x="760" y="850" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="#A8B5C7">Visual panel pulls from the tracked static, dupire, and poster assets instead of creating new simulated figures.</text>
+</svg>
+

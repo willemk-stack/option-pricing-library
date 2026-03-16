@@ -2,7 +2,10 @@
 
 This page is the committed benchmark snapshot for the workflows that matter most in review: implied-vol inversion, PDE runtime versus error, digital-payoff remedies, local-vol extraction, the end-to-end surface-to-PDE path, and CRR tree scaling. The goal is not to claim universal absolute speed on one machine; it is to show which workflows scale cleanly, what extra accuracy costs, and which implementation choices are the defensible defaults.
 
-![Benchmark overview: committed IV scaling, PDE runtime-versus-error, macro stage budget, and benchmark callouts derived from published artifacts.](../assets/generated/benchmarks/benchmark_overview.svg)
+<figure markdown class="diagram" style="--diagram-max-width: 1180px">
+  ![Benchmark overview: committed IV scaling, PDE runtime-versus-error, macro stage budget, and benchmark callouts derived from published artifacts.](assets/generated/benchmarks/benchmark_overview.light.svg){ .diagram-img .diagram-light }
+  ![Benchmark overview: committed IV scaling, PDE runtime-versus-error, macro stage budget, and benchmark callouts derived from published artifacts.](assets/generated/benchmarks/benchmark_overview.dark.svg){ .diagram-img .diagram-dark }
+</figure>
 
 ## Snapshot
 
@@ -15,25 +18,37 @@ This page is the committed benchmark snapshot for the workflows that matter most
 
 ## Implied-vol inversion
 
-![IV scaling figure: vectorized slice inversion versus scalar-loop inversion, plus scalar single-option latency scenarios.](../assets/generated/benchmarks/iv_scaling.png)
+<figure markdown class="diagram" style="--diagram-max-width: 980px">
+  ![IV scaling figure: vectorized slice inversion versus scalar-loop inversion, plus scalar single-option latency scenarios.](assets/generated/benchmarks/iv_scaling.light.png){ .diagram-img .diagram-light }
+  ![IV scaling figure: vectorized slice inversion versus scalar-loop inversion, plus scalar single-option latency scenarios.](assets/generated/benchmarks/iv_scaling.dark.png){ .diagram-img .diagram-dark }
+</figure>
 
 Use the vectorized slice inverter whenever the workload is a smile or surface rather than an isolated option. At `801` strikes the committed snapshot records about `1.12 ms` for the vectorized slice path versus about `498.04 ms` for the scalar-loop baseline.
 
 ## PDE runtime versus error
 
-![PDE runtime versus error tradeoff for Black-Scholes vanilla PDE and local-vol PDE refinement.](../assets/generated/benchmarks/pde_runtime_error_tradeoff.png)
+<figure markdown class="diagram" style="--diagram-max-width: 980px">
+  ![PDE runtime versus error tradeoff for Black-Scholes vanilla PDE and local-vol PDE refinement.](assets/generated/benchmarks/pde_runtime_error_tradeoff.light.png){ .diagram-img .diagram-light }
+  ![PDE runtime versus error tradeoff for Black-Scholes vanilla PDE and local-vol PDE refinement.](assets/generated/benchmarks/pde_runtime_error_tradeoff.dark.png){ .diagram-img .diagram-dark }
+</figure>
 
 The vanilla PDE curve shows the expected refinement tradeoff against an analytic benchmark. The local-vol curve uses a finer-grid local-vol PDE solve as its reference because there is no closed-form target for that path. That is the right comparison for review: the figure shows what extra grid density buys rather than just how long one solve took.
 
 ## Digital-payoff remedies
 
-![Digital payoff remedy tradeoff: runtime versus error, plus grid-refinement price spread across remedy choices.](../assets/generated/benchmarks/digital_remedies_tradeoff.png)
+<figure markdown class="diagram" style="--diagram-max-width: 980px">
+  ![Digital payoff remedy tradeoff: runtime versus error, plus grid-refinement price spread across remedy choices.](assets/generated/benchmarks/digital_remedies_tradeoff.light.png){ .diagram-img .diagram-light }
+  ![Digital payoff remedy tradeoff: runtime versus error, plus grid-refinement price spread across remedy choices.](assets/generated/benchmarks/digital_remedies_tradeoff.dark.png){ .diagram-img .diagram-dark }
+</figure>
 
 This is the clearest benchmark family for domain-aware numerical engineering. Leaving the discontinuity untreated keeps runtime modest, but it also leaves materially larger error and much wider grid-to-grid drift. The cell-average and L2-projection remedies both stabilize the refinement path without changing the runtime order of magnitude.
 
 ## End-to-end pipeline
 
-![Macro pipeline benchmark: stacked stage timing for the synthetic surface-to-local-vol-to-PDE workflow.](../assets/generated/benchmarks/macro_pipeline_summary.png)
+<figure markdown class="diagram" style="--diagram-max-width: 980px">
+  ![Macro pipeline benchmark: stacked stage timing for the synthetic surface-to-local-vol-to-PDE workflow.](assets/generated/benchmarks/macro_pipeline_summary.light.png){ .diagram-img .diagram-light }
+  ![Macro pipeline benchmark: stacked stage timing for the synthetic surface-to-local-vol-to-PDE workflow.](assets/generated/benchmarks/macro_pipeline_summary.dark.png){ .diagram-img .diagram-dark }
+</figure>
 
 For the integrated benchmark, the key observation is where time actually goes. In this snapshot the handoff itself stays cheap, the local-vol extraction step stays around `0.46-1.01 ms`, and the expensive parts are fitting the surface and running the PDE. That is useful when discussing optimization priorities because it argues against spending engineering effort on the wrong stage.
 
@@ -48,7 +63,7 @@ The published local-vol extraction run compares `strike_coordinate="K"` and `str
 | `K` | `121 x 241` | `1.327 ms` | `0.0%` |
 | `logK` | `121 x 241` | `1.312 ms` | `0.0%` |
 
-The full figure is available at [localvol_scaling.png](../assets/generated/benchmarks/localvol_scaling.png).
+The full figure is available at [localvol_scaling.png](assets/generated/benchmarks/localvol_scaling.png).
 
 ### Tree scaling
 
@@ -60,7 +75,7 @@ The CRR benchmark remains useful for convergence discussion, but the published n
 | `1000` | `900.7 ms` | `1.98e-3` |
 | `5000` | `19.7 s` | `3.96e-4` |
 
-The full figure is available at [tree_scaling.png](../assets/generated/benchmarks/tree_scaling.png).
+The full figure is available at [tree_scaling.png](assets/generated/benchmarks/tree_scaling.png).
 
 ## Environment and reproducibility
 

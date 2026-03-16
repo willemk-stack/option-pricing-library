@@ -16,8 +16,9 @@ hide:
   </div>
 </div>
 
-<figure class="figure-frame">
-  <img src="assets/generated/showcase/reviewer_proof_panel.svg" alt="Reviewer proof panel showing surface repair, eSSVI smoothing, local-vol extraction, and PDE repricing with tracked evidence callouts" />
+<figure markdown class="diagram" style="--diagram-max-width: 1180px">
+  ![Reviewer proof panel showing surface repair, eSSVI smoothing, local-vol extraction, and PDE repricing with tracked evidence callouts](assets/generated/showcase/reviewer_proof_panel.light.svg){ .diagram-img .diagram-light }
+  ![Reviewer proof panel showing surface repair, eSSVI smoothing, local-vol extraction, and PDE repricing with tracked evidence callouts](assets/generated/showcase/reviewer_proof_panel.dark.svg){ .diagram-img .diagram-dark }
   <figcaption>The fastest single scan: quoted-to-repaired surface evidence, smooth Dupire handoff evidence, and local-vol/PDE validation evidence in one panel.</figcaption>
 </figure>
 
