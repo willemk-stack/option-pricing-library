@@ -108,7 +108,7 @@ nav:
       - Recommended API: user_guides/instruments.md
       - Convenience quickstart: user_guides/quickstart.md
       - Installation: installation.md
-      - Guides overview: user_guides/index.md
+      - Guides: user_guides/index.md
       - Market APIs: user_guides/market_api.md
       - Black-Scholes: user_guides/black_scholes.md
       - Monte Carlo: user_guides/monte_carlo.md
@@ -121,11 +121,11 @@ nav:
       - SVI: user_guides/svi.md
       - SVI repair: user_guides/svi_repair.md
       - Local volatility: user_guides/local_vol.md
-  - Flagship demos:
-      - Decision guide: user_guides/flagship_capstone2_page.md
-      - Surface flagship: user_guides/flagship_surface.md
-      - eSSVI bridge: user_guides/flagship_essvi_bridge.md
-      - Local vol + PDE flagship: user_guides/flagship_localvol_pde.md
+  - Proof path:
+      - Decision guide: user_guides/decision_guide.md
+      - Surface repair workflow: user_guides/surface_workflow.md
+      - eSSVI smooth handoff: user_guides/essvi_smooth_handoff.md
+      - Local-vol and PDE validation: user_guides/localvol_pde_validation.md
   - API:
       - Overview: api/index.md
       - Public: api/public.md
@@ -134,7 +134,7 @@ nav:
       - Volatility: api/vol.md
       - Exceptions: api/exceptions.md
   - Architecture: architecture.md
-  - Performance: performance.md
+  - Performance evidence: performance.md
   - Notes:
       - Overview: notes/index.md
       - Black-Scholes pricing: notes/bs_pricing.md

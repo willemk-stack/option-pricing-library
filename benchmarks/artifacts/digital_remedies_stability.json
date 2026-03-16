@@ -1,0 +1,22 @@
+[
+  {
+    "config":"Rannacher + L2 projection",
+    "refinement_spread":0.0000143316,
+    "best_abs_error":0.0000014285
+  },
+  {
+    "config":"Rannacher + cell average",
+    "refinement_spread":0.0000300185,
+    "best_abs_error":0.000003499
+  },
+  {
+    "config":"CN + none",
+    "refinement_spread":0.0118184509,
+    "best_abs_error":0.0019748276
+  },
+  {
+    "config":"Rannacher + none",
+    "refinement_spread":0.0118184664,
+    "best_abs_error":0.0019748381
+  }
+]

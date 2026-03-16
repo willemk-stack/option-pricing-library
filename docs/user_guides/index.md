@@ -1,30 +1,30 @@
-# User guides
+# Guides
 
-These guides focus on *how to use the library in practice*.
-They are organized from the simplest workflows to the more advanced volatility and PDE tooling.
+Use this section either to evaluate the repo quickly or to start from the public API and work outward.
 
-## Start here
+## Start with the strongest proof
 
-- [Installation](../installation.md) - install the package and verify the environment.
+- [Decision guide](decision_guide.md) - quickest route to the surface, eSSVI, local-vol/PDE, performance, and architecture pages.
+- [Surface repair workflow](surface_workflow.md) - quoted surface diagnostics, SVI fit quality, and repair evidence.
+- [eSSVI smooth handoff](essvi_smooth_handoff.md) - why slice-wise repair is not the final Dupire handoff, and what the smoothed surface fixes.
+- [Local-vol and PDE validation](localvol_pde_validation.md) - repricing accuracy, error structure, and convergence evidence.
+- [Performance evidence](../performance.md) - committed scaling plots, runtime/error tradeoffs, and reproducibility notes.
+- [Architecture](../architecture.md) - typed package structure, dependency direction, and system-design intent.
+
+## Start with the public API
+
+- [Installation](../installation.md) - install the package and choose the right extras.
 - [Instruments](instruments.md) - recommended public entry point for most users.
-- [Decision guide](flagship_capstone2_page.md) - fastest route to the strongest surface, eSSVI, and local-vol/PDE proof.
 - [Quickstart](quickstart.md) - compact walkthrough using the convenience `PricingInputs` API.
-- [Market APIs](market_api.md) - understand flat `MarketData` versus curves-first `PricingContext`.
+- [Market APIs](market_api.md) - flat `MarketData` versus curves-first `PricingContext`.
 
-## Flagship demos
-
-- [Decision guide](flagship_capstone2_page.md) - choose the right flagship notebook for surface engineering, the eSSVI bridge, or local-vol/PDE numerics.
-- [Surface flagship](flagship_surface.md) - the SVI/no-arbitrage/repair story for static-surface engineering.
-- [eSSVI bridge](flagship_essvi_bridge.md) - the smooth term-structure handoff into Dupire-ready local vol.
-- [Local vol + PDE flagship](flagship_localvol_pde.md) - the numerics-heavy local-vol diagnostics, PDE repricing, and convergence story.
-
-## Vanilla pricing
+## Pricing engines
 
 - [Black-Scholes](black_scholes.md) - closed-form pricing and analytic Greeks.
 - [Monte Carlo](monte_carlo.md) - GBM pricing, standard errors, and reproducibility.
 - [Binomial CRR](binomial_crr.md) - lattice pricing, convergence, and American exercise.
 - [PDE pricing](pde_pricing.md) - finite-difference pricing under Black-Scholes and local vol.
-- [Diagnostics](diagnostics.md) - notebook-friendly helpers for comparisons, sweeps, and surface reports.
+- [Diagnostics](diagnostics.md) - notebook-friendly helpers for comparisons, sweeps, and reports.
 
 ## Volatility workflows
 

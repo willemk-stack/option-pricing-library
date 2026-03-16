@@ -22,7 +22,7 @@ For a continuous time-differentiable implied surface such as `ESSVISmoothedSurfa
 A plain grid surface built with `VolSurface.from_grid(...)` does **not** provide those derivatives.
 An SVI-based surface does.
 
-That said, SVI is only one route. If you need a smoother time-consistent surface, the eSSVI workflow is the stronger choice and is now the preferred Dupire-oriented path in the docs and flagship demos.
+That said, SVI is only one route. If you need a smoother time-consistent surface, the eSSVI workflow is the stronger choice and is now the preferred Dupire-oriented path in the proof pages.
 
 ## Build an implied SVI surface first
 

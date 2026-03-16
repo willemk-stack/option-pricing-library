@@ -34,6 +34,8 @@ jobs:
         run: |
           set -euo pipefail
 
+          mkdir -p benchmarks/artifacts
+
           # Keep the Actions log "alive" during long/quiet benchmark runs
           ( while true; do
               echo "benchmarks still running @ $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
@@ -42,12 +44,27 @@ jobs:
           KEEPALIVE_PID=$!
           trap 'kill $KEEPALIVE_PID' EXIT
 
-          pytest benchmarks --benchmark-only --benchmark-json benchmarks.json --benchmark-verbose
+          pytest benchmarks --benchmark-only --benchmark-json benchmarks/artifacts/pytest-benchmark.json --benchmark-verbose
 
-      - name: Upload benchmark results
+      - name: Publish benchmark artifacts
+        run: |
+          python scripts/build_benchmark_artifacts.py \
+            --pytest-benchmark-json benchmarks/artifacts/pytest-benchmark.json
+
+      - name: Upload raw benchmark results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: benchmarks-json
-          path: benchmarks.json
+          path: benchmarks/artifacts/pytest-benchmark.json
+          if-no-files-found: error
+
+      - name: Upload derived benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-artifacts
+          path: |
+            benchmarks/artifacts
+            docs/assets/generated/benchmarks
           if-no-files-found: error
