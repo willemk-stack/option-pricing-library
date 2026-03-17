@@ -8,10 +8,10 @@ hide:
 
 Use this page when you want the fastest route to the strongest engineering proof in the repo. The public story has three steps: repair a noisy implied-vol surface, make the Dupire handoff smooth enough to trust, then show local-vol and PDE repricing evidence.
 
-<div class="cta-row cta-row--trio">
-  <a class="md-button md-button--primary" href="../surface_workflow/">Start with surface repair</a>
-  <a class="md-button" href="../essvi_smooth_handoff/">See the smooth handoff</a>
-  <a class="md-button" href="../localvol_pde_validation/">Review local-vol and PDE validation</a>
+<div class="cta-row cta-row--trio" markdown="1">
+[Start with surface repair](surface_workflow.md){ .md-button .md-button--primary }
+[See the smooth handoff](essvi_smooth_handoff.md){ .md-button }
+[Review local-vol and PDE validation](localvol_pde_validation.md){ .md-button }
 </div>
 
 ## Choose by question

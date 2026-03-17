@@ -8,9 +8,9 @@ hide:
 
 This page covers the hard transition between a repaired static surface and a local-vol workflow that needs time derivatives to behave well.
 
-<div class="cta-row cta-row--duo">
-  <a class="md-button md-button--primary" href="https://github.com/willemk-stack/option-pricing-library/blob/main/demos/07_essvi_smooth_surface_for_dupire.ipynb">Open the notebook</a>
-  <a class="md-button" href="../localvol_pde_validation/">Next: local-vol and PDE validation</a>
+<div class="cta-row cta-row--duo" markdown="1">
+[Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/07_essvi_smooth_surface_for_dupire.ipynb){ .md-button .md-button--primary }
+[Next: local-vol and PDE validation](localvol_pde_validation.md){ .md-button }
 </div>
 
 <figure markdown class="diagram">
@@ -19,17 +19,20 @@ This page covers the hard transition between a repaired static surface and a loc
   <figcaption>The smoothed eSSVI surface is the preferred Dupire handoff because it gives the local-vol step a time-continuous surface instead of a stack of repaired slices.</figcaption>
 </figure>
 
-<div class="snapshot-grid">
-  <figure class="diagram" style="--diagram-max-width: 720px">
-    <img alt="Heatmap of Gatheral local volatility extracted from the smoothed eSSVI surface" class="diagram-img diagram-light" src="../../assets/generated/dupire/localvol_gatheral_heatmap.light.png" />
-    <img alt="Heatmap of Gatheral local volatility extracted from the smoothed eSSVI surface" class="diagram-img diagram-dark" src="../../assets/generated/dupire/localvol_gatheral_heatmap.dark.png" />
-    <figcaption>Once the handoff is smoothed, the local-vol field becomes an object that can be inspected for shape and stability instead of treated as a hidden intermediate.</figcaption>
-  </figure>
-  <figure class="diagram" style="--diagram-max-width: 720px">
-    <img alt="Heatmap of differences between Gatheral and call-grid Dupire local-vol estimates" class="diagram-img diagram-light" src="../../assets/generated/dupire/gatheral_vs_dupire_diff_heatmap.light.png" />
-    <img alt="Heatmap of differences between Gatheral and call-grid Dupire local-vol estimates" class="diagram-img diagram-dark" src="../../assets/generated/dupire/gatheral_vs_dupire_diff_heatmap.dark.png" />
-    <figcaption>The difference view shows where the two extraction routes agree and where the handoff still deserves scrutiny.</figcaption>
-  </figure>
+<div class="snapshot-grid" markdown="1">
+
+<figure class="diagram" style="--diagram-max-width: 720px" markdown="1">
+![Heatmap of Gatheral local volatility extracted from the smoothed eSSVI surface](../assets/generated/dupire/localvol_gatheral_heatmap.light.png){ .diagram-img .diagram-light }
+![Heatmap of Gatheral local volatility extracted from the smoothed eSSVI surface](../assets/generated/dupire/localvol_gatheral_heatmap.dark.png){ .diagram-img .diagram-dark }
+<figcaption>Once the handoff is smoothed, the local-vol field becomes an object that can be inspected for shape and stability instead of treated as a hidden intermediate.</figcaption>
+</figure>
+
+<figure class="diagram" style="--diagram-max-width: 720px" markdown="1">
+![Heatmap of differences between Gatheral and call-grid Dupire local-vol estimates](../assets/generated/dupire/gatheral_vs_dupire_diff_heatmap.light.png){ .diagram-img .diagram-light }
+![Heatmap of differences between Gatheral and call-grid Dupire local-vol estimates](../assets/generated/dupire/gatheral_vs_dupire_diff_heatmap.dark.png){ .diagram-img .diagram-dark }
+<figcaption>The difference view shows where the two extraction routes agree and where the handoff still deserves scrutiny.</figcaption>
+</figure>
+
 </div>
 
 ## Hard problem

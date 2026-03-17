@@ -305,6 +305,8 @@ def main() -> int:
     env["MPLBACKEND"] = "Agg"
     env["DOCS_BASE_URL"] = DEFAULT_DOCS_BASE_URL
 
+    run([python_command, "scripts/check_docs_source_links.py"], env=env)
+
     if should_rebuild_assets:
         run([python_command, "scripts/render_d2_diagrams.py"], env=env)
         run(
