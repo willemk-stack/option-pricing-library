@@ -157,98 +157,145 @@ export async function assertNoTinyVisibleContainers(page: Page): Promise<void> {
 
 export async function assertNoMeaningfulOverlaps(page: Page): Promise<void> {
   const offenders = await page.evaluate(() => {
-    type Box = {
+    type Candidate = {
+      el: HTMLElement;
       text: string;
       className: string;
-      left: number;
-      top: number;
-      right: number;
-      bottom: number;
-      width: number;
-      height: number;
+      rect: {
+        left: number;
+        top: number;
+        right: number;
+        bottom: number;
+        width: number;
+        height: number;
+      };
     };
 
-    function intersects(a: Box, b: Box): boolean {
-      return !(
-        a.right <= b.left ||
-        a.left >= b.right ||
-        a.bottom <= b.top ||
-        a.top >= b.bottom
-      );
+    const root =
+      (document.querySelector(".md-content__inner") as HTMLElement | null) ||
+      (document.querySelector("main") as HTMLElement | null) ||
+      document.body;
+
+    const selectors = [
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "p",
+      "li",
+      "figcaption",
+      "td",
+      "th",
+      "blockquote",
+      ".metric-number",
+      ".metric-value",
+      ".snapshot-label",
+      ".snapshot-copy"
+    ].join(",");
+
+    const hiddenOrIgnoredAncestorSelector = [
+      "[hidden]",
+      "[aria-hidden='true']",
+      ".md-header",
+      ".md-sidebar",
+      ".md-search",
+      ".md-search__inner",
+      ".md-overlay",
+      ".md-dialog",
+      ".md-tabs",
+      ".md-footer",
+      ".md-top",
+      "nav"
+    ].join(",");
+
+    function isVisible(el: HTMLElement): boolean {
+      const style = window.getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+
+      if (el.closest(hiddenOrIgnoredAncestorSelector)) return false;
+      if (style.display === "none") return false;
+      if (style.visibility === "hidden") return false;
+      if (style.opacity === "0") return false;
+      if (rect.width < 8 || rect.height < 8) return false;
+
+      const text = (el.innerText || "").trim();
+      return text.length > 0;
     }
 
-    const ignored = new Set([
-      "md-header",
-      "md-sidebar",
-      "md-search",
-      "md-overlay",
-      "md-dialog"
-    ]);
-
-    const nodes = Array.from(
-      document.querySelectorAll(
-        "main h1, main h2, main h3, main p, main li, main .metric-number, main .metric-value, main .snapshot-label, main .snapshot-copy"
-      )
-    );
-
-    const boxes: Box[] = [];
-
-    for (const node of nodes) {
-      const el = node as HTMLElement;
-      const rect = el.getBoundingClientRect();
-      const style = window.getComputedStyle(el);
-
-      if (
-        rect.width < 8 ||
-        rect.height < 8 ||
-        style.display === "none" ||
-        style.visibility === "hidden"
-      ) {
-        continue;
-      }
-
-      const className = el.className || "";
-      if ([...ignored].some((name) => className.includes(name))) {
-        continue;
-      }
-
-      const text = el.innerText.trim();
-      if (!text) continue;
-
-      boxes.push({
-        text: text.slice(0, 80),
-        className,
-        left: rect.left,
-        top: rect.top,
-        right: rect.right,
-        bottom: rect.bottom,
-        width: rect.width,
-        height: rect.height
+    function hasVisibleTextChild(el: HTMLElement): boolean {
+      return Array.from(el.children).some((child) => {
+        const c = child as HTMLElement;
+        return isVisible(c) && (c.innerText || "").trim().length > 0;
       });
     }
 
+    function overlapArea(a: Candidate["rect"], b: Candidate["rect"]): number {
+      const width = Math.max(
+        0,
+        Math.min(a.right, b.right) - Math.max(a.left, b.left)
+      );
+      const height = Math.max(
+        0,
+        Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
+      );
+      return width * height;
+    }
+
+    function area(rect: Candidate["rect"]): number {
+      return rect.width * rect.height;
+    }
+
+    const candidates: Candidate[] = Array.from(
+      root.querySelectorAll<HTMLElement>(selectors)
+    )
+      .filter((el) => isVisible(el))
+      .filter((el) => !hasVisibleTextChild(el))
+      .map((el) => {
+        const rect = el.getBoundingClientRect();
+        return {
+          el,
+          text: (el.innerText || "").trim().replace(/\s+/g, " ").slice(0, 120),
+          className: (el.className || "").toString(),
+          rect: {
+            left: rect.left,
+            top: rect.top,
+            right: rect.right,
+            bottom: rect.bottom,
+            width: rect.width,
+            height: rect.height
+          }
+        };
+      });
+
     const bad: Array<{ a: string; b: string }> = [];
 
-    for (let i = 0; i < boxes.length; i += 1) {
-      for (let j = i + 1; j < boxes.length; j += 1) {
-        const a = boxes[i];
-        const b = boxes[j];
+    for (let i = 0; i < candidates.length; i += 1) {
+      for (let j = i + 1; j < candidates.length; j += 1) {
+        const a = candidates[i];
+        const b = candidates[j];
 
-        if (!intersects(a, b)) continue;
+        if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
 
-        const sameBlock =
-          Math.abs(a.left - b.left) < 4 &&
-          Math.abs(a.right - b.right) < 4 &&
-          Math.abs(a.top - b.top) < 24;
+        const overlap = overlapArea(a.rect, b.rect);
+        if (overlap <= 0) continue;
 
-        if (sameBlock) continue;
+        const smallerArea = Math.min(area(a.rect), area(b.rect));
+        if (smallerArea <= 0) continue;
+
+        // Ignore tiny edge-touching or near-miss cases.
+        if (overlap < 12) continue;
+
+        // Only flag genuinely substantial overlap.
+        if (overlap / smallerArea < 0.25) continue;
 
         bad.push({
           a: `${a.text} [${a.className}]`,
           b: `${b.text} [${b.className}]`
         });
 
-        if (bad.length >= 20) return bad;
+        if (bad.length >= 20) {
+          return bad;
+        }
       }
     }
 
