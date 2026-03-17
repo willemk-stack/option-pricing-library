@@ -9,9 +9,9 @@ hide:
 This page is the numerics proof page: it shows a local-vol workflow that is validated with repricing error, error structure, and convergence evidence instead of a single headline price.
 
 <div class="cta-row cta-row--trio">
-  <a class="md-button md-button--primary" href="https://github.com/willemk-stack/option-pricing-library/blob/main/demos/08_localvol_pde_repricing.ipynb">Open the notebook</a>
-  <a class="md-button" href="../../performance/">Review performance evidence</a>
-  <a class="md-button" href="../../architecture/">See architecture</a>
+  [Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/08_localvol_pde_repricing.ipynb){ .md-button .md-button--primary }
+  [Review performance evidence](../performance.md){ .md-button }
+  [See architecture](../architecture.md){ .md-button }
 </div>
 
 <figure markdown class="diagram">

@@ -9,8 +9,8 @@ hide:
 This page covers the hard transition between a repaired static surface and a local-vol workflow that needs time derivatives to behave well.
 
 <div class="cta-row cta-row--duo">
-  <a class="md-button md-button--primary" href="https://github.com/willemk-stack/option-pricing-library/blob/main/demos/07_essvi_smooth_surface_for_dupire.ipynb">Open the notebook</a>
-  <a class="md-button" href="../localvol_pde_validation/">Next: local-vol and PDE validation</a>
+  [Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/07_essvi_smooth_surface_for_dupire.ipynb){ .md-button .md-button--primary }
+  [Next: local-vol and PDE validation](localvol_pde_validation.md){ .md-button }
 </div>
 
 <figure markdown class="diagram">
