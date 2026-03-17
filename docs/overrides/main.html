@@ -16,6 +16,16 @@
         const uniqueLabel = seen === 0 ? rawLabel : `${rawLabel} ${seen + 1}`;
         nav.setAttribute("aria-label", uniqueLabel);
       });
+
+      document.querySelectorAll("nav.md-code__nav").forEach((nav, index) => {
+        const codeBlockTitle = nav
+          .closest(".highlight")
+          ?.querySelector(".filename, figcaption, summary");
+        const rawLabel =
+          codeBlockTitle?.textContent?.trim().replace(/\s+/g, " ") ||
+          `Code block actions ${index + 1}`;
+        nav.setAttribute("aria-label", rawLabel);
+      });
     }
 
     function makeScrollableRegionsFocusable() {

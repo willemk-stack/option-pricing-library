@@ -112,6 +112,7 @@ pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
 That hook runs on pushes touching docs-sensitive files such as `docs/**`, `mkdocs.yml`,
+`src/**`, `benchmarks/artifacts/**`, `scripts/build_benchmark_artifacts.py`,
 `docs/stylesheets/**`, `tests/visual/**`, and the docs visual-audit scripts. It performs a
 strict MkDocs build, SVG asset integrity checks, the representative Playwright sentinel,
 targeted Playwright smoke and DOM checks against the affected docs paths, and targeted

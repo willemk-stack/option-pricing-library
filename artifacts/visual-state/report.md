@@ -2,11 +2,11 @@
 
 ## Summary
 
-- **pages**: `7`
+- **pages**: `15`
 - **themes**: `2`
 - **widths**: `4`
-- **expected_snapshots**: `56`
-- **actual_snapshots**: `56`
+- **expected_snapshots**: `120`
+- **actual_snapshots**: `120`
 - **missing_snapshots**: `0`
 - **stale_snapshots**: `0`
 - **site_url**: `https://willemk-stack.github.io/option-pricing-library/`
@@ -29,7 +29,7 @@
 ## Info findings
 
 - **targets**: pages.spec.ts and a11y.spec.ts both read targets from tests/visual/targets.ts
-- **snapshots**: Snapshot matrix is complete: 56 files (`C:\Users\ouwez\Documents\Quant\option-pricing-library\tests\visual\pages.spec.ts-snapshots`)
+- **snapshots**: Snapshot matrix is complete: 120 files (`C:\Users\ouwez\Documents\Quant\option-pricing-library\tests\visual\pages.spec.ts-snapshots`)
 - **snapshots**: No stale snapshot filenames detected (`C:\Users\ouwez\Documents\Quant\option-pricing-library\tests\visual\pages.spec.ts-snapshots`)
 - **ci**: Detected at least one workflow that appears to run a visual-related gate
 - **docs**: Found 5 references to build_visual_artifacts.py

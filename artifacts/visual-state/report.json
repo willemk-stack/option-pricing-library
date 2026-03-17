@@ -1,10 +1,10 @@
 {
   "summary": {
-    "pages": 7,
+    "pages": 15,
     "themes": 2,
     "widths": 4,
-    "expected_snapshots": 56,
-    "actual_snapshots": 56,
+    "expected_snapshots": 120,
+    "actual_snapshots": 120,
     "missing_snapshots": 0,
     "stale_snapshots": 0,
     "site_url": "https://willemk-stack.github.io/option-pricing-library/",
@@ -23,7 +23,7 @@
     {
       "severity": "info",
       "category": "snapshots",
-      "message": "Snapshot matrix is complete: 56 files",
+      "message": "Snapshot matrix is complete: 120 files",
       "file": "C:\\Users\\ouwez\\Documents\\Quant\\option-pricing-library\\tests\\visual\\pages.spec.ts-snapshots"
     },
     {

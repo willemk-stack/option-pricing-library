@@ -2,11 +2,19 @@
   "pages": [
     "/",
     "/architecture/",
+    "/installation/",
     "/performance/",
+    "/user_guides/quickstart/",
+    "/user_guides/instruments/",
+    "/user_guides/market_api/",
     "/user_guides/decision_guide/",
     "/user_guides/surface_workflow/",
     "/user_guides/essvi_smooth_handoff/",
-    "/user_guides/localvol_pde_validation/"
+    "/user_guides/localvol_pde_validation/",
+    "/api/",
+    "/api/public/",
+    "/api/pricers/",
+    "/api/vol/"
   ],
   "themes": [
     "light",

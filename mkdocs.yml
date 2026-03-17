@@ -64,8 +64,8 @@ plugins:
             show_root_heading: false
             show_root_toc_entry: false
 
-            # Keep mkdocstrings headings below your Markdown headings
-            heading_level: 4  
+            # Nest API object headings cleanly under page-level H2 sections
+            heading_level: 3
 
             # Nice defaults
             members_order: source
