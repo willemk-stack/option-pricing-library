@@ -66,6 +66,7 @@ def extract_default_docs_base_url(text: str) -> str | None:
         r'DOCS_BASE_URL\s*\|\|\s*"([^"]+)"',
         r"DOCS_BASE_URL\s*=\s*\"([^\"]+)\"",
         r"\$env:DOCS_BASE_URL\s*=\s*\"([^\"]+)\"",
+        r'DEFAULT_DOCS_BASE_URL\s*=\s*"([^"]+)"',
     ]
     for pattern in patterns:
         match = re.search(pattern, text)
@@ -199,6 +200,7 @@ def main() -> int:
     pages_spec = ROOT / "tests" / "visual" / "pages.spec.ts"
     a11y_spec = ROOT / "tests" / "visual" / "a11y.spec.ts"
     serve_script = ROOT / "scripts" / "serve-docs.ps1"
+    serve_script_py = ROOT / "scripts" / "serve_docs.py"
     run_script = ROOT / "scripts" / "run_visual_audit.ps1"
     snapshots_dir = ROOT / "tests" / "visual" / "pages.spec.ts-snapshots"
 
@@ -222,11 +224,14 @@ def main() -> int:
     site_url = parse_simple_yaml_value(mkdocs_text, "site_url")
     playwright_base = extract_default_docs_base_url(playwright_text)
     serve_base = extract_default_docs_base_url(serve_text)
+    serve_py_text = read_text(serve_script_py)
+    serve_py_base = extract_default_docs_base_url(serve_py_text)
     run_base = extract_default_docs_base_url(run_text)
 
     site_path = urlparse(site_url).path if site_url else None
     playwright_path = urlparse(playwright_base).path if playwright_base else None
     serve_path = urlparse(serve_base).path if serve_base else None
+    serve_py_path = urlparse(serve_py_base).path if serve_py_base else None
     run_path = urlparse(run_base).path if run_base else None
 
     if site_path and playwright_path and site_path != playwright_path:
@@ -242,6 +247,13 @@ def main() -> int:
             "config",
             f"mkdocs site_url path {site_path!r} does not match serve-docs DOCS_BASE_URL path {serve_path!r}",
             serve_script,
+        )
+    if site_path and serve_py_path and site_path != serve_py_path:
+        report.add(
+            "high",
+            "config",
+            f"mkdocs site_url path {site_path!r} does not match serve_docs.py DOCS_BASE_URL path {serve_py_path!r}",
+            serve_script_py,
         )
     if site_path and run_path and site_path != run_path:
         report.add(
@@ -311,6 +323,7 @@ def main() -> int:
         ROOT / "README.md",
         ROOT / "docs" / "visual-audit.md",
         serve_script,
+        serve_script_py,
         run_script,
     ]
     build_refs = find_command_refs(ref_paths, r"build_visual_artifacts\.py")

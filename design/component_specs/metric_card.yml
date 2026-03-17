@@ -1,0 +1,21 @@
+component_key: metric_card
+selectors:
+  - .snapshot-card
+  - .metric-number
+  - .metric-value
+intent:
+  - Present one metric cluster with an obvious label, value, and supporting context.
+quality_targets:
+  - Cards align cleanly as a set at supported breakpoints.
+  - The main number is visually dominant without overpowering the label.
+  - Cards do not feel empty, cramped, or visually unbalanced across themes.
+allowed_edits:
+  - Adjust spacing, alignment, font sizing, and card framing.
+  - Refine value and label contrast.
+forbidden_edits:
+  - Remove key metric labels or captions.
+  - Introduce new claims or values without source changes.
+review_rules:
+  - No overflow or clipped metric text.
+  - Consistent card height within a row when the content type matches.
+  - Clear primary value and secondary explanation.

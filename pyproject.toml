@@ -19,6 +19,7 @@ dev = [
     "matplotlib",
     "jupyter",
     "nbmake",
+    "PyYAML",
     "pytest",
     "pytest-benchmark",
     "pytest-cov",
@@ -34,6 +35,7 @@ docs = [
     "mkdocs",
     "mkdocs-material",
     "pymdown-extensions",
+    "PyYAML",
     "mkdocstrings[python]",
 ]
 

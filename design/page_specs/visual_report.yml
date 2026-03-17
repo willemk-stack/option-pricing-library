@@ -1,0 +1,30 @@
+page_key: visual_report
+page_path: docs/performance.md
+archetype: visual/report page
+intent:
+  - Present benchmark evidence as a reviewable report, not a plot dump.
+  - Keep the benchmark overview panel and the supporting figures visually trustworthy.
+  - Make captions and narrative conclusions do the interpretation work around the charts.
+quality_targets:
+  - No blank-looking report panels or clipped labels in the featured benchmark overview.
+  - All primary figures remain readable and intentional at supported widths.
+  - Supporting tables and reproducibility instructions remain visually secondary but easy to find.
+  - Light and dark themes preserve contrast and visual completeness across figures.
+required_sections:
+  - featured benchmark overview panel
+  - snapshot table near the top of the page
+  - supporting benchmark figures
+  - reproducibility section
+allowed_edits:
+  - Refine layout around the overview panel, snapshot table, and supporting figures.
+  - Improve caption hierarchy and section spacing.
+  - Fix artifact framing in CSS or generator code.
+forbidden_edits:
+  - Change published benchmark conclusions without explicit data regeneration.
+  - Hide or crop benchmark visuals to avoid fixing the source issue.
+  - Remove reproducibility instructions.
+review_rules:
+  heading_hierarchy: The top benchmark panel and top conclusions should dominate the scan path.
+  visual_density: Large artifact panels should feel full and informative, not empty.
+  theme_parity: Both themes must preserve chart legibility and panel completeness.
+  primary_vs_secondary: Overview panel and key figures are primary; environment notes are secondary.

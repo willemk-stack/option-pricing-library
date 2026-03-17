@@ -1,4 +1,7 @@
-﻿import { defineConfig, devices } from "@playwright/test";
+﻿import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
+import { defineConfig, devices } from "@playwright/test";
 import { widths } from "./targets";
 
 function normalizeBaseURL(rawUrl: string): string {
@@ -8,6 +11,27 @@ function normalizeBaseURL(rawUrl: string): string {
 const baseURL = normalizeBaseURL(
   process.env.DOCS_BASE_URL || "http://127.0.0.1:8000/option-pricing-library/"
 );
+
+function resolvePythonCommand(): string {
+  const explicitCommand = process.env.PYTHON || process.env.PYTHON_EXECUTABLE;
+  if (explicitCommand) {
+    return JSON.stringify(explicitCommand);
+  }
+
+  const windowsVenvPython = resolve(__dirname, "../../.venv/Scripts/python.exe");
+  if (existsSync(windowsVenvPython)) {
+    return JSON.stringify(windowsVenvPython);
+  }
+
+  const posixVenvPython = resolve(__dirname, "../../.venv/bin/python");
+  if (existsSync(posixVenvPython)) {
+    return JSON.stringify(posixVenvPython);
+  }
+
+  return "python";
+}
+
+const pythonCommand = resolvePythonCommand();
 
 export default defineConfig({
   testDir: ".",
@@ -21,7 +45,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: "powershell -NoProfile -ExecutionPolicy Bypass -File ..\\..\\scripts\\serve-docs.ps1",
+    command: `${pythonCommand} ../../scripts/serve_docs.py`,
     url: baseURL,
     reuseExistingServer: true,
     timeout: 180_000,
