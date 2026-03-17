@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "test": "playwright test",
-    "test:update": "playwright test --update-snapshots",
+    "test:baseline": "playwright test pages.spec.ts",
+    "test:update": "playwright test pages.spec.ts --update-snapshots",
     "test:a11y": "playwright test a11y.spec.ts"
   },
   "devDependencies": {

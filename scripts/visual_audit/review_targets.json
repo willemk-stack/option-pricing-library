@@ -4,6 +4,8 @@
     "/architecture/",
     "/performance/",
     "/user_guides/decision_guide/",
+    "/user_guides/surface_workflow/",
+    "/user_guides/essvi_smooth_handoff/",
     "/user_guides/localvol_pde_validation/"
   ],
   "themes": [

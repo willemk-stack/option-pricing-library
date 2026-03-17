@@ -67,14 +67,21 @@ Install docs dependencies and build the docs artifacts first:
 ```bash
 python -m pip install -e "[docs,plot]"
 python scripts/render_d2_diagrams.py
-MPLBACKEND=Agg python scripts/make_docs_figures.py
+python scripts/build_visual_artifacts.py all --profile ci
 mkdocs build --strict
 ```
 
-For local browser-based audit:
+For a quick browser baseline check, Playwright can start the docs server itself:
 
 ```bash
-mkdocs serve -a 127.0.0.1:8000
+cd tests/visual
+npm run test:baseline
+```
+
+For the full repeatable audit flow from the repo root:
+
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_visual_audit.ps1
 ```
 
 ## Visual test workflow
@@ -82,11 +89,17 @@ mkdocs serve -a 127.0.0.1:8000
 Run the visual audit in this order:
 
 1. rebuild the relevant docs/assets
-2. serve the docs locally
+2. run strict docs build and asset integrity checks
 3. run the scripted visual audit
 4. inspect any failing screenshots or reports
 5. patch the smallest correct root cause
 6. rerun the nearest targeted checks
+
+Refresh screenshot baselines only when the rendered result is intentionally correct:
+
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_visual_audit.ps1 -UpdateSnapshots
+```
 
 ## Root-cause buckets
 
