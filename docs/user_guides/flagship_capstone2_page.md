@@ -15,10 +15,10 @@ hide:
 
 This legacy proof-path URL now redirects to [Decision guide](decision_guide.md).
 
-<div class="cta-row cta-row--trio">
-  <a class="md-button md-button--primary" href="../decision_guide/">Open the current guide</a>
-  <a class="md-button" href="../surface_workflow/">Surface repair workflow</a>
-  <a class="md-button" href="../localvol_pde_validation/">Local-vol and PDE validation</a>
+<div class="cta-row cta-row--trio" markdown="1">
+[Open the current guide](decision_guide.md){ .md-button .md-button--primary }
+[Surface repair workflow](surface_workflow.md){ .md-button }
+[Local-vol and PDE validation](localvol_pde_validation.md){ .md-button }
 </div>
 
 </div>

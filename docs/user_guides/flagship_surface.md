@@ -15,9 +15,9 @@ hide:
 
 This legacy proof-path URL now redirects to [Surface repair workflow](surface_workflow.md).
 
-<div class="cta-row cta-row--duo">
-  <a class="md-button md-button--primary" href="../surface_workflow/">Open the current page</a>
-  <a class="md-button" href="../essvi_smooth_handoff/">Next: eSSVI smooth handoff</a>
+<div class="cta-row cta-row--duo" markdown="1">
+[Open the current page](surface_workflow.md){ .md-button .md-button--primary }
+[Next: eSSVI smooth handoff](essvi_smooth_handoff.md){ .md-button }
 </div>
 
 </div>
