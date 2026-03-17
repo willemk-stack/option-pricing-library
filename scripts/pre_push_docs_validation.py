@@ -344,6 +344,17 @@ def main() -> int:
         cwd=TESTS_VISUAL_DIR,
         env=playwright_env,
     )
+    run(
+        [
+            npx_command,
+            "playwright",
+            "test",
+            "sentinel.spec.ts",
+            "--max-failures=1",
+        ],
+        cwd=TESTS_VISUAL_DIR,
+        env=playwright_env,
+    )
 
     a11y_paths = determine_a11y_paths(review_paths)
     if a11y_paths == []:
