@@ -86,7 +86,12 @@ def implied_vol_bs_result(
 
         from dataclasses import replace
         cfg2 = replace(cfg, sigma_hi=10.0)
-        iv  = implied_vol_bs_result(price, spec, market, cfg=cfg2)
+        iv = implied_vol_bs_result(
+            price,
+            spec,
+            market,
+            cfg=cfg2,
+        )
 
     The objective uses :func:`option_pricing.bs_greeks` for both price and vega.
     Vega is clamped below by ``cfg.numerics.min_vega`` for robustness.

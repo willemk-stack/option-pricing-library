@@ -13,7 +13,10 @@ DEFAULT_DOCS_BASE_URL = "http://127.0.0.1:8125/option-pricing-library/"
 EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 DOCS_SENSITIVE_PREFIXES = (
+    "benchmarks/artifacts/",
     "docs/",
+    "src/",
+    "scripts/build_benchmark_artifacts.py",
     "tests/visual/",
     "scripts/serve_docs.py",
     "scripts/build_visual_artifacts.py",
@@ -22,9 +25,12 @@ DOCS_SENSITIVE_PREFIXES = (
 )
 
 FULL_REVIEW_PREFIXES = (
+    "benchmarks/artifacts/",
     "mkdocs.yml",
     "docs/stylesheets/",
     "docs/assets/",
+    "src/",
+    "scripts/build_benchmark_artifacts.py",
     "tests/visual/",
     "scripts/serve_docs.py",
     "scripts/build_visual_artifacts.py",
@@ -49,11 +55,19 @@ LEGACY_PAGE_ALIASES = {
 CURATED_A11Y_PATHS = {
     "/",
     "/architecture/",
+    "/installation/",
     "/performance/",
+    "/user_guides/quickstart/",
+    "/user_guides/instruments/",
+    "/user_guides/market_api/",
     "/user_guides/decision_guide/",
     "/user_guides/surface_workflow/",
     "/user_guides/essvi_smooth_handoff/",
     "/user_guides/localvol_pde_validation/",
+    "/api/",
+    "/api/public/",
+    "/api/pricers/",
+    "/api/vol/",
 }
 
 

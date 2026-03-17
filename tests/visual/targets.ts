@@ -108,9 +108,8 @@ export const themes = reviewTargets.themes;
 export const widths = reviewTargets.widths;
 export const priorityAssetGlobs = reviewTargets.priority_asset_globs;
 
-const allPageReviewConfigs: PageReviewConfig[] = [
-    {
-        path: "/",
+const pageReviewConfigOverrides: Record<string, Omit<PageReviewConfig, "path">> = {
+    "/": {
         pageKey: "homepage",
         archetype: "homepage",
         requiresVisualEvidence: true,
@@ -121,8 +120,7 @@ const allPageReviewConfigs: PageReviewConfig[] = [
             { path: "/", name: "home-proof-panel", selector: "figure.diagram" },
         ],
     },
-    {
-        path: "/architecture/",
+    "/architecture/": {
         pageKey: "architecture",
         archetype: "section-landing",
         requiresVisualEvidence: true,
@@ -130,8 +128,7 @@ const allPageReviewConfigs: PageReviewConfig[] = [
         emptyContainerSelectors: ["figure.diagram", "main article"],
         componentShots: [],
     },
-    {
-        path: "/performance/",
+    "/performance/": {
         pageKey: "visual_report",
         archetype: "visual-report",
         requiresVisualEvidence: true,
@@ -142,8 +139,7 @@ const allPageReviewConfigs: PageReviewConfig[] = [
             { path: "/performance/", name: "performance-snapshot-table", selector: "table" },
         ],
     },
-    {
-        path: "/user_guides/decision_guide/",
+    "/user_guides/decision_guide/": {
         pageKey: "decision_guide",
         archetype: "section-landing",
         requiresVisualEvidence: false,
@@ -151,8 +147,7 @@ const allPageReviewConfigs: PageReviewConfig[] = [
         emptyContainerSelectors: [".cta-row", "table"],
         componentShots: [],
     },
-    {
-        path: "/user_guides/surface_workflow/",
+    "/user_guides/surface_workflow/": {
         pageKey: "long_form_guide",
         archetype: "long-form-guide",
         requiresVisualEvidence: true,
@@ -163,8 +158,7 @@ const allPageReviewConfigs: PageReviewConfig[] = [
             { path: "/user_guides/surface_workflow/", name: "surface-guide-figure-grid", selector: ".snapshot-grid" },
         ],
     },
-    {
-        path: "/user_guides/essvi_smooth_handoff/",
+    "/user_guides/essvi_smooth_handoff/": {
         pageKey: "essvi_smooth_handoff",
         archetype: "long-form-guide",
         requiresVisualEvidence: true,
@@ -172,8 +166,7 @@ const allPageReviewConfigs: PageReviewConfig[] = [
         emptyContainerSelectors: ["figure.diagram", ".snapshot-grid"],
         componentShots: [],
     },
-    {
-        path: "/user_guides/localvol_pde_validation/",
+    "/user_guides/localvol_pde_validation/": {
         pageKey: "localvol_pde_validation",
         archetype: "long-form-guide",
         requiresVisualEvidence: true,
@@ -181,7 +174,23 @@ const allPageReviewConfigs: PageReviewConfig[] = [
         emptyContainerSelectors: ["figure.diagram", ".snapshot-grid"],
         componentShots: [],
     },
-];
+};
+
+function buildDefaultPageReviewConfig(path: string): PageReviewConfig {
+    const override = pageReviewConfigOverrides[path];
+    if (!override) {
+        return buildFallbackPageReviewConfig(path);
+    }
+
+    return {
+        path,
+        ...override,
+    };
+}
+
+const allPageReviewConfigs: PageReviewConfig[] = reviewTargets.pages.map((path) =>
+    buildDefaultPageReviewConfig(path)
+);
 
 function readFilterSet(value: string | undefined): Set<string> {
     if (!value) {

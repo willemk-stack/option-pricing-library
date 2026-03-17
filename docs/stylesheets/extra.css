@@ -222,6 +222,25 @@
     color: #666666;
 }
 
+/*
+ * Material's default syntax palette sits just under 4.5:1 on a few code-heavy
+ * pages. Nudge the shared token variables instead of styling individual pages.
+ */
+[data-md-color-scheme="default"] {
+    --md-code-hl-comment-color: #666666;
+    --md-code-hl-operator-color: #666666;
+    --md-code-hl-punctuation-color: #666666;
+    --md-code-hl-generic-color: #666666;
+    --md-code-hl-variable-color: #61656b;
+}
+
+[data-md-color-scheme="slate"] {
+    --md-code-hl-number-color: #f07a6c;
+    --md-code-hl-function-color: #d788e4;
+    --md-code-hl-constant-color: #a292f0;
+    --md-code-hl-keyword-color: #78a2f0;
+}
+
 /* --- Diagrams ------------------------------------------------------------
 
 MkDocs Material toggles light/dark via:
