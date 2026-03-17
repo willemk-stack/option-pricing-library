@@ -3,6 +3,18 @@
     max-width: 1200px;
 }
 
+.md-typeset a:not(.md-button) {
+    text-decoration-line: underline !important;
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.16em;
+    text-decoration-color: currentColor;
+    box-shadow: none !important;
+}
+
+[data-md-color-scheme="slate"] .md-typeset a:not(.md-button) {
+    color: #8cc9ff !important;
+}
+
 /* Portfolio landing helpers */
 .portfolio-hero {
     margin: 1rem auto 1.5rem;
@@ -76,7 +88,7 @@
 .cta-row .md-button:not(.md-button--primary) {
     background: rgba(11, 92, 171, 0.06);
     border-color: rgba(11, 92, 171, 0.28);
-    color: #4f7cff;
+    color: #0b5cab;
 }
 
 .cta-row .md-button--primary {
@@ -84,6 +96,7 @@
 }
 
 @media screen and (max-width: 44.984375em) {
+
     .cta-row--duo,
     .cta-row--trio {
         grid-template-columns: 1fr;
@@ -138,7 +151,7 @@
 
 .metric-key,
 .metric-caption {
-    color: var(--md-default-fg-color--light);
+    color: #5f6165;
 }
 
 .metric-value {
@@ -165,9 +178,9 @@
 }
 
 .metric-number--good {
-    color: #0f766e;
-    background: rgba(15, 118, 110, 0.12);
-    border-color: rgba(15, 118, 110, 0.18);
+    color: #0b5f58;
+    background: rgba(15, 118, 110, 0.10);
+    border-color: rgba(15, 118, 110, 0.16);
 }
 
 .figure-frame {
@@ -198,6 +211,10 @@
 /* Make API signatures a bit easier to scan */
 .doc-heading code {
     font-size: 0.95em;
+}
+
+[data-md-color-scheme="default"] .md-typeset .highlight .nv {
+    color: #666666;
 }
 
 /* --- Diagrams ------------------------------------------------------------
@@ -279,6 +296,11 @@ figure.diagram img.diagram-dark {
 [data-md-color-scheme="slate"] .snapshot-label,
 [data-md-color-scheme="slate"] .metric-value {
     color: #8cc9ff;
+}
+
+[data-md-color-scheme="slate"] .metric-key,
+[data-md-color-scheme="slate"] .metric-caption {
+    color: #b7c0cb;
 }
 
 [data-md-color-scheme="slate"] .metric-number {

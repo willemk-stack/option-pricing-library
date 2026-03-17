@@ -1,37 +1,32 @@
 import { test } from "@playwright/test";
 import {
   assertImagesLoaded,
+  assertNoMissingPage,
   assertNoDomOverflow,
   assertNoMeaningfulOverlaps,
+  assertThemeDiagramVariants,
   assertNoTinyVisibleContainers,
   expectMainScreenshot,
   gotoAndStabilize
 } from "./helpers";
 
-const paths = [
-  "/",
-  "/architecture/",
-  "/performance/",
-  "/user_guides/decision_guide/",
-  "/user_guides/localvol_pde_validation/"
-];
+import { pages, screenshotName, themes } from "./targets";
 
-for (const theme of ["light", "dark"] as const) {
-  for (const path of paths) {
+for (const theme of themes) {
+  for (const path of pages) {
     test(`${path} renders in ${theme}`, async ({ page }, testInfo) => {
       await gotoAndStabilize(page, path, theme);
 
+      await assertNoMissingPage(page);
       await assertImagesLoaded(page);
+      await assertThemeDiagramVariants(page, theme);
       await assertNoDomOverflow(page);
       await assertNoTinyVisibleContainers(page);
       await assertNoMeaningfulOverlaps(page);
 
-      const safeName =
-        path === "/" ? "home" : path.replaceAll("/", "_").replace(/^_+|_+$/g, "");
-
       await expectMainScreenshot(
         page,
-        `${safeName}-${theme}-${testInfo.project.name}.png`
+        screenshotName(path, theme, testInfo.project.name)
       );
     });
   }

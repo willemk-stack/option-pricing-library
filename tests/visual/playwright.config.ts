@@ -1,38 +1,39 @@
-import { defineConfig, devices } from "@playwright/test";
+﻿import { defineConfig, devices } from "@playwright/test";
+import { widths } from "./targets";
 
-const baseURL =
-  process.env.DOCS_BASE_URL ?? "http://127.0.0.1:8000/option-pricing-library";
+function normalizeBaseURL(rawUrl: string): string {
+  return rawUrl.endsWith("/") ? rawUrl : `${rawUrl}/`;
+}
+
+const baseURL = normalizeBaseURL(
+  process.env.DOCS_BASE_URL || "http://127.0.0.1:8000/option-pricing-library/"
+);
 
 export default defineConfig({
   testDir: ".",
   timeout: 60_000,
+  snapshotPathTemplate: "{testDir}/{testFilePath}-snapshots/{arg}{ext}",
   expect: {
     timeout: 10_000,
-    toHaveScreenshot: {
-      maxDiffPixelRatio: 0.01
-    }
   },
   use: {
     baseURL,
     trace: "on-first-retry",
-    screenshot: "only-on-failure"
   },
-  projects: [
-    {
-      name: "chromium-375",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 375, height: 1400 } }
+  webServer: {
+    command: "powershell -NoProfile -ExecutionPolicy Bypass -File ..\\..\\scripts\\serve-docs.ps1",
+    url: baseURL,
+    reuseExistingServer: true,
+    timeout: 180_000,
+  },
+  projects: widths.map((width) => ({
+    name: `chromium-${width}`,
+    use: {
+      ...devices["Desktop Chrome"],
+      viewport: {
+        width,
+        height: 1400,
+      },
     },
-    {
-      name: "chromium-768",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 768, height: 1400 } }
-    },
-    {
-      name: "chromium-1280",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 1600 } }
-    },
-    {
-      name: "chromium-1536",
-      use: { ...devices["Desktop Chrome"], viewport: { width: 1536, height: 1800 } }
-    }
-  ]
+  })),
 });

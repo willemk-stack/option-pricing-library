@@ -15,7 +15,8 @@ export async function gotoAndStabilize(
     await setTheme(page, theme);
   }
 
-  await page.goto(path, { waitUntil: "networkidle" });
+  const navigationPath = path === "/" ? "./" : path.replace(/^\//, "");
+  await page.goto(navigationPath, { waitUntil: "networkidle" });
 
   await page.evaluate((selectedTheme?: "light" | "dark") => {
     if (!selectedTheme) return;
@@ -62,16 +63,83 @@ export async function assertImagesLoaded(page: Page): Promise<void> {
   ).toEqual([]);
 }
 
+export async function assertNoMissingPage(page: Page): Promise<void> {
+  const mainHeading = page.locator("main article > h1").first();
+
+  await expect(mainHeading).toBeVisible();
+  await expect(mainHeading).not.toHaveText("404 - Not found");
+}
+
+export async function assertThemeDiagramVariants(
+  page: Page,
+  theme: "light" | "dark"
+): Promise<void> {
+  const offenders = await page.evaluate((selectedTheme) => {
+    const diagrams = Array.from(document.querySelectorAll("figure.diagram"));
+    const bad: Array<{
+      figure: string;
+      visibleLight: number;
+      visibleDark: number;
+    }> = [];
+
+    const isVisible = (element: Element): boolean => {
+      const node = element as HTMLElement;
+      const style = window.getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return (
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        rect.width > 0 &&
+        rect.height > 0
+      );
+    };
+
+    for (const figure of diagrams) {
+      const light = Array.from(figure.querySelectorAll("img.diagram-light"));
+      const dark = Array.from(figure.querySelectorAll("img.diagram-dark"));
+      if (light.length === 0 && dark.length === 0) {
+        continue;
+      }
+
+      const visibleLight = light.filter(isVisible).length;
+      const visibleDark = dark.filter(isVisible).length;
+      const expectedLight = selectedTheme === "light" ? 1 : 0;
+      const expectedDark = selectedTheme === "dark" ? 1 : 0;
+
+      if (visibleLight !== expectedLight || visibleDark !== expectedDark) {
+        bad.push({
+          figure: (figure.textContent || "").trim().replace(/\s+/g, " ").slice(0, 120),
+          visibleLight,
+          visibleDark,
+        });
+      }
+    }
+
+    return bad.slice(0, 20);
+  }, theme);
+
+  expect(
+    offenders,
+    `Theme diagram visibility offenders:\n${JSON.stringify(offenders, null, 2)}`
+  ).toEqual([]);
+}
+
 export async function assertNoDomOverflow(page: Page): Promise<void> {
   const offenders = await page.evaluate(() => {
     const bad: Array<{ tag: string; className: string; text: string }> = [];
-    const nodes = Array.from(document.querySelectorAll("body *"));
+    const root =
+      document.querySelector(".md-content__inner") ||
+      document.querySelector("main") ||
+      document.body;
+    const nodes = Array.from(root.querySelectorAll("*"));
 
     for (const el of nodes) {
       const node = el as HTMLElement;
       const style = window.getComputedStyle(node);
 
       if (style.display === "inline") continue;
+      if (style.textOverflow === "ellipsis") continue;
+      if (node.classList.contains("md-ellipsis")) continue;
       if (!node.innerText?.trim()) continue;
       if (node.children.length > 0) continue;
 
