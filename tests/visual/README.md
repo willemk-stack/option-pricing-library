@@ -26,15 +26,39 @@ cd tests/visual
 npm test
 ```
 
+For the CI-shaped split stages:
+
+```bash
+cd tests/visual
+npm run test:smoke
+npm run test:audits
+npm run test:a11y
+npm run test:baseline
+npm run test:components
+npm run test:artifacts
+```
+
+For bounded improvement-loop capture runs, set a page filter and capture directory:
+
+```bash
+cd tests/visual
+set REVIEW_PAGE_KEYS=homepage
+set IMPROVEMENT_CAPTURE_DIR=..\..\artifacts\visual-state\improvement-runs\manual\homepage\before\captures
+npm run test:capture
+```
+
 ## What these tests check
 
 - configured proof-path and generated-asset pages render in light and dark themes
 - configured pages render at the widths defined in `scripts/visual_audit/review_targets.json`
 - no obvious DOM overflow in main content
+- structured DOM/CSS findings with `critical`, `major`, and `minor` severity
+- console errors and uncaught page errors during navigation
 - images are loaded
 - theme-swapped light/dark figure pairs resolve to a single visible asset
 - audited routes do not silently fall through to MkDocs 404 pages
 - screenshots stay within baseline tolerance
+- component-level screenshots for key proof and metric blocks
 
 ## Snapshot update
 
@@ -46,3 +70,4 @@ npm run test:update
 ```
 
 The authoritative route, theme, and width matrix lives in `scripts/visual_audit/review_targets.json`.
+The browser suite also supports `REVIEW_PAGE_KEYS` and `REVIEW_PATHS` to narrow runs to one page during bounded improvement passes.

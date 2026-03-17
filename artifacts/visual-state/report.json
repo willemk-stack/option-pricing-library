@@ -11,7 +11,7 @@
     "playwright_base_url": "http://127.0.0.1:8000/option-pricing-library/",
     "serve_docs_base_url": "http://127.0.0.1:8000/option-pricing-library/",
     "run_visual_audit_base_url": "http://127.0.0.1:8000/option-pricing-library/",
-    "visual_ci_present": false
+    "visual_ci_present": true
   },
   "findings": [
     {
@@ -57,15 +57,15 @@
       "file": "C:\\Users\\ouwez\\Documents\\Quant\\option-pricing-library\\docs\\assets\\generated\\benchmarks\\benchmark_overview.dark.svg"
     },
     {
-      "severity": "medium",
+      "severity": "info",
       "category": "ci",
-      "message": "No obvious CI workflow currently runs Playwright or the visual audit scripts",
+      "message": "Detected at least one workflow that appears to run a visual-related gate",
       "file": null
     },
     {
       "severity": "info",
       "category": "docs",
-      "message": "Found 4 references to build_visual_artifacts.py",
+      "message": "Found 5 references to build_visual_artifacts.py",
       "file": null
     }
   ]

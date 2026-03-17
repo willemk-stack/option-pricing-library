@@ -1,0 +1,76 @@
+name: improve-page-loop
+
+on:
+  workflow_dispatch:
+    inputs:
+      page_key:
+        description: Page spec key to review, for example homepage or visual_report
+        required: true
+        default: homepage
+      run_name:
+        description: Output folder name under artifacts/visual-state/improvement-runs
+        required: false
+        default: workflow-dispatch
+
+concurrency:
+  group: improve-page-loop-${{ github.ref }}-${{ inputs.page_key }}
+  cancel-in-progress: true
+
+jobs:
+  bounded-loop:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      MPLBACKEND: Agg
+      DOCS_BASE_URL: http://127.0.0.1:8000/option-pricing-library/
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            pyproject.toml
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            tests/visual/package-lock.json
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[docs,plot]"
+
+      - name: Install Playwright dependencies
+        working-directory: tests/visual
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Install D2
+        run: |
+          curl -fsSL https://d2lang.com/install.sh | sh -s --
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Run bounded improvement loop
+        run: >-
+          python scripts/visual_audit/run_improvement_loop.py
+          --page-key "${{ inputs.page_key }}"
+          --run-name "${{ inputs.run_name }}"
+
+      - name: Upload bounded loop artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bounded-improvement-loop-${{ inputs.page_key }}
+          if-no-files-found: ignore
+          path: |
+            artifacts/visual-state/improvement-runs/${{ inputs.run_name }}/${{ inputs.page_key }}/**

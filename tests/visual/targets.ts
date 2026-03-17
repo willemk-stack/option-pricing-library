@@ -1,13 +1,36 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-type ThemeName = "light" | "dark";
+export type ThemeName = "light" | "dark";
 
 type ReviewTargets = {
     pages: string[];
     themes: ThemeName[];
     widths: number[];
     priority_asset_globs: string[];
+};
+
+export type PageArchetype =
+    | "homepage"
+    | "section-landing"
+    | "long-form-guide"
+    | "api-landing"
+    | "visual-report";
+
+export type ComponentReviewTarget = {
+    path: string;
+    name: string;
+    selector: string;
+};
+
+export type PageReviewConfig = {
+    path: string;
+    pageKey: string;
+    archetype: PageArchetype;
+    requiresVisualEvidence: boolean;
+    essentialMediaSelectors: string[];
+    emptyContainerSelectors: string[];
+    componentShots: ComponentReviewTarget[];
 };
 
 function loadReviewTargets(): ReviewTargets {
@@ -50,10 +73,139 @@ export const themes = reviewTargets.themes;
 export const widths = reviewTargets.widths;
 export const priorityAssetGlobs = reviewTargets.priority_asset_globs;
 
+const allPageReviewConfigs: PageReviewConfig[] = [
+    {
+        path: "/",
+        pageKey: "homepage",
+        archetype: "homepage",
+        requiresVisualEvidence: true,
+        essentialMediaSelectors: ["figure.diagram img", ".snapshot-card"],
+        emptyContainerSelectors: ["figure.diagram", ".snapshot-card", ".snapshot-grid"],
+        componentShots: [
+            { path: "/", name: "home-snapshot-grid", selector: ".snapshot-grid" },
+            { path: "/", name: "home-proof-panel", selector: "figure.diagram" },
+        ],
+    },
+    {
+        path: "/architecture/",
+        pageKey: "architecture",
+        archetype: "section-landing",
+        requiresVisualEvidence: true,
+        essentialMediaSelectors: ["figure.diagram img"],
+        emptyContainerSelectors: ["figure.diagram", "main article"],
+        componentShots: [],
+    },
+    {
+        path: "/performance/",
+        pageKey: "visual_report",
+        archetype: "visual-report",
+        requiresVisualEvidence: true,
+        essentialMediaSelectors: ["figure.diagram img", "table"],
+        emptyContainerSelectors: ["figure.diagram", "table"],
+        componentShots: [
+            { path: "/performance/", name: "performance-overview-panel", selector: "figure.diagram" },
+            { path: "/performance/", name: "performance-snapshot-table", selector: "table" },
+        ],
+    },
+    {
+        path: "/user_guides/decision_guide/",
+        pageKey: "decision_guide",
+        archetype: "section-landing",
+        requiresVisualEvidence: false,
+        essentialMediaSelectors: [".cta-row", "table"],
+        emptyContainerSelectors: [".cta-row", "table"],
+        componentShots: [],
+    },
+    {
+        path: "/user_guides/surface_workflow/",
+        pageKey: "long_form_guide",
+        archetype: "long-form-guide",
+        requiresVisualEvidence: true,
+        essentialMediaSelectors: ["figure.diagram img", ".snapshot-grid"],
+        emptyContainerSelectors: ["figure.diagram", ".snapshot-grid"],
+        componentShots: [
+            { path: "/user_guides/surface_workflow/", name: "surface-guide-primary-figure", selector: "figure.diagram" },
+            { path: "/user_guides/surface_workflow/", name: "surface-guide-figure-grid", selector: ".snapshot-grid" },
+        ],
+    },
+    {
+        path: "/user_guides/essvi_smooth_handoff/",
+        pageKey: "essvi_smooth_handoff",
+        archetype: "long-form-guide",
+        requiresVisualEvidence: true,
+        essentialMediaSelectors: ["figure.diagram img", ".snapshot-grid"],
+        emptyContainerSelectors: ["figure.diagram", ".snapshot-grid"],
+        componentShots: [],
+    },
+    {
+        path: "/user_guides/localvol_pde_validation/",
+        pageKey: "localvol_pde_validation",
+        archetype: "long-form-guide",
+        requiresVisualEvidence: true,
+        essentialMediaSelectors: ["figure.diagram img", ".snapshot-grid"],
+        emptyContainerSelectors: ["figure.diagram", ".snapshot-grid"],
+        componentShots: [],
+    },
+];
+
+function readFilterSet(value: string | undefined): Set<string> {
+    if (!value) {
+        return new Set();
+    }
+
+    return new Set(
+        value
+            .split(",")
+            .map((entry) => entry.trim())
+            .filter((entry) => entry.length > 0)
+    );
+}
+
+function filterPageReviewConfigs(configs: PageReviewConfig[]): PageReviewConfig[] {
+    const selectedPaths = readFilterSet(process.env.REVIEW_PATHS);
+    const selectedPageKeys = readFilterSet(process.env.REVIEW_PAGE_KEYS);
+
+    if (selectedPaths.size === 0 && selectedPageKeys.size === 0) {
+        return configs;
+    }
+
+    const filtered = configs.filter(
+        (config) =>
+            selectedPaths.has(config.path) ||
+            selectedPageKeys.has(config.pageKey)
+    );
+
+    if (filtered.length === 0) {
+        throw new Error(
+            `No review targets matched REVIEW_PATHS=${process.env.REVIEW_PATHS || ""} REVIEW_PAGE_KEYS=${process.env.REVIEW_PAGE_KEYS || ""}`
+        );
+    }
+
+    return filtered;
+}
+
+export const pageReviewConfigs = filterPageReviewConfigs(allPageReviewConfigs);
+
+export const componentReviewTargets = pageReviewConfigs.flatMap((config) => config.componentShots);
+
 export function screenshotName(path: string, theme: ThemeName, projectName: string): string {
     const safeName =
         path === "/"
             ? "home"
             : path.replaceAll("/", "-").replaceAll("_", "-").replace(/^-+|-+$/g, "");
     return `${safeName}-${theme}-${projectName}.png`;
+}
+
+export function componentScreenshotName(
+    path: string,
+    componentName: string,
+    theme: ThemeName,
+    projectName: string
+): string {
+    const safePageName =
+        path === "/"
+            ? "home"
+            : path.replaceAll("/", "-").replaceAll("_", "-").replace(/^-+|-+$/g, "");
+    const safeComponentName = componentName.replaceAll("_", "-").replace(/^-+|-+$/g, "");
+    return `${safePageName}-${safeComponentName}-${theme}-${projectName}.png`;
 }

@@ -5,7 +5,13 @@
     "test": "playwright test",
     "test:baseline": "playwright test pages.spec.ts",
     "test:update": "playwright test pages.spec.ts --update-snapshots",
-    "test:a11y": "playwright test a11y.spec.ts"
+    "test:a11y": "playwright test a11y.spec.ts",
+    "test:smoke": "playwright test smoke.spec.ts",
+    "test:audits": "playwright test dom-audits.spec.ts",
+    "test:components": "playwright test components.spec.ts",
+    "test:artifacts": "playwright test embedded-panels.spec.ts",
+    "test:capture": "playwright test review-capture.spec.ts",
+    "test:ci": "playwright test smoke.spec.ts dom-audits.spec.ts a11y.spec.ts pages.spec.ts components.spec.ts embedded-panels.spec.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",

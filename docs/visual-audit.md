@@ -14,6 +14,22 @@ The audit covers:
 - generated SVG/PNG proof assets embedded in docs pages
 - responsive regressions at representative widths
 
+## Modes
+
+The docs quality system runs in three modes:
+
+- Validation mode: blocking PR checks for build, links, Playwright, DOM and CSS audits, accessibility, and visual regression.
+- Improvement mode: manual or nightly quality passes guided by specs under `design/` and bounded by explicit allowed edits.
+- Artifact mode: focused validation of generated SVG, PNG, and composite proof assets independent of the surrounding page shell.
+
+Progress against the rollout:
+
+- Phase 1 is in place: deterministic build, blocking docs validation workflow, baseline visual regression, design specs, and agent prompts.
+- Phase 2 is in progress: artifact-specific CI and severity-tagged browser audits are now part of the implementation surface.
+- Phase 3 has started in report-only form: `.github/workflows/improve-docs.yml` generates non-blocking improvement suggestions from the current page specs.
+- Phase 3 also now has a bounded page-loop scaffold: `scripts/visual_audit/run_improvement_loop.py` and `.github/workflows/improve-page-loop.yml` capture before/after state for one page and replay targeted validation.
+- Phase 4 remains future work: automated improvement PRs.
+
 ## Why this exists
 
 This docs site is not only regular MkDocs DOM/CSS. Some pages embed generated visual assets.
@@ -60,6 +76,16 @@ A visual fix is not complete unless:
 - the affected page was rechecked after the change
 - the nearest targeted visual checks passed
 
+## PR definition of done
+
+A docs-facing PR is not done until:
+
+- the deterministic docs build passes
+- generated artifact validation passes for affected assets
+- no critical or major findings remain on the required review pages
+- accessibility checks pass in the required scope
+- screenshot baselines only change when the rendered result is intentionally correct
+
 ## Local setup
 
 Install docs dependencies and build the docs artifacts first:
@@ -84,16 +110,23 @@ For the full repeatable audit flow from the repo root:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_visual_audit.ps1
 ```
 
+For pull requests, the blocking workflow lives in `.github/workflows/validate-docs.yml`.
+Generated-asset validation also has a dedicated workflow in `.github/workflows/validate-docs-artifacts.yml`.
+The non-blocking quality-report workflow lives in `.github/workflows/improve-docs.yml`.
+The single-page bounded loop workflow lives in `.github/workflows/improve-page-loop.yml`.
+The manual draft-PR bridge lives in `.github/workflows/improve-page-pr.yml`.
+
 ## Visual test workflow
 
 Run the visual audit in this order:
 
 1. rebuild the relevant docs/assets
 2. run strict docs build and asset integrity checks
-3. run the scripted visual audit
-4. inspect any failing screenshots or reports
-5. patch the smallest correct root cause
-6. rerun the nearest targeted checks
+3. run smoke navigation and DOM/CSS audits
+4. run accessibility and artifact-panel checks
+5. inspect any failing screenshots or reports
+6. patch the smallest correct root cause
+7. rerun the nearest targeted checks
 
 Refresh screenshot baselines only when the rendered result is intentionally correct:
 
@@ -151,6 +184,12 @@ Typical fix area:
 - docs styles
 - asset export palette
 
+## Severity expectations
+
+- `critical`: broken images, missing required content, clipped primary heading, overlapping interactive elements, missing required media on visual-evidence pages.
+- `major`: text overflow, empty visual containers, unexpected horizontal scroll, console errors, responsive collapse, theme-variant mismatches.
+- `minor`: weak grouping, uneven spacing, odd wrapping, and other non-blocking polish issues.
+
 ## Reporting format
 
 When filing or fixing a visual issue, record:
@@ -163,6 +202,16 @@ When filing or fixing a visual issue, record:
 - likely source file(s)
 - validation run
 - before/after screenshot path if available
+
+## Design spec inputs
+
+Improvement work should read the specs under `design/` before proposing changes.
+Those specs define archetype goals, allowed edits, forbidden edits, and quality targets that go beyond "no bug".
+
+The report-only improvement pass currently writes `artifacts/visual-state/improvement-report.md` and `artifacts/visual-state/improvement-report.json`.
+
+The bounded loop currently writes before/after captures, logs, score reports, and a summary under `artifacts/visual-state/improvement-runs/<run>/<page_key>/`.
+The draft-PR workflow consumes that summary and only opens a PR when the bounded after-state still validates cleanly.
 
 ## Manual color and contrast review
 

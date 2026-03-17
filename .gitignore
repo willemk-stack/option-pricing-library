@@ -23,6 +23,7 @@ MANIFEST
 /site/
 tests/visual/node_modules/
 tests/visual/test-results/
+artifacts/visual-state/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
