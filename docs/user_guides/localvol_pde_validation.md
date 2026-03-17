@@ -9,9 +9,9 @@ hide:
 This page is the numerics proof page: it shows a local-vol workflow that is validated with repricing error, error structure, and convergence evidence instead of a single headline price.
 
 <div class="cta-row cta-row--trio">
-  [Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/08_localvol_pde_repricing.ipynb){ .md-button .md-button--primary }
-  [Review performance evidence](../performance.md){ .md-button }
-  [See architecture](../architecture.md){ .md-button }
+  <a class="md-button md-button--primary" href="https://github.com/willemk-stack/option-pricing-library/blob/main/demos/08_localvol_pde_repricing.ipynb">Open the notebook</a>
+  <a class="md-button" href="../../performance/">Review performance evidence</a>
+  <a class="md-button" href="../../architecture/">See architecture</a>
 </div>
 
 <figure markdown class="diagram">
@@ -21,14 +21,14 @@ This page is the numerics proof page: it shows a local-vol workflow that is vali
 </figure>
 
 <div class="snapshot-grid">
-  <figure markdown class="diagram" style="--diagram-max-width: 720px">
-    ![Heatmap of local-vol PDE pricing error across strike and maturity on the repricing grid](../assets/generated/numerics/pde_price_error_heatmap.light.png){ .diagram-img .diagram-light }
-    ![Heatmap of local-vol PDE pricing error across strike and maturity on the repricing grid](../assets/generated/numerics/pde_price_error_heatmap.dark.png){ .diagram-img .diagram-dark }
+  <figure class="diagram" style="--diagram-max-width: 720px">
+    <img alt="Heatmap of local-vol PDE pricing error across strike and maturity on the repricing grid" class="diagram-img diagram-light" src="../../assets/generated/numerics/pde_price_error_heatmap.light.png" />
+    <img alt="Heatmap of local-vol PDE pricing error across strike and maturity on the repricing grid" class="diagram-img diagram-dark" src="../../assets/generated/numerics/pde_price_error_heatmap.dark.png" />
     <figcaption>The price-error heatmap shows where the workflow is most stressed across strike and maturity.</figcaption>
   </figure>
-  <figure markdown class="diagram" style="--diagram-max-width: 720px">
-    ![Convergence plot for a representative local-vol PDE solve as the numerical grid is refined](../assets/generated/numerics/pde_convergence.light.png){ .diagram-img .diagram-light }
-    ![Convergence plot for a representative local-vol PDE solve as the numerical grid is refined](../assets/generated/numerics/pde_convergence.dark.png){ .diagram-img .diagram-dark }
+  <figure class="diagram" style="--diagram-max-width: 720px">
+    <img alt="Convergence plot for a representative local-vol PDE solve as the numerical grid is refined" class="diagram-img diagram-light" src="../../assets/generated/numerics/pde_convergence.light.png" />
+    <img alt="Convergence plot for a representative local-vol PDE solve as the numerical grid is refined" class="diagram-img diagram-dark" src="../../assets/generated/numerics/pde_convergence.dark.png" />
     <figcaption>The convergence sweep makes the mesh tradeoff explicit instead of asking the reader to trust a single chosen grid.</figcaption>
   </figure>
 </div>

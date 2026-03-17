@@ -9,15 +9,15 @@ hide:
 
 <meta http-equiv="refresh" content="0; url=../surface_workflow/" />
 
-<div class="compat-redirect" data-search-exclude>
+<div class="compat-redirect" data-search-exclude markdown="1">
 
 # Legacy redirect: surface repair workflow
 
 This legacy proof-path URL now redirects to [Surface repair workflow](surface_workflow.md).
 
 <div class="cta-row cta-row--duo">
-  [Open the current page](surface_workflow.md){ .md-button .md-button--primary }
-  [Next: eSSVI smooth handoff](essvi_smooth_handoff.md){ .md-button }
+  <a class="md-button md-button--primary" href="../surface_workflow/">Open the current page</a>
+  <a class="md-button" href="../essvi_smooth_handoff/">Next: eSSVI smooth handoff</a>
 </div>
 
 </div>

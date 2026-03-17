@@ -9,8 +9,8 @@ hide:
 This page shows the static-surface problem the library handles well: noisy option quotes rarely arrive in a form that is smooth, interpretable, or ready for downstream numerics.
 
 <div class="cta-row cta-row--duo">
-  [Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/06_surface_noarb_svi_repair.ipynb){ .md-button .md-button--primary }
-  [Next: eSSVI smooth handoff](essvi_smooth_handoff.md){ .md-button }
+  <a class="md-button md-button--primary" href="https://github.com/willemk-stack/option-pricing-library/blob/main/demos/06_surface_noarb_svi_repair.ipynb">Open the notebook</a>
+  <a class="md-button" href="../essvi_smooth_handoff/">Next: eSSVI smooth handoff</a>
 </div>
 
 <figure markdown class="diagram">
@@ -20,14 +20,14 @@ This page shows the static-surface problem the library handles well: noisy optio
 </figure>
 
 <div class="snapshot-grid">
-  <figure markdown class="diagram" style="--diagram-max-width: 720px">
-    ![Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity](../assets/generated/static/svi_repaired_surface_heatmap.light.png){ .diagram-img .diagram-light }
-    ![Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity](../assets/generated/static/svi_repaired_surface_heatmap.dark.png){ .diagram-img .diagram-dark }
+  <figure class="diagram" style="--diagram-max-width: 720px">
+    <img alt="Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity" class="diagram-img diagram-light" src="../../assets/generated/static/svi_repaired_surface_heatmap.light.png" />
+    <img alt="Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity" class="diagram-img diagram-dark" src="../../assets/generated/static/svi_repaired_surface_heatmap.dark.png" />
     <figcaption>The repaired surface heatmap makes maturity continuity and remaining stress regions visible before any local-vol step is considered.</figcaption>
   </figure>
-  <figure markdown class="diagram" style="--diagram-max-width: 720px">
-    ![Repaired SVI smile slices for multiple expiries plotted against log-moneyness](../assets/generated/static/svi_smile_slices.light.png){ .diagram-img .diagram-light }
-    ![Repaired SVI smile slices for multiple expiries plotted against log-moneyness](../assets/generated/static/svi_smile_slices.dark.png){ .diagram-img .diagram-dark }
+  <figure class="diagram" style="--diagram-max-width: 720px">
+    <img alt="Repaired SVI smile slices for multiple expiries plotted against log-moneyness" class="diagram-img diagram-light" src="../../assets/generated/static/svi_smile_slices.light.png" />
+    <img alt="Repaired SVI smile slices for multiple expiries plotted against log-moneyness" class="diagram-img diagram-dark" src="../../assets/generated/static/svi_smile_slices.dark.png" />
     <figcaption>Per-expiry slices keep fit quality and repair behavior visible slice by slice, which is what a reviewer needs to inspect.</figcaption>
   </figure>
 </div>
