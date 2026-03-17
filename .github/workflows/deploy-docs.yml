@@ -70,3 +70,33 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  verify-public-links:
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Wait for GitHub Pages to serve the deployed site
+        run: |
+          for attempt in {1..18}; do
+            if curl --silent --show-error --fail --head https://willemk-stack.github.io/option-pricing-library/ > /dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+
+          echo "GitHub Pages site did not become reachable within 3 minutes." >&2
+          exit 1
+
+      - name: Link check public README URLs
+        uses: lycheeverse/lychee-action@v2
+        with:
+          fail: true
+          jobSummary: true
+          args: >-
+            --verbose
+            --no-progress
+            --format detailed
+            README.md

@@ -79,8 +79,6 @@ jobs:
             --no-progress
             --format detailed
             docs/**/*.md
-            README.md
-            README.template.md
 
       - name: Run Playwright smoke checks
         working-directory: tests/visual
