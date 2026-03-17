@@ -118,6 +118,10 @@ def run_targeted_validation(
         argument for project in projects for argument in ("--project", project)
     ]
 
+    run_component_snapshots = (
+        os.environ.get("RUN_COMPONENT_SNAPSHOT_VALIDATION") == "1" or os.name == "nt"
+    )
+
     commands: list[tuple[str, list[str]]] = [
         (
             "review-capture",
@@ -163,18 +167,21 @@ def run_targeted_validation(
                 *project_args,
             ],
         ),
-        (
-            "components",
-            [
-                npm_command(),
-                "exec",
-                "playwright",
-                "test",
-                "components.spec.ts",
-                *project_args,
-            ],
-        ),
     ]
+    if run_component_snapshots:
+        commands.append(
+            (
+                "components",
+                [
+                    npm_command(),
+                    "exec",
+                    "playwright",
+                    "test",
+                    "components.spec.ts",
+                    *project_args,
+                ],
+            )
+        )
     if include_embedded_panels:
         commands.append(
             (

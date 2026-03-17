@@ -8,6 +8,7 @@
     "test:a11y": "playwright test a11y.spec.ts",
     "test:smoke": "playwright test smoke.spec.ts",
     "test:audits": "playwright test dom-audits.spec.ts",
+    "test:sentinel": "playwright test sentinel.spec.ts --max-failures=1",
     "test:components": "playwright test components.spec.ts",
     "test:artifacts": "playwright test embedded-panels.spec.ts",
     "test:capture": "playwright test review-capture.spec.ts",

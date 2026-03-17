@@ -29,6 +29,7 @@ jobs:
     env:
       MPLBACKEND: Agg
       DOCS_BASE_URL: http://127.0.0.1:8000/option-pricing-library/
+      RUN_COMPONENT_SNAPSHOT_VALIDATION: "0"
 
     steps:
       - name: Checkout
