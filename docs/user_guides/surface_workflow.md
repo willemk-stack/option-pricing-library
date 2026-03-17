@@ -9,8 +9,8 @@ hide:
 This page shows the static-surface problem the library handles well: noisy option quotes rarely arrive in a form that is smooth, interpretable, or ready for downstream numerics.
 
 <div class="cta-row cta-row--duo">
-  <a class="md-button md-button--primary" href="https://github.com/willemk-stack/option-pricing-library/blob/main/demos/06_surface_noarb_svi_repair.ipynb">Open the notebook</a>
-  <a class="md-button" href="../essvi_smooth_handoff/">Next: eSSVI smooth handoff</a>
+  [Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/06_surface_noarb_svi_repair.ipynb){ .md-button .md-button--primary }
+  [Next: eSSVI smooth handoff](essvi_smooth_handoff.md){ .md-button }
 </div>
 
 <figure markdown class="diagram">
