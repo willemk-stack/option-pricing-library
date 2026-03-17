@@ -33,6 +33,7 @@ cd tests/visual
 npm run test:smoke
 npm run test:audits
 npm run test:a11y
+npm run test:sentinel
 npm run test:baseline
 npm run test:components
 npm run test:artifacts
@@ -59,6 +60,7 @@ npm run test:capture
 - audited routes do not silently fall through to MkDocs 404 pages
 - screenshots stay within baseline tolerance
 - component-level screenshots for key proof and metric blocks
+- a small sentinel snapshot subset can fail fast before the full pixel suite
 
 ## Snapshot update
 

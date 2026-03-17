@@ -62,14 +62,14 @@ jobs:
       - name: Build MkDocs site strictly
         run: python -m mkdocs build --strict
 
-      - name: Run smoke and DOM audits
+      - name: Run portable Playwright audits
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
         run: |
           npx playwright test smoke.spec.ts
           npx playwright test dom-audits.spec.ts
-          npx playwright test components.spec.ts
+          npx playwright test embedded-panels.spec.ts
 
       - name: Generate improvement report
         run: python scripts/visual_audit/score_pages.py
