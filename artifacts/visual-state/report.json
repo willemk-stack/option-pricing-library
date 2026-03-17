@@ -1,0 +1,72 @@
+{
+  "summary": {
+    "pages": 7,
+    "themes": 2,
+    "widths": 4,
+    "expected_snapshots": 56,
+    "actual_snapshots": 56,
+    "missing_snapshots": 0,
+    "stale_snapshots": 0,
+    "site_url": "https://willemk-stack.github.io/option-pricing-library/",
+    "playwright_base_url": "http://127.0.0.1:8000/option-pricing-library/",
+    "serve_docs_base_url": "http://127.0.0.1:8000/option-pricing-library/",
+    "run_visual_audit_base_url": "http://127.0.0.1:8000/option-pricing-library/",
+    "visual_ci_present": false
+  },
+  "findings": [
+    {
+      "severity": "info",
+      "category": "targets",
+      "message": "pages.spec.ts and a11y.spec.ts both read targets from tests/visual/targets.ts",
+      "file": null
+    },
+    {
+      "severity": "info",
+      "category": "snapshots",
+      "message": "Snapshot matrix is complete: 56 files",
+      "file": "C:\\Users\\ouwez\\Documents\\Quant\\option-pricing-library\\tests\\visual\\pages.spec.ts-snapshots"
+    },
+    {
+      "severity": "info",
+      "category": "snapshots",
+      "message": "No stale snapshot filenames detected",
+      "file": "C:\\Users\\ouwez\\Documents\\Quant\\option-pricing-library\\tests\\visual\\pages.spec.ts-snapshots"
+    },
+    {
+      "severity": "medium",
+      "category": "assets",
+      "message": "SVG contains linked raster/image subpanels that need browser validation: ['../static/quote_surface_compare.png', '../dupire/essvi_smoothed_surface_heatmap.png', '../poster/poster_essvi_localvol_pde.png']",
+      "file": "C:\\Users\\ouwez\\Documents\\Quant\\option-pricing-library\\docs\\assets\\generated\\showcase\\reviewer_proof_panel.light.svg"
+    },
+    {
+      "severity": "medium",
+      "category": "assets",
+      "message": "SVG contains linked raster/image subpanels that need browser validation: ['../static/quote_surface_compare.dark.png', '../dupire/essvi_smoothed_surface_heatmap.dark.png', '../poster/poster_essvi_localvol_pde.dark.png']",
+      "file": "C:\\Users\\ouwez\\Documents\\Quant\\option-pricing-library\\docs\\assets\\generated\\showcase\\reviewer_proof_panel.dark.svg"
+    },
+    {
+      "severity": "medium",
+      "category": "assets",
+      "message": "SVG contains linked raster/image subpanels that need browser validation: ['./iv_scaling.png', './pde_runtime_error_tradeoff.png', './macro_pipeline_summary.png']",
+      "file": "C:\\Users\\ouwez\\Documents\\Quant\\option-pricing-library\\docs\\assets\\generated\\benchmarks\\benchmark_overview.light.svg"
+    },
+    {
+      "severity": "medium",
+      "category": "assets",
+      "message": "SVG contains linked raster/image subpanels that need browser validation: ['./iv_scaling.dark.png', './pde_runtime_error_tradeoff.dark.png', './macro_pipeline_summary.dark.png']",
+      "file": "C:\\Users\\ouwez\\Documents\\Quant\\option-pricing-library\\docs\\assets\\generated\\benchmarks\\benchmark_overview.dark.svg"
+    },
+    {
+      "severity": "medium",
+      "category": "ci",
+      "message": "No obvious CI workflow currently runs Playwright or the visual audit scripts",
+      "file": null
+    },
+    {
+      "severity": "info",
+      "category": "docs",
+      "message": "Found 4 references to build_visual_artifacts.py",
+      "file": null
+    }
+  ]
+}
