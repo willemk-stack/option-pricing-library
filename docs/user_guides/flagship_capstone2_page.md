@@ -9,16 +9,16 @@ hide:
 
 <meta http-equiv="refresh" content="0; url=../decision_guide/" />
 
-<div class="compat-redirect" data-search-exclude>
+<div class="compat-redirect" data-search-exclude markdown="1">
 
 # Legacy redirect: decision guide
 
 This legacy proof-path URL now redirects to [Decision guide](decision_guide.md).
 
 <div class="cta-row cta-row--trio">
-  [Open the current guide](decision_guide.md){ .md-button .md-button--primary }
-  [Surface repair workflow](surface_workflow.md){ .md-button }
-  [Local-vol and PDE validation](localvol_pde_validation.md){ .md-button }
+  <a class="md-button md-button--primary" href="../decision_guide/">Open the current guide</a>
+  <a class="md-button" href="../surface_workflow/">Surface repair workflow</a>
+  <a class="md-button" href="../localvol_pde_validation/">Local-vol and PDE validation</a>
 </div>
 
 </div>

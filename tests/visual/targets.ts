@@ -33,6 +33,42 @@ export type PageReviewConfig = {
     componentShots: ComponentReviewTarget[];
 };
 
+function deriveFallbackPageKey(path: string): string {
+    if (path === "/") {
+        return "homepage";
+    }
+
+    return path
+        .replaceAll("/", "_")
+        .replaceAll("-", "_")
+        .replace(/^_+|_+$/g, "") || "page";
+}
+
+function deriveFallbackArchetype(path: string): PageArchetype {
+    if (path === "/") {
+        return "homepage";
+    }
+    if (path.startsWith("/api/")) {
+        return "api-landing";
+    }
+    if (path.startsWith("/user_guides/")) {
+        return "long-form-guide";
+    }
+    return "section-landing";
+}
+
+function buildFallbackPageReviewConfig(path: string): PageReviewConfig {
+    return {
+        path,
+        pageKey: deriveFallbackPageKey(path),
+        archetype: deriveFallbackArchetype(path),
+        requiresVisualEvidence: false,
+        essentialMediaSelectors: ["figure.diagram img", ".snapshot-grid", ".cta-row", "table"],
+        emptyContainerSelectors: ["figure.diagram", ".snapshot-grid", ".cta-row", "table", "main article"],
+        componentShots: [],
+    };
+}
+
 function loadReviewTargets(): ReviewTargets {
     const filePath = resolve(__dirname, "../../scripts/visual_audit/review_targets.json");
     const raw = JSON.parse(readFileSync(filePath, "utf8")) as Partial<ReviewTargets>;
@@ -68,7 +104,6 @@ function loadReviewTargets(): ReviewTargets {
 
 const reviewTargets = loadReviewTargets();
 
-export const pages = reviewTargets.pages;
 export const themes = reviewTargets.themes;
 export const widths = reviewTargets.widths;
 export const priorityAssetGlobs = reviewTargets.priority_asset_globs;
@@ -175,6 +210,14 @@ function filterPageReviewConfigs(configs: PageReviewConfig[]): PageReviewConfig[
             selectedPageKeys.has(config.pageKey)
     );
 
+    const knownPaths = new Set(configs.map((config) => config.path));
+    for (const path of selectedPaths) {
+        if (knownPaths.has(path)) {
+            continue;
+        }
+        filtered.push(buildFallbackPageReviewConfig(path));
+    }
+
     if (filtered.length === 0) {
         throw new Error(
             `No review targets matched REVIEW_PATHS=${process.env.REVIEW_PATHS || ""} REVIEW_PAGE_KEYS=${process.env.REVIEW_PAGE_KEYS || ""}`
@@ -185,6 +228,7 @@ function filterPageReviewConfigs(configs: PageReviewConfig[]): PageReviewConfig[
 }
 
 export const pageReviewConfigs = filterPageReviewConfigs(allPageReviewConfigs);
+export const pages = Array.from(new Set(pageReviewConfigs.map((config) => config.path)));
 
 export const componentReviewTargets = pageReviewConfigs.flatMap((config) => config.componentShots);
 

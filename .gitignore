@@ -21,6 +21,7 @@ MANIFEST
 # Build/output artifacts
 /out/
 /site/
+/test-results/
 tests/visual/node_modules/
 tests/visual/test-results/
 artifacts/visual-state/

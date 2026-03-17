@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DOCS_BASE_URL = "http://127.0.0.1:8000/option-pricing-library/"
@@ -13,9 +14,17 @@ def run(command: list[str]) -> None:
     subprocess.run(command, check=True, cwd=ROOT)
 
 
+def resolve_bind_address(base_url: str) -> str:
+    parsed = urlparse(base_url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 8000
+    return f"{host}:{port}"
+
+
 def main() -> int:
     os.environ.setdefault("MPLBACKEND", "Agg")
     os.environ.setdefault("DOCS_BASE_URL", DEFAULT_DOCS_BASE_URL)
+    bind_address = resolve_bind_address(os.environ["DOCS_BASE_URL"])
 
     if os.environ.get("SKIP_DOCS_PREBUILD") != "1":
         print("Rendering diagrams...", flush=True)
@@ -33,7 +42,7 @@ def main() -> int:
         )
 
     print("Starting MkDocs server...", flush=True)
-    run([sys.executable, "-m", "mkdocs", "serve", "-a", "127.0.0.1:8000"])
+    run([sys.executable, "-m", "mkdocs", "serve", "-a", bind_address])
     return 0
 
 

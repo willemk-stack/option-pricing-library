@@ -1,3 +1,5 @@
+default_install_hook_types: [pre-commit, pre-push]
+
 default_language_version:
   python: python3.12
 
@@ -29,4 +31,14 @@ repos:
           - optype[numpy]==0.15.0
           - pandas==2.2.3
           - pandas-stubs==2.2.3.241126
+
+  - repo: local
+    hooks:
+      - id: docs-pre-push-guard
+        name: docs pre-push guard
+        entry: python
+        args: [scripts/pre_push_docs_validation.py]
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
 

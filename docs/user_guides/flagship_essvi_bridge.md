@@ -9,15 +9,15 @@ hide:
 
 <meta http-equiv="refresh" content="0; url=../essvi_smooth_handoff/" />
 
-<div class="compat-redirect" data-search-exclude>
+<div class="compat-redirect" data-search-exclude markdown="1">
 
 # Legacy redirect: eSSVI smooth handoff
 
 This legacy proof-path URL now redirects to [eSSVI smooth handoff](essvi_smooth_handoff.md).
 
 <div class="cta-row cta-row--duo">
-  [Open the current page](essvi_smooth_handoff.md){ .md-button .md-button--primary }
-  [Next: local-vol and PDE validation](localvol_pde_validation.md){ .md-button }
+  <a class="md-button md-button--primary" href="../essvi_smooth_handoff/">Open the current page</a>
+  <a class="md-button" href="../localvol_pde_validation/">Next: local-vol and PDE validation</a>
 </div>
 
 </div>

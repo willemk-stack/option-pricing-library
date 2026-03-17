@@ -104,6 +104,19 @@ cd tests/visual
 npm run test:baseline
 ```
 
+To block pushes when docs-sensitive changes would fail local docs validation, install the
+pre-push hook once:
+
+```bash
+pre-commit install --hook-type pre-commit --hook-type pre-push
+```
+
+That hook runs on pushes touching docs-sensitive files such as `docs/**`, `mkdocs.yml`,
+`docs/stylesheets/**`, `tests/visual/**`, and the docs visual-audit scripts. It performs a
+strict MkDocs build, SVG asset integrity checks, targeted Playwright smoke and DOM checks
+against the affected docs paths, and targeted accessibility checks on the curated blocking
+review pages.
+
 For the full repeatable audit flow from the repo root:
 
 ```bash
