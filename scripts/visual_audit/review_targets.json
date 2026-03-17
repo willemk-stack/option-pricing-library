@@ -1,0 +1,23 @@
+{
+  "pages": [
+    "/",
+    "/architecture/",
+    "/performance/",
+    "/user_guides/decision_guide/",
+    "/user_guides/localvol_pde_validation/"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "widths": [
+    375,
+    768,
+    1280,
+    1536
+  ],
+  "priority_asset_globs": [
+    "docs/assets/generated/**/*.svg",
+    "docs/assets/generated/**/*.png"
+  ]
+}

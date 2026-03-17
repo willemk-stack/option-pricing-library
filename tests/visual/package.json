@@ -1,0 +1,15 @@
+{
+  "name": "option-pricing-docs-visual-tests",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:update": "playwright test --update-snapshots",
+    "test:a11y": "playwright test a11y.spec.ts"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3"
+  }
+}

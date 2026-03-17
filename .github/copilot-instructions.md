@@ -80,6 +80,33 @@ MPLBACKEND=Agg python scripts/make_docs_figures.py
 mkdocs build --strict
 ```
 
+## Docs visual QA and generated artifact guidance
+
+For MkDocs/docs UI issues, distinguish between:
+
+- regular DOM/CSS/layout issues in `docs/`, theme overrides, or `docs/stylesheets`
+- generated visual asset issues in exported SVG/PNG figures and proof panels
+
+When a docs page embeds generated figures, do not assume CSS-only fixes are sufficient.
+Prefer fixing the upstream generator or source asset when the defect is inside the figure itself.
+
+For visual bug tasks:
+- reproduce the issue locally before proposing a fix
+- validate both light and dark themes when relevant
+- validate representative widths before calling a fix complete
+- prefer small, targeted fixes over broad restyling
+- preserve the current documentation information architecture and visual tone
+
+Typical visual issue classes:
+- text overflow or clipping
+- missing or blank-looking media panels
+- overlap, misalignment, or excessive whitespace
+- color/contrast inconsistencies across themes
+- responsive regressions
+
+For docs-facing visual changes, validate the relevant docs flow and any nearest targeted checks.
+If a figure is generated, update the generator/source when possible and regenerate artifacts rather than hand-editing built outputs.
+
 ## Project structure guidance
 
 - Production code lives under `src/option_pricing`.
