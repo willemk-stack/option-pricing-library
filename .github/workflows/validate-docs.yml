@@ -98,15 +98,14 @@ jobs:
           SKIP_DOCS_PREBUILD: "1"
         run: npx playwright test a11y.spec.ts
 
-      - name: Upload visual regression inputs
+      - name: Upload rendered D2 diagrams
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: docs-visual-regression-inputs
+          name: docs-visual-regression-diagrams
           if-no-files-found: error
           path: |
             docs/assets/diagrams/**
-            docs/assets/generated/**
 
       - name: Upload docs validation artifacts
         if: always()
@@ -157,11 +156,14 @@ jobs:
           npm ci
           npx playwright install chromium
 
-      - name: Download visual regression inputs
+      - name: Download rendered D2 diagrams
         uses: actions/download-artifact@v4
         with:
-          name: docs-visual-regression-inputs
+          name: docs-visual-regression-diagrams
           path: .
+
+      - name: Build generated visual assets
+        run: python scripts/build_visual_artifacts.py all --profile ci
 
       - name: Run Playwright visual sentinel
         working-directory: tests/visual
