@@ -9,10 +9,10 @@ hide:
 <div class="portfolio-hero">
   <p class="hero-kicker">Typed pricing, surface repair, and validated numerics</p>
   <p class="hero-copy">This library prices vanilla options, repairs noisy implied-vol surfaces, smooths the Dupire handoff with eSSVI, and validates the local-vol/PDE workflow with repricing and convergence evidence.</p>
-  <div class="cta-row cta-row--trio" markdown="1">
-[Read the proof path](user_guides/decision_guide.md){ .md-button .md-button--primary }
-[Start with the recommended API](user_guides/instruments.md){ .md-button }
-[Review performance evidence](performance.md){ .md-button }
+  <div class="cta-row cta-row--trio">
+    <a class="md-button md-button--primary" href="user_guides/decision_guide.md">Read the proof path</a>
+    <a class="md-button" href="user_guides/instruments.md">Start with the recommended API</a>
+    <a class="md-button" href="performance.md">Review performance evidence</a>
   </div>
 </div>
 

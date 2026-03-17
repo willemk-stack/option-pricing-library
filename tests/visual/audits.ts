@@ -164,6 +164,42 @@ export async function collectDomAuditFindings(
             );
         };
 
+        const hiddenOrIgnoredAncestorSelector = [
+            "[hidden]",
+            "[aria-hidden='true']",
+            ".md-header",
+            ".md-sidebar",
+            ".md-search",
+            ".md-search__inner",
+            ".md-overlay",
+            ".md-dialog",
+            ".md-tabs",
+            ".md-footer",
+            ".md-top",
+            "nav",
+        ].join(",");
+
+        const markdownLeakIgnoredAncestorSelector = [
+            "code",
+            "pre",
+            "kbd",
+            "samp",
+            "script",
+            "style",
+            "textarea",
+            ".highlight",
+            ".highlighttable",
+        ].join(",");
+
+        const hasVisibleTextChild = (element: HTMLElement): boolean =>
+            Array.from(element.children).some((child) => {
+                if (!(child instanceof HTMLElement)) {
+                    return false;
+                }
+
+                return isVisible(child) && (child.innerText || "").trim().length > 0;
+            });
+
         const documentRoot = document.documentElement;
         if (documentRoot.scrollWidth - documentRoot.clientWidth > 2) {
             pushFinding(
@@ -247,6 +283,36 @@ export async function collectDomAuditFindings(
             document.querySelector(".md-content__inner") ||
             document.querySelector("main") ||
             document.body;
+
+        const rawMarkdownPattern =
+            /!?\[[^\]\n]{1,160}\]\([^\)\n]{1,320}\)(?:\{\s*[^}\n]{1,160}\s*\})?/;
+
+        const markdownLeakNodes = Array.from(root.querySelectorAll("*"))
+            .filter((node): node is HTMLElement => node instanceof HTMLElement)
+            .filter((node) => !node.closest(hiddenOrIgnoredAncestorSelector))
+            .filter((node) => !node.closest(markdownLeakIgnoredAncestorSelector))
+            .filter((node) => isVisible(node))
+            .filter((node) => !hasVisibleTextChild(node))
+            .map((node) => ({
+                node,
+                text: (node.innerText || "").trim().replace(/\s+/g, " "),
+            }))
+            .filter(({ text }) => rawMarkdownPattern.test(text))
+            .slice(0, 5);
+
+        for (const { node, text } of markdownLeakNodes) {
+            pushFinding(
+                "critical",
+                "content",
+                "raw-markdown-rendered",
+                `Rendered page contains raw Markdown syntax instead of parsed content: ${text.slice(0, 120)}`,
+                {
+                    tag: node.tagName.toLowerCase(),
+                    className: node.className,
+                    text,
+                }
+            );
+        }
 
         const overflowNodes = Array.from(root.querySelectorAll("*"))
             .filter((node): node is HTMLElement => node instanceof HTMLElement)
@@ -359,30 +425,6 @@ export async function collectDomAuditFindings(
             "a.md-button",
             "button",
         ].join(",");
-
-        const hiddenOrIgnoredAncestorSelector = [
-            "[hidden]",
-            "[aria-hidden='true']",
-            ".md-header",
-            ".md-sidebar",
-            ".md-search",
-            ".md-search__inner",
-            ".md-overlay",
-            ".md-dialog",
-            ".md-tabs",
-            ".md-footer",
-            ".md-top",
-            "nav",
-        ].join(",");
-
-        const hasVisibleTextChild = (element: HTMLElement): boolean =>
-            Array.from(element.children).some((child) => {
-                if (!(child instanceof HTMLElement)) {
-                    return false;
-                }
-
-                return isVisible(child) && (child.innerText || "").trim().length > 0;
-            });
 
         const overlapArea = (a: Candidate["rect"], b: Candidate["rect"]): number => {
             const width = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
