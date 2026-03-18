@@ -13,6 +13,7 @@ DEFAULT_TESTS = [
     "components.spec.ts",
     "embedded-panels.spec.ts",
 ]
+SERIAL_TESTS = {"components.spec.ts"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,9 +49,24 @@ def format_command(parts: list[str]) -> str:
 def main() -> int:
     args = parse_args()
 
-    playwright_parts = ["npx", "playwright", "test", *args.tests]
+    requested_tests = list(dict.fromkeys(args.tests))
+    parallel_tests = [test for test in requested_tests if test not in SERIAL_TESTS]
+    serial_tests = [test for test in requested_tests if test in SERIAL_TESTS]
+
+    playwright_commands: list[list[str]] = []
+    if parallel_tests:
+        playwright_commands.append(["npx", "playwright", "test", *parallel_tests])
+    for test_name in serial_tests:
+        playwright_commands.append(
+            ["npx", "playwright", "test", test_name, "--workers=1"]
+        )
+
     if args.mode == "update":
-        playwright_parts.append("--update-snapshots")
+        for command in playwright_commands:
+            command.append("--update-snapshots")
+
+    if not playwright_commands:
+        raise ValueError("No Playwright test files were selected.")
 
     inner_script = " && ".join(
         [
@@ -63,7 +79,10 @@ def main() -> int:
             "cd /work",
             "python3 scripts/build_visual_artifacts.py all --profile ci >/dev/null",
             "cd tests/visual",
-            "SKIP_DOCS_PREBUILD=1 " + format_command(playwright_parts),
+            *(
+                "SKIP_DOCS_PREBUILD=1 " + format_command(command)
+                for command in playwright_commands
+            ),
         ]
     )
 
