@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = ROOT / "artifacts" / "visual-state"
+DOCS_VISUAL_CONFIG_PATH = ROOT / "scripts" / "visual_audit" / "docs_visual_config.json"
 SVG_NS = {"svg": "http://www.w3.org/2000/svg", "xlink": "http://www.w3.org/1999/xlink"}
 HIGH_RISK_ASSETS = [
     Path("docs/assets/generated/showcase/reviewer_proof_panel.light.svg"),
@@ -205,6 +206,8 @@ def main() -> int:
     snapshots_dir = ROOT / "tests" / "visual" / "pages.spec.ts-snapshots"
 
     targets = parse_json(review_targets_path)
+    docs_visual_config = parse_json(DOCS_VISUAL_CONFIG_PATH)
+    configured_base_url = docs_visual_config.get("docs_base_url")
     pages = targets.get("pages", [])
     themes = targets.get("themes", [])
     widths = targets.get("widths", [])
@@ -222,11 +225,13 @@ def main() -> int:
     a11y_text = read_text(a11y_spec)
 
     site_url = parse_simple_yaml_value(mkdocs_text, "site_url")
-    playwright_base = extract_default_docs_base_url(playwright_text)
-    serve_base = extract_default_docs_base_url(serve_text)
+    playwright_base = (
+        extract_default_docs_base_url(playwright_text) or configured_base_url
+    )
+    serve_base = extract_default_docs_base_url(serve_text) or configured_base_url
     serve_py_text = read_text(serve_script_py)
-    serve_py_base = extract_default_docs_base_url(serve_py_text)
-    run_base = extract_default_docs_base_url(run_text)
+    serve_py_base = extract_default_docs_base_url(serve_py_text) or configured_base_url
+    run_base = extract_default_docs_base_url(run_text) or configured_base_url
 
     site_path = urlparse(site_url).path if site_url else None
     playwright_path = urlparse(playwright_base).path if playwright_base else None

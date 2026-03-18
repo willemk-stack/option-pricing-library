@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import json
 import os
 import subprocess
 import sys
@@ -11,7 +13,16 @@ from urllib.parse import urlparse, urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE_DIR = ROOT / "site"
-DEFAULT_DOCS_BASE_URL = "http://127.0.0.1:8000/option-pricing-library/"
+DOCS_VISUAL_CONFIG_PATH = ROOT / "scripts" / "visual_audit" / "docs_visual_config.json"
+
+
+def load_docs_visual_config() -> dict[str, str]:
+    return json.loads(DOCS_VISUAL_CONFIG_PATH.read_text(encoding="utf8"))
+
+
+DOCS_VISUAL_CONFIG = load_docs_visual_config()
+DEFAULT_DOCS_BASE_URL = DOCS_VISUAL_CONFIG["docs_base_url"]
+DEFAULT_BUILD_PROFILE = DOCS_VISUAL_CONFIG["build_profile"]
 
 
 def run(command: list[str]) -> None:
@@ -33,6 +44,26 @@ def resolve_docs_prefix(base_url: str) -> str:
 def split_bind_address(bind_address: str) -> tuple[str, int]:
     host, port = bind_address.rsplit(":", 1)
     return host, int(port)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Serve the built MkDocs site for Playwright-based docs validation."
+    )
+    parser.add_argument(
+        "--serve-prebuilt",
+        action="store_true",
+        help="Serve the existing site/ directory without rebuilding assets or MkDocs.",
+    )
+    return parser.parse_args()
+
+
+def should_serve_prebuilt(args: argparse.Namespace) -> bool:
+    if args.serve_prebuilt:
+        return True
+
+    env_value = os.environ.get("SERVE_PREBUILT_SITE", "").strip().lower()
+    return env_value in {"1", "true", "yes", "on"}
 
 
 class DocsSiteHandler(SimpleHTTPRequestHandler):
@@ -118,29 +149,39 @@ class DocsSiteHandler(SimpleHTTPRequestHandler):
 
 
 def main() -> int:
+    args = parse_args()
     os.environ.setdefault("MPLBACKEND", "Agg")
     os.environ.setdefault("DOCS_BASE_URL", DEFAULT_DOCS_BASE_URL)
     docs_base_url = os.environ["DOCS_BASE_URL"]
     bind_address = resolve_bind_address(docs_base_url)
     docs_prefix = resolve_docs_prefix(docs_base_url)
+    build_profile = os.environ.get("DOCS_VISUAL_BUILD_PROFILE", DEFAULT_BUILD_PROFILE)
+    serve_prebuilt = should_serve_prebuilt(args)
 
-    if os.environ.get("SKIP_DOCS_PREBUILD") != "1":
-        print("Rendering diagrams...", flush=True)
-        run([sys.executable, "scripts/render_d2_diagrams.py"])
+    if serve_prebuilt:
+        if not SITE_DIR.exists():
+            raise SystemExit(
+                "Prebuilt site directory is missing. Run `python -m mkdocs build --strict` first."
+            )
+        print("Serving existing MkDocs site build...", flush=True)
+    else:
+        if os.environ.get("SKIP_DOCS_PREBUILD") != "1":
+            print("Rendering diagrams...", flush=True)
+            run([sys.executable, "scripts/render_d2_diagrams.py"])
 
-        print("Building generated visual assets...", flush=True)
-        run(
-            [
-                sys.executable,
-                "scripts/build_visual_artifacts.py",
-                "all",
-                "--profile",
-                "ci",
-            ]
-        )
+            print("Building generated visual assets...", flush=True)
+            run(
+                [
+                    sys.executable,
+                    "scripts/build_visual_artifacts.py",
+                    "all",
+                    "--profile",
+                    build_profile,
+                ]
+            )
 
-    print("Building MkDocs site...", flush=True)
-    run([sys.executable, "-m", "mkdocs", "build", "--strict"])
+        print("Building MkDocs site...", flush=True)
+        run([sys.executable, "-m", "mkdocs", "build", "--strict"])
 
     host, port = split_bind_address(bind_address)
     handler = partial(

@@ -52,6 +52,19 @@ Ubuntu container:
 python ../../scripts/run_ci_visual_regression.py verify
 ```
 
+The docs pre-push hook now requires Docker for docs-sensitive pushes. It still runs the
+fast local strict-build, smoke, DOM, and targeted accessibility checks first, then runs
+the authoritative Ubuntu snapshot suites in Docker against the same filtered review paths.
+For targeted page edits, the Docker step always includes `sentinel.spec.ts` and
+`pages.spec.ts`, and adds component or embedded-panel suites only when the changed paths
+touch pages that own those snapshots.
+When one of those stages fails, the scripts now print a failure class so you can tell
+whether the regression came from environment setup, MkDocs/build output, generated assets,
+DOM/a11y checks, or Ubuntu-authoritative snapshots.
+In GitHub Actions, the PR job summary can also show warning-level entries for
+non-blocking visual-state advisories, so cleanup items can be surfaced without failing
+the docs job.
+
 For bounded improvement-loop capture runs, set a page filter and capture directory:
 
 ```bash

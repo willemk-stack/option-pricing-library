@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MPLBACKEND: Agg
-      DOCS_BASE_URL: http://127.0.0.1:8000/option-pricing-library/
 
     steps:
       - name: Checkout
@@ -36,41 +35,84 @@ jobs:
             tests/visual/package-lock.json
 
       - name: Install Python dependencies
+        id: install_python_dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[docs,plot]"
 
       - name: Install Playwright dependencies
+        id: install_playwright_dependencies
         working-directory: tests/visual
         run: |
           npm ci
           npx playwright install --with-deps chromium
 
       - name: Install D2
+        id: install_d2
         run: |
           curl -fsSL https://d2lang.com/install.sh | sh -s --
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Render D2 diagrams
+        id: render_d2_diagrams
         run: python scripts/render_d2_diagrams.py
 
       - name: Build generated visual assets
+        id: build_visual_assets
         run: python scripts/build_visual_artifacts.py all --profile ci
 
       - name: Build MkDocs site strictly
+        id: build_mkdocs
         run: python -m mkdocs build --strict
 
       - name: Check generated asset integrity
+        id: check_generated_asset_integrity
         run: python scripts/visual_audit/check_svg_assets.py
 
       - name: Report visual state
+        id: report_visual_state
         run: python scripts/visual_audit/report_visual_state.py
 
+      - name: Export visual state advisory warnings
+        if: always()
+        run: python scripts/visual_audit/export_visual_report_warning_status.py
+
       - name: Run embedded panel checks
+        id: embedded_panel_checks
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
+          SERVE_PREBUILT_SITE: "1"
         run: npx playwright test embedded-panels.spec.ts
+
+      - name: Summarize validate-artifacts job outcome
+        if: always()
+        env:
+          STEP_INSTALL_PYTHON_DEPS: ${{ steps.install_python_dependencies.conclusion }}
+          STEP_INSTALL_PLAYWRIGHT_DEPS: ${{ steps.install_playwright_dependencies.conclusion }}
+          STEP_INSTALL_D2: ${{ steps.install_d2.conclusion }}
+          STEP_RENDER_D2: ${{ steps.render_d2_diagrams.conclusion }}
+          STEP_BUILD_VISUAL_ASSETS: ${{ steps.build_visual_assets.conclusion }}
+          STEP_BUILD_MKDOCS: ${{ steps.build_mkdocs.conclusion }}
+          STEP_CHECK_ASSET_INTEGRITY: ${{ steps.check_generated_asset_integrity.conclusion }}
+          STEP_REPORT_VISUAL_STATE: ${{ steps.report_visual_state.conclusion }}
+          STEP_EMBEDDED_PANELS: ${{ steps.embedded_panel_checks.conclusion }}
+          WORKFLOW_SUMMARY_TITLE: Docs artifact validation summary
+          WORKFLOW_SUMMARY_ITEMS_JSON: >-
+            [
+              {"env_key":"STEP_INSTALL_PYTHON_DEPS","label":"Install Python dependencies","failure_class":"environment-python","layer":"Python dependency install","next_step":"Inspect pip output and dependency resolution."},
+              {"env_key":"STEP_INSTALL_PLAYWRIGHT_DEPS","label":"Install Playwright dependencies","failure_class":"environment-node-browser","layer":"Node modules or Playwright browser install","next_step":"Inspect npm or Playwright install output."},
+              {"env_key":"STEP_INSTALL_D2","label":"Install D2","failure_class":"environment-tooling","layer":"D2 CLI installation","next_step":"Inspect the D2 install output and PATH setup."},
+              {"env_key":"STEP_RENDER_D2","label":"Render D2 diagrams","failure_class":"generated-asset-build","layer":"D2 diagram generation","next_step":"Fix the diagram sources or D2 tooling failure."},
+              {"env_key":"STEP_BUILD_VISUAL_ASSETS","label":"Build generated visual assets","failure_class":"generated-asset-build","layer":"SVG or PNG visual artifact generation","next_step":"Inspect the artifact generator inputs and failing asset build."},
+              {"env_key":"STEP_BUILD_MKDOCS","label":"Build MkDocs site strictly","failure_class":"build-mkdocs","layer":"MkDocs config, Markdown, or generated docs content","next_step":"Fix the strict MkDocs build failure before checking browser regressions."},
+              {"env_key":"STEP_CHECK_ASSET_INTEGRITY","label":"Check generated asset integrity","failure_class":"generated-asset-integrity","layer":"Generated SVG or PNG references and linked media","next_step":"Inspect the reported generated asset and its linked media."},
+              {"env_key":"STEP_REPORT_VISUAL_STATE","label":"Report visual state","failure_class":"report-visual-state","layer":"Visual-state reporting script","next_step":"Inspect the reporting script output and expected review-target inputs."},
+              {"env_key":"STEP_VISUAL_STATE_WARNINGS","label":"Visual state advisory findings","classification":"visual-state-advisory","layer":"Non-blocking medium findings from the visual state report","next_step":"Inspect artifacts/visual-state/report.md for advisory findings that may merit cleanup before merge."},
+              {"env_key":"STEP_EMBEDDED_PANELS","label":"Run embedded panel checks","failure_class":"browser-snapshot-or-embedded-asset","layer":"Ubuntu embedded-panel checks or generated proof assets","next_step":"Inspect embedded-panel failures and the linked generated assets."}
+            ]
+        run: |
+          python scripts/visual_audit/write_github_step_summary.py
 
       - name: Upload artifact validation outputs
         if: always()
