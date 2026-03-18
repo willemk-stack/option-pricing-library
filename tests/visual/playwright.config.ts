@@ -19,12 +19,12 @@ function resolvePythonCommand(): string {
   }
 
   const windowsVenvPython = resolve(__dirname, "../../.venv/Scripts/python.exe");
-  if (existsSync(windowsVenvPython)) {
+  if (process.platform === "win32" && existsSync(windowsVenvPython)) {
     return JSON.stringify(windowsVenvPython);
   }
 
   const posixVenvPython = resolve(__dirname, "../../.venv/bin/python");
-  if (existsSync(posixVenvPython)) {
+  if (process.platform !== "win32" && existsSync(posixVenvPython)) {
     return JSON.stringify(posixVenvPython);
   }
 
@@ -36,6 +36,7 @@ const pythonCommand = resolvePythonCommand();
 export default defineConfig({
   testDir: ".",
   timeout: 60_000,
+  retries: process.env.CI ? 1 : 0,
   snapshotPathTemplate: "{testDir}/{testFilePath}-snapshots/{arg}{ext}",
   expect: {
     timeout: 10_000,

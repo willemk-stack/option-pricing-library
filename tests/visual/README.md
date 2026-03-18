@@ -41,6 +41,13 @@ npm run test:artifacts
 
 In CI, the snapshot-based suites (`sentinel`, `baseline`, `components`, and `artifacts`) are authoritative on Ubuntu. Windows still runs the non-snapshot browser checks (`smoke`, `audits`, and `a11y`) to catch cross-platform issues without forcing a second snapshot baseline set.
 
+For the closest local match to CI, run the visual suites inside the GitHub-runner-style
+Ubuntu container:
+
+```bash
+python ../../scripts/run_ci_visual_regression.py verify
+```
+
 For bounded improvement-loop capture runs, set a page filter and capture directory:
 
 ```bash
@@ -84,6 +91,12 @@ npm run test:update:artifacts
 ```
 
 `npm run test:update` refreshes all committed snapshot suites in one pass.
+
+When you need authoritative snapshot updates that match CI, prefer:
+
+```bash
+python ../../scripts/run_ci_visual_regression.py update
+```
 
 The authoritative route, theme, and width matrix lives in `scripts/visual_audit/review_targets.json`.
 The browser suite also supports `REVIEW_PAGE_KEYS` and `REVIEW_PATHS` to narrow runs to one page during bounded improvement passes.

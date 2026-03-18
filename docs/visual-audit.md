@@ -150,6 +150,12 @@ Refresh screenshot baselines only when the rendered result is intentionally corr
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_visual_audit.ps1 -UpdateSnapshots
 ```
 
+For authoritative Playwright snapshot refreshes that match the Ubuntu CI runner, prefer:
+
+```bash
+python scripts/run_ci_visual_regression.py update
+```
+
 ## Root-cause buckets
 
 Classify each issue as one of:

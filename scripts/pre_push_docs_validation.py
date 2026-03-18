@@ -137,7 +137,7 @@ def normalize_path(path: str) -> str:
 
 
 def is_zero_ref(ref: str | None) -> bool:
-    return bool(ref) and set(ref) == {"0"}
+    return ref is not None and set(ref) == {"0"}
 
 
 def ref_exists(ref: str) -> bool:
