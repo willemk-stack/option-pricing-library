@@ -13,6 +13,7 @@ from option_pricing.demos import (
     render_plot_presets,
 )
 from option_pricing.demos.integration import run_surface_to_localvol_pde_integration
+from option_pricing.viz.publishing import PUBLISHING_THEMES
 
 
 def _required_columns(df: pd.DataFrame, columns: set[str]) -> None:
@@ -94,15 +95,19 @@ def test_visual_plot_presets_smoke(
 ) -> None:
     pytest.importorskip("matplotlib")
     result = visual_bundle_ci
+    presets = ["static", "dupire", "poster", "docs", "numerics"]
+    expected_count = sum(len(build_plot_specs(preset=preset)) for preset in presets) * (
+        len(PUBLISHING_THEMES) + 1
+    )
 
     written = render_plot_presets(
         result.manifest,
-        presets=["static", "dupire", "poster", "docs", "numerics"],
+        presets=presets,
         out_root=tmp_path / "assets",
     )
 
     assert written
-    assert len(written) == 13
+    assert len(written) == expected_count
     assert all(path.exists() for path in written)
 
 

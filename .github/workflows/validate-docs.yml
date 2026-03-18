@@ -120,6 +120,75 @@ jobs:
 
   visual-regression:
     needs: validate
+    runs-on: ubuntu-latest
+    env:
+      MPLBACKEND: Agg
+      DOCS_BASE_URL: http://127.0.0.1:8000/option-pricing-library/
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            pyproject.toml
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            tests/visual/package-lock.json
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[docs,plot]"
+
+      - name: Install Playwright dependencies
+        working-directory: tests/visual
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Download rendered D2 diagrams
+        uses: actions/download-artifact@v4
+        with:
+          name: docs-visual-regression-diagrams
+          path: .
+
+      - name: Build generated visual assets
+        run: python scripts/build_visual_artifacts.py all --profile ci
+
+      - name: Run Playwright visual sentinel
+        working-directory: tests/visual
+        env:
+          SKIP_DOCS_PREBUILD: "1"
+        run: npx playwright test sentinel.spec.ts --max-failures=1
+
+      - name: Run Playwright visual regression
+        working-directory: tests/visual
+        env:
+          SKIP_DOCS_PREBUILD: "1"
+        run: npx playwright test pages.spec.ts components.spec.ts embedded-panels.spec.ts
+
+      - name: Upload visual regression artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-visual-regression-artifacts
+          if-no-files-found: ignore
+          path: |
+            site/**
+            tests/visual/test-results/**
+
+  windows-browser-checks:
+    needs: validate
     runs-on: windows-latest
     env:
       MPLBACKEND: Agg
@@ -165,23 +234,29 @@ jobs:
       - name: Build generated visual assets
         run: python scripts/build_visual_artifacts.py all --profile ci
 
-      - name: Run Playwright visual sentinel
+      - name: Run Playwright smoke checks
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
-        run: npx playwright test sentinel.spec.ts --max-failures=1
+        run: npx playwright test smoke.spec.ts
 
-      - name: Run Playwright visual regression
+      - name: Run Playwright DOM and CSS audits
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
-        run: npx playwright test pages.spec.ts components.spec.ts embedded-panels.spec.ts
+        run: npx playwright test dom-audits.spec.ts
 
-      - name: Upload visual regression artifacts
+      - name: Run Playwright accessibility checks
+        working-directory: tests/visual
+        env:
+          SKIP_DOCS_PREBUILD: "1"
+        run: npx playwright test a11y.spec.ts
+
+      - name: Upload Windows browser check artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: docs-visual-regression-artifacts
+          name: docs-windows-browser-check-artifacts
           if-no-files-found: ignore
           path: |
             site/**

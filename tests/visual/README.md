@@ -39,6 +39,8 @@ npm run test:components
 npm run test:artifacts
 ```
 
+In CI, the snapshot-based suites (`sentinel`, `baseline`, `components`, and `artifacts`) are authoritative on Ubuntu. Windows still runs the non-snapshot browser checks (`smoke`, `audits`, and `a11y`) to catch cross-platform issues without forcing a second snapshot baseline set.
+
 For bounded improvement-loop capture runs, set a page filter and capture directory:
 
 ```bash
@@ -70,6 +72,18 @@ Only update snapshots intentionally after reviewing the visual diff:
 cd tests/visual
 npm run test:update
 ```
+
+Use the narrower commands when you only intend to refresh one part of the snapshot suite:
+
+```bash
+cd tests/visual
+npm run test:update:sentinel
+npm run test:update:pages
+npm run test:update:components
+npm run test:update:artifacts
+```
+
+`npm run test:update` refreshes all committed snapshot suites in one pass.
 
 The authoritative route, theme, and width matrix lives in `scripts/visual_audit/review_targets.json`.
 The browser suite also supports `REVIEW_PAGE_KEYS` and `REVIEW_PATHS` to narrow runs to one page during bounded improvement passes.
