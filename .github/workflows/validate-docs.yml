@@ -171,11 +171,23 @@ jobs:
           SKIP_DOCS_PREBUILD: "1"
         run: npx playwright test sentinel.spec.ts --max-failures=1
 
-      - name: Run Playwright visual regression
+      - name: Run Playwright page visual regression
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
-        run: npx playwright test pages.spec.ts components.spec.ts embedded-panels.spec.ts
+        run: npx playwright test pages.spec.ts
+
+      - name: Run Playwright component visual regression
+        working-directory: tests/visual
+        env:
+          SKIP_DOCS_PREBUILD: "1"
+        run: npx playwright test components.spec.ts --workers=1
+
+      - name: Run Playwright embedded panel visual regression
+        working-directory: tests/visual
+        env:
+          SKIP_DOCS_PREBUILD: "1"
+        run: npx playwright test embedded-panels.spec.ts
 
       - name: Upload visual regression artifacts
         if: always()

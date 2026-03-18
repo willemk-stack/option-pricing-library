@@ -39,6 +39,10 @@ npm run test:components
 npm run test:artifacts
 ```
 
+`npm run test:components` intentionally uses one worker. The mobile `/performance/`
+snapshot table can flip between two raster states under heavier Ubuntu parallelism,
+so component snapshots are serialized to keep the authoritative CI baseline stable.
+
 In CI, the snapshot-based suites (`sentinel`, `baseline`, `components`, and `artifacts`) are authoritative on Ubuntu. Windows still runs the non-snapshot browser checks (`smoke`, `audits`, and `a11y`) to catch cross-platform issues without forcing a second snapshot baseline set.
 
 For the closest local match to CI, run the visual suites inside the GitHub-runner-style
