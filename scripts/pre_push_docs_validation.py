@@ -294,16 +294,32 @@ def ensure_playwright_dependencies() -> None:
     )
 
 
-def resolve_npx_command() -> str:
-    for candidate in ("npx.cmd", "npx"):
+def resolve_node_command() -> str:
+    for candidate in ("node.exe", "node"):
         resolved = shutil.which(candidate)
         if resolved:
             return resolved
 
     raise HookFailure(
-        "Could not find `npx` on PATH.\n"
-        "Install Node.js and ensure `npx` is available before using the docs pre-push hook."
+        "Could not find `node` on PATH.\n"
+        "Install Node.js and ensure `node` is available before using the docs pre-push hook."
     )
+
+
+def resolve_playwright_command() -> list[str]:
+    cli_path = TESTS_VISUAL_DIR / "node_modules" / "@playwright" / "test" / "cli.js"
+    if not cli_path.exists():
+        raise HookFailure(
+            "Could not find the local Playwright CLI under "
+            "`tests/visual/node_modules/@playwright/test/cli.js`.\n"
+            "Run `cd tests/visual && npm ci` once, then retry the push."
+        )
+
+    return [resolve_node_command(), str(cli_path)]
+
+
+def playwright_command(*args: str) -> list[str]:
+    return [*resolve_playwright_command(), *args]
 
 
 def is_snapshot_authoritative_platform() -> bool:
@@ -339,7 +355,6 @@ def main() -> int:
         return 0
 
     python_command = resolve_python_command()
-    npx_command = resolve_npx_command()
     ensure_playwright_dependencies()
 
     review_paths = determine_review_paths(docs_sensitive_files)
@@ -409,13 +424,12 @@ def main() -> int:
         playwright_env["REVIEW_PATHS"] = ",".join(review_paths)
 
     run(
-        [
-            npx_command,
-            "playwright",
+        playwright_command(
             "test",
             "smoke.spec.ts",
             "dom-audits.spec.ts",
-        ],
+            "--retries=1",
+        ),
         label="Playwright smoke and DOM audits",
         cwd=TESTS_VISUAL_DIR,
         env=playwright_env,
@@ -423,13 +437,12 @@ def main() -> int:
 
     if should_run_local_sentinel():
         run(
-            [
-                npx_command,
-                "playwright",
+            playwright_command(
                 "test",
                 "sentinel.spec.ts",
                 "--max-failures=1",
-            ],
+                "--retries=1",
+            ),
             label="Playwright sentinel snapshots",
             cwd=TESTS_VISUAL_DIR,
             env=playwright_env,
@@ -451,7 +464,7 @@ def main() -> int:
         a11y_env["REVIEW_PATHS"] = ",".join(a11y_paths)
 
     run(
-        [npx_command, "playwright", "test", "a11y.spec.ts"],
+        playwright_command("test", "a11y.spec.ts", "--retries=1"),
         label="Playwright accessibility checks",
         cwd=TESTS_VISUAL_DIR,
         env=a11y_env,
