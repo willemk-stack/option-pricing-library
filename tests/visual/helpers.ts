@@ -16,7 +16,7 @@ export async function gotoAndStabilize(
   }
 
   const navigationPath = path === "/" ? "./" : path.replace(/^\//, "");
-  await page.goto(navigationPath, { waitUntil: "networkidle" });
+  await page.goto(navigationPath, { waitUntil: "domcontentloaded" });
 
   await page.evaluate((selectedTheme?: "light" | "dark") => {
     if (!selectedTheme) return;
@@ -34,11 +34,31 @@ export async function gotoAndStabilize(
 }
 
 export async function waitForPageStable(page: Page): Promise<void> {
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("load");
   await page.evaluate(async () => {
+    const pendingImages = Array.from(document.images).filter(
+      (img) => !img.complete
+    );
+    await Promise.all(
+      pendingImages.map(
+        (img) =>
+          new Promise<void>((resolve) => {
+            const finish = () => resolve();
+            img.addEventListener("load", finish, { once: true });
+            img.addEventListener("error", finish, { once: true });
+          })
+      )
+    );
+
     if ("fonts" in document) {
       await document.fonts.ready;
     }
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
   });
 }
 
