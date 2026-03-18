@@ -1,4 +1,25 @@
 /* Slightly improve readability on wide screens */
+:root {
+    /*
+     * Keep docs typography runner-stable by avoiding remote font downloads and
+     * using a repo-chosen local stack. Ubuntu is the visual-regression source
+     * of truth, so prefer fonts that are present on Linux first.
+     */
+    --md-text-font: "DejaVu Sans", "Liberation Sans", Arial, sans-serif;
+    --md-code-font: "DejaVu Sans Mono", "Liberation Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+body {
+    font-family: var(--md-text-font);
+}
+
+code,
+kbd,
+pre,
+.md-typeset code {
+    font-family: var(--md-code-font);
+}
+
 .md-grid {
     max-width: 1200px;
 }
