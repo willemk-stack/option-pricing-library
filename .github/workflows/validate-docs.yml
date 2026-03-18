@@ -26,6 +26,10 @@ jobs:
           cache-dependency-path: |
             pyproject.toml
 
+      - name: Load docs site contract
+        id: docs_site_contract
+        run: python scripts/docs_site_contract.py github-outputs
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -72,9 +76,9 @@ jobs:
       - name: Upload built docs site
         uses: actions/upload-artifact@v4
         with:
-          name: docs-built-site
+          name: ${{ steps.docs_site_contract.outputs.artifact_name }}
           if-no-files-found: error
-          path: site
+          path: ${{ steps.docs_site_contract.outputs.site_dir }}
 
       - name: Check generated asset integrity
         id: check_generated_asset_integrity
@@ -169,7 +173,7 @@ jobs:
           if-no-files-found: ignore
           path: |
             artifacts/visual-state/**
-            site/**
+            ${{ steps.docs_site_contract.outputs.site_dir }}/**
             tests/visual/test-results/**
 
   visual-regression:
@@ -190,6 +194,10 @@ jobs:
           cache-dependency-path: |
             pyproject.toml
 
+      - name: Load docs site contract
+        id: docs_site_contract
+        run: python scripts/docs_site_contract.py github-outputs
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -209,16 +217,12 @@ jobs:
         id: download_built_docs_site
         uses: actions/download-artifact@v4
         with:
-          name: docs-built-site
-          path: .
+          name: ${{ steps.docs_site_contract.outputs.artifact_name }}
+          path: ${{ steps.docs_site_contract.outputs.site_dir }}
 
       - name: Verify built docs site layout
         id: verify_built_docs_site
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -d site
-          test -f site/index.html
+        run: python scripts/docs_site_contract.py verify
 
       - name: Run Playwright visual sentinel
         id: visual_sentinel
@@ -267,7 +271,7 @@ jobs:
             [
               {"env_key":"STEP_INSTALL_PLAYWRIGHT_DEPS","label":"Install Playwright dependencies","failure_class":"environment-node-browser","layer":"Node modules or Playwright browser install","next_step":"Inspect npm or Playwright install output."},
               {"env_key":"STEP_DOWNLOAD_BUILT_SITE","label":"Download built docs site","failure_class":"artifact-download","layer":"GitHub Actions artifact handoff","next_step":"Inspect whether the validate job uploaded the built site artifact successfully."},
-              {"env_key":"STEP_VERIFY_BUILT_SITE","label":"Verify built docs site layout","failure_class":"artifact-layout","layer":"Downloaded MkDocs site directory structure","next_step":"Inspect the downloaded docs-built-site artifact and ensure it contains site/index.html."},
+              {"env_key":"STEP_VERIFY_BUILT_SITE","label":"Verify built docs site layout","failure_class":"artifact-layout","layer":"Downloaded MkDocs site directory structure","next_step":"Inspect the downloaded built-site artifact and ensure the shared prebuilt-site contract still matches the extracted layout."},
               {"env_key":"STEP_SENTINEL","label":"Run Playwright visual sentinel","failure_class":"browser-snapshot-page","layer":"Ubuntu sentinel snapshots","next_step":"Inspect sentinel diffs in the uploaded test results."},
               {"env_key":"STEP_PAGES","label":"Run Playwright page visual regression","failure_class":"browser-snapshot-page","layer":"Ubuntu full-page snapshots","next_step":"Inspect page snapshot diffs in the uploaded test results."},
               {"env_key":"STEP_COMPONENTS","label":"Run Playwright component visual regression","failure_class":"browser-snapshot-component","layer":"Ubuntu component snapshots","next_step":"Inspect component snapshot diffs in the uploaded test results."},
@@ -283,7 +287,7 @@ jobs:
           name: docs-visual-regression-artifacts
           if-no-files-found: ignore
           path: |
-            site/**
+            ${{ steps.docs_site_contract.outputs.site_dir }}/**
             tests/visual/test-results/**
 
   windows-browser-checks:
@@ -304,6 +308,10 @@ jobs:
           cache-dependency-path: |
             pyproject.toml
 
+      - name: Load docs site contract
+        id: docs_site_contract
+        run: python scripts/docs_site_contract.py github-outputs
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -323,16 +331,12 @@ jobs:
         id: download_built_docs_site
         uses: actions/download-artifact@v4
         with:
-          name: docs-built-site
-          path: .
+          name: ${{ steps.docs_site_contract.outputs.artifact_name }}
+          path: ${{ steps.docs_site_contract.outputs.site_dir }}
 
       - name: Verify built docs site layout
         id: verify_built_docs_site
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -d site
-          test -f site/index.html
+        run: python scripts/docs_site_contract.py verify
 
       - name: Run Playwright smoke checks
         id: smoke_checks
@@ -372,7 +376,7 @@ jobs:
             [
               {"env_key":"STEP_INSTALL_PLAYWRIGHT_DEPS","label":"Install Playwright dependencies","failure_class":"environment-node-browser","layer":"Node modules or Playwright browser install","next_step":"Inspect npm or Playwright install output."},
               {"env_key":"STEP_DOWNLOAD_BUILT_SITE","label":"Download built docs site","failure_class":"artifact-download","layer":"GitHub Actions artifact handoff","next_step":"Inspect whether the validate job uploaded the built site artifact successfully."},
-              {"env_key":"STEP_VERIFY_BUILT_SITE","label":"Verify built docs site layout","failure_class":"artifact-layout","layer":"Downloaded MkDocs site directory structure","next_step":"Inspect the downloaded docs-built-site artifact and ensure it contains site/index.html."},
+              {"env_key":"STEP_VERIFY_BUILT_SITE","label":"Verify built docs site layout","failure_class":"artifact-layout","layer":"Downloaded MkDocs site directory structure","next_step":"Inspect the downloaded built-site artifact and ensure the shared prebuilt-site contract still matches the extracted layout."},
               {"env_key":"STEP_SMOKE","label":"Run Playwright smoke checks","failure_class":"browser-smoke","layer":"Rendered routes, console errors, or missing pages on Windows","next_step":"Inspect Playwright smoke output and the affected route."},
               {"env_key":"STEP_DOM_AUDITS","label":"Run Playwright DOM and CSS audits","failure_class":"browser-dom","layer":"Rendered docs DOM, CSS layout, or overflow findings on Windows","next_step":"Inspect Playwright audit findings in the uploaded test results."},
               {"env_key":"STEP_A11Y","label":"Run Playwright accessibility checks","failure_class":"browser-a11y","layer":"Rendered docs accessibility violations on Windows","next_step":"Inspect the accessibility violations in the uploaded test results."}
@@ -387,5 +391,5 @@ jobs:
           name: docs-windows-browser-check-artifacts
           if-no-files-found: ignore
           path: |
-            site/**
+            ${{ steps.docs_site_contract.outputs.site_dir }}/**
             tests/visual/test-results/**
