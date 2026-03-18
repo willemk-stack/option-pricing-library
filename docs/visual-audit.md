@@ -116,9 +116,16 @@ That hook runs on pushes touching docs-sensitive files such as `docs/**`, `mkdoc
 `docs/stylesheets/**`, `tests/visual/**`, and the docs visual-audit scripts. It performs a
 strict MkDocs build, SVG asset integrity checks, targeted Playwright smoke and DOM checks
 against the affected docs paths, and targeted accessibility checks on the curated blocking
-review pages. On Linux, where the committed screenshot baselines are authoritative, the hook
-also runs the representative Playwright sentinel snapshot suite. On Windows and macOS, the
-hook skips sentinel locally and relies on Ubuntu CI for the authoritative snapshot check.
+review pages. It then requires Docker and runs the authoritative Ubuntu snapshot suites
+against the same review-path filter. Targeted pushes always run `sentinel.spec.ts` and
+`pages.spec.ts`; component and embedded-panel suites are added only when the changed pages
+own those snapshots. Full-review changes still run the full authoritative snapshot set.
+Both the local guard and the Docker runner print a failure class and likely layer so a
+failed push can be triaged quickly as a build/link issue, generated-asset issue,
+DOM/a11y issue, or Ubuntu-authoritative snapshot issue.
+The GitHub Actions summary can also show warning-level visual-state advisories when the
+report finds non-blocking medium-severity issues, so the PR UI can surface cleanup items
+without failing the job.
 
 For the full repeatable audit flow from the repo root:
 

@@ -1,8 +1,9 @@
 import { expect, type Page, type TestInfo } from "@playwright/test";
 
+import { defaultDocsBaseURL } from "./config";
 import type { PageReviewConfig } from "./targets";
 
-const DEFAULT_DOCS_BASE_URL = "http://127.0.0.1:8000/option-pricing-library/";
+const DEFAULT_DOCS_BASE_URL = defaultDocsBaseURL;
 
 export type AuditSeverity = "critical" | "major" | "minor";
 export type AuditCategory = "console" | "content" | "layout" | "media" | "theme";
@@ -30,11 +31,7 @@ function shouldIgnoreConsoleMessage(message: string): boolean {
 
 function isTrackedLocalUrl(url: string): boolean {
     const docsBaseUrl = process.env.DOCS_BASE_URL || DEFAULT_DOCS_BASE_URL;
-    return (
-        url.startsWith(docsBaseUrl) ||
-        url.startsWith("http://127.0.0.1:8000/") ||
-        url.startsWith("http://localhost:8000/")
-    );
+    return url.startsWith(docsBaseUrl);
 }
 
 function shouldIgnoreResponseUrl(url: string): boolean {

@@ -2,15 +2,10 @@
 import { resolve } from "node:path";
 
 import { defineConfig, devices } from "@playwright/test";
+import { defaultDocsBaseURL, normalizeBaseURL } from "./config";
 import { widths } from "./targets";
 
-function normalizeBaseURL(rawUrl: string): string {
-  return rawUrl.endsWith("/") ? rawUrl : `${rawUrl}/`;
-}
-
-const baseURL = normalizeBaseURL(
-  process.env.DOCS_BASE_URL || "http://127.0.0.1:8000/option-pricing-library/"
-);
+const baseURL = normalizeBaseURL(process.env.DOCS_BASE_URL || defaultDocsBaseURL);
 
 function resolvePythonCommand(): string {
   const explicitCommand = process.env.PYTHON || process.env.PYTHON_EXECUTABLE;
@@ -32,6 +27,7 @@ function resolvePythonCommand(): string {
 }
 
 const pythonCommand = resolvePythonCommand();
+const servePrebuiltArg = process.env.SERVE_PREBUILT_SITE === "1" ? " --serve-prebuilt" : "";
 
 export default defineConfig({
   testDir: ".",
@@ -46,7 +42,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: `${pythonCommand} ../../scripts/serve_docs.py`,
+    command: `${pythonCommand} ../../scripts/serve_docs.py${servePrebuiltArg}`,
     url: baseURL,
     reuseExistingServer: true,
     timeout: 180_000,

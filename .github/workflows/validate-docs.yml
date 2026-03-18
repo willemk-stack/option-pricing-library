@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MPLBACKEND: Agg
-      DOCS_BASE_URL: http://127.0.0.1:8000/option-pricing-library/
 
     steps:
       - name: Checkout
@@ -36,40 +35,62 @@ jobs:
             tests/visual/package-lock.json
 
       - name: Install Python dependencies
+        id: install_python_dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[docs,plot]"
 
       - name: Install Playwright dependencies
+        id: install_playwright_dependencies
         working-directory: tests/visual
         run: |
           npm ci
           npx playwright install --with-deps chromium
 
       - name: Install D2
+        id: install_d2
         run: |
           curl -fsSL https://d2lang.com/install.sh | sh -s --
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: README is up to date
+        id: readme_up_to_date
         run: python scripts/render_readme.py --check
 
       - name: Render D2 diagrams
+        id: render_d2_diagrams
         run: python scripts/render_d2_diagrams.py
 
       - name: Build generated visual assets
+        id: build_visual_assets
         run: python scripts/build_visual_artifacts.py all --profile ci
 
       - name: Build MkDocs site strictly
+        id: build_mkdocs
         run: python -m mkdocs build --strict
 
+      - name: Upload built docs site
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-built-site
+          if-no-files-found: error
+          path: |
+            site/**
+
       - name: Check generated asset integrity
+        id: check_generated_asset_integrity
         run: python scripts/visual_audit/check_svg_assets.py
 
       - name: Report visual state
+        id: report_visual_state
         run: python scripts/visual_audit/report_visual_state.py
 
+      - name: Export visual state advisory warnings
+        if: always()
+        run: python scripts/visual_audit/export_visual_report_warning_status.py
+
       - name: Link check docs sources
+        id: link_check_docs_sources
         uses: lycheeverse/lychee-action@v2
         with:
           fail: true
@@ -81,31 +102,65 @@ jobs:
             docs/**/*.md
 
       - name: Run Playwright smoke checks
+        id: smoke_checks
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
+          SERVE_PREBUILT_SITE: "1"
         run: npx playwright test smoke.spec.ts
 
       - name: Run Playwright DOM and CSS audits
+        id: dom_css_audits
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
+          SERVE_PREBUILT_SITE: "1"
         run: npx playwright test dom-audits.spec.ts
 
       - name: Run Playwright accessibility checks
+        id: accessibility_checks
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
+          SERVE_PREBUILT_SITE: "1"
         run: npx playwright test a11y.spec.ts
 
-      - name: Upload rendered D2 diagrams
+      - name: Summarize validate job outcome
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: docs-visual-regression-diagrams
-          if-no-files-found: error
-          path: |
-            docs/assets/diagrams/**
+        env:
+          STEP_INSTALL_PYTHON_DEPS: ${{ steps.install_python_dependencies.conclusion }}
+          STEP_INSTALL_PLAYWRIGHT_DEPS: ${{ steps.install_playwright_dependencies.conclusion }}
+          STEP_INSTALL_D2: ${{ steps.install_d2.conclusion }}
+          STEP_README: ${{ steps.readme_up_to_date.conclusion }}
+          STEP_RENDER_D2: ${{ steps.render_d2_diagrams.conclusion }}
+          STEP_BUILD_VISUAL_ASSETS: ${{ steps.build_visual_assets.conclusion }}
+          STEP_BUILD_MKDOCS: ${{ steps.build_mkdocs.conclusion }}
+          STEP_CHECK_ASSET_INTEGRITY: ${{ steps.check_generated_asset_integrity.conclusion }}
+          STEP_REPORT_VISUAL_STATE: ${{ steps.report_visual_state.conclusion }}
+          STEP_LINK_CHECK: ${{ steps.link_check_docs_sources.conclusion }}
+          STEP_SMOKE: ${{ steps.smoke_checks.conclusion }}
+          STEP_DOM_AUDITS: ${{ steps.dom_css_audits.conclusion }}
+          STEP_A11Y: ${{ steps.accessibility_checks.conclusion }}
+          WORKFLOW_SUMMARY_TITLE: Docs validation job summary
+          WORKFLOW_SUMMARY_ITEMS_JSON: >-
+            [
+              {"env_key":"STEP_INSTALL_PYTHON_DEPS","label":"Install Python dependencies","failure_class":"environment-python","layer":"Python dependency install","next_step":"Inspect pip output and dependency resolution."},
+              {"env_key":"STEP_INSTALL_PLAYWRIGHT_DEPS","label":"Install Playwright dependencies","failure_class":"environment-node-browser","layer":"Node modules or Playwright browser install","next_step":"Inspect npm or Playwright install output."},
+              {"env_key":"STEP_INSTALL_D2","label":"Install D2","failure_class":"environment-tooling","layer":"D2 CLI installation","next_step":"Inspect the D2 install output and PATH setup."},
+              {"env_key":"STEP_README","label":"README is up to date","failure_class":"build-readme-sync","layer":"Generated README sync","next_step":"Regenerate README content from the template and examples."},
+              {"env_key":"STEP_RENDER_D2","label":"Render D2 diagrams","failure_class":"generated-asset-build","layer":"D2 diagram generation","next_step":"Fix the diagram sources or D2 tooling failure."},
+              {"env_key":"STEP_BUILD_VISUAL_ASSETS","label":"Build generated visual assets","failure_class":"generated-asset-build","layer":"SVG or PNG visual artifact generation","next_step":"Inspect the artifact generator inputs and failing asset build."},
+              {"env_key":"STEP_BUILD_MKDOCS","label":"Build MkDocs site strictly","failure_class":"build-mkdocs","layer":"MkDocs config, Markdown, or generated docs content","next_step":"Fix the strict MkDocs build failure before checking browser regressions."},
+              {"env_key":"STEP_CHECK_ASSET_INTEGRITY","label":"Check generated asset integrity","failure_class":"generated-asset-integrity","layer":"Generated SVG or PNG references and linked media","next_step":"Inspect the reported generated asset and its linked media."},
+              {"env_key":"STEP_REPORT_VISUAL_STATE","label":"Report visual state","failure_class":"report-visual-state","layer":"Visual-state reporting script","next_step":"Inspect the reporting script output and expected review-target inputs."},
+              {"env_key":"STEP_VISUAL_STATE_WARNINGS","label":"Visual state advisory findings","classification":"visual-state-advisory","layer":"Non-blocking medium findings from the visual state report","next_step":"Inspect artifacts/visual-state/report.md for advisory findings that may merit cleanup before merge."},
+              {"env_key":"STEP_LINK_CHECK","label":"Link check docs sources","failure_class":"build-link","layer":"Docs source links","next_step":"Fix the broken docs links reported by Lychee."},
+              {"env_key":"STEP_SMOKE","label":"Run Playwright smoke checks","failure_class":"browser-smoke","layer":"Rendered routes, console errors, or missing pages","next_step":"Inspect Playwright smoke output and the affected route."},
+              {"env_key":"STEP_DOM_AUDITS","label":"Run Playwright DOM and CSS audits","failure_class":"browser-dom","layer":"Rendered docs DOM, CSS layout, or overflow findings","next_step":"Inspect Playwright audit findings in the uploaded test results."},
+              {"env_key":"STEP_A11Y","label":"Run Playwright accessibility checks","failure_class":"browser-a11y","layer":"Rendered docs accessibility violations","next_step":"Inspect the accessibility violations in the uploaded test results."}
+            ]
+        run: |
+          python scripts/visual_audit/write_github_step_summary.py
 
       - name: Upload docs validation artifacts
         if: always()
@@ -123,7 +178,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       MPLBACKEND: Agg
-      DOCS_BASE_URL: http://127.0.0.1:8000/option-pricing-library/
 
     steps:
       - name: Checkout
@@ -145,49 +199,73 @@ jobs:
           cache-dependency-path: |
             tests/visual/package-lock.json
 
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[docs,plot]"
-
       - name: Install Playwright dependencies
+        id: install_playwright_dependencies
         working-directory: tests/visual
         run: |
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Download rendered D2 diagrams
+      - name: Download built docs site
+        id: download_built_docs_site
         uses: actions/download-artifact@v4
         with:
-          name: docs-visual-regression-diagrams
+          name: docs-built-site
           path: .
 
-      - name: Build generated visual assets
-        run: python scripts/build_visual_artifacts.py all --profile ci
-
       - name: Run Playwright visual sentinel
+        id: visual_sentinel
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
+          SERVE_PREBUILT_SITE: "1"
         run: npx playwright test sentinel.spec.ts --max-failures=1
 
       - name: Run Playwright page visual regression
+        id: page_visual_regression
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
+          SERVE_PREBUILT_SITE: "1"
         run: npx playwright test pages.spec.ts
 
       - name: Run Playwright component visual regression
+        id: component_visual_regression
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
+          SERVE_PREBUILT_SITE: "1"
         run: npx playwright test components.spec.ts --workers=1
 
       - name: Run Playwright embedded panel visual regression
+        id: embedded_panel_visual_regression
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
+          SERVE_PREBUILT_SITE: "1"
         run: npx playwright test embedded-panels.spec.ts
+
+      - name: Summarize visual-regression job outcome
+        if: always()
+        env:
+          STEP_INSTALL_PLAYWRIGHT_DEPS: ${{ steps.install_playwright_dependencies.conclusion }}
+          STEP_DOWNLOAD_BUILT_SITE: ${{ steps.download_built_docs_site.conclusion }}
+          STEP_SENTINEL: ${{ steps.visual_sentinel.conclusion }}
+          STEP_PAGES: ${{ steps.page_visual_regression.conclusion }}
+          STEP_COMPONENTS: ${{ steps.component_visual_regression.conclusion }}
+          STEP_EMBEDDED_PANELS: ${{ steps.embedded_panel_visual_regression.conclusion }}
+          WORKFLOW_SUMMARY_TITLE: Docs visual regression job summary
+          WORKFLOW_SUMMARY_ITEMS_JSON: >-
+            [
+              {"env_key":"STEP_INSTALL_PLAYWRIGHT_DEPS","label":"Install Playwright dependencies","failure_class":"environment-node-browser","layer":"Node modules or Playwright browser install","next_step":"Inspect npm or Playwright install output."},
+              {"env_key":"STEP_DOWNLOAD_BUILT_SITE","label":"Download built docs site","failure_class":"artifact-download","layer":"GitHub Actions artifact handoff","next_step":"Inspect whether the validate job uploaded the built site artifact successfully."},
+              {"env_key":"STEP_SENTINEL","label":"Run Playwright visual sentinel","failure_class":"browser-snapshot-page","layer":"Ubuntu sentinel snapshots","next_step":"Inspect sentinel diffs in the uploaded test results."},
+              {"env_key":"STEP_PAGES","label":"Run Playwright page visual regression","failure_class":"browser-snapshot-page","layer":"Ubuntu full-page snapshots","next_step":"Inspect page snapshot diffs in the uploaded test results."},
+              {"env_key":"STEP_COMPONENTS","label":"Run Playwright component visual regression","failure_class":"browser-snapshot-component","layer":"Ubuntu component snapshots","next_step":"Inspect component snapshot diffs in the uploaded test results."},
+              {"env_key":"STEP_EMBEDDED_PANELS","label":"Run Playwright embedded panel visual regression","failure_class":"browser-snapshot-or-embedded-asset","layer":"Ubuntu embedded-panel checks or generated proof assets","next_step":"Inspect embedded-panel failures and the linked generated assets."}
+            ]
+        run: |
+          python scripts/visual_audit/write_github_step_summary.py
 
       - name: Upload visual regression artifacts
         if: always()
@@ -204,7 +282,6 @@ jobs:
     runs-on: windows-latest
     env:
       MPLBACKEND: Agg
-      DOCS_BASE_URL: http://127.0.0.1:8000/option-pricing-library/
 
     steps:
       - name: Checkout
@@ -226,43 +303,63 @@ jobs:
           cache-dependency-path: |
             tests/visual/package-lock.json
 
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[docs,plot]"
-
       - name: Install Playwright dependencies
+        id: install_playwright_dependencies
         working-directory: tests/visual
         run: |
           npm ci
           npx playwright install chromium
 
-      - name: Download rendered D2 diagrams
+      - name: Download built docs site
+        id: download_built_docs_site
         uses: actions/download-artifact@v4
         with:
-          name: docs-visual-regression-diagrams
+          name: docs-built-site
           path: .
 
-      - name: Build generated visual assets
-        run: python scripts/build_visual_artifacts.py all --profile ci
-
       - name: Run Playwright smoke checks
+        id: smoke_checks
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
+          SERVE_PREBUILT_SITE: "1"
         run: npx playwright test smoke.spec.ts
 
       - name: Run Playwright DOM and CSS audits
+        id: dom_css_audits
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
+          SERVE_PREBUILT_SITE: "1"
         run: npx playwright test dom-audits.spec.ts
 
       - name: Run Playwright accessibility checks
+        id: accessibility_checks
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
+          SERVE_PREBUILT_SITE: "1"
         run: npx playwright test a11y.spec.ts
+
+      - name: Summarize windows-browser-checks job outcome
+        if: always()
+        env:
+          STEP_INSTALL_PLAYWRIGHT_DEPS: ${{ steps.install_playwright_dependencies.conclusion }}
+          STEP_DOWNLOAD_BUILT_SITE: ${{ steps.download_built_docs_site.conclusion }}
+          STEP_SMOKE: ${{ steps.smoke_checks.conclusion }}
+          STEP_DOM_AUDITS: ${{ steps.dom_css_audits.conclusion }}
+          STEP_A11Y: ${{ steps.accessibility_checks.conclusion }}
+          WORKFLOW_SUMMARY_TITLE: Docs Windows browser checks summary
+          WORKFLOW_SUMMARY_ITEMS_JSON: >-
+            [
+              {"env_key":"STEP_INSTALL_PLAYWRIGHT_DEPS","label":"Install Playwright dependencies","failure_class":"environment-node-browser","layer":"Node modules or Playwright browser install","next_step":"Inspect npm or Playwright install output."},
+              {"env_key":"STEP_DOWNLOAD_BUILT_SITE","label":"Download built docs site","failure_class":"artifact-download","layer":"GitHub Actions artifact handoff","next_step":"Inspect whether the validate job uploaded the built site artifact successfully."},
+              {"env_key":"STEP_SMOKE","label":"Run Playwright smoke checks","failure_class":"browser-smoke","layer":"Rendered routes, console errors, or missing pages on Windows","next_step":"Inspect Playwright smoke output and the affected route."},
+              {"env_key":"STEP_DOM_AUDITS","label":"Run Playwright DOM and CSS audits","failure_class":"browser-dom","layer":"Rendered docs DOM, CSS layout, or overflow findings on Windows","next_step":"Inspect Playwright audit findings in the uploaded test results."},
+              {"env_key":"STEP_A11Y","label":"Run Playwright accessibility checks","failure_class":"browser-a11y","layer":"Rendered docs accessibility violations on Windows","next_step":"Inspect the accessibility violations in the uploaded test results."}
+            ]
+        run: |
+          python scripts/visual_audit/write_github_step_summary.py
 
       - name: Upload Windows browser check artifacts
         if: always()
