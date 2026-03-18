@@ -4,7 +4,12 @@
   "scripts": {
     "test": "playwright test",
     "test:baseline": "playwright test pages.spec.ts",
-    "test:update": "playwright test pages.spec.ts --update-snapshots",
+    "test:update": "npm run test:update:all",
+    "test:update:all": "playwright test sentinel.spec.ts pages.spec.ts components.spec.ts embedded-panels.spec.ts --update-snapshots",
+    "test:update:sentinel": "playwright test sentinel.spec.ts --update-snapshots",
+    "test:update:pages": "playwright test pages.spec.ts --update-snapshots",
+    "test:update:components": "playwright test components.spec.ts --update-snapshots",
+    "test:update:artifacts": "playwright test embedded-panels.spec.ts --update-snapshots",
     "test:a11y": "playwright test a11y.spec.ts",
     "test:smoke": "playwright test smoke.spec.ts",
     "test:audits": "playwright test dom-audits.spec.ts",
