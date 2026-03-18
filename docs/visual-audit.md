@@ -114,9 +114,11 @@ pre-commit install --hook-type pre-commit --hook-type pre-push
 That hook runs on pushes touching docs-sensitive files such as `docs/**`, `mkdocs.yml`,
 `src/**`, `benchmarks/artifacts/**`, `scripts/build_benchmark_artifacts.py`,
 `docs/stylesheets/**`, `tests/visual/**`, and the docs visual-audit scripts. It performs a
-strict MkDocs build, SVG asset integrity checks, the representative Playwright sentinel,
-targeted Playwright smoke and DOM checks against the affected docs paths, and targeted
-accessibility checks on the curated blocking review pages.
+strict MkDocs build, SVG asset integrity checks, targeted Playwright smoke and DOM checks
+against the affected docs paths, and targeted accessibility checks on the curated blocking
+review pages. On Linux, where the committed screenshot baselines are authoritative, the hook
+also runs the representative Playwright sentinel snapshot suite. On Windows and macOS, the
+hook skips sentinel locally and relies on Ubuntu CI for the authoritative snapshot check.
 
 For the full repeatable audit flow from the repo root:
 

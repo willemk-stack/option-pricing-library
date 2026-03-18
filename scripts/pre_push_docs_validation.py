@@ -71,6 +71,14 @@ CURATED_A11Y_PATHS = {
 }
 
 
+class HookFailure(Exception):
+    """Actionable pre-push failure without a Python traceback."""
+
+    def __init__(self, message: str, *, exit_code: int = 1) -> None:
+        super().__init__(message)
+        self.exit_code = exit_code
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -90,12 +98,27 @@ def parse_args() -> argparse.Namespace:
 def run(
     command: list[str],
     *,
+    label: str | None = None,
     cwd: Path = ROOT,
     env: dict[str, str] | None = None,
 ) -> None:
     printable = " ".join(command)
-    print(f"\n> {printable}", flush=True)
-    subprocess.run(command, cwd=cwd, env=env, check=True)
+    if label:
+        print(f"\n[{label}]", flush=True)
+    print(f"> {printable}", flush=True)
+    try:
+        subprocess.run(command, cwd=cwd, env=env, check=True)
+    except subprocess.CalledProcessError as exc:
+        raise HookFailure(
+            "\n".join(
+                [
+                    f"{label or 'Validation step'} failed.",
+                    f"Command: {printable}",
+                    f"Exit code: {exc.returncode}",
+                ]
+            ),
+            exit_code=exc.returncode or 1,
+        ) from None
 
 
 def git_stdout(args: list[str]) -> str:
@@ -265,7 +288,7 @@ def ensure_playwright_dependencies() -> None:
     if (TESTS_VISUAL_DIR / "node_modules").exists():
         return
 
-    raise SystemExit(
+    raise HookFailure(
         "Missing Playwright dependencies under tests/visual/node_modules.\n"
         "Run `cd tests/visual && npm ci` once, then retry the push."
     )
@@ -277,9 +300,30 @@ def resolve_npx_command() -> str:
         if resolved:
             return resolved
 
-    raise SystemExit(
+    raise HookFailure(
         "Could not find `npx` on PATH.\n"
         "Install Node.js and ensure `npx` is available before using the docs pre-push hook."
+    )
+
+
+def is_snapshot_authoritative_platform() -> bool:
+    return sys.platform.startswith("linux")
+
+
+def should_run_local_sentinel() -> bool:
+    force_value = os.environ.get("DOCS_PRE_PUSH_FORCE_SENTINEL", "").strip().lower()
+    if force_value in {"1", "true", "yes", "on"}:
+        return True
+    return is_snapshot_authoritative_platform()
+
+
+def print_non_authoritative_snapshot_note() -> None:
+    print(
+        "\nSkipping Playwright sentinel snapshots on "
+        f"{sys.platform}. The committed baselines are authoritative on Ubuntu, "
+        "so this local pre-push hook only enforces the non-snapshot browser checks "
+        "on this OS. CI will still run the sentinel suite on Ubuntu.",
+        flush=True,
     )
 
 
@@ -319,10 +363,18 @@ def main() -> int:
     env["MPLBACKEND"] = "Agg"
     env["DOCS_BASE_URL"] = DEFAULT_DOCS_BASE_URL
 
-    run([python_command, "scripts/check_docs_source_links.py"], env=env)
+    run(
+        [python_command, "scripts/check_docs_source_links.py"],
+        label="Docs source links",
+        env=env,
+    )
 
     if should_rebuild_assets:
-        run([python_command, "scripts/render_d2_diagrams.py"], env=env)
+        run(
+            [python_command, "scripts/render_d2_diagrams.py"],
+            label="Rebuild D2 diagrams",
+            env=env,
+        )
         run(
             [
                 python_command,
@@ -331,6 +383,7 @@ def main() -> int:
                 "--profile",
                 "ci",
             ],
+            label="Rebuild visual artifacts",
             env=env,
         )
     else:
@@ -339,8 +392,16 @@ def main() -> int:
             flush=True,
         )
 
-    run([python_command, "-m", "mkdocs", "build", "--strict"], env=env)
-    run([python_command, "scripts/visual_audit/check_svg_assets.py"], env=env)
+    run(
+        [python_command, "-m", "mkdocs", "build", "--strict"],
+        label="Strict MkDocs build",
+        env=env,
+    )
+    run(
+        [python_command, "scripts/visual_audit/check_svg_assets.py"],
+        label="SVG/PNG asset integrity",
+        env=env,
+    )
 
     playwright_env = env.copy()
     playwright_env["SKIP_DOCS_PREBUILD"] = "1"
@@ -355,20 +416,26 @@ def main() -> int:
             "smoke.spec.ts",
             "dom-audits.spec.ts",
         ],
+        label="Playwright smoke and DOM audits",
         cwd=TESTS_VISUAL_DIR,
         env=playwright_env,
     )
-    run(
-        [
-            npx_command,
-            "playwright",
-            "test",
-            "sentinel.spec.ts",
-            "--max-failures=1",
-        ],
-        cwd=TESTS_VISUAL_DIR,
-        env=playwright_env,
-    )
+
+    if should_run_local_sentinel():
+        run(
+            [
+                npx_command,
+                "playwright",
+                "test",
+                "sentinel.spec.ts",
+                "--max-failures=1",
+            ],
+            label="Playwright sentinel snapshots",
+            cwd=TESTS_VISUAL_DIR,
+            env=playwright_env,
+        )
+    else:
+        print_non_authoritative_snapshot_note()
 
     a11y_paths = determine_a11y_paths(review_paths)
     if a11y_paths == []:
@@ -385,6 +452,7 @@ def main() -> int:
 
     run(
         [npx_command, "playwright", "test", "a11y.spec.ts"],
+        label="Playwright accessibility checks",
         cwd=TESTS_VISUAL_DIR,
         env=a11y_env,
     )
@@ -393,4 +461,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except HookFailure as exc:
+        print("\nDocs pre-push guard failed.", flush=True)
+        print(str(exc), flush=True)
+        raise SystemExit(exc.exit_code) from None
