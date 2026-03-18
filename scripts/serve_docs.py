@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import subprocess
 import sys
@@ -11,18 +10,18 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, urlsplit, urlunsplit
 
+from docs_site_contract import (
+    load_docs_site_contract,
+    load_docs_visual_config,
+    verify_prebuilt_site,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
-SITE_DIR = ROOT / "site"
-DOCS_VISUAL_CONFIG_PATH = ROOT / "scripts" / "visual_audit" / "docs_visual_config.json"
-
-
-def load_docs_visual_config() -> dict[str, str]:
-    return json.loads(DOCS_VISUAL_CONFIG_PATH.read_text(encoding="utf8"))
-
-
 DOCS_VISUAL_CONFIG = load_docs_visual_config()
+DOCS_SITE_CONTRACT = load_docs_site_contract()
 DEFAULT_DOCS_BASE_URL = DOCS_VISUAL_CONFIG["docs_base_url"]
 DEFAULT_BUILD_PROFILE = DOCS_VISUAL_CONFIG["build_profile"]
+SITE_DIR = DOCS_SITE_CONTRACT.site_dir
 
 
 def run(command: list[str]) -> None:
@@ -159,11 +158,15 @@ def main() -> int:
     serve_prebuilt = should_serve_prebuilt(args)
 
     if serve_prebuilt:
-        if not SITE_DIR.exists():
-            raise SystemExit(
-                "Prebuilt site directory is missing. Run `python -m mkdocs build --strict` first."
-            )
-        print("Serving existing MkDocs site build...", flush=True)
+        try:
+            verify_prebuilt_site(DOCS_SITE_CONTRACT)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from None
+        print(
+            "Serving existing MkDocs site build from "
+            f"{DOCS_SITE_CONTRACT.artifact_name}...",
+            flush=True,
+        )
     else:
         if os.environ.get("SKIP_DOCS_PREBUILD") != "1":
             print("Rendering diagrams...", flush=True)
