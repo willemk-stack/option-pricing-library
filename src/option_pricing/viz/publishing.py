@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -8,6 +9,13 @@ from pathlib import Path
 LIGHT_THEME = "light"
 DARK_THEME = "dark"
 PUBLISHING_THEMES = (LIGHT_THEME, DARK_THEME)
+SVG_TEXT_FONT_STACK = "DejaVu Sans, Liberation Sans, Arial, sans-serif"
+_DATA_URI_MIME_TYPES = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".svg": "image/svg+xml",
+}
 
 
 @dataclass(frozen=True)
@@ -40,6 +48,16 @@ def copy_light_variant(variants: AssetVariants) -> Path:
     variants.base.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(variants.light, variants.base)
     return variants.base
+
+
+def file_to_data_uri(path: str | Path) -> str:
+    asset_path = Path(path)
+    mime_type = _DATA_URI_MIME_TYPES.get(asset_path.suffix.lower())
+    if mime_type is None:
+        raise ValueError(f"Unsupported asset type for data URI embedding: {asset_path}")
+
+    encoded = base64.b64encode(asset_path.read_bytes()).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
 
 
 def publishing_palette(theme: str = LIGHT_THEME) -> dict[str, str]:
@@ -122,7 +140,6 @@ def publishing_style(theme: str = LIGHT_THEME):
             "legend.facecolor": palette["legend_face"],
             "legend.edgecolor": palette["legend_edge"],
             "font.family": "DejaVu Sans",
-            "savefig.bbox": "tight",
             "savefig.facecolor": palette["figure_face"],
             "savefig.edgecolor": palette["figure_face"],
         }
@@ -137,7 +154,6 @@ def save_figure(fig, out_path: str | Path, *, dpi: int) -> Path:
     fig.savefig(
         path,
         dpi=dpi,
-        bbox_inches="tight",
         facecolor=fig.get_facecolor(),
         edgecolor=fig.get_facecolor(),
     )

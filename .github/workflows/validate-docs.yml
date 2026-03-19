@@ -250,13 +250,13 @@ jobs:
           SERVE_PREBUILT_SITE: "1"
         run: npx playwright test repo-facts.spec.ts --max-failures=1
 
-      - name: Run Playwright page visual regression
+      - name: Run Playwright representative page visual regression
         id: page_visual_regression
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
           SERVE_PREBUILT_SITE: "1"
-        run: npx playwright test pages.spec.ts
+        run: npx playwright test pages.spec.ts --workers=1
 
       - name: Run Playwright component visual regression
         id: component_visual_regression
@@ -293,7 +293,7 @@ jobs:
               {"env_key":"STEP_VERIFY_BUILT_SITE","label":"Verify built docs site layout","failure_class":"artifact-layout","layer":"Downloaded MkDocs site directory structure","next_step":"Inspect the downloaded built-site artifact and ensure the shared prebuilt-site contract still matches the extracted layout."},
               {"env_key":"STEP_SENTINEL","label":"Run Playwright visual sentinel","failure_class":"browser-snapshot-page","layer":"Ubuntu sentinel snapshots","next_step":"Inspect sentinel diffs in the uploaded test results."},
               {"env_key":"STEP_REPO_FACTS","label":"Run Playwright repository facts checks","failure_class":"browser-shell-widget","layer":"Deterministic repo-facts shell assertions","next_step":"Inspect the mocked repo-facts test output in the uploaded test results."},
-              {"env_key":"STEP_PAGES","label":"Run Playwright page visual regression","failure_class":"browser-snapshot-page","layer":"Ubuntu full-page snapshots","next_step":"Inspect page snapshot diffs in the uploaded test results."},
+              {"env_key":"STEP_PAGES","label":"Run Playwright representative page visual regression","failure_class":"browser-snapshot-page","layer":"Ubuntu representative full-page snapshots","next_step":"Inspect representative page snapshot diffs in the uploaded test results."},
               {"env_key":"STEP_COMPONENTS","label":"Run Playwright component visual regression","failure_class":"browser-snapshot-component","layer":"Ubuntu component snapshots","next_step":"Inspect component snapshot diffs in the uploaded test results."},
               {"env_key":"STEP_EMBEDDED_PANELS","label":"Run Playwright embedded panel visual regression","failure_class":"browser-snapshot-or-embedded-asset","layer":"Ubuntu embedded-panel checks or generated proof assets","next_step":"Inspect embedded-panel failures and the linked generated assets."}
             ]

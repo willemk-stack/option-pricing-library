@@ -16,7 +16,7 @@ dependencies = ["numpy", "scipy"]
 [project.optional-dependencies]
 dev = [
     "pandas==2.2.3",
-    "matplotlib",
+    "matplotlib==3.10.8",
     "jupyter",
     "nbmake",
     "PyYAML",
@@ -29,14 +29,15 @@ dev = [
     "scipy-stubs",
     "pandas-stubs==2.2.3.241126",
 ]
-notebooks = ["jupyter", "matplotlib", "pandas", "ipywidgets"]
-plot = ["matplotlib", "pandas"]
+notebooks = ["jupyter", "matplotlib==3.10.8", "pandas", "ipywidgets"]
+plot = ["matplotlib==3.10.8", "pandas==2.2.3"]
 docs = [
-    "mkdocs",
-    "mkdocs-material",
-    "pymdown-extensions",
-    "PyYAML",
-    "mkdocstrings[python]",
+    "mkdocs==1.6.1",
+    "mkdocs-material==9.7.0",
+    "pymdown-extensions==10.19.1",
+    "PyYAML==6.0.3",
+    "mkdocstrings[python]==1.0.0",
+    "mkdocstrings-python==2.0.1",
 ]
 
 [tool.black]

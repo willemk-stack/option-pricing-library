@@ -118,8 +118,10 @@ strict MkDocs build, SVG asset integrity checks, targeted Playwright smoke and D
 against the affected docs paths, and targeted accessibility checks on the curated blocking
 review pages. It then requires Docker and runs the authoritative Ubuntu snapshot suites
 against the same review-path filter. Targeted pushes always run `sentinel.spec.ts` and
-`pages.spec.ts`; component and embedded-panel suites are added only when the changed pages
-own those snapshots. Full-review changes still run the full authoritative snapshot set.
+the representative `pages.spec.ts` subset; component and embedded-panel suites are added
+only when the changed pages own those snapshots. Full-review changes still run the full
+authoritative snapshot contract, but the blocking full-page slice is intentionally
+smaller than the broader smoke/DOM/a11y audit matrix.
 Both the local guard and the Docker runner print a failure class and likely layer so a
 failed push can be triaged quickly as a build/link issue, generated-asset issue,
 DOM/a11y issue, or Ubuntu-authoritative snapshot issue.

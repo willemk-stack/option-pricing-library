@@ -5,8 +5,10 @@ export type ThemeName = "light" | "dark";
 
 type ReviewTargets = {
     pages: string[];
+    page_snapshot_pages: string[];
     themes: ThemeName[];
     widths: number[];
+    page_snapshot_widths: number[];
     priority_asset_globs: string[];
 };
 
@@ -74,11 +76,17 @@ function loadReviewTargets(): ReviewTargets {
     const raw = JSON.parse(readFileSync(filePath, "utf8")) as Partial<ReviewTargets>;
 
     const pages = Array.isArray(raw.pages) ? raw.pages.filter((value): value is string => typeof value === "string") : [];
+    const pageSnapshotPages = Array.isArray(raw.page_snapshot_pages)
+        ? raw.page_snapshot_pages.filter((value): value is string => typeof value === "string")
+        : [];
     const themes = Array.isArray(raw.themes)
         ? raw.themes.filter((value): value is ThemeName => value === "light" || value === "dark")
         : [];
     const widths = Array.isArray(raw.widths)
         ? raw.widths.filter((value): value is number => Number.isInteger(value) && value > 0)
+        : [];
+    const pageSnapshotWidths = Array.isArray(raw.page_snapshot_widths)
+        ? raw.page_snapshot_widths.filter((value): value is number => Number.isInteger(value) && value > 0)
         : [];
     const priorityAssetGlobs = Array.isArray(raw.priority_asset_globs)
         ? raw.priority_asset_globs.filter((value): value is string => typeof value === "string")
@@ -96,8 +104,10 @@ function loadReviewTargets(): ReviewTargets {
 
     return {
         pages,
+        page_snapshot_pages: pageSnapshotPages.length > 0 ? pageSnapshotPages : pages,
         themes,
         widths,
+        page_snapshot_widths: pageSnapshotWidths.length > 0 ? pageSnapshotWidths : widths,
         priority_asset_globs: priorityAssetGlobs,
     };
 }
@@ -107,6 +117,8 @@ const reviewTargets = loadReviewTargets();
 export const themes = reviewTargets.themes;
 export const widths = reviewTargets.widths;
 export const priorityAssetGlobs = reviewTargets.priority_asset_globs;
+const defaultPageSnapshotPageSet = new Set(reviewTargets.page_snapshot_pages);
+const defaultPageSnapshotWidths = reviewTargets.page_snapshot_widths;
 
 const pageReviewConfigOverrides: Record<string, Omit<PageReviewConfig, "path">> = {
     "/": {
@@ -205,22 +217,27 @@ function readFilterSet(value: string | undefined): Set<string> {
     );
 }
 
-function filterPageReviewConfigs(configs: PageReviewConfig[]): PageReviewConfig[] {
-    const selectedPaths = readFilterSet(process.env.REVIEW_PATHS);
-    const selectedPageKeys = readFilterSet(process.env.REVIEW_PAGE_KEYS);
+const selectedPaths = readFilterSet(process.env.REVIEW_PATHS);
+const selectedPageKeys = readFilterSet(process.env.REVIEW_PAGE_KEYS);
+const hasReviewFilters = selectedPaths.size > 0 || selectedPageKeys.size > 0;
 
-    if (selectedPaths.size === 0 && selectedPageKeys.size === 0) {
+function filterPageReviewConfigs(
+    configs: PageReviewConfig[],
+    filteredPaths: Set<string>,
+    filteredPageKeys: Set<string>
+): PageReviewConfig[] {
+    if (filteredPaths.size === 0 && filteredPageKeys.size === 0) {
         return configs;
     }
 
     const filtered = configs.filter(
         (config) =>
-            selectedPaths.has(config.path) ||
-            selectedPageKeys.has(config.pageKey)
+            filteredPaths.has(config.path) ||
+            filteredPageKeys.has(config.pageKey)
     );
 
     const knownPaths = new Set(configs.map((config) => config.path));
-    for (const path of selectedPaths) {
+    for (const path of filteredPaths) {
         if (knownPaths.has(path)) {
             continue;
         }
@@ -236,8 +253,19 @@ function filterPageReviewConfigs(configs: PageReviewConfig[]): PageReviewConfig[
     return filtered;
 }
 
-export const pageReviewConfigs = filterPageReviewConfigs(allPageReviewConfigs);
+export const pageReviewConfigs = filterPageReviewConfigs(
+    allPageReviewConfigs,
+    selectedPaths,
+    selectedPageKeys
+);
 export const pages = Array.from(new Set(pageReviewConfigs.map((config) => config.path)));
+export const pageSnapshotWidths = hasReviewFilters ? widths : defaultPageSnapshotWidths;
+export const pageSnapshotProjectNames = new Set(
+    pageSnapshotWidths.map((width) => `chromium-${width}`)
+);
+export const pageSnapshotReviewConfigs = hasReviewFilters
+    ? pageReviewConfigs
+    : pageReviewConfigs.filter((config) => defaultPageSnapshotPageSet.has(config.path));
 
 export const componentReviewTargets = pageReviewConfigs.flatMap((config) => config.componentShots);
 

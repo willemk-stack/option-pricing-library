@@ -17,7 +17,7 @@ DEFAULT_TESTS = [
     "components.spec.ts",
     "embedded-panels.spec.ts",
 ]
-SERIAL_TESTS = {"components.spec.ts"}
+SERIAL_TESTS = {"pages.spec.ts", "components.spec.ts"}
 FORWARDED_ENV_VARS = (
     "REVIEW_PATHS",
     "REVIEW_PAGE_KEYS",
@@ -59,6 +59,21 @@ STAGE_METADATA = {
         "browser-snapshot-page",
         "Ubuntu Playwright sentinel or full-page snapshots",
         "Inspect the page snapshot diffs under tests/visual/test-results.",
+    ),
+    "playwright-pages": (
+        "browser-snapshot-page",
+        "Ubuntu representative full-page snapshots",
+        "Inspect the representative page snapshot diffs under tests/visual/test-results.",
+    ),
+    "playwright-sentinel-repo-facts": (
+        "browser-snapshot-page",
+        "Ubuntu Playwright sentinel and repository-facts checks",
+        "Inspect the sentinel or repo-facts output under tests/visual/test-results.",
+    ),
+    "playwright-sentinel-repo-facts-embedded-panels": (
+        "browser-snapshot-or-embedded-asset",
+        "Ubuntu Playwright sentinel, repository-facts, or embedded-panel checks",
+        "Inspect the snapshot, repo-facts, or embedded-panel output under tests/visual/test-results.",
     ),
     "playwright-components": (
         "browser-snapshot-component",
@@ -117,10 +132,12 @@ def docker_stage_command(stage_name: str, command: list[str]) -> str:
 
 def classify_parallel_tests(parallel_tests: list[str]) -> str:
     unique_tests = list(dict.fromkeys(parallel_tests))
-    if unique_tests == ["sentinel.spec.ts", "pages.spec.ts"]:
+    if unique_tests == ["sentinel.spec.ts", "repo-facts.spec.ts"]:
+        return "playwright-sentinel-repo-facts"
+    if unique_tests == ["sentinel.spec.ts"]:
         return "playwright-sentinel-pages"
     if "embedded-panels.spec.ts" in unique_tests:
-        return "playwright-sentinel-pages-embedded-panels"
+        return "playwright-sentinel-repo-facts-embedded-panels"
     return "playwright-sentinel-pages"
 
 
@@ -144,7 +161,9 @@ def main() -> int:
         playwright_commands.append(
             ["npx", "playwright", "test", test_name, "--workers=1"]
         )
-        if test_name == "components.spec.ts":
+        if test_name == "pages.spec.ts":
+            playwright_stage_names.append("playwright-pages")
+        elif test_name == "components.spec.ts":
             playwright_stage_names.append("playwright-components")
         elif test_name == "embedded-panels.spec.ts":
             playwright_stage_names.append("playwright-embedded-panels")

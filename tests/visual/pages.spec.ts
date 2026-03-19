@@ -10,12 +10,22 @@ import {
   gotoAndStabilize
 } from "./helpers";
 
-import { pages, screenshotName, themes } from "./targets";
+import {
+  pageSnapshotProjectNames,
+  pageSnapshotReviewConfigs,
+  screenshotName,
+  themes
+} from "./targets";
 
 for (const theme of themes) {
-  for (const path of pages) {
-    test(`${path} renders in ${theme}`, async ({ page }, testInfo) => {
-      await gotoAndStabilize(page, path, theme);
+  for (const reviewConfig of pageSnapshotReviewConfigs) {
+    test(`${reviewConfig.path} renders in ${theme}`, async ({ page }, testInfo) => {
+      test.skip(
+        !pageSnapshotProjectNames.has(testInfo.project.name),
+        "Representative page baselines only cover the blocking mobile and desktop widths by default."
+      );
+
+      await gotoAndStabilize(page, reviewConfig.path, theme);
 
       await assertNoMissingPage(page);
       await assertImagesLoaded(page);
@@ -26,7 +36,7 @@ for (const theme of themes) {
 
       await expectMainScreenshot(
         page,
-        screenshotName(path, theme, testInfo.project.name)
+        screenshotName(reviewConfig.path, theme, testInfo.project.name)
       );
     });
   }

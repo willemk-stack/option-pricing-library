@@ -48,15 +48,18 @@ site once, then reuse the prebuilt output for all selected suites instead of let
 each standalone Playwright command trigger its own rebuild.
 
 The lower-level `npm run test:*` suite commands and `npm run test:raw` remain useful
-for one-off debugging, but each fresh invocation can rebuild diagrams, generated assets, and MkDocs before
-Playwright starts the server.
+for one-off debugging, but each fresh invocation can rebuild diagrams, generated assets,
+and MkDocs before Playwright starts the server.
 
-`npm run test:components` intentionally uses one worker. The mobile `/performance/`
-snapshot table can flip between two raster states under heavier Ubuntu parallelism,
-so component snapshots are serialized to keep the authoritative CI baseline stable.
+`npm run test:baseline` and `npm run test:components` intentionally use one worker.
+The blocking full-page suite is now a representative subset, and the mobile
+`/performance/` snapshot table can still flip between two raster states under heavier
+Ubuntu parallelism, so the authoritative pixel suites stay serialized where it matters.
 
 In CI, the snapshot-based suites (`sentinel`, `baseline`, `components`, and `artifacts`) are authoritative on Ubuntu. Windows still runs the non-snapshot browser checks (`smoke`, `audits`, and `a11y`) to catch cross-platform issues without forcing a second snapshot baseline set.
 The shared repo-facts shell widget is checked separately with mocked data so full-page baselines stay focused on stable docs content instead of async page chrome.
+The two composite proof panels now inline their child thumbnails, and MathJax is served
+from a vendored local asset so visual CI no longer depends on nested browser fetches.
 
 For the closest local match to CI, run the visual suites inside the GitHub-runner-style
 Ubuntu container:
@@ -79,9 +82,9 @@ python ../../scripts/run_local_visual_regression.py verify --skip-build --tests 
 The docs pre-push hook now requires Docker for docs-sensitive pushes. It still runs the
 fast local strict-build, smoke, DOM, and targeted accessibility checks first, then runs
 the authoritative Ubuntu snapshot suites in Docker against the same filtered review paths.
-For targeted page edits, the Docker step always includes `sentinel.spec.ts` and
-`pages.spec.ts`, and adds component or embedded-panel suites only when the changed paths
-touch pages that own those snapshots.
+For targeted page edits, the Docker step always includes `sentinel.spec.ts` and the
+representative `pages.spec.ts` subset, and adds component or embedded-panel suites only
+when the changed paths touch pages that own those snapshots.
 When one of those stages fails, the scripts now print a failure class so you can tell
 whether the regression came from environment setup, MkDocs/build output, generated assets,
 DOM/a11y checks, or Ubuntu-authoritative snapshots.
@@ -101,7 +104,8 @@ npm run test:capture
 ## What these tests check
 
 - configured proof-path and generated-asset pages render in light and dark themes
-- configured pages render at the widths defined in `scripts/visual_audit/review_targets.json`
+- smoke, DOM, accessibility, and review-capture coverage use the broad page and width matrix defined in `scripts/visual_audit/review_targets.json`
+- blocking full-page baselines use the smaller `page_snapshot_pages` and `page_snapshot_widths` subset from `scripts/visual_audit/review_targets.json`
 - no obvious DOM overflow in main content
 - structured DOM/CSS findings with `critical`, `major`, and `minor` severity
 - console errors and uncaught page errors during navigation
@@ -111,6 +115,7 @@ npm run test:capture
 - screenshots stay within baseline tolerance
 - the repository facts shell widget renders deterministic mocked data outside full-page baselines
 - component-level screenshots for key proof and metric blocks
+- the reviewer proof panel and benchmark overview no longer depend on browser-resolved linked PNG thumbnails
 - a small sentinel component snapshot subset can fail fast before the full pixel suite
 
 ## Snapshot update
@@ -132,7 +137,8 @@ npm run test:update:components
 npm run test:update:artifacts
 ```
 
-`npm run test:update` refreshes all committed snapshot suites in one pass.
+`npm run test:update` refreshes all committed snapshot suites in one pass through the
+shared wrapper, so serialized page and component suites keep the same ordering as CI.
 
 When you need authoritative snapshot updates that match CI, prefer:
 
@@ -146,5 +152,8 @@ For native iteration, the `run_local_visual_regression.py` wrapper is more stabl
 running several standalone Playwright commands back-to-back because it reuses one
 prebuilt site across the whole selected suite set.
 
-The authoritative route, theme, and width matrix lives in `scripts/visual_audit/review_targets.json`.
-The browser suite also supports `REVIEW_PAGE_KEYS` and `REVIEW_PATHS` to narrow runs to one page during bounded improvement passes.
+The authoritative audit and snapshot targets live in `scripts/visual_audit/review_targets.json`.
+Use `pages`, `themes`, and `widths` for the broad browser audit surface, and
+`page_snapshot_pages` plus `page_snapshot_widths` for the blocking full-page baseline subset.
+The browser suite also supports `REVIEW_PAGE_KEYS` and `REVIEW_PATHS` to narrow runs
+to one page during bounded improvement passes.

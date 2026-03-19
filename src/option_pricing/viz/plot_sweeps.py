@@ -149,7 +149,7 @@ def plot_sweep(
         if savepath is not None:
             savepath = Path(savepath)
             savepath.parent.mkdir(parents=True, exist_ok=True)
-            fig.savefig(savepath, dpi=dpi, bbox_inches="tight")
+            fig.savefig(savepath, dpi=dpi)
 
         if show:
             plt.show()

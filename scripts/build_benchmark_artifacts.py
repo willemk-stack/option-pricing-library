@@ -38,7 +38,9 @@ from option_pricing.types import (
 )
 from option_pricing.viz.publishing import (
     PUBLISHING_THEMES,
+    SVG_TEXT_FONT_STACK,
     copy_light_variant,
+    file_to_data_uri,
     publishing_palette,
     publishing_style,
     save_figure,
@@ -1323,7 +1325,7 @@ def _save_themed_plot(out_path: Path, *, dpi: int, render) -> Path:
     return variants.base
 
 
-def _build_benchmark_overview_asset(
+def build_benchmark_overview_asset(
     *,
     artifacts_dir: Path,
     plot_dir: Path,
@@ -1374,6 +1376,14 @@ def _build_benchmark_overview_asset(
     for theme in PUBLISHING_THEMES:
         base_palette = publishing_palette(theme)
         image_suffix = "dark" if theme == "dark" else "light"
+        font_stack = SVG_TEXT_FONT_STACK
+        iv_panel_uri = file_to_data_uri(plot_dir / f"iv_scaling.{image_suffix}.png")
+        pde_panel_uri = file_to_data_uri(
+            plot_dir / f"pde_runtime_error_tradeoff.{image_suffix}.png"
+        )
+        macro_panel_uri = file_to_data_uri(
+            plot_dir / f"macro_pipeline_summary.{image_suffix}.png"
+        )
         if theme == "dark":
             colors = {
                 "page_bg": "#08101F",
@@ -1440,21 +1450,21 @@ def _build_benchmark_overview_asset(
   <text x="102" y="254" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1" fill="{colors["accent"]}">PRIMARY PANELS</text>
 
   <rect x="74" y="264" width="452" height="290" rx="20" ry="20" fill="{colors["thumb_fill"]}" />
-  <image x="74" y="264" width="452" height="290" href="./iv_scaling.{image_suffix}.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#ivThumb)" />
+  <image x="74" y="264" width="452" height="290" href="{iv_panel_uri}" preserveAspectRatio="xMidYMid slice" clip-path="url(#ivThumb)" />
   <rect x="92" y="282" width="186" height="30" rx="15" ry="15" fill="{colors["chip_fill"]}" opacity="0.84" />
   <text x="110" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="{colors["chip_text"]}">IV inversion scaling</text>
   <text x="74" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">801-strike slice: {_fmt_runtime_ms(iv_vec_ms)} vectorized vs {_fmt_runtime_ms(iv_scalar_ms)} scalar loop</text>
   <text x="74" y="636" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Measured max speedup at that size: {iv_speedup_801:.0f}x, with zero observed vol difference vs the scalar loop.</text>
 
   <rect x="574" y="264" width="452" height="290" rx="20" ry="20" fill="{colors["thumb_fill"]}" />
-  <image x="574" y="264" width="452" height="290" href="./pde_runtime_error_tradeoff.{image_suffix}.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#pdeThumb)" />
+  <image x="574" y="264" width="452" height="290" href="{pde_panel_uri}" preserveAspectRatio="xMidYMid slice" clip-path="url(#pdeThumb)" />
   <rect x="592" y="282" width="176" height="30" rx="15" ry="15" fill="{colors["chip_fill"]}" opacity="0.84" />
   <text x="610" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="{colors["chip_text"]}">PDE cost / accuracy</text>
   <text x="574" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">Vanilla BS PDE, Rannacher: 401x401 -&gt; 801x801 cuts abs error</text>
   <text x="574" y="634" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">{_fmt_sci(float(pde_401["abs_error"]))} -&gt; {_fmt_sci(float(pde_801["abs_error"]))} while runtime rises {_fmt_runtime_ms(float(pde_401["runtime_ms"]))} -&gt; {_fmt_runtime_ms(float(pde_801["runtime_ms"]))}.</text>
 
   <rect x="1074" y="264" width="452" height="290" rx="20" ry="20" fill="{colors["thumb_fill"]}" />
-  <image x="1074" y="264" width="452" height="290" href="./macro_pipeline_summary.{image_suffix}.png" preserveAspectRatio="xMidYMid slice" clip-path="url(#macroThumb)" />
+  <image x="1074" y="264" width="452" height="290" href="{macro_panel_uri}" preserveAspectRatio="xMidYMid slice" clip-path="url(#macroThumb)" />
   <rect x="1092" y="282" width="196" height="30" rx="15" ry="15" fill="{colors["chip_fill"]}" opacity="0.84" />
   <text x="1110" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="{colors["chip_text"]}">Macro stage budget</text>
   <text x="1074" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">Surface fit dominates the integrated path budget across tested sizes.</text>
@@ -1483,6 +1493,7 @@ def _build_benchmark_overview_asset(
   <text x="72" y="1012" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">This asset summarizes the committed benchmark bundle. Use the performance page for the full figures, conditions, and reproducibility notes.</text>
 </svg>
 """
+        svg = svg.replace("Segoe UI, Inter, Arial, sans-serif", font_stack)
         variants.path_for(theme).write_text(svg, encoding="utf-8")
 
     copy_light_variant(variants)
@@ -1541,7 +1552,7 @@ def main(argv: list[str] | None = None) -> int:
             warmup=args.warmup,
         ),
     }
-    overview_asset = _build_benchmark_overview_asset(
+    overview_asset = build_benchmark_overview_asset(
         artifacts_dir=artifacts_dir,
         plot_dir=plot_dir,
     )

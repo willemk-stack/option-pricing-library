@@ -118,6 +118,7 @@ def scan_high_risk_svg(path: Path, report: Report) -> None:
     root = tree.getroot()
     images = root.findall(".//svg:image", SVG_NS)
     local_linked = []
+    embedded = []
     external = []
     missing = []
     for image in images:
@@ -125,6 +126,7 @@ def scan_high_risk_svg(path: Path, report: Report) -> None:
         if not href:
             continue
         if href.startswith("data:"):
+            embedded.append(href)
             continue
         if href.startswith(("http://", "https://")):
             external.append(href)
@@ -148,19 +150,32 @@ def scan_high_risk_svg(path: Path, report: Report) -> None:
             f"SVG contains linked raster/image subpanels that need browser validation: {local_linked}",
             path,
         )
-
-    if path.name.startswith("reviewer_proof_panel") and len(local_linked) < 3:
+    if embedded:
         report.add(
-            "medium",
+            "info",
             "assets",
-            f"Expected ~3 linked proof thumbnails, found {len(local_linked)}",
+            f"SVG embeds {len(embedded)} inlined sub-assets for deterministic rendering",
             path,
         )
-    if path.name.startswith("benchmark_overview") and len(local_linked) < 3:
+
+    if (
+        path.name.startswith("reviewer_proof_panel")
+        and len(local_linked) + len(embedded) < 3
+    ):
         report.add(
             "medium",
             "assets",
-            f"Expected ~3 linked benchmark panels, found {len(local_linked)}",
+            f"Expected ~3 proof thumbnails, found {len(local_linked) + len(embedded)}",
+            path,
+        )
+    if (
+        path.name.startswith("benchmark_overview")
+        and len(local_linked) + len(embedded) < 3
+    ):
+        report.add(
+            "medium",
+            "assets",
+            f"Expected ~3 benchmark panels, found {len(local_linked) + len(embedded)}",
             path,
         )
 
@@ -209,10 +224,14 @@ def main() -> int:
     docs_visual_config = parse_json(DOCS_VISUAL_CONFIG_PATH)
     configured_base_url = docs_visual_config.get("docs_base_url")
     pages = targets.get("pages", [])
+    page_snapshot_pages = targets.get("page_snapshot_pages", pages)
     themes = targets.get("themes", [])
     widths = targets.get("widths", [])
+    page_snapshot_widths = targets.get("page_snapshot_widths", widths)
 
-    expected = expected_snapshot_names(pages, themes, widths)
+    expected = expected_snapshot_names(
+        page_snapshot_pages, themes, page_snapshot_widths
+    )
     actual = {path.name for path in snapshots_dir.glob("*.png")}
     missing = sorted(expected - actual)
     stale = sorted(actual - expected)
@@ -281,6 +300,14 @@ def main() -> int:
             "One or more visual specs may not be using the shared targets module",
         )
 
+    if page_snapshot_pages != pages or page_snapshot_widths != widths:
+        report.add(
+            "info",
+            "snapshots",
+            "Blocking page snapshots use a smaller representative subset than the broader audit matrix",
+            review_targets_path,
+        )
+
     if missing:
         report.add(
             "high",
@@ -340,9 +367,11 @@ def main() -> int:
         )
 
     report.summary = {
-        "pages": len(pages),
+        "audit_pages": len(pages),
+        "snapshot_pages": len(page_snapshot_pages),
         "themes": len(themes),
-        "widths": len(widths),
+        "audit_widths": len(widths),
+        "snapshot_widths": len(page_snapshot_widths),
         "expected_snapshots": len(expected),
         "actual_snapshots": len(actual),
         "missing_snapshots": len(missing),
