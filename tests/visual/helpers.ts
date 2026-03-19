@@ -1,5 +1,124 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
+async function stubRepositoryFacts(page: Page): Promise<void> {
+  // MkDocs Material augments the repo badge with async GitHub/GitLab facts.
+  // Those counters are outside the docs content we care about and can appear
+  // nondeterministically across snapshot runs, so force an empty response.
+  await page.route(/https:\/\/api\.github\.com\/repos\/.+/i, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: "{}",
+    });
+  });
+
+  await page.route(
+    /https:\/\/[^/]*gitlab[^/]+\/api\/v4\/projects\/.+/i,
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "{}",
+      });
+    }
+  );
+}
+
+async function suppressRepositoryFacts(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    if (
+      document.documentElement.dataset.playwrightRepoFactsSuppressed === "1"
+    ) {
+      return;
+    }
+
+    document.documentElement.dataset.playwrightRepoFactsSuppressed = "1";
+
+    const styleId = "__playwright-hide-repository-facts";
+    const styleContent = `
+      .md-source__facts,
+      .md-source__repository ul {
+        display: none !important;
+      }
+    `;
+
+    const ensureStyle = () => {
+      if (document.getElementById(styleId)) {
+        return;
+      }
+
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = styleContent;
+      document.head.appendChild(style);
+    };
+
+    const stripFacts = () => {
+      document
+        .querySelectorAll(".md-source__facts, .md-source__repository ul")
+        .forEach((node) => node.remove());
+
+      document
+        .querySelectorAll(".md-source__repository--active")
+        .forEach((node) =>
+          node.classList.remove("md-source__repository--active")
+        );
+    };
+
+    const install = () => {
+      ensureStyle();
+      stripFacts();
+
+      const observer = new MutationObserver(() => {
+        ensureStyle();
+        stripFacts();
+      });
+
+      observer.observe(document.documentElement, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+    };
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", install, { once: true });
+      return;
+    }
+
+    install();
+  });
+}
+
+async function removeRepositoryFacts(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const stripFacts = () => {
+      document
+        .querySelectorAll(".md-source__facts, .md-source ul")
+        .forEach((node) => node.remove());
+
+      document
+        .querySelectorAll(".md-source__repository--active")
+        .forEach((node) =>
+          node.classList.remove("md-source__repository--active")
+        );
+    };
+
+    stripFacts();
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        stripFacts();
+        requestAnimationFrame(() => {
+          stripFacts();
+          resolve();
+        });
+      });
+    });
+  });
+}
+
 export async function setTheme(page: Page, theme: "light" | "dark"): Promise<void> {
   await page.addInitScript((selectedTheme: "light" | "dark") => {
     localStorage.setItem("/.__palette", JSON.stringify({ color: selectedTheme }));
@@ -11,6 +130,9 @@ export async function gotoAndStabilize(
   path: string,
   theme?: "light" | "dark"
 ): Promise<void> {
+  await stubRepositoryFacts(page);
+  await suppressRepositoryFacts(page);
+
   if (theme) {
     await setTheme(page, theme);
   }
@@ -31,6 +153,7 @@ export async function gotoAndStabilize(
   }, theme);
 
   await waitForPageStable(page);
+  await removeRepositoryFacts(page);
 }
 
 export async function waitForPageStable(page: Page): Promise<void> {
