@@ -10,9 +10,10 @@ concurrency:
 
 jobs:
   validate-artifacts:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       MPLBACKEND: Agg
+      D2_VERSION: "v0.7.1"
 
     steps:
       - name: Checkout
@@ -50,8 +51,17 @@ jobs:
       - name: Install D2
         id: install_d2
         run: |
-          curl -fsSL https://d2lang.com/install.sh | sh -s --
+          set -euo pipefail
+          D2_TMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "$D2_TMP_DIR"' EXIT
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSLo "$D2_TMP_DIR/d2.tgz" "https://github.com/terrastruct/d2/releases/download/${D2_VERSION}/d2-${D2_VERSION}-linux-amd64.tar.gz"
+          tar -xzf "$D2_TMP_DIR/d2.tgz" -C "$D2_TMP_DIR"
+          D2_BIN="$(find "$D2_TMP_DIR" -type f -path '*/bin/d2' -print -quit)"
+          test -x "$D2_BIN"
+          install "$D2_BIN" "$HOME/.local/bin/d2"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/d2" --version
 
       - name: Render D2 diagrams
         id: render_d2_diagrams

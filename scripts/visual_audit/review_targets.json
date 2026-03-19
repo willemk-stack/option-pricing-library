@@ -16,6 +16,12 @@
     "/api/pricers/",
     "/api/vol/"
   ],
+  "page_snapshot_pages": [
+    "/",
+    "/performance/",
+    "/user_guides/surface_workflow/",
+    "/api/"
+  ],
   "themes": [
     "light",
     "dark"
@@ -25,6 +31,10 @@
     768,
     1280,
     1536
+  ],
+  "page_snapshot_widths": [
+    375,
+    1280
   ],
   "priority_asset_globs": [
     "docs/assets/generated/**/*.svg",

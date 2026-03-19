@@ -9,6 +9,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from build_benchmark_artifacts import build_benchmark_overview_asset  # noqa: E402
+
 from option_pricing.demos.publishing import (  # noqa: E402
     build_visual_bundle,
     export_dataset_vts,
@@ -49,7 +51,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         dest="presets",
         action="append",
         default=[],
-        choices=("static", "dupire", "poster", "docs", "numerics"),
+        choices=("static", "dupire", "poster", "docs", "numerics", "showcase"),
         help="Plot preset to render. Repeat to render multiple presets.",
     )
     p_plots.add_argument(
@@ -90,7 +92,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         dest="presets",
         action="append",
         default=[],
-        choices=("static", "dupire", "poster", "docs", "numerics"),
+        choices=("static", "dupire", "poster", "docs", "numerics", "showcase"),
         help="Plot preset to render. Repeat to render multiple presets.",
     )
     p_all.add_argument(
@@ -122,6 +124,11 @@ def main(argv: list[str] | None = None) -> int:
             presets=args.presets or None,
             out_root=args.out_root,
         )
+        overview_path = build_benchmark_overview_asset(
+            artifacts_dir=ROOT / "benchmarks" / "artifacts",
+            plot_dir=Path(args.out_root) / "benchmarks",
+        )
+        written.append(ROOT / overview_path)
         for path in written:
             print(path)
         return 0
@@ -149,6 +156,11 @@ def main(argv: list[str] | None = None) -> int:
             presets=args.presets or None,
             out_root=args.out_root,
         )
+        overview_path = build_benchmark_overview_asset(
+            artifacts_dir=ROOT / "benchmarks" / "artifacts",
+            plot_dir=Path(args.out_root) / "benchmarks",
+        )
+        written.append(ROOT / overview_path)
         print(result.manifest.manifest_path())
         for path in written:
             print(path)

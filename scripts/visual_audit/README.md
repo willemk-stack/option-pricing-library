@@ -2,7 +2,10 @@
 
 These scripts provide repo-specific helpers for docs visual QA.
 
-`review_targets.json` is the single source of truth for the audited page, theme, and width matrix used by Playwright.
+`review_targets.json` is the single source of truth for the Playwright audit surface.
+It now carries both the broad audit matrix (`pages`, `themes`, `widths`) and the
+smaller blocking full-page baseline subset (`page_snapshot_pages`,
+`page_snapshot_widths`).
 
 ## Scripts
 

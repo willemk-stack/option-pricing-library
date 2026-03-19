@@ -206,30 +206,86 @@ export async function gotoAndStabilize(
 
 export async function waitForPageStable(page: Page): Promise<void> {
   await page.waitForLoadState("load");
+  await page.waitForLoadState("networkidle").catch(() => {});
   await page.evaluate(async () => {
-    const pendingImages = Array.from(document.images).filter(
-      (img) => !img.complete
-    );
-    await Promise.all(
-      pendingImages.map(
-        (img) =>
-          new Promise<void>((resolve) => {
-            const finish = () => resolve();
-            img.addEventListener("load", finish, { once: true });
-            img.addEventListener("error", finish, { once: true });
-          })
-      )
-    );
+    const nextFrame = () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+
+    const settleFrames = async (count: number) => {
+      for (let index = 0; index < count; index += 1) {
+        await nextFrame();
+      }
+    };
+
+    const decodeImage = async (img: HTMLImageElement) => {
+      if (!img.complete) {
+        await new Promise<void>((resolve) => {
+          const finish = () => resolve();
+          img.addEventListener("load", finish, { once: true });
+          img.addEventListener("error", finish, { once: true });
+        });
+      }
+
+      if ("decode" in img && img.naturalWidth > 0) {
+        try {
+          await img.decode();
+        } catch {
+          // SVG-backed or lazy-decoded images can reject decode even after load.
+        }
+      }
+    };
+
+    await Promise.all(Array.from(document.images).map((img) => decodeImage(img)));
 
     if ("fonts" in document) {
       await document.fonts.ready;
     }
 
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => resolve());
-      });
-    });
+    const trackedElements = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        "main, figure.diagram, figure.diagram img, .snapshot-grid, .md-content img"
+      )
+    );
+
+    let previousSignature = "";
+    let stableFrames = 0;
+
+    for (let attempt = 0; attempt < 10 && stableFrames < 3; attempt += 1) {
+      await settleFrames(1);
+
+      const signature = JSON.stringify(
+        trackedElements.map((element) => {
+          const rect = element.getBoundingClientRect();
+          const image = element as HTMLImageElement;
+          return [
+            Math.round(rect.x),
+            Math.round(rect.y),
+            Math.round(rect.width),
+            Math.round(rect.height),
+            image.currentSrc || image.src || "",
+            element.scrollWidth,
+            element.scrollHeight,
+          ];
+        }).concat([
+          [
+            document.documentElement.scrollHeight,
+            document.body?.scrollHeight ?? 0,
+            document.images.length,
+          ],
+        ])
+      );
+
+      if (signature === previousSignature) {
+        stableFrames += 1;
+      } else {
+        previousSignature = signature;
+        stableFrames = 1;
+      }
+    }
+
+    await settleFrames(trackedElements.length > 0 ? 3 : 2);
   });
 }
 
