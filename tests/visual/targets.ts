@@ -263,6 +263,9 @@ export const pageSnapshotWidths = hasReviewFilters ? widths : defaultPageSnapsho
 export const pageSnapshotProjectNames = new Set(
     pageSnapshotWidths.map((width) => `chromium-${width}`)
 );
+export const representativeDesktopProjectNames = new Set(["chromium-1280"]);
+export const componentSnapshotProjectNames = representativeDesktopProjectNames;
+export const embeddedPanelProjectNames = representativeDesktopProjectNames;
 export const pageSnapshotReviewConfigs = hasReviewFilters
     ? pageReviewConfigs
     : pageReviewConfigs.filter((config) => defaultPageSnapshotPageSet.has(config.path));

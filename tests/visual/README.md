@@ -54,7 +54,8 @@ and MkDocs before Playwright starts the server.
 `npm run test:baseline` and `npm run test:components` intentionally use one worker.
 The blocking full-page suite is now a representative subset, and the mobile
 `/performance/` snapshot table can still flip between two raster states under heavier
-Ubuntu parallelism, so the authoritative pixel suites stay serialized where it matters.
+Ubuntu parallelism, so the authoritative page suite keeps that route out of the
+blocking full-page subset and leaves it to narrower component or embedded-panel checks.
 
 In CI, the snapshot-based suites (`sentinel`, `baseline`, `components`, and `artifacts`) are authoritative on Ubuntu. Windows still runs the non-snapshot browser checks (`smoke`, `audits`, and `a11y`) to catch cross-platform issues without forcing a second snapshot baseline set.
 The shared repo-facts shell widget is checked separately with mocked data so full-page baselines stay focused on stable docs content instead of async page chrome.
@@ -62,7 +63,8 @@ The two composite proof panels now inline their child thumbnails, and MathJax is
 from a vendored local asset so visual CI no longer depends on nested browser fetches.
 
 For the closest local match to CI, run the visual suites inside the GitHub-runner-style
-Ubuntu container:
+Ubuntu container. The GitHub visual-regression job now uses this same container wrapper
+and selects suites with the same path-aware rules as the docs pre-push guard:
 
 ```bash
 python ../../scripts/run_ci_visual_regression.py verify

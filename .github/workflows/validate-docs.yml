@@ -43,7 +43,7 @@ jobs:
         id: install_python_dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[docs,plot]"
+          python -m pip install -c scripts/ci-constraints.txt -e ".[docs,plot]"
 
       - name: Install Playwright dependencies
         id: install_playwright_dependencies
@@ -195,33 +195,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: |
-            pyproject.toml
 
       - name: Load docs site contract
         id: docs_site_contract
         run: python scripts/docs_site_contract.py github-outputs
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: |
-            tests/visual/package-lock.json
-
-      - name: Install Playwright dependencies
-        id: install_playwright_dependencies
-        working-directory: tests/visual
+      - name: Determine authoritative visual suites
+        id: select_visual_suites
         run: |
-          npm ci
-          npx playwright install --with-deps chromium
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python scripts/select_docs_visual_ci.py github-outputs \
+              --base-ref "${{ github.event.pull_request.base.sha }}" \
+              --head-ref "${{ github.event.pull_request.head.sha }}"
+          else
+            python scripts/select_docs_visual_ci.py github-outputs --full
+          fi
 
       - name: Download built docs site
         id: download_built_docs_site
@@ -234,68 +229,29 @@ jobs:
         id: verify_built_docs_site
         run: python scripts/docs_site_contract.py verify
 
-      - name: Run Playwright visual sentinel
-        id: visual_sentinel
-        working-directory: tests/visual
+      - name: Run authoritative Ubuntu visual regression
+        id: authoritative_visual_regression
         env:
-          SKIP_DOCS_PREBUILD: "1"
-          SERVE_PREBUILT_SITE: "1"
-        run: npx playwright test sentinel.spec.ts --max-failures=1
-
-      - name: Run Playwright repository facts checks
-        id: repository_facts_checks
-        working-directory: tests/visual
-        env:
-          SKIP_DOCS_PREBUILD: "1"
-          SERVE_PREBUILT_SITE: "1"
-        run: npx playwright test repo-facts.spec.ts --max-failures=1
-
-      - name: Run Playwright representative page visual regression
-        id: page_visual_regression
-        working-directory: tests/visual
-        env:
-          SKIP_DOCS_PREBUILD: "1"
-          SERVE_PREBUILT_SITE: "1"
-        run: npx playwright test pages.spec.ts --workers=1
-
-      - name: Run Playwright component visual regression
-        id: component_visual_regression
-        working-directory: tests/visual
-        env:
-          SKIP_DOCS_PREBUILD: "1"
-          SERVE_PREBUILT_SITE: "1"
-        run: npx playwright test components.spec.ts --workers=1
-
-      - name: Run Playwright embedded panel visual regression
-        id: embedded_panel_visual_regression
-        working-directory: tests/visual
-        env:
-          SKIP_DOCS_PREBUILD: "1"
-          SERVE_PREBUILT_SITE: "1"
-        run: npx playwright test embedded-panels.spec.ts
+          REVIEW_PATHS: ${{ steps.select_visual_suites.outputs.review_paths }}
+        run: |
+          python scripts/run_ci_visual_regression.py verify \
+            --skip-build \
+            --tests repo-facts.spec.ts ${{ steps.select_visual_suites.outputs.selected_tests }}
 
       - name: Summarize visual-regression job outcome
         if: always()
         env:
-          STEP_INSTALL_PLAYWRIGHT_DEPS: ${{ steps.install_playwright_dependencies.conclusion }}
+          STEP_SELECT_VISUAL_SUITES: ${{ steps.select_visual_suites.conclusion }}
           STEP_DOWNLOAD_BUILT_SITE: ${{ steps.download_built_docs_site.conclusion }}
           STEP_VERIFY_BUILT_SITE: ${{ steps.verify_built_docs_site.conclusion }}
-          STEP_SENTINEL: ${{ steps.visual_sentinel.conclusion }}
-          STEP_REPO_FACTS: ${{ steps.repository_facts_checks.conclusion }}
-          STEP_PAGES: ${{ steps.page_visual_regression.conclusion }}
-          STEP_COMPONENTS: ${{ steps.component_visual_regression.conclusion }}
-          STEP_EMBEDDED_PANELS: ${{ steps.embedded_panel_visual_regression.conclusion }}
+          STEP_AUTHORITATIVE_VISUAL: ${{ steps.authoritative_visual_regression.conclusion }}
           WORKFLOW_SUMMARY_TITLE: Docs visual regression job summary
           WORKFLOW_SUMMARY_ITEMS_JSON: >-
             [
-              {"env_key":"STEP_INSTALL_PLAYWRIGHT_DEPS","label":"Install Playwright dependencies","failure_class":"environment-node-browser","layer":"Node modules or Playwright browser install","next_step":"Inspect npm or Playwright install output."},
+              {"env_key":"STEP_SELECT_VISUAL_SUITES","label":"Determine authoritative visual suites","failure_class":"suite-selection","layer":"Shared path-aware visual suite selection","next_step":"Inspect scripts/select_docs_visual_ci.py output and the changed-file diff used for suite selection."},
               {"env_key":"STEP_DOWNLOAD_BUILT_SITE","label":"Download built docs site","failure_class":"artifact-download","layer":"GitHub Actions artifact handoff","next_step":"Inspect whether the validate job uploaded the built site artifact successfully."},
               {"env_key":"STEP_VERIFY_BUILT_SITE","label":"Verify built docs site layout","failure_class":"artifact-layout","layer":"Downloaded MkDocs site directory structure","next_step":"Inspect the downloaded built-site artifact and ensure the shared prebuilt-site contract still matches the extracted layout."},
-              {"env_key":"STEP_SENTINEL","label":"Run Playwright visual sentinel","failure_class":"browser-snapshot-page","layer":"Ubuntu sentinel snapshots","next_step":"Inspect sentinel diffs in the uploaded test results."},
-              {"env_key":"STEP_REPO_FACTS","label":"Run Playwright repository facts checks","failure_class":"browser-shell-widget","layer":"Deterministic repo-facts shell assertions","next_step":"Inspect the mocked repo-facts test output in the uploaded test results."},
-              {"env_key":"STEP_PAGES","label":"Run Playwright representative page visual regression","failure_class":"browser-snapshot-page","layer":"Ubuntu representative full-page snapshots","next_step":"Inspect representative page snapshot diffs in the uploaded test results."},
-              {"env_key":"STEP_COMPONENTS","label":"Run Playwright component visual regression","failure_class":"browser-snapshot-component","layer":"Ubuntu component snapshots","next_step":"Inspect component snapshot diffs in the uploaded test results."},
-              {"env_key":"STEP_EMBEDDED_PANELS","label":"Run Playwright embedded panel visual regression","failure_class":"browser-snapshot-or-embedded-asset","layer":"Ubuntu embedded-panel checks or generated proof assets","next_step":"Inspect embedded-panel failures and the linked generated assets."}
+              {"env_key":"STEP_AUTHORITATIVE_VISUAL","label":"Run authoritative Ubuntu visual regression","failure_class":"browser-snapshot-or-embedded-asset","layer":"Containerized Ubuntu-authoritative Playwright visual checks","next_step":"Inspect tests/visual/test-results and the selected visual suites reported in the job log."}
             ]
         run: |
           python scripts/visual_audit/write_github_step_summary.py
