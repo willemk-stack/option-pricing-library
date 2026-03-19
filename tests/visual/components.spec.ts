@@ -4,12 +4,18 @@ import { gotoAndStabilize } from "./helpers";
 import {
     componentReviewTargets,
     componentScreenshotName,
+    componentSnapshotProjectNames,
     themes,
 } from "./targets";
 
 for (const theme of themes) {
     for (const target of componentReviewTargets) {
         test(`${target.path} component ${target.name} in ${theme}`, async ({ page }, testInfo) => {
+            test.skip(
+                !componentSnapshotProjectNames.has(testInfo.project.name),
+                "Component baselines only cover the representative desktop width by default."
+            );
+
             await gotoAndStabilize(page, target.path, theme);
 
             const component = page.locator(target.selector).first();

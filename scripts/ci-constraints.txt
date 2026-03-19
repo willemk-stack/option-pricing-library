@@ -1,0 +1,6 @@
+# Keep the visual-build numerics stack deterministic for CI and Docker.
+# These versions already appear in the repository's generated performance metadata,
+# which makes them a grounded starting point for the visual artifact pipeline.
+# Update intentionally when refreshing generated artifacts and visual baselines.
+numpy==1.26.4
+scipy==1.17.1

@@ -18,6 +18,7 @@ DEFAULT_TESTS = [
     "embedded-panels.spec.ts",
 ]
 SERIAL_TESTS = {"pages.spec.ts", "components.spec.ts"}
+CI_CONSTRAINTS_PATH = ROOT / "scripts" / "ci-constraints.txt"
 FORWARDED_ENV_VARS = (
     "REVIEW_PATHS",
     "REVIEW_PAGE_KEYS",
@@ -119,6 +120,14 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_TESTS,
         help="Playwright test files to run inside the container.",
     )
+    parser.add_argument(
+        "--skip-build",
+        action="store_true",
+        help=(
+            "Reuse an already-built MkDocs site mounted into the container instead of "
+            "rebuilding generated assets and the site inside Docker."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -144,6 +153,9 @@ def classify_parallel_tests(parallel_tests: list[str]) -> str:
 def main() -> int:
     args = parse_args()
     build_profile = os.environ.get("DOCS_VISUAL_BUILD_PROFILE", DEFAULT_BUILD_PROFILE)
+    constraints_arg = []
+    if CI_CONSTRAINTS_PATH.exists():
+        constraints_arg = ["-c", CI_CONSTRAINTS_PATH.relative_to(ROOT).as_posix()]
 
     requested_tests = list(dict.fromkeys(args.tests))
     parallel_tests = [test for test in requested_tests if test not in SERIAL_TESTS]
@@ -203,6 +215,7 @@ def main() -> int:
                     "pip",
                     "install",
                     "--break-system-packages",
+                    *constraints_arg,
                     "-e",
                     ".[docs,plot]",
                 ],
@@ -214,19 +227,25 @@ def main() -> int:
                 ["npx", "playwright", "install", "--with-deps", "chromium"],
             ),
             "cd /work",
-            docker_stage_command(
-                "build-visual-artifacts",
-                [
-                    "python3",
-                    "scripts/build_visual_artifacts.py",
-                    "all",
-                    "--profile",
-                    build_profile,
-                ],
-            ),
-            docker_stage_command(
-                "build-mkdocs",
-                ["python3", "-m", "mkdocs", "build", "--strict"],
+            *(
+                []
+                if args.skip_build
+                else [
+                    docker_stage_command(
+                        "build-visual-artifacts",
+                        [
+                            "python3",
+                            "scripts/build_visual_artifacts.py",
+                            "all",
+                            "--profile",
+                            build_profile,
+                        ],
+                    ),
+                    docker_stage_command(
+                        "build-mkdocs",
+                        ["python3", "-m", "mkdocs", "build", "--strict"],
+                    ),
+                ]
             ),
             "cd tests/visual",
             *(
@@ -263,6 +282,8 @@ def main() -> int:
 
     print(f"Running CI-like visual {args.mode} in {args.image}", flush=True)
     print("Selected tests: " + ", ".join(requested_tests), flush=True)
+    if args.skip_build:
+        print("Build mode: reuse prebuilt site", flush=True)
     if forwarded_env.get("REVIEW_PATHS"):
         print("Review paths: " + forwarded_env["REVIEW_PATHS"], flush=True)
     if forwarded_env.get("REVIEW_PAGE_KEYS"):

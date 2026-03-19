@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { assertImagesLoaded, assertNoMissingPage, gotoAndStabilize } from "./helpers";
-import { themes } from "./targets";
+import { embeddedPanelProjectNames, themes } from "./targets";
 
 type Region = {
   label: string;
@@ -121,7 +121,12 @@ function suspiciousRegion(stats: RegionStats): boolean {
 
 for (const theme of themes) {
   for (const asset of HIGH_RISK_ASSETS) {
-    test(`embedded panels look non-blank on ${asset.pagePath} in ${theme} (${asset.srcIncludes})`, async ({ page }) => {
+    test(`embedded panels look non-blank on ${asset.pagePath} in ${theme} (${asset.srcIncludes})`, async ({ page }, testInfo) => {
+      test.skip(
+        !embeddedPanelProjectNames.has(testInfo.project.name),
+        "Embedded-panel checks only cover the representative desktop width by default."
+      );
+
       await gotoAndStabilize(page, asset.pagePath, theme);
       await assertNoMissingPage(page);
       await assertImagesLoaded(page);
