@@ -14,10 +14,11 @@
     "test:smoke": "playwright test smoke.spec.ts",
     "test:audits": "playwright test dom-audits.spec.ts",
     "test:sentinel": "playwright test sentinel.spec.ts --max-failures=1",
+    "test:repo-facts": "playwright test repo-facts.spec.ts --max-failures=1",
     "test:components": "playwright test components.spec.ts --workers=1",
     "test:artifacts": "playwright test embedded-panels.spec.ts",
     "test:capture": "playwright test review-capture.spec.ts",
-    "test:ci": "playwright test smoke.spec.ts dom-audits.spec.ts a11y.spec.ts pages.spec.ts components.spec.ts embedded-panels.spec.ts"
+    "test:ci": "playwright test smoke.spec.ts dom-audits.spec.ts a11y.spec.ts sentinel.spec.ts repo-facts.spec.ts pages.spec.ts components.spec.ts embedded-panels.spec.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",
