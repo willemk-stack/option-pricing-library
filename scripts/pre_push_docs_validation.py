@@ -331,7 +331,8 @@ def resolve_python_command() -> str:
 
 
 def ensure_playwright_dependencies() -> None:
-    if (TESTS_VISUAL_DIR / "node_modules").exists():
+    cli_path = TESTS_VISUAL_DIR / "node_modules" / "playwright" / "cli.js"
+    if (TESTS_VISUAL_DIR / "node_modules").exists() and cli_path.exists():
         return
 
     raise HookFailure(
@@ -359,11 +360,11 @@ def resolve_node_command() -> str:
 
 
 def resolve_playwright_command() -> list[str]:
-    cli_path = TESTS_VISUAL_DIR / "node_modules" / "@playwright" / "test" / "cli.js"
+    cli_path = TESTS_VISUAL_DIR / "node_modules" / "playwright" / "cli.js"
     if not cli_path.exists():
         raise HookFailure(
             "Could not find the local Playwright CLI under "
-            "`tests/visual/node_modules/@playwright/test/cli.js`.\n"
+            "`tests/visual/node_modules/playwright/cli.js`.\n"
             "Run `cd tests/visual && npm ci` once, then retry the push.",
             failure_class="environment-dependency",
             likely_layer="Local Playwright CLI install",
@@ -632,6 +633,11 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except HookFailure as exc:
-        print("\nDocs pre-push guard failed.", flush=True)
-        print(str(exc), flush=True)
+        print("\nDocs pre-push guard failed.", file=sys.stderr, flush=True)
+        print(
+            "This push was blocked by the local pre-push hook before GitHub could reject any refs.",
+            file=sys.stderr,
+            flush=True,
+        )
+        print(str(exc), file=sys.stderr, flush=True)
         raise SystemExit(exc.exit_code) from None

@@ -19,7 +19,7 @@ from docs_site_contract import (  # noqa: E402
 )
 
 VISUAL_TEST_DIR = ROOT / "tests" / "visual"
-PLAYWRIGHT_CLI = VISUAL_TEST_DIR / "node_modules" / "@playwright" / "test" / "cli.js"
+PLAYWRIGHT_CLI = VISUAL_TEST_DIR / "node_modules" / "playwright" / "cli.js"
 SERIAL_TESTS = {"components.spec.ts"}
 DEFAULT_VERIFY_TESTS = [
     "smoke.spec.ts",
