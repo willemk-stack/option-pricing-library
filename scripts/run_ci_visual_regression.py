@@ -12,6 +12,7 @@ DOCS_VISUAL_CONFIG_PATH = ROOT / "scripts" / "visual_audit" / "docs_visual_confi
 DEFAULT_IMAGE = "ghcr.io/catthehacker/ubuntu:runner-24.04"
 DEFAULT_TESTS = [
     "sentinel.spec.ts",
+    "repo-facts.spec.ts",
     "pages.spec.ts",
     "components.spec.ts",
     "embedded-panels.spec.ts",

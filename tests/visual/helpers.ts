@@ -1,6 +1,8 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 async function stubRepositoryFacts(page: Page): Promise<void> {
+  // Full-page docs baselines intentionally exclude async shell chrome like the
+  // repo facts widget so page snapshots stay focused on docs content.
   // MkDocs Material augments the repo badge with async GitHub/GitLab facts.
   // Those counters are outside the docs content we care about and can appear
   // nondeterministically across snapshot runs, so force an empty response.
@@ -24,26 +26,67 @@ async function stubRepositoryFacts(page: Page): Promise<void> {
   );
 }
 
+export async function mockRepositoryFacts(
+  page: Page,
+  facts: { version: string; stars: number; forks: number } = {
+    version: "v0.4.0",
+    stars: 42,
+    forks: 7,
+  }
+): Promise<void> {
+  await page.route(
+    /https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/releases\/latest$/i,
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ tag_name: facts.version }),
+      });
+    }
+  );
+
+  await page.route(
+    /https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+$/i,
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          stargazers_count: facts.stars,
+          forks_count: facts.forks,
+        }),
+      });
+    }
+  );
+}
+
 async function suppressRepositoryFacts(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    if (
-      document.documentElement.dataset.playwrightRepoFactsSuppressed === "1"
-    ) {
+    const suppressionKey = "__playwrightRepoFactsSuppressed";
+    const globalWindow = window as Window & {
+      __playwrightRepoFactsSuppressed?: boolean;
+    };
+
+    if (globalWindow[suppressionKey]) {
       return;
     }
 
-    document.documentElement.dataset.playwrightRepoFactsSuppressed = "1";
+    globalWindow[suppressionKey] = true;
 
     const styleId = "__playwright-hide-repository-facts";
     const styleContent = `
       .md-source__facts,
-      .md-source__repository ul {
+      .md-source__repository > ul {
         display: none !important;
       }
     `;
 
     const ensureStyle = () => {
       if (document.getElementById(styleId)) {
+        return;
+      }
+
+      if (!document.head) {
         return;
       }
 
@@ -55,7 +98,7 @@ async function suppressRepositoryFacts(page: Page): Promise<void> {
 
     const stripFacts = () => {
       document
-        .querySelectorAll(".md-source__facts, .md-source__repository ul")
+        .querySelectorAll(".md-source__facts, .md-source__repository > ul")
         .forEach((node) => node.remove());
 
       document
@@ -66,6 +109,11 @@ async function suppressRepositoryFacts(page: Page): Promise<void> {
     };
 
     const install = () => {
+      if (!document.documentElement || !document.head) {
+        requestAnimationFrame(install);
+        return;
+      }
+
       ensureStyle();
       stripFacts();
 
@@ -95,7 +143,7 @@ async function removeRepositoryFacts(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const stripFacts = () => {
       document
-        .querySelectorAll(".md-source__facts, .md-source ul")
+        .querySelectorAll(".md-source__facts, .md-source__repository > ul")
         .forEach((node) => node.remove());
 
       document

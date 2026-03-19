@@ -10,9 +10,10 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       MPLBACKEND: Agg
+      D2_VERSION: "v0.7.1"
 
     steps:
       - name: Checkout
@@ -54,8 +55,14 @@ jobs:
       - name: Install D2
         id: install_d2
         run: |
-          curl -fsSL https://d2lang.com/install.sh | sh -s --
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSLo /tmp/d2.tgz "https://github.com/terrastruct/d2/releases/download/${D2_VERSION}/d2-${D2_VERSION}-linux-amd64.tar.gz"
+          tar -xzf /tmp/d2.tgz -C /tmp
+          D2_BIN="$(find /tmp -maxdepth 2 -type f -name d2 | head -n 1)"
+          test -n "$D2_BIN"
+          install "$D2_BIN" "$HOME/.local/bin/d2"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/d2" --version
 
       - name: README is up to date
         id: readme_up_to_date
@@ -178,7 +185,7 @@ jobs:
 
   visual-regression:
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       MPLBACKEND: Agg
 
@@ -232,6 +239,14 @@ jobs:
           SERVE_PREBUILT_SITE: "1"
         run: npx playwright test sentinel.spec.ts --max-failures=1
 
+      - name: Run Playwright repository facts checks
+        id: repository_facts_checks
+        working-directory: tests/visual
+        env:
+          SKIP_DOCS_PREBUILD: "1"
+          SERVE_PREBUILT_SITE: "1"
+        run: npx playwright test repo-facts.spec.ts --max-failures=1
+
       - name: Run Playwright page visual regression
         id: page_visual_regression
         working-directory: tests/visual
@@ -263,6 +278,7 @@ jobs:
           STEP_DOWNLOAD_BUILT_SITE: ${{ steps.download_built_docs_site.conclusion }}
           STEP_VERIFY_BUILT_SITE: ${{ steps.verify_built_docs_site.conclusion }}
           STEP_SENTINEL: ${{ steps.visual_sentinel.conclusion }}
+          STEP_REPO_FACTS: ${{ steps.repository_facts_checks.conclusion }}
           STEP_PAGES: ${{ steps.page_visual_regression.conclusion }}
           STEP_COMPONENTS: ${{ steps.component_visual_regression.conclusion }}
           STEP_EMBEDDED_PANELS: ${{ steps.embedded_panel_visual_regression.conclusion }}
@@ -273,6 +289,7 @@ jobs:
               {"env_key":"STEP_DOWNLOAD_BUILT_SITE","label":"Download built docs site","failure_class":"artifact-download","layer":"GitHub Actions artifact handoff","next_step":"Inspect whether the validate job uploaded the built site artifact successfully."},
               {"env_key":"STEP_VERIFY_BUILT_SITE","label":"Verify built docs site layout","failure_class":"artifact-layout","layer":"Downloaded MkDocs site directory structure","next_step":"Inspect the downloaded built-site artifact and ensure the shared prebuilt-site contract still matches the extracted layout."},
               {"env_key":"STEP_SENTINEL","label":"Run Playwright visual sentinel","failure_class":"browser-snapshot-page","layer":"Ubuntu sentinel snapshots","next_step":"Inspect sentinel diffs in the uploaded test results."},
+              {"env_key":"STEP_REPO_FACTS","label":"Run Playwright repository facts checks","failure_class":"browser-shell-widget","layer":"Deterministic repo-facts shell assertions","next_step":"Inspect the mocked repo-facts test output in the uploaded test results."},
               {"env_key":"STEP_PAGES","label":"Run Playwright page visual regression","failure_class":"browser-snapshot-page","layer":"Ubuntu full-page snapshots","next_step":"Inspect page snapshot diffs in the uploaded test results."},
               {"env_key":"STEP_COMPONENTS","label":"Run Playwright component visual regression","failure_class":"browser-snapshot-component","layer":"Ubuntu component snapshots","next_step":"Inspect component snapshot diffs in the uploaded test results."},
               {"env_key":"STEP_EMBEDDED_PANELS","label":"Run Playwright embedded panel visual regression","failure_class":"browser-snapshot-or-embedded-asset","layer":"Ubuntu embedded-panel checks or generated proof assets","next_step":"Inspect embedded-panel failures and the linked generated assets."}

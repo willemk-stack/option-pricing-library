@@ -34,6 +34,7 @@ npm run test:smoke
 npm run test:audits
 npm run test:a11y
 npm run test:sentinel
+npm run test:repo-facts
 npm run test:baseline
 npm run test:components
 npm run test:artifacts
@@ -44,6 +45,7 @@ snapshot table can flip between two raster states under heavier Ubuntu paralleli
 so component snapshots are serialized to keep the authoritative CI baseline stable.
 
 In CI, the snapshot-based suites (`sentinel`, `baseline`, `components`, and `artifacts`) are authoritative on Ubuntu. Windows still runs the non-snapshot browser checks (`smoke`, `audits`, and `a11y`) to catch cross-platform issues without forcing a second snapshot baseline set.
+The shared repo-facts shell widget is checked separately with mocked data so full-page baselines stay focused on stable docs content instead of async page chrome.
 
 For the closest local match to CI, run the visual suites inside the GitHub-runner-style
 Ubuntu container:
@@ -51,6 +53,10 @@ Ubuntu container:
 ```bash
 python ../../scripts/run_ci_visual_regression.py verify
 ```
+
+Native Windows page-snapshot runs are useful for debugging, but they are not the
+authoritative baseline source. When a snapshot diff matters, verify or refresh it
+through the CI-like Ubuntu runner instead of relying on native Windows output.
 
 The docs pre-push hook now requires Docker for docs-sensitive pushes. It still runs the
 fast local strict-build, smoke, DOM, and targeted accessibility checks first, then runs
@@ -85,6 +91,7 @@ npm run test:capture
 - theme-swapped light/dark figure pairs resolve to a single visible asset
 - audited routes do not silently fall through to MkDocs 404 pages
 - screenshots stay within baseline tolerance
+- the repository facts shell widget renders deterministic mocked data outside full-page baselines
 - component-level screenshots for key proof and metric blocks
 - a small sentinel component snapshot subset can fail fast before the full pixel suite
 
@@ -114,6 +121,9 @@ When you need authoritative snapshot updates that match CI, prefer:
 ```bash
 python ../../scripts/run_ci_visual_regression.py update
 ```
+
+That Ubuntu container path is also the preferred way to investigate snapshot mismatches.
+Native Windows page snapshots can legitimately differ from the shared Ubuntu baselines.
 
 The authoritative route, theme, and width matrix lives in `scripts/visual_audit/review_targets.json`.
 The browser suite also supports `REVIEW_PAGE_KEYS` and `REVIEW_PATHS` to narrow runs to one page during bounded improvement passes.

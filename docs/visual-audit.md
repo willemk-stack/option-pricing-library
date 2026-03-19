@@ -163,6 +163,10 @@ For authoritative Playwright snapshot refreshes that match the Ubuntu CI runner,
 python scripts/run_ci_visual_regression.py update
 ```
 
+Use that same CI-like Ubuntu runner for authoritative snapshot verification when a page
+diff is under investigation. Native Windows page-snapshot runs are helpful for debugging,
+but the shared baselines are owned by the Ubuntu visual-regression workflow.
+
 ## Root-cause buckets
 
 Classify each issue as one of:
