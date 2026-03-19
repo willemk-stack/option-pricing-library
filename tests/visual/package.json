@@ -2,7 +2,11 @@
   "name": "option-pricing-docs-visual-tests",
   "private": true,
   "scripts": {
-    "test": "playwright test",
+    "test": "python ../../scripts/run_local_visual_regression.py verify",
+    "test:raw": "playwright test",
+    "test:local:quick": "python ../../scripts/run_local_visual_regression.py verify --tests smoke.spec.ts dom-audits.spec.ts a11y.spec.ts sentinel.spec.ts repo-facts.spec.ts",
+    "test:local:full": "python ../../scripts/run_local_visual_regression.py verify",
+    "test:local:update": "python ../../scripts/run_local_visual_regression.py update",
     "test:baseline": "playwright test pages.spec.ts",
     "test:update": "npm run test:update:all",
     "test:update:all": "playwright test sentinel.spec.ts pages.spec.ts components.spec.ts embedded-panels.spec.ts --update-snapshots",
@@ -18,7 +22,7 @@
     "test:components": "playwright test components.spec.ts --workers=1",
     "test:artifacts": "playwright test embedded-panels.spec.ts",
     "test:capture": "playwright test review-capture.spec.ts",
-    "test:ci": "playwright test smoke.spec.ts dom-audits.spec.ts a11y.spec.ts sentinel.spec.ts repo-facts.spec.ts pages.spec.ts components.spec.ts embedded-panels.spec.ts"
+    "test:ci": "python ../../scripts/run_local_visual_regression.py verify"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",

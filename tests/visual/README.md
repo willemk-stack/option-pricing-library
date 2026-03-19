@@ -30,6 +30,9 @@ For the CI-shaped split stages:
 
 ```bash
 cd tests/visual
+npm run test:local:quick
+npm run test:local:full
+npm run test:local:update
 npm run test:smoke
 npm run test:audits
 npm run test:a11y
@@ -39,6 +42,14 @@ npm run test:baseline
 npm run test:components
 npm run test:artifacts
 ```
+
+The `test:local:*` scripts are the preferred native entrypoints. They build the docs
+site once, then reuse the prebuilt output for all selected suites instead of letting
+each standalone Playwright command trigger its own rebuild.
+
+The lower-level `npm run test:*` suite commands and `npm run test:raw` remain useful
+for one-off debugging, but each fresh invocation can rebuild diagrams, generated assets, and MkDocs before
+Playwright starts the server.
 
 `npm run test:components` intentionally uses one worker. The mobile `/performance/`
 snapshot table can flip between two raster states under heavier Ubuntu parallelism,
@@ -57,6 +68,13 @@ python ../../scripts/run_ci_visual_regression.py verify
 Native Windows page-snapshot runs are useful for debugging, but they are not the
 authoritative baseline source. When a snapshot diff matters, verify or refresh it
 through the CI-like Ubuntu runner instead of relying on native Windows output.
+
+When you do want a native run, prefer the cross-platform wrapper:
+
+```bash
+python ../../scripts/run_local_visual_regression.py verify
+python ../../scripts/run_local_visual_regression.py verify --skip-build --tests smoke.spec.ts repo-facts.spec.ts
+```
 
 The docs pre-push hook now requires Docker for docs-sensitive pushes. It still runs the
 fast local strict-build, smoke, DOM, and targeted accessibility checks first, then runs
@@ -124,6 +142,9 @@ python ../../scripts/run_ci_visual_regression.py update
 
 That Ubuntu container path is also the preferred way to investigate snapshot mismatches.
 Native Windows page snapshots can legitimately differ from the shared Ubuntu baselines.
+For native iteration, the `run_local_visual_regression.py` wrapper is more stable than
+running several standalone Playwright commands back-to-back because it reuses one
+prebuilt site across the whole selected suite set.
 
 The authoritative route, theme, and width matrix lives in `scripts/visual_audit/review_targets.json`.
 The browser suite also supports `REVIEW_PAGE_KEYS` and `REVIEW_PATHS` to narrow runs to one page during bounded improvement passes.

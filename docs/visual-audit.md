@@ -167,6 +167,17 @@ Use that same CI-like Ubuntu runner for authoritative snapshot verification when
 diff is under investigation. Native Windows page-snapshot runs are helpful for debugging,
 but the shared baselines are owned by the Ubuntu visual-regression workflow.
 
+For native local iteration, prefer:
+
+```bash
+python scripts/run_local_visual_regression.py verify
+python scripts/run_local_visual_regression.py verify --skip-build --tests smoke.spec.ts repo-facts.spec.ts
+```
+
+That wrapper builds the docs site once and then serves the prebuilt output to every
+selected Playwright suite, which is substantially less fragile than triggering several
+standalone Playwright commands that each rebuild the site independently.
+
 ## Root-cause buckets
 
 Classify each issue as one of:
