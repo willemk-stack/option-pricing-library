@@ -1,26 +1,26 @@
 [
   {
     "n_strikes":21,
-    "scalar_loop":14.2689999957,
-    "vectorized_slice":0.7901999998,
-    "vectorized_speedup_x":18.0574538093
+    "scalar_loop":9.1686999999,
+    "vectorized_slice":0.5804999998,
+    "vectorized_speedup_x":15.7944875149
   },
   {
     "n_strikes":61,
-    "scalar_loop":39.0149499981,
-    "vectorized_slice":0.7727999982,
-    "vectorized_speedup_x":50.4851838605
+    "scalar_loop":26.93345,
+    "vectorized_slice":0.5910000002,
+    "vectorized_speedup_x":45.5726734184
   },
   {
     "n_strikes":201,
-    "scalar_loop":128.06585,
-    "vectorized_slice":0.9176999956,
-    "vectorized_speedup_x":139.550888755
+    "scalar_loop":86.54305,
+    "vectorized_slice":0.6352,
+    "vectorized_speedup_x":136.2453557864
   },
   {
     "n_strikes":801,
-    "scalar_loop":498.0403000009,
-    "vectorized_slice":1.1166999975,
-    "vectorized_speedup_x":445.9929265794
+    "scalar_loop":351.6012,
+    "vectorized_slice":0.8635000002,
+    "vectorized_speedup_x":407.1814706876
   }
 ]
