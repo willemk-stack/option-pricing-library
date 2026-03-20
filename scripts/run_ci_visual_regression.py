@@ -10,6 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DOCS_VISUAL_CONFIG_PATH = ROOT / "scripts" / "visual_audit" / "docs_visual_config.json"
 DEFAULT_IMAGE = "ghcr.io/catthehacker/ubuntu:runner-24.04"
+PRE_PUSH_ARTIFACTS_DIR = ROOT / "artifacts" / "pre_push"
+CI_VISUAL_STAGE_STATUS_PATH = PRE_PUSH_ARTIFACTS_DIR / "docs_ci_visual_last_stage.json"
 DEFAULT_TESTS = [
     "sentinel.spec.ts",
     "repo-facts.spec.ts",
@@ -97,6 +99,68 @@ DOCS_VISUAL_CONFIG = load_docs_visual_config()
 DEFAULT_BUILD_PROFILE = DOCS_VISUAL_CONFIG["build_profile"]
 
 
+def prepare_stage_status_artifact() -> None:
+    PRE_PUSH_ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    if CI_VISUAL_STAGE_STATUS_PATH.exists():
+        CI_VISUAL_STAGE_STATUS_PATH.unlink()
+
+
+def clear_stage_status_artifact() -> None:
+    if CI_VISUAL_STAGE_STATUS_PATH.exists():
+        CI_VISUAL_STAGE_STATUS_PATH.unlink()
+
+
+def load_stage_status() -> dict[str, str] | None:
+    if not CI_VISUAL_STAGE_STATUS_PATH.exists():
+        return None
+
+    try:
+        data = json.loads(CI_VISUAL_STAGE_STATUS_PATH.read_text(encoding="utf8"))
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    normalized: dict[str, str] = {}
+    for key, value in data.items():
+        if isinstance(key, str) and isinstance(value, str):
+            normalized[key] = value
+    return normalized or None
+
+
+def runner_failure_summary_lines(
+    *,
+    mode: str,
+    image: str,
+    stage_status: dict[str, str] | None,
+) -> list[str]:
+    lines = ["CI visual runner failed.", f"Mode: {mode}", f"Image: {image}"]
+
+    if stage_status is None:
+        lines.extend(
+            [
+                "Failure class: environment-container-startup",
+                "Likely layer: Docker invocation, image pull, or container startup",
+                "Next step: Run the docker command directly and inspect daemon, image-pull, or volume-mount errors.",
+            ]
+        )
+        return lines
+
+    stage_name = stage_status.get("stage", "unknown")
+    stage_state = stage_status.get("status", "unknown")
+    lines.extend(
+        [
+            f"Stage: {stage_name}",
+            f"Stage status: {stage_state}",
+            f"Failure class: {stage_status.get('failure_class', 'unknown')}",
+            f"Likely layer: {stage_status.get('likely_layer', 'Unknown failure layer')}",
+            f"Next step: {stage_status.get('next_step', 'Inspect the command output above.')}",
+        ]
+    )
+    return lines
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -142,6 +206,59 @@ def docker_stage_command(stage_name: str, command: list[str]) -> str:
     return f"run_stage {shlex.quote(stage_name)} {format_command(command)}"
 
 
+def pip_install_command(*args: str) -> list[str]:
+    return [
+        "python3",
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        "--progress-bar",
+        "off",
+        "--break-system-packages",
+        *args,
+    ]
+
+
+def stage_status_setup_command() -> str:
+    metadata_literal = shlex.quote(json.dumps(STAGE_METADATA))
+    status_path = "/work/artifacts/pre_push/docs_ci_visual_last_stage.json"
+    return (
+        f"STAGE_STATUS_PATH={shlex.quote(status_path)} && "
+        'write_stage_status() { stage_name="$1"; stage_state="$2"; python3 - <<\'PY\' "$stage_name" "$stage_state" "$STAGE_STATUS_PATH"\n'
+        "import json\n"
+        "import sys\n"
+        "from pathlib import Path\n"
+        "\n"
+        "stage_name, stage_state, status_path = sys.argv[1:4]\n"
+        f"metadata = {metadata_literal}\n"
+        'entry = json.loads(metadata).get(stage_name, ("unknown", "Unknown failure layer", "Inspect the command output above."))\n'
+        "payload = {\n"
+        '    "stage": stage_name,\n'
+        '    "status": stage_state,\n'
+        '    "failure_class": entry[0],\n'
+        '    "likely_layer": entry[1],\n'
+        '    "next_step": entry[2],\n'
+        "}\n"
+        "path = Path(status_path)\n"
+        "path.parent.mkdir(parents=True, exist_ok=True)\n"
+        'path.write_text(json.dumps(payload), encoding="utf8")\n'
+        "PY\n"
+        "} && "
+        'run_stage() { stage_name="$1"; shift; write_stage_status "$stage_name" running; printf "\\n[%s]\\n" "$stage_name"; printf "> "; printf "%q " "$@"; printf "\\n"; if ! "$@"; then write_stage_status "$stage_name" failed; python3 - <<\'PY\' "$stage_name"\n'
+        "import sys\n"
+        "stage = sys.argv[1]\n"
+        f"metadata = {metadata_literal}\n"
+        'entry = __import__("json").loads(metadata).get(stage, ("unknown", "Unknown failure layer", "Inspect the command output above."))\n'
+        'print(f"\\n{stage} failed.", file=sys.stderr)\n'
+        'print(f"Failure class: {entry[0]}", file=sys.stderr)\n'
+        'print(f"Likely layer: {entry[1]}", file=sys.stderr)\n'
+        'print(f"Next step: {entry[2]}", file=sys.stderr)\n'
+        "PY\n"
+        'exit 1; fi; write_stage_status "$stage_name" passed; }'
+    )
+
+
 def classify_parallel_tests(parallel_tests: list[str]) -> str:
     unique_tests = list(dict.fromkeys(parallel_tests))
     if unique_tests == ["sentinel.spec.ts", "repo-facts.spec.ts"]:
@@ -155,6 +272,7 @@ def classify_parallel_tests(parallel_tests: list[str]) -> str:
 
 def main() -> int:
     args = parse_args()
+    prepare_stage_status_artifact()
     build_profile = os.environ.get("DOCS_VISUAL_BUILD_PROFILE", DEFAULT_BUILD_PROFILE)
     constraints_arg = []
     if CI_CONSTRAINTS_PATH.exists():
@@ -205,33 +323,14 @@ def main() -> int:
 
     inner_commands = [
         "set -e",
-        'run_stage() { stage_name="$1"; shift; printf "\\n[%s]\\n" "$stage_name"; printf "> "; printf "%q " "$@"; printf "\\n"; if ! "$@"; then python3 - <<\'PY\' "$stage_name"\nimport sys\nstage = sys.argv[1]\nmetadata = '
-        + shlex.quote(json.dumps(STAGE_METADATA))
-        + '\nentry = __import__("json").loads(metadata).get(stage, ("unknown", "Unknown failure layer", "Inspect the command output above."))\nprint(f"\\n{stage} failed.", file=sys.stderr)\nprint(f"Failure class: {entry[0]}", file=sys.stderr)\nprint(f"Likely layer: {entry[1]}", file=sys.stderr)\nprint(f"Next step: {entry[2]}", file=sys.stderr)\nPY\nexit 1; fi; }',
+        stage_status_setup_command(),
         docker_stage_command(
             "install-python-deps",
-            [
-                "python3",
-                "-m",
-                "pip",
-                "install",
-                "--break-system-packages",
-                "--upgrade",
-                "pip",
-            ],
+            pip_install_command("--upgrade", "pip"),
         ),
         docker_stage_command(
             "install-python-deps",
-            [
-                "python3",
-                "-m",
-                "pip",
-                "install",
-                "--break-system-packages",
-                *constraints_arg,
-                "-e",
-                ".[docs,plot]",
-            ],
+            pip_install_command(*constraints_arg, "-e", ".[docs,plot]"),
         ),
     ]
 
@@ -252,7 +351,10 @@ def main() -> int:
         inner_commands.extend(
             [
                 "cd tests/visual",
-                docker_stage_command("install-node-deps", ["npm", "ci"]),
+                docker_stage_command(
+                    "install-node-deps",
+                    ["npm", "ci", "--no-audit", "--no-fund"],
+                ),
                 docker_stage_command(
                     "install-playwright",
                     ["npx", "playwright", "install", "--with-deps", "chromium"],
@@ -322,7 +424,19 @@ def main() -> int:
     if forwarded_env.get("REVIEW_PAGE_KEYS"):
         print("Review page keys: " + forwarded_env["REVIEW_PAGE_KEYS"], flush=True)
     print("> " + format_command(docker_command), flush=True)
-    subprocess.run(docker_command, check=True)
+    try:
+        subprocess.run(docker_command, check=True)
+    except subprocess.CalledProcessError as exc:
+        print("", flush=True)
+        for line in runner_failure_summary_lines(
+            mode=args.mode,
+            image=args.image,
+            stage_status=load_stage_status(),
+        ):
+            print(line, flush=True)
+        return exc.returncode or 1
+
+    clear_stage_status_artifact()
     return 0
 
 
