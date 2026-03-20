@@ -9,6 +9,9 @@ concurrency:
   group: docs-advisory-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   linux-audits:
     runs-on: ubuntu-24.04
@@ -19,12 +22,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: "pip"
@@ -32,7 +35,7 @@ jobs:
             pyproject.toml
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
@@ -59,11 +62,11 @@ jobs:
       - name: Check performance page synchronization
         run: python scripts/render_performance_page.py --check
 
-      - name: Render D2 diagrams
-        run: python scripts/render_d2_diagrams.py
+      - name: Check D2 diagrams
+        run: python scripts/render_d2_diagrams.py --check
 
-      - name: Build generated visual assets
-        run: python scripts/build_visual_artifacts.py all --profile ci
+      - name: Check generated visual assets
+        run: python scripts/build_visual_artifacts.py all --profile ci --check
 
       - name: Build MkDocs site strictly
         run: python -m mkdocs build --strict
@@ -72,7 +75,7 @@ jobs:
         run: python scripts/check_docs_source_links.py
 
       - name: Link check docs sources and README
-        uses: lycheeverse/lychee-action@v2
+        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2
         with:
           fail: true
           jobSummary: true
@@ -97,11 +100,11 @@ jobs:
         run: npx playwright test a11y.spec.ts
 
       - name: Run full authoritative visual regression
-        run: python scripts/run_ci_visual_regression.py verify
+        run: python scripts/run_ci_visual_regression.py verify --skip-build
 
       - name: Upload advisory artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: docs-advisory-linux-artifacts
           if-no-files-found: ignore
@@ -117,10 +120,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: "pip"
@@ -128,7 +131,7 @@ jobs:
             pyproject.toml
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20"
           cache: "npm"
@@ -172,7 +175,7 @@ jobs:
 
       - name: Upload Windows advisory artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: docs-advisory-windows-artifacts
           if-no-files-found: ignore

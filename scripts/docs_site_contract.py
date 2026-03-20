@@ -6,12 +6,22 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.parse import urljoin
+from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS_VISUAL_CONFIG_PATH = ROOT / "scripts" / "visual_audit" / "docs_visual_config.json"
 DEFAULT_ARTIFACT_NAME = "docs-built-site"
 DEFAULT_SITE_DIR = "site"
 DEFAULT_SITE_ENTRYPOINT = "index.html"
+DEFAULT_PUBLIC_DOCS_PATHS = (
+    "/",
+    "/installation/",
+    "/performance/",
+    "/api/",
+    "/user_guides/quickstart/",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +111,65 @@ def verify_prebuilt_site(contract: DocsSiteContract) -> None:
     raise ValueError("\n".join(lines))
 
 
+def normalize_public_base_url(base_url: str) -> str:
+    normalized = base_url.strip()
+    if not normalized:
+        raise ValueError("A non-empty public docs base URL is required.")
+    if not normalized.endswith("/"):
+        normalized += "/"
+    return normalized
+
+
+def public_docs_urls(
+    base_url: str,
+    paths: tuple[str, ...] | list[str] | None = None,
+) -> list[str]:
+    normalized_base = normalize_public_base_url(base_url)
+    selected_paths = paths or list(DEFAULT_PUBLIC_DOCS_PATHS)
+    urls: list[str] = []
+    for path in selected_paths:
+        stripped = path.strip()
+        if not stripped:
+            continue
+        if stripped == "/":
+            urls.append(normalized_base)
+            continue
+        urls.append(urljoin(normalized_base, stripped.lstrip("/")))
+    return urls
+
+
+def verify_public_site(
+    *,
+    base_url: str,
+    paths: tuple[str, ...] | list[str] | None = None,
+    timeout: float = 15.0,
+) -> None:
+    failures: list[str] = []
+    for url in public_docs_urls(base_url, paths):
+        request = Request(url, headers={"User-Agent": "option-pricing-docs-check"})
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                status = getattr(response, "status", None) or response.getcode()
+                content_type = response.headers.get("Content-Type", "")
+                if status >= 400:
+                    failures.append(f"{url} returned HTTP {status}")
+                    continue
+                if "text/html" not in content_type:
+                    failures.append(
+                        f"{url} returned unexpected content type: {content_type or 'missing'}"
+                    )
+        except HTTPError as exc:
+            failures.append(f"{url} returned HTTP {exc.code}")
+        except URLError as exc:
+            failures.append(f"{url} could not be reached: {exc.reason}")
+
+    if failures:
+        raise ValueError(
+            "Published docs verification failed.\n"
+            + "\n".join(f"- {failure}" for failure in failures)
+        )
+
+
 def write_github_outputs(contract: DocsSiteContract) -> None:
     output_lines = [
         f"artifact_name={contract.artifact_name}",
@@ -126,8 +195,24 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "command",
-        choices=("describe", "github-outputs", "verify"),
+        choices=("describe", "github-outputs", "verify", "verify-public"),
         help="Action to perform.",
+    )
+    parser.add_argument(
+        "--base-url",
+        help="Public base URL used by verify-public, for example https://example.github.io/project/.",
+    )
+    parser.add_argument(
+        "--path",
+        action="append",
+        default=[],
+        help="Specific public docs path to verify. Repeat to override the default curated path set.",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=15.0,
+        help="Per-request timeout in seconds for verify-public.",
     )
     return parser.parse_args()
 
@@ -144,6 +229,26 @@ def main() -> int:
         print("Loaded docs built-site contract:", flush=True)
         print("\n".join(contract_lines(contract)), flush=True)
         write_github_outputs(contract)
+        return 0
+
+    if args.command == "verify-public":
+        if not args.base_url:
+            print("verify-public requires --base-url", file=sys.stderr, flush=True)
+            return 1
+
+        try:
+            verify_public_site(
+                base_url=args.base_url,
+                paths=args.path or None,
+                timeout=args.timeout,
+            )
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr, flush=True)
+            return 1
+
+        print("Published docs URLs verified.", flush=True)
+        for url in public_docs_urls(args.base_url, args.path or None):
+            print(url, flush=True)
         return 0
 
     try:
