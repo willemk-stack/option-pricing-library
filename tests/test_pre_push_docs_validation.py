@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -84,3 +85,130 @@ def test_prepare_run_log_replaces_stale_failure_log(
 
     assert run_log.read_text(encoding="utf8") == "Docs pre-push guard log\n"
     assert failure_log.read_text(encoding="utf8") == "Docs pre-push guard log\n"
+
+
+def test_ensure_clean_generated_diff_detects_untracked_files(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run(*args, **kwargs):
+        return hook.subprocess.CompletedProcess(
+            args[0],
+            0,
+            stdout="?? docs/assets/generated/new-figure.svg\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(hook.subprocess, "run", fake_run)
+
+    with pytest.raises(
+        hook.HookFailure, match="tracked or untracked generated-file drift"
+    ):
+        hook.ensure_clean_generated_diff(
+            ["docs/assets/generated"],
+            label="Generated docs asset tree",
+        )
+
+
+def test_main_readme_only_fast_mode_skips_playwright_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[list[str]] = []
+
+    monkeypatch.setattr(
+        hook,
+        "parse_args",
+        lambda: argparse.Namespace(mode="fast", files=["README.template.md"]),
+    )
+    monkeypatch.setattr(hook, "prepare_run_log", lambda: None)
+    monkeypatch.setattr(hook, "clear_failure_log", lambda: None)
+    monkeypatch.setattr(hook, "resolve_python_command", lambda: "python")
+    monkeypatch.setattr(
+        hook,
+        "ensure_playwright_dependencies",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected Playwright check")),
+    )
+    monkeypatch.setattr(
+        hook,
+        "docker_available_detail",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected Docker check")),
+    )
+    monkeypatch.setattr(
+        hook,
+        "run",
+        lambda command, **kwargs: commands.append(command),
+    )
+    monkeypatch.setattr(
+        hook, "ensure_clean_generated_diff", lambda *args, **kwargs: None
+    )
+
+    assert hook.main() == 0
+    assert commands == [["python", "scripts/render_readme.py", "--check"]]
+
+
+def test_main_docs_site_fast_mode_skips_browser_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[list[str]] = []
+
+    monkeypatch.setattr(
+        hook,
+        "parse_args",
+        lambda: argparse.Namespace(mode="fast", files=["docs/index.md"]),
+    )
+    monkeypatch.setattr(hook, "prepare_run_log", lambda: None)
+    monkeypatch.setattr(hook, "clear_failure_log", lambda: None)
+    monkeypatch.setattr(hook, "resolve_python_command", lambda: "python")
+    monkeypatch.setattr(
+        hook,
+        "ensure_playwright_dependencies",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected Playwright check")),
+    )
+    monkeypatch.setattr(
+        hook,
+        "docker_available_detail",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected Docker check")),
+    )
+    monkeypatch.setattr(
+        hook,
+        "run",
+        lambda command, **kwargs: commands.append(command),
+    )
+    monkeypatch.setattr(
+        hook, "ensure_clean_generated_diff", lambda *args, **kwargs: None
+    )
+
+    assert hook.main() == 0
+    assert [command[1:] for command in commands] == [
+        ["scripts/check_docs_source_links.py"],
+        ["-m", "mkdocs", "build", "--strict"],
+        ["scripts/visual_audit/check_svg_assets.py"],
+    ]
+
+
+def test_main_manual_mode_checks_playwright_for_docs_site(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    monkeypatch.setattr(
+        hook,
+        "parse_args",
+        lambda: argparse.Namespace(mode="manual", files=["docs/index.md"]),
+    )
+    monkeypatch.setattr(hook, "prepare_run_log", lambda: None)
+    monkeypatch.setattr(hook, "clear_failure_log", lambda: None)
+    monkeypatch.setattr(hook, "resolve_python_command", lambda: "python")
+    monkeypatch.setattr(
+        hook,
+        "ensure_playwright_dependencies",
+        lambda: calls.append("playwright"),
+    )
+    monkeypatch.setattr(hook, "docker_available_detail", lambda: (True, None))
+    monkeypatch.setattr(hook, "run", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        hook, "ensure_clean_generated_diff", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(hook, "playwright_command", lambda *args: ["playwright", *args])
+
+    assert hook.main() == 0
+    assert calls == ["playwright"]

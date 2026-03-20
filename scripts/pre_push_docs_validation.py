@@ -73,6 +73,16 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument(
+        "--mode",
+        choices=("fast", "manual"),
+        default="fast",
+        help=(
+            "Fast mode keeps the default pre-push hook portable and avoids browser "
+            "dependencies. Manual mode adds the heavier local browser and Dockerized "
+            "authoritative checks."
+        ),
+    )
+    parser.add_argument(
         "--files",
         nargs="*",
         default=None,
@@ -320,26 +330,48 @@ def ensure_clean_generated_diff(paths: list[str], *, label: str) -> None:
         return
 
     result = subprocess.run(
-        ["git", "diff", "--quiet", "--", *paths],
+        [
+            "git",
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--",
+            *paths,
+        ],
         cwd=ROOT,
         check=False,
         capture_output=True,
         text=True,
     )
-    if result.returncode == 0:
+    if result.returncode != 0:
+        detail = (
+            result.stderr or result.stdout
+        ).strip() or "Unknown git status failure."
+        raise HookFailure(
+            f"{label} could not inspect git status.\nDetail: {detail}",
+            failure_class="generated-output-drift",
+            likely_layer="Generated docs asset status inspection",
+            next_step="Run `git status --short --untracked-files=all` locally and resolve the status inspection failure.",
+        )
+
+    changed_entries = [
+        line.strip() for line in result.stdout.splitlines() if line.strip()
+    ]
+    if not changed_entries:
         return
 
     raise HookFailure(
         "\n".join(
             [
-                f"{label} updated tracked generated files.",
-                "Review the regenerated outputs, stage them, and retry the push.",
-                "Changed paths: " + ", ".join(paths),
+                f"{label} detected tracked or untracked generated-file drift.",
+                "Review the generated outputs, stage the intended updates, and retry the push.",
+                "Changed entries:",
+                *(f"  {entry}" for entry in changed_entries),
             ]
         ),
         failure_class="generated-output-drift",
         likely_layer="Generated README, diagrams, or docs asset outputs",
-        next_step="Review the regenerated files, stage the intended updates, then retry the push.",
+        next_step="Review the generated files, stage the intended updates, then retry the push.",
     )
 
 
@@ -379,11 +411,12 @@ def main() -> int:
         return 0
 
     python_command = resolve_python_command()
-    ensure_playwright_dependencies()
+    manual_mode = args.mode == "manual"
 
-    docker_ready = True
+    docker_ready = False
     docker_detail: str | None = None
-    if impact.docs_site_required:
+    if manual_mode and impact.docs_site_required:
+        ensure_playwright_dependencies()
         docker_ready, docker_detail = docker_available_detail()
         if not docker_ready and not allow_no_docker():
             raise docker_unavailable_failure(docker_detail or "Unknown Docker error.")
@@ -409,15 +442,23 @@ def main() -> int:
         )
 
     if impact.docs_site_required:
-        print(
-            "Authoritative Ubuntu visual suites: " + ", ".join(authoritative_tests),
-            flush=True,
-        )
-        print(
-            "Failure classes: build/link, generated-asset, browser-dom, browser-a11y, browser-snapshot",
-            flush=True,
-        )
-        if not docker_ready:
+        if manual_mode:
+            print(
+                "Authoritative Ubuntu visual suites: " + ", ".join(authoritative_tests),
+                flush=True,
+            )
+            print(
+                "Failure classes: build/link, generated-asset, browser-dom, browser-a11y, browser-snapshot",
+                flush=True,
+            )
+        else:
+            print(
+                "Fast mode skips browser and Docker validation locally; PR CI remains authoritative for: "
+                + ", ".join(authoritative_tests),
+                flush=True,
+            )
+
+        if manual_mode and not docker_ready:
             print(
                 f"WARNING: Docker is unavailable; local authoritative Ubuntu checks are deferred to CI because {ALLOW_NO_DOCKER_ENV}=1.",
                 flush=True,
@@ -432,31 +473,26 @@ def main() -> int:
 
     if impact.readme_required:
         run(
-            [resolve_python_command(), "scripts/render_readme.py"],
+            [python_command, "scripts/render_readme.py", "--check"],
             stage=ValidationStage(
-                label="Refresh generated README",
+                label="Check generated README",
                 failure_class="build-readme-sync",
                 likely_layer="Generated README sync from template and examples",
-                next_step="Inspect README.template.md and examples/, then rerun the README generator.",
+                next_step="Inspect README.template.md and examples/, then rerun the README generator in write mode if the committed README is stale.",
             ),
             env=env,
         )
-        ensure_clean_generated_diff(["README.md"], label="Generated README refresh")
 
     if impact.performance_page_required:
         run(
-            [python_command, "scripts/render_performance_page.py"],
+            [python_command, "scripts/render_performance_page.py", "--check"],
             stage=ValidationStage(
-                label="Refresh generated performance page",
+                label="Check generated performance page",
                 failure_class="build-performance-sync",
                 likely_layer="Generated performance page sync from committed benchmark artifacts",
-                next_step="Inspect the benchmark artifacts or performance page template, then rerun the renderer.",
+                next_step="Inspect the benchmark artifacts or performance page template, then rerun the renderer in write mode if the committed page is stale.",
             ),
             env=env,
-        )
-        ensure_clean_generated_diff(
-            ["docs/performance.md"],
-            label="Generated performance page refresh",
         )
 
     if impact.benchmark_artifacts_required:
@@ -473,18 +509,18 @@ def main() -> int:
 
     if impact.d2_required:
         run(
-            [python_command, "scripts/render_d2_diagrams.py"],
+            [python_command, "scripts/render_d2_diagrams.py", "--check"],
             stage=ValidationStage(
-                label="Rebuild D2 diagrams",
+                label="Check D2 diagrams",
                 failure_class="generated-asset-build",
                 likely_layer="D2 diagram generation",
-                next_step="Fix the diagram sources or D2 installation issue, then rerun the asset build.",
+                next_step="Fix the diagram sources or D2 installation issue, then rerun the D2 refresh in write mode if the committed diagrams are stale.",
             ),
             env=env,
         )
         ensure_clean_generated_diff(
             ["docs/assets/diagrams"],
-            label="D2 diagram refresh",
+            label="D2 diagram tree",
         )
 
     if not impact.docs_site_required:
@@ -502,30 +538,34 @@ def main() -> int:
     )
 
     if impact.visual_assets_required:
-        if docker_ready:
+        if manual_mode:
             run(
                 [
                     python_command,
-                    "scripts/run_ci_visual_regression.py",
-                    "build-assets",
+                    "scripts/build_visual_artifacts.py",
+                    "all",
+                    "--profile",
+                    DEFAULT_BUILD_PROFILE,
+                    "--check",
                 ],
                 stage=ValidationStage(
-                    label="Rebuild visual artifacts in authoritative Ubuntu container",
+                    label="Check generated visual assets",
                     failure_class="generated-asset-build",
-                    likely_layer="Authoritative Ubuntu SVG/PNG visual artifact generation",
-                    next_step="Inspect the visual artifact generator inputs or Dockerized Ubuntu build output, then rerun the asset build.",
+                    likely_layer="SVG/PNG visual artifact generation",
+                    next_step="Inspect the visual artifact generator inputs, then rerun the asset refresh workflow or an explicit local refresh if the committed assets are stale.",
                 ),
                 env=env,
             )
-            ensure_clean_generated_diff(
-                ["docs/assets/generated"],
-                label="Generated docs asset refresh",
-            )
         else:
             print(
-                "\nSkipping Dockerized visual-asset rebuild locally; CI remains authoritative for generated SVG/PNG docs assets.",
+                "\nFast mode skips local generated-asset rendering; CI and the manual docs guard remain authoritative for semantic visual-asset drift.",
                 flush=True,
             )
+
+        ensure_clean_generated_diff(
+            ["docs/assets/generated"],
+            label="Generated docs asset tree",
+        )
     else:
         print(
             "\nSkipping generated-asset rebuild; no generator inputs changed.",
@@ -552,6 +592,10 @@ def main() -> int:
         ),
         env=env,
     )
+
+    if not manual_mode:
+        clear_failure_log()
+        return 0
 
     playwright_env = env.copy()
     playwright_env["SKIP_DOCS_PREBUILD"] = "1"
@@ -643,7 +687,7 @@ if __name__ == "__main__":
         print(str(exc), file=sys.stderr, flush=True)
         print(f"Full hook log: {failure_log}", file=sys.stderr, flush=True)
         print(
-            "Manual reproduction: pre-commit run docs-pre-push-guard --hook-stage pre-push -v",
+            "Manual reproduction: pre-commit run docs-pre-push-guard --hook-stage pre-push -v or pre-commit run docs-manual-guard --hook-stage manual -v",
             file=sys.stderr,
             flush=True,
         )
