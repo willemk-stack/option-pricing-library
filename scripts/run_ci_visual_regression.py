@@ -100,14 +100,17 @@ DEFAULT_BUILD_PROFILE = DOCS_VISUAL_CONFIG["build_profile"]
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Run the Playwright visual suites inside a GitHub-runner-style Ubuntu "
-            "container so snapshot verification and refreshes match CI."
+            "Run docs visual validation steps inside a GitHub-runner-style Ubuntu "
+            "container so generated assets and snapshot verification match CI."
         )
     )
     parser.add_argument(
         "mode",
-        choices=("verify", "update"),
-        help="Verify current snapshots or refresh them in the CI-like container.",
+        choices=("verify", "update", "build-assets"),
+        help=(
+            "Verify current snapshots, refresh them, or rebuild generated docs assets "
+            "in the CI-like container."
+        ),
     )
     parser.add_argument(
         "--image",
@@ -157,9 +160,20 @@ def main() -> int:
     if CI_CONSTRAINTS_PATH.exists():
         constraints_arg = ["-c", CI_CONSTRAINTS_PATH.relative_to(ROOT).as_posix()]
 
+    if args.mode == "build-assets" and args.skip_build:
+        raise ValueError("--skip-build cannot be used with build-assets mode.")
+
+    build_only = args.mode == "build-assets"
+
     requested_tests = list(dict.fromkeys(args.tests))
-    parallel_tests = [test for test in requested_tests if test not in SERIAL_TESTS]
-    serial_tests = [test for test in requested_tests if test in SERIAL_TESTS]
+    parallel_tests = (
+        []
+        if build_only
+        else [test for test in requested_tests if test not in SERIAL_TESTS]
+    )
+    serial_tests = (
+        [] if build_only else [test for test in requested_tests if test in SERIAL_TESTS]
+    )
     forwarded_env = {
         name: value for name in FORWARDED_ENV_VARS if (value := os.environ.get(name))
     }
@@ -186,51 +200,69 @@ def main() -> int:
         for command in playwright_commands:
             command.append("--update-snapshots")
 
-    if not playwright_commands:
+    if not playwright_commands and not build_only:
         raise ValueError("No Playwright test files were selected.")
 
-    inner_script = " && ".join(
-        [
-            "set -e",
-            'run_stage() { stage_name="$1"; shift; printf "\\n[%s]\\n" "$stage_name"; printf "> "; printf "%q " "$@"; printf "\\n"; if ! "$@"; then python3 - <<\'PY\' "$stage_name"\nimport sys\nstage = sys.argv[1]\nmetadata = '
-            + shlex.quote(json.dumps(STAGE_METADATA))
-            + '\nentry = __import__("json").loads(metadata).get(stage, ("unknown", "Unknown failure layer", "Inspect the command output above."))\nprint(f"\\n{stage} failed.", file=sys.stderr)\nprint(f"Failure class: {entry[0]}", file=sys.stderr)\nprint(f"Likely layer: {entry[1]}", file=sys.stderr)\nprint(f"Next step: {entry[2]}", file=sys.stderr)\nPY\nexit 1; fi; }',
+    inner_commands = [
+        "set -e",
+        'run_stage() { stage_name="$1"; shift; printf "\\n[%s]\\n" "$stage_name"; printf "> "; printf "%q " "$@"; printf "\\n"; if ! "$@"; then python3 - <<\'PY\' "$stage_name"\nimport sys\nstage = sys.argv[1]\nmetadata = '
+        + shlex.quote(json.dumps(STAGE_METADATA))
+        + '\nentry = __import__("json").loads(metadata).get(stage, ("unknown", "Unknown failure layer", "Inspect the command output above."))\nprint(f"\\n{stage} failed.", file=sys.stderr)\nprint(f"Failure class: {entry[0]}", file=sys.stderr)\nprint(f"Likely layer: {entry[1]}", file=sys.stderr)\nprint(f"Next step: {entry[2]}", file=sys.stderr)\nPY\nexit 1; fi; }',
+        docker_stage_command(
+            "install-python-deps",
+            [
+                "python3",
+                "-m",
+                "pip",
+                "install",
+                "--break-system-packages",
+                "--upgrade",
+                "pip",
+            ],
+        ),
+        docker_stage_command(
+            "install-python-deps",
+            [
+                "python3",
+                "-m",
+                "pip",
+                "install",
+                "--break-system-packages",
+                *constraints_arg,
+                "-e",
+                ".[docs,plot]",
+            ],
+        ),
+    ]
+
+    if build_only:
+        inner_commands.append(
             docker_stage_command(
-                "install-python-deps",
+                "build-visual-artifacts",
                 [
                     "python3",
-                    "-m",
-                    "pip",
-                    "install",
-                    "--break-system-packages",
-                    "--upgrade",
-                    "pip",
+                    "scripts/build_visual_artifacts.py",
+                    "all",
+                    "--profile",
+                    build_profile,
                 ],
-            ),
-            docker_stage_command(
-                "install-python-deps",
+            )
+        )
+    else:
+        inner_commands.extend(
+            [
+                "cd tests/visual",
+                docker_stage_command("install-node-deps", ["npm", "ci"]),
+                docker_stage_command(
+                    "install-playwright",
+                    ["npx", "playwright", "install", "--with-deps", "chromium"],
+                ),
+                "cd /work",
+            ]
+        )
+        if not args.skip_build:
+            inner_commands.extend(
                 [
-                    "python3",
-                    "-m",
-                    "pip",
-                    "install",
-                    "--break-system-packages",
-                    *constraints_arg,
-                    "-e",
-                    ".[docs,plot]",
-                ],
-            ),
-            "cd tests/visual",
-            docker_stage_command("install-node-deps", ["npm", "ci"]),
-            docker_stage_command(
-                "install-playwright",
-                ["npx", "playwright", "install", "--with-deps", "chromium"],
-            ),
-            "cd /work",
-            *(
-                []
-                if args.skip_build
-                else [
                     docker_stage_command(
                         "build-visual-artifacts",
                         [
@@ -246,24 +278,24 @@ def main() -> int:
                         ["python3", "-m", "mkdocs", "build", "--strict"],
                     ),
                 ]
-            ),
-            "cd tests/visual",
-            *(
-                docker_stage_command(
-                    stage_name,
-                    [
-                        "env",
-                        "SKIP_DOCS_PREBUILD=1",
-                        "SERVE_PREBUILT_SITE=1",
-                        *command,
-                    ],
-                )
-                for stage_name, command in zip(
-                    playwright_stage_names, playwright_commands, strict=True
-                )
-            ),
-        ]
-    )
+            )
+        inner_commands.append("cd tests/visual")
+        inner_commands.extend(
+            docker_stage_command(
+                stage_name,
+                [
+                    "env",
+                    "SKIP_DOCS_PREBUILD=1",
+                    "SERVE_PREBUILT_SITE=1",
+                    *command,
+                ],
+            )
+            for stage_name, command in zip(
+                playwright_stage_names, playwright_commands, strict=True
+            )
+        )
+
+    inner_script = " && ".join(inner_commands)
 
     docker_command = [
         "docker",
@@ -281,8 +313,9 @@ def main() -> int:
     ]
 
     print(f"Running CI-like visual {args.mode} in {args.image}", flush=True)
-    print("Selected tests: " + ", ".join(requested_tests), flush=True)
-    if args.skip_build:
+    if not build_only:
+        print("Selected tests: " + ", ".join(requested_tests), flush=True)
+    if args.skip_build and not build_only:
         print("Build mode: reuse prebuilt site", flush=True)
     if forwarded_env.get("REVIEW_PATHS"):
         print("Review paths: " + forwarded_env["REVIEW_PATHS"], flush=True)

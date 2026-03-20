@@ -2,6 +2,23 @@ name: validate-docs-artifacts
 
 on:
   pull_request:
+    paths:
+      - '.github/workflows/validate-docs-artifacts.yml'
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'scripts/build_benchmark_artifacts.py'
+      - 'scripts/build_visual_artifacts.py'
+      - 'scripts/docs_impact.py'
+      - 'scripts/docs_site_contract.py'
+      - 'scripts/render_d2_diagrams.py'
+      - 'scripts/run_ci_visual_regression.py'
+      - 'scripts/select_docs_visual_ci.py'
+      - 'scripts/serve_docs.py'
+      - 'scripts/visual_audit/**'
+      - 'src/option_pricing/**'
+      - 'tests/visual/**'
+      - 'benchmarks/artifacts/**'
+      - 'benchmarks/*.py'
   workflow_dispatch:
 
 concurrency:
@@ -27,6 +44,17 @@ jobs:
           cache-dependency-path: |
             pyproject.toml
 
+      - name: Determine docs impact
+        id: docs_impact
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python scripts/docs_impact.py github-outputs \
+              --base-ref "${{ github.event.pull_request.base.sha }}" \
+              --head-ref "${{ github.event.pull_request.head.sha }}"
+          else
+            python scripts/docs_impact.py github-outputs --full
+          fi
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -41,6 +69,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[docs,plot]"
 
+      - name: Check benchmark source freshness
+        id: check_benchmark_source_freshness
+        if: steps.docs_impact.outputs.benchmark_artifacts_required == 'true'
+        run: python scripts/build_benchmark_artifacts.py --check
+
       - name: Install Playwright dependencies
         id: install_playwright_dependencies
         working-directory: tests/visual
@@ -50,6 +83,7 @@ jobs:
 
       - name: Install D2
         id: install_d2
+        if: steps.docs_impact.outputs.d2_required == 'true'
         run: |
           set -euo pipefail
           D2_TMP_DIR="$(mktemp -d)"
@@ -65,11 +99,17 @@ jobs:
 
       - name: Render D2 diagrams
         id: render_d2_diagrams
-        run: python scripts/render_d2_diagrams.py
+        if: steps.docs_impact.outputs.d2_required == 'true'
+        run: |
+          python scripts/render_d2_diagrams.py
+          git diff --exit-code -- docs/assets/diagrams
 
       - name: Build generated visual assets
         id: build_visual_assets
-        run: python scripts/build_visual_artifacts.py all --profile ci
+        if: steps.docs_impact.outputs.visual_assets_required == 'true'
+        run: |
+          python scripts/build_visual_artifacts.py all --profile ci
+          git diff --exit-code -- docs/assets/generated
 
       - name: Build MkDocs site strictly
         id: build_mkdocs
@@ -99,6 +139,7 @@ jobs:
         if: always()
         env:
           STEP_INSTALL_PYTHON_DEPS: ${{ steps.install_python_dependencies.conclusion }}
+          STEP_BENCHMARK_SOURCE_FRESHNESS: ${{ steps.check_benchmark_source_freshness.conclusion }}
           STEP_INSTALL_PLAYWRIGHT_DEPS: ${{ steps.install_playwright_dependencies.conclusion }}
           STEP_INSTALL_D2: ${{ steps.install_d2.conclusion }}
           STEP_RENDER_D2: ${{ steps.render_d2_diagrams.conclusion }}
@@ -111,6 +152,7 @@ jobs:
           WORKFLOW_SUMMARY_ITEMS_JSON: >-
             [
               {"env_key":"STEP_INSTALL_PYTHON_DEPS","label":"Install Python dependencies","failure_class":"environment-python","layer":"Python dependency install","next_step":"Inspect pip output and dependency resolution."},
+              {"env_key":"STEP_BENCHMARK_SOURCE_FRESHNESS","label":"Check benchmark source freshness","failure_class":"benchmark-artifact-stale","layer":"Committed benchmark snapshots versus tracked benchmark source inputs","next_step":"Refresh the benchmark artifacts in the authoritative benchmark workflow, then commit the updated benchmarks/artifacts outputs."},
               {"env_key":"STEP_INSTALL_PLAYWRIGHT_DEPS","label":"Install Playwright dependencies","failure_class":"environment-node-browser","layer":"Node modules or Playwright browser install","next_step":"Inspect npm or Playwright install output."},
               {"env_key":"STEP_INSTALL_D2","label":"Install D2","failure_class":"environment-tooling","layer":"D2 CLI installation","next_step":"Inspect the D2 install output and PATH setup."},
               {"env_key":"STEP_RENDER_D2","label":"Render D2 diagrams","failure_class":"generated-asset-build","layer":"D2 diagram generation","next_step":"Fix the diagram sources or D2 tooling failure."},

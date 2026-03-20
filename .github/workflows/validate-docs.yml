@@ -2,6 +2,29 @@ name: validate-docs
 
 on:
   pull_request:
+    paths:
+      - '.github/workflows/validate-docs.yml'
+      - '.github/workflows/validate-docs-artifacts.yml'
+      - 'README.template.md'
+      - 'docs/**'
+      - 'examples/**'
+      - 'mkdocs.yml'
+      - 'scripts/build_benchmark_artifacts.py'
+      - 'scripts/build_visual_artifacts.py'
+      - 'scripts/check_docs_source_links.py'
+      - 'scripts/docs_impact.py'
+      - 'scripts/docs_site_contract.py'
+      - 'scripts/pre_push_docs_validation.py'
+      - 'scripts/render_d2_diagrams.py'
+      - 'scripts/render_readme.py'
+      - 'scripts/run_ci_visual_regression.py'
+      - 'scripts/select_docs_visual_ci.py'
+      - 'scripts/serve_docs.py'
+      - 'scripts/visual_audit/**'
+      - 'src/option_pricing/**'
+      - 'tests/visual/**'
+      - 'benchmarks/artifacts/**'
+      - 'benchmarks/*.py'
   workflow_dispatch:
 
 concurrency:
@@ -11,6 +34,8 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-24.04
+    outputs:
+      docs_site_required: ${{ steps.docs_impact.outputs.docs_site_required }}
     env:
       MPLBACKEND: Agg
       D2_VERSION: "v0.7.1"
@@ -27,11 +52,23 @@ jobs:
           cache-dependency-path: |
             pyproject.toml
 
+      - name: Determine docs impact
+        id: docs_impact
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python scripts/docs_impact.py github-outputs \
+              --base-ref "${{ github.event.pull_request.base.sha }}" \
+              --head-ref "${{ github.event.pull_request.head.sha }}"
+          else
+            python scripts/docs_impact.py github-outputs --full
+          fi
+
       - name: Load docs site contract
         id: docs_site_contract
         run: python scripts/docs_site_contract.py github-outputs
 
       - name: Set up Node
+        if: steps.docs_impact.outputs.docs_site_required == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -41,12 +78,19 @@ jobs:
 
       - name: Install Python dependencies
         id: install_python_dependencies
+        if: steps.docs_impact.outputs.docs_sensitive == 'true'
         run: |
           python -m pip install --upgrade pip
           python -m pip install -c scripts/ci-constraints.txt -e ".[docs,plot]"
 
+      - name: Check benchmark source freshness
+        id: check_benchmark_source_freshness
+        if: steps.docs_impact.outputs.benchmark_artifacts_required == 'true'
+        run: python scripts/build_benchmark_artifacts.py --check
+
       - name: Install Playwright dependencies
         id: install_playwright_dependencies
+        if: steps.docs_impact.outputs.docs_site_required == 'true'
         working-directory: tests/visual
         run: |
           npm ci
@@ -54,6 +98,7 @@ jobs:
 
       - name: Install D2
         id: install_d2
+        if: steps.docs_impact.outputs.d2_required == 'true'
         run: |
           set -euo pipefail
           D2_TMP_DIR="$(mktemp -d)"
@@ -69,21 +114,32 @@ jobs:
 
       - name: README is up to date
         id: readme_up_to_date
-        run: python scripts/render_readme.py --check
+        if: steps.docs_impact.outputs.readme_required == 'true'
+        run: |
+          python scripts/render_readme.py
+          git diff --exit-code -- README.md
 
       - name: Render D2 diagrams
         id: render_d2_diagrams
-        run: python scripts/render_d2_diagrams.py
+        if: steps.docs_impact.outputs.d2_required == 'true'
+        run: |
+          python scripts/render_d2_diagrams.py
+          git diff --exit-code -- docs/assets/diagrams
 
       - name: Build generated visual assets
         id: build_visual_assets
-        run: python scripts/build_visual_artifacts.py all --profile ci
+        if: steps.docs_impact.outputs.visual_assets_required == 'true'
+        run: |
+          python scripts/build_visual_artifacts.py all --profile ci
+          git diff --exit-code -- docs/assets/generated
 
       - name: Build MkDocs site strictly
         id: build_mkdocs
+        if: steps.docs_impact.outputs.docs_site_required == 'true'
         run: python -m mkdocs build --strict
 
       - name: Upload built docs site
+        if: steps.docs_impact.outputs.docs_site_required == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.docs_site_contract.outputs.artifact_name }}
@@ -92,10 +148,12 @@ jobs:
 
       - name: Check generated asset integrity
         id: check_generated_asset_integrity
+        if: steps.docs_impact.outputs.docs_site_required == 'true'
         run: python scripts/visual_audit/check_svg_assets.py
 
       - name: Report visual state
         id: report_visual_state
+        if: steps.docs_impact.outputs.docs_site_required == 'true'
         run: python scripts/visual_audit/report_visual_state.py
 
       - name: Export visual state advisory warnings
@@ -104,6 +162,7 @@ jobs:
 
       - name: Link check docs sources
         id: link_check_docs_sources
+        if: steps.docs_impact.outputs.docs_site_required == 'true'
         uses: lycheeverse/lychee-action@v2
         with:
           fail: true
@@ -116,6 +175,7 @@ jobs:
 
       - name: Run Playwright smoke checks
         id: smoke_checks
+        if: steps.docs_impact.outputs.docs_site_required == 'true'
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
@@ -124,6 +184,7 @@ jobs:
 
       - name: Run Playwright DOM and CSS audits
         id: dom_css_audits
+        if: steps.docs_impact.outputs.docs_site_required == 'true'
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
@@ -132,6 +193,7 @@ jobs:
 
       - name: Run Playwright accessibility checks
         id: accessibility_checks
+        if: steps.docs_impact.outputs.docs_site_required == 'true'
         working-directory: tests/visual
         env:
           SKIP_DOCS_PREBUILD: "1"
@@ -142,6 +204,7 @@ jobs:
         if: always()
         env:
           STEP_INSTALL_PYTHON_DEPS: ${{ steps.install_python_dependencies.conclusion }}
+          STEP_BENCHMARK_SOURCE_FRESHNESS: ${{ steps.check_benchmark_source_freshness.conclusion }}
           STEP_INSTALL_PLAYWRIGHT_DEPS: ${{ steps.install_playwright_dependencies.conclusion }}
           STEP_INSTALL_D2: ${{ steps.install_d2.conclusion }}
           STEP_README: ${{ steps.readme_up_to_date.conclusion }}
@@ -158,6 +221,7 @@ jobs:
           WORKFLOW_SUMMARY_ITEMS_JSON: >-
             [
               {"env_key":"STEP_INSTALL_PYTHON_DEPS","label":"Install Python dependencies","failure_class":"environment-python","layer":"Python dependency install","next_step":"Inspect pip output and dependency resolution."},
+              {"env_key":"STEP_BENCHMARK_SOURCE_FRESHNESS","label":"Check benchmark source freshness","failure_class":"benchmark-artifact-stale","layer":"Committed benchmark snapshots versus tracked benchmark source inputs","next_step":"Refresh the benchmark artifacts in the authoritative benchmark workflow, then commit the updated benchmarks/artifacts outputs."},
               {"env_key":"STEP_INSTALL_PLAYWRIGHT_DEPS","label":"Install Playwright dependencies","failure_class":"environment-node-browser","layer":"Node modules or Playwright browser install","next_step":"Inspect npm or Playwright install output."},
               {"env_key":"STEP_INSTALL_D2","label":"Install D2","failure_class":"environment-tooling","layer":"D2 CLI installation","next_step":"Inspect the D2 install output and PATH setup."},
               {"env_key":"STEP_README","label":"README is up to date","failure_class":"build-readme-sync","layer":"Generated README sync","next_step":"Regenerate README content from the template and examples."},
@@ -187,6 +251,7 @@ jobs:
             tests/visual/test-results/**
 
   visual-regression:
+    if: needs.validate.outputs.docs_site_required == 'true'
     needs: validate
     runs-on: ubuntu-24.04
     env:
@@ -267,6 +332,7 @@ jobs:
             tests/visual/test-results/**
 
   windows-browser-checks:
+    if: needs.validate.outputs.docs_site_required == 'true'
     needs: validate
     runs-on: windows-latest
     env:
