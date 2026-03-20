@@ -3,4 +3,5 @@
 # which makes them a grounded starting point for the visual artifact pipeline.
 # Update intentionally when refreshing generated artifacts and visual baselines.
 numpy==1.26.4
+pandas==2.2.3
 scipy==1.17.1

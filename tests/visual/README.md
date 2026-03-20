@@ -74,6 +74,12 @@ Native Windows page-snapshot runs are useful for debugging, but they are not the
 authoritative baseline source. When a snapshot diff matters, verify or refresh it
 through the CI-like Ubuntu runner instead of relying on native Windows output.
 
+For the fast blocking docs contract without the heavier advisory audits, run:
+
+```bash
+python ../../scripts/docs_doctor.py
+```
+
 When you do want a native run, prefer the cross-platform wrapper:
 
 ```bash
@@ -182,6 +188,10 @@ suite:
 ```bash
 python ../../scripts/build_benchmark_artifacts.py --check
 ```
+
+When that check fails, the authoritative refresh path is the `benchmarks` GitHub
+workflow, which now rebuilds the benchmark bundle and opens a draft PR with the
+refreshed artifacts.
 
 That Ubuntu container path is also the preferred way to investigate snapshot mismatches.
 Native Windows page snapshots can legitimately differ from the shared Ubuntu baselines.

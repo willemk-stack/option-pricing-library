@@ -8,7 +8,6 @@ import os
 import platform
 import sys
 import warnings
-from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -279,11 +278,7 @@ def _collect_environment() -> dict[str, Any]:
         versions["scipy"] = "unavailable"
 
     return {
-        "timestamp_utc": datetime.now(UTC).isoformat(),
-        "platform": platform.platform(),
-        "python_executable": sys.executable,
         "cpu_count": os.cpu_count(),
-        "processor": platform.processor(),
         "versions": versions,
     }
 

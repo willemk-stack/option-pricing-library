@@ -443,6 +443,22 @@ def main() -> int:
         )
         ensure_clean_generated_diff(["README.md"], label="Generated README refresh")
 
+    if impact.performance_page_required:
+        run(
+            [python_command, "scripts/render_performance_page.py"],
+            stage=ValidationStage(
+                label="Refresh generated performance page",
+                failure_class="build-performance-sync",
+                likely_layer="Generated performance page sync from committed benchmark artifacts",
+                next_step="Inspect the benchmark artifacts or performance page template, then rerun the renderer.",
+            ),
+            env=env,
+        )
+        ensure_clean_generated_diff(
+            ["docs/performance.md"],
+            label="Generated performance page refresh",
+        )
+
     if impact.benchmark_artifacts_required:
         run(
             [python_command, "scripts/build_benchmark_artifacts.py", "--check"],

@@ -59,6 +59,7 @@ def main() -> int:
             docs_sensitive=True,
             docs_site_required=True,
             readme_required=True,
+            performance_page_required=True,
             benchmark_artifacts_required=True,
             d2_required=True,
             visual_assets_required=True,

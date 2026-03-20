@@ -24,7 +24,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -c scripts/ci-constraints.txt -e ".[dev]"
 
       - name: README is up to date
         run: python scripts/render_readme.py --check
@@ -57,7 +57,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -c scripts/ci-constraints.txt -e ".[dev]"
 
       - name: Pytest (non-slow tests + coverage)
         run: pytest -q tests -m "not slow" --cov=option_pricing --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=80
@@ -89,7 +89,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -c scripts/ci-constraints.txt -e ".[dev]"
 
       - name: Pytest (slow diagnostics)
         run: pytest -q tests -m slow
@@ -113,7 +113,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -c scripts/ci-constraints.txt -e ".[dev]"
 
       - name: Pytest (notebooks)
         env:
