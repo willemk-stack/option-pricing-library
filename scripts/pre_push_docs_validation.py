@@ -96,7 +96,10 @@ def run(
     tail: deque[str] = deque(maxlen=FAILURE_SUMMARY_TAIL_LINES)
 
     try:
-        with PRE_PUSH_RUN_LOG.open("a", encoding="utf8") as log_file:
+        with (
+            PRE_PUSH_RUN_LOG.open("a", encoding="utf8") as run_log_file,
+            PRE_PUSH_FAILURE_LOG.open("a", encoding="utf8") as failure_log_file,
+        ):
             process = subprocess.Popen(
                 command,
                 cwd=cwd,
@@ -109,7 +112,8 @@ def run(
             assert process.stdout is not None
             for line in process.stdout:
                 print(line, end="", flush=True)
-                log_file.write(line)
+                run_log_file.write(line)
+                failure_log_file.write(line)
                 tail.append(line.rstrip())
             return_code = process.wait()
     except OSError as exc:
@@ -158,25 +162,32 @@ def run(
 
 def prepare_run_log() -> None:
     PRE_PUSH_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    PRE_PUSH_RUN_LOG.write_text("Docs pre-push guard log\n", encoding="utf8")
+    log_header = "Docs pre-push guard log\n"
+    PRE_PUSH_RUN_LOG.write_text(log_header, encoding="utf8")
+    PRE_PUSH_FAILURE_LOG.write_text(log_header, encoding="utf8")
 
 
 def append_run_log(message: str) -> None:
     PRE_PUSH_LOG_DIR.mkdir(parents=True, exist_ok=True)
     with PRE_PUSH_RUN_LOG.open("a", encoding="utf8") as log_file:
         log_file.write(message)
+    with PRE_PUSH_FAILURE_LOG.open("a", encoding="utf8") as log_file:
+        log_file.write(message)
 
 
 def snapshot_failure_log() -> Path:
     PRE_PUSH_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    if PRE_PUSH_RUN_LOG.exists():
-        shutil.copyfile(PRE_PUSH_RUN_LOG, PRE_PUSH_FAILURE_LOG)
-    else:
+    if not PRE_PUSH_FAILURE_LOG.exists():
         PRE_PUSH_FAILURE_LOG.write_text(
             "Docs pre-push guard failed before any stage output was captured.\n",
             encoding="utf8",
         )
     return PRE_PUSH_FAILURE_LOG
+
+
+def clear_failure_log() -> None:
+    if PRE_PUSH_FAILURE_LOG.exists():
+        PRE_PUSH_FAILURE_LOG.unlink()
 
 
 def git_stdout(args: list[str]) -> str:
@@ -596,6 +607,7 @@ def main() -> int:
             flush=True,
         )
 
+    clear_failure_log()
     return 0
 
 
