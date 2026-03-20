@@ -4,28 +4,34 @@ hide:
   - toc
 ---
 
-# Option Pricing Library
+<h1 class="homepage-hero__title homepage-page-title">Option Pricing Library</h1>
 
-<div class="portfolio-hero">
+<div class="portfolio-hero homepage-hero">
   <p class="hero-kicker">Typed pricing, surface repair, and validated numerics</p>
-  <p class="hero-copy">This library prices vanilla options, repairs noisy implied-vol surfaces, smooths the Dupire handoff with eSSVI, and validates the local-vol/PDE workflow with repricing and convergence evidence.</p>
-  <div class="cta-row cta-row--trio">
+  <p class="hero-copy homepage-hero__copy">This library prices vanilla options, repairs noisy implied-vol surfaces, smooths the Dupire handoff with eSSVI, and validates the local-vol/PDE workflow with repricing and convergence evidence.</p>
+  <div class="cta-row cta-row--trio homepage-cta-row">
     <a class="md-button md-button--primary" href="user_guides/decision_guide.md">Read the proof path</a>
     <a class="md-button" href="user_guides/instruments.md">Start with the recommended API</a>
     <a class="md-button" href="performance.md">Review performance evidence</a>
   </div>
 </div>
 
-<figure markdown class="diagram" style="--diagram-max-width: 1180px">
-  ![Reviewer proof panel showing surface repair, eSSVI smoothing, local-vol extraction, and PDE repricing with tracked evidence callouts](assets/generated/showcase/reviewer_proof_panel.light.svg){ .diagram-img .diagram-light }
-  ![Reviewer proof panel showing surface repair, eSSVI smoothing, local-vol extraction, and PDE repricing with tracked evidence callouts](assets/generated/showcase/reviewer_proof_panel.dark.svg){ .diagram-img .diagram-dark }
-  <figcaption>The fastest single scan: quoted-to-repaired surface evidence, smooth Dupire handoff evidence, and local-vol/PDE validation evidence in one panel.</figcaption>
-</figure>
+<div class="homepage-proof-section" markdown="1">
+  <div class="homepage-proof-section__header">
+    <p class="homepage-section-kicker">Featured proof panel</p>
+    <p class="homepage-proof-section__copy">One scan across quoted-to-repaired surface evidence, the smooth Dupire handoff, and local-vol/PDE validation.</p>
+  </div>
+  <figure class="diagram homepage-proof-panel" style="--diagram-max-width: 1180px">
+    <img alt="Reviewer proof panel showing surface repair, eSSVI smoothing, local-vol extraction, and PDE repricing with tracked evidence callouts" src="assets/generated/showcase/reviewer_proof_panel.light.svg" class="diagram-img diagram-light" />
+    <img alt="Reviewer proof panel showing surface repair, eSSVI smoothing, local-vol extraction, and PDE repricing with tracked evidence callouts" src="assets/generated/showcase/reviewer_proof_panel.dark.svg" class="diagram-img diagram-dark" />
+    <figcaption>Quoted-to-repaired surface evidence, smooth Dupire handoff evidence, and local-vol/PDE validation in one panel.</figcaption>
+  </figure>
+</div>
 
 ## Validation snapshot
 
-<div class="snapshot-grid">
-  <div class="snapshot-card">
+<div class="snapshot-grid homepage-snapshot-grid">
+  <div class="snapshot-card homepage-snapshot-card homepage-snapshot-card--transition">
     <p class="snapshot-label">Seam control</p>
     <p class="snapshot-copy">Worst observed <code>w_T</code> seam jump</p>
     <p class="metric-pair">
@@ -34,14 +40,14 @@ hide:
       <span class="metric-number metric-number--good">8.17e-5</span>
     </p>
   </div>
-  <div class="snapshot-card">
+  <div class="snapshot-card homepage-snapshot-card homepage-snapshot-card--zero">
     <p class="snapshot-label">Dupire handoff</p>
     <p class="snapshot-copy"><code>projection_dupire_invalid_count</code></p>
     <p class="metric-line">
       <span class="metric-number metric-number--good">0</span>
     </p>
   </div>
-  <div class="snapshot-card">
+  <div class="snapshot-card homepage-snapshot-card homepage-snapshot-card--detail">
     <p class="snapshot-label">PDE repricing</p>
     <p class="snapshot-copy">Published repricing sweep</p>
     <p class="metric-line">
