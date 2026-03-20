@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: E402
 import argparse
+import hashlib
 import json
 import os
 import platform
@@ -53,6 +54,22 @@ from option_pricing.vol.local_vol_surface import LocalVolSurface
 from option_pricing.vol.surface_core import VolSurface
 from option_pricing.vol.svi import SVIParams, svi_total_variance
 
+BENCHMARK_SOURCE_MANIFEST = "benchmark_source_manifest.json"
+BENCHMARK_SOURCE_INPUTS = (
+    "benchmarks/conftest.py",
+    "benchmarks/test_bench_iv.py",
+    "benchmarks/test_bench_localvol.py",
+    "benchmarks/test_bench_macro.py",
+    "benchmarks/test_bench_pde.py",
+    "benchmarks/test_bench_tree.py",
+    "src/option_pricing/models/",
+    "src/option_pricing/numerics/",
+    "src/option_pricing/pricers/",
+    "src/option_pricing/types.py",
+    "src/option_pricing/vol/",
+)
+BENCHMARK_SOURCE_MANIFEST_VERSION = 1
+
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -91,7 +108,112 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=1,
         help="Warmup repetitions before timing.",
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "Fail if the tracked benchmark-source manifest does not match the current "
+            "benchmark inputs. This does not rerun benchmarks."
+        ),
+    )
+    parser.add_argument(
+        "--write-source-manifest",
+        action="store_true",
+        help=(
+            "Write or refresh the benchmark source manifest without recomputing the "
+            "benchmark timing snapshots."
+        ),
+    )
     return parser.parse_args(argv)
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _iter_benchmark_source_files() -> list[Path]:
+    files: list[Path] = []
+    for entry in BENCHMARK_SOURCE_INPUTS:
+        path = ROOT / entry
+        if path.is_file():
+            files.append(path)
+            continue
+        if path.is_dir():
+            files.extend(
+                candidate for candidate in path.rglob("*.py") if candidate.is_file()
+            )
+    return sorted(set(files))
+
+
+def _benchmark_source_manifest_payload() -> dict[str, Any]:
+    files = _iter_benchmark_source_files()
+    return {
+        "version": BENCHMARK_SOURCE_MANIFEST_VERSION,
+        "inputs": {
+            str(path.relative_to(ROOT)).replace("\\", "/"): _sha256(path)
+            for path in files
+        },
+    }
+
+
+def _benchmark_source_manifest_path(artifacts_dir: Path) -> Path:
+    return artifacts_dir / BENCHMARK_SOURCE_MANIFEST
+
+
+def _write_benchmark_source_manifest(artifacts_dir: Path) -> Path:
+    path = _benchmark_source_manifest_path(artifacts_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(_benchmark_source_manifest_payload(), indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _check_benchmark_source_manifest(artifacts_dir: Path) -> int:
+    manifest_path = _benchmark_source_manifest_path(artifacts_dir)
+    current_payload = _benchmark_source_manifest_payload()
+    if not manifest_path.exists():
+        print("Benchmark source manifest is missing. Refresh benchmark artifacts with:")
+        print("  python scripts/build_benchmark_artifacts.py --write-source-manifest")
+        return 1
+
+    recorded_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    recorded_inputs = dict(recorded_payload.get("inputs", {}))
+    current_inputs = dict(current_payload.get("inputs", {}))
+
+    missing = sorted(path for path in current_inputs if path not in recorded_inputs)
+    changed = sorted(
+        path
+        for path, digest in current_inputs.items()
+        if path in recorded_inputs and recorded_inputs[path] != digest
+    )
+    orphaned = sorted(path for path in recorded_inputs if path not in current_inputs)
+
+    if not missing and not changed and not orphaned:
+        print("Benchmark source manifest is up to date.")
+        return 0
+
+    print(
+        "Benchmark source inputs have changed since the committed benchmark snapshot."
+    )
+    print(
+        "Refresh the authoritative benchmark artifacts and commit the updated outputs."
+    )
+    for label, items in (
+        ("missing", missing),
+        ("changed", changed),
+        ("orphaned", orphaned),
+    ):
+        if not items:
+            continue
+        for item in items:
+            print(f" - {label}: {item}")
+    return 1
 
 
 def _domain_cfg() -> BSDomainConfig:
@@ -1506,6 +1628,15 @@ def main(argv: list[str] | None = None) -> int:
     plot_dir = args.plot_dir.resolve()
     artifacts_dir.mkdir(parents=True, exist_ok=True)
     plot_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.check:
+        return _check_benchmark_source_manifest(artifacts_dir)
+
+    if args.write_source_manifest:
+        path = _write_benchmark_source_manifest(artifacts_dir)
+        print(str(path.relative_to(ROOT)).replace("\\", "/"))
+        return 0
+
     environment = _collect_environment()
     pytest_summary = None
     if args.pytest_benchmark_json is not None:
@@ -1567,6 +1698,7 @@ def main(argv: list[str] | None = None) -> int:
         name="performance_summary.json",
         artifacts_dir=artifacts_dir,
     )
+    _write_benchmark_source_manifest(artifacts_dir)
     print(summary_path)
     return 0
 

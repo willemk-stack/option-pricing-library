@@ -9,10 +9,15 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from docs_impact import (
+    classify_docs_impact,
+    collect_changed_files,
+    determine_a11y_paths,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 TESTS_VISUAL_DIR = ROOT / "tests" / "visual"
 DOCS_VISUAL_CONFIG_PATH = ROOT / "scripts" / "visual_audit" / "docs_visual_config.json"
-EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
 def load_docs_visual_config() -> dict[str, str]:
@@ -22,75 +27,6 @@ def load_docs_visual_config() -> dict[str, str]:
 DOCS_VISUAL_CONFIG = load_docs_visual_config()
 DEFAULT_DOCS_BASE_URL = DOCS_VISUAL_CONFIG["docs_base_url"]
 DEFAULT_BUILD_PROFILE = DOCS_VISUAL_CONFIG["build_profile"]
-
-DOCS_SENSITIVE_PREFIXES = (
-    "benchmarks/artifacts/",
-    "docs/",
-    "src/",
-    "scripts/build_benchmark_artifacts.py",
-    "tests/visual/",
-    "scripts/serve_docs.py",
-    "scripts/build_visual_artifacts.py",
-    "scripts/render_d2_diagrams.py",
-    "scripts/visual_audit/",
-)
-
-FULL_REVIEW_PREFIXES = (
-    "benchmarks/artifacts/",
-    "mkdocs.yml",
-    "docs/stylesheets/",
-    "docs/assets/",
-    "src/",
-    "scripts/build_benchmark_artifacts.py",
-    "tests/visual/",
-    "scripts/serve_docs.py",
-    "scripts/build_visual_artifacts.py",
-    "scripts/render_d2_diagrams.py",
-    "scripts/visual_audit/",
-)
-
-ASSET_REBUILD_PREFIXES = (
-    "docs/assets/",
-    "scripts/build_visual_artifacts.py",
-    "scripts/render_d2_diagrams.py",
-    "scripts/visual_audit/",
-)
-
-LEGACY_PAGE_ALIASES = {
-    "docs/user_guides/flagship_capstone2_page.md": "/user_guides/decision_guide/",
-    "docs/user_guides/flagship_surface.md": "/user_guides/surface_workflow/",
-    "docs/user_guides/flagship_essvi_bridge.md": "/user_guides/essvi_smooth_handoff/",
-    "docs/user_guides/flagship_localvol_pde.md": "/user_guides/localvol_pde_validation/",
-}
-
-CURATED_A11Y_PATHS = {
-    "/",
-    "/architecture/",
-    "/installation/",
-    "/performance/",
-    "/user_guides/quickstart/",
-    "/user_guides/instruments/",
-    "/user_guides/market_api/",
-    "/user_guides/decision_guide/",
-    "/user_guides/surface_workflow/",
-    "/user_guides/essvi_smooth_handoff/",
-    "/user_guides/localvol_pde_validation/",
-    "/api/",
-    "/api/public/",
-    "/api/pricers/",
-    "/api/vol/",
-}
-
-AUTHORITATIVE_COMPONENT_PATHS = {
-    "/",
-    "/performance/",
-    "/user_guides/surface_workflow/",
-}
-
-AUTHORITATIVE_EMBEDDED_PANEL_PATHS = {
-    "/",
-    "/performance/",
-}
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,154 +104,13 @@ def run(
 
 
 def git_stdout(args: list[str]) -> str:
-    result = subprocess.run(
+    subprocess.run(
         ["git", *args],
         cwd=ROOT,
         check=True,
         capture_output=True,
         text=True,
     )
-    return result.stdout.strip()
-
-
-def normalize_path(path: str) -> str:
-    return Path(path).as_posix().lstrip("./")
-
-
-def is_zero_ref(ref: str | None) -> bool:
-    return ref is not None and set(ref) == {"0"}
-
-
-def ref_exists(ref: str) -> bool:
-    result = subprocess.run(
-        ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
-        cwd=ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    return result.returncode == 0
-
-
-def merge_base(target_ref: str, base_ref: str) -> str | None:
-    if not ref_exists(base_ref):
-        return None
-
-    result = subprocess.run(
-        ["git", "merge-base", target_ref, base_ref],
-        cwd=ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        return None
-    return result.stdout.strip() or None
-
-
-def guess_push_base(target_ref: str) -> str:
-    for candidate in (
-        "@{upstream}",
-        "origin/HEAD",
-        "origin/main",
-        "origin/master",
-        "main",
-        "master",
-    ):
-        base = merge_base(target_ref, candidate)
-        if base:
-            return base
-
-    head_parent = subprocess.run(
-        ["git", "rev-parse", "--verify", "--quiet", f"{target_ref}~1"],
-        cwd=ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if head_parent.returncode == 0:
-        return head_parent.stdout.strip()
-
-    return EMPTY_TREE_HASH
-
-
-def collect_changed_files(explicit_files: list[str] | None) -> list[str]:
-    if explicit_files is not None:
-        return sorted({normalize_path(path) for path in explicit_files if path})
-
-    to_ref = os.environ.get("PRE_COMMIT_TO_REF") or "HEAD"
-    from_ref = os.environ.get("PRE_COMMIT_FROM_REF")
-
-    if from_ref and not is_zero_ref(from_ref):
-        base_ref = from_ref
-    else:
-        base_ref = guess_push_base(to_ref)
-
-    diff_output = git_stdout(
-        ["diff", "--name-only", "--diff-filter=ACMR", f"{base_ref}..{to_ref}"]
-    )
-    if not diff_output:
-        return []
-
-    return sorted(
-        {normalize_path(path) for path in diff_output.splitlines() if path.strip()}
-    )
-
-
-def is_docs_sensitive(path: str) -> bool:
-    return path == "mkdocs.yml" or any(
-        path.startswith(prefix) for prefix in DOCS_SENSITIVE_PREFIXES
-    )
-
-
-def needs_full_review(path: str) -> bool:
-    return any(path.startswith(prefix) for prefix in FULL_REVIEW_PREFIXES)
-
-
-def needs_asset_rebuild(path: str) -> bool:
-    return any(path.startswith(prefix) for prefix in ASSET_REBUILD_PREFIXES)
-
-
-def docs_file_to_review_path(path: str) -> str | None:
-    normalized = normalize_path(path)
-    if not normalized.startswith("docs/") or not normalized.endswith(".md"):
-        return None
-
-    relative = normalized.removeprefix("docs/")
-    if relative == "index.md":
-        return "/"
-
-    if relative.endswith("/index.md"):
-        relative = relative[: -len("index.md")]
-        return f"/{relative.strip('/')}/"
-
-    slug = relative[: -len(".md")]
-    return f"/{slug.strip('/')}/"
-
-
-def determine_review_paths(changed_files: list[str]) -> list[str] | None:
-    if any(needs_full_review(path) for path in changed_files):
-        return None
-
-    review_paths: set[str] = set()
-    for path in changed_files:
-        alias = LEGACY_PAGE_ALIASES.get(path)
-        if alias:
-            review_paths.add(alias)
-
-        review_path = docs_file_to_review_path(path)
-        if review_path:
-            review_paths.add(review_path)
-
-    return sorted(review_paths) or None
-
-
-def determine_a11y_paths(review_paths: list[str] | None) -> list[str] | None:
-    if review_paths is None:
-        return None
-
-    selected = [path for path in review_paths if path in CURATED_A11Y_PATHS]
-    return selected or []
 
 
 def resolve_python_command() -> str:
@@ -415,17 +210,32 @@ def ensure_docker_available() -> None:
     )
 
 
-def determine_authoritative_visual_tests(review_paths: list[str] | None) -> list[str]:
-    tests = ["sentinel.spec.ts", "pages.spec.ts"]
-    if review_paths is None:
-        return [*tests, "components.spec.ts", "embedded-panels.spec.ts"]
+def ensure_clean_generated_diff(paths: list[str], *, label: str) -> None:
+    if not paths:
+        return
 
-    review_path_set = set(review_paths)
-    if review_path_set & AUTHORITATIVE_COMPONENT_PATHS:
-        tests.append("components.spec.ts")
-    if review_path_set & AUTHORITATIVE_EMBEDDED_PANEL_PATHS:
-        tests.append("embedded-panels.spec.ts")
-    return tests
+    result = subprocess.run(
+        ["git", "diff", "--quiet", "--", *paths],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return
+
+    raise HookFailure(
+        "\n".join(
+            [
+                f"{label} updated tracked generated files.",
+                "Review the regenerated outputs, stage them, and retry the push.",
+                "Changed paths: " + ", ".join(paths),
+            ]
+        ),
+        failure_class="generated-output-drift",
+        likely_layer="Generated README, diagrams, or docs asset outputs",
+        next_step="Review the regenerated files, stage the intended updates, then retry the push.",
+    )
 
 
 def stage_for_authoritative_tests(authoritative_tests: list[str]) -> ValidationStage:
@@ -454,9 +264,9 @@ def stage_for_authoritative_tests(authoritative_tests: list[str]) -> ValidationS
 def main() -> int:
     args = parse_args()
     changed_files = collect_changed_files(args.files)
-    docs_sensitive_files = [path for path in changed_files if is_docs_sensitive(path)]
+    impact = classify_docs_impact(changed_files)
 
-    if not docs_sensitive_files:
+    if not impact.docs_sensitive:
         print(
             "No docs-sensitive changes detected in this push; skipping docs pre-push guard."
         )
@@ -466,36 +276,84 @@ def main() -> int:
     ensure_playwright_dependencies()
     ensure_docker_available()
 
-    review_paths = determine_review_paths(docs_sensitive_files)
-    should_rebuild_assets = any(
-        needs_asset_rebuild(path) for path in docs_sensitive_files
-    )
-    authoritative_tests = determine_authoritative_visual_tests(review_paths)
+    review_paths = impact.review_paths
+    authoritative_tests = impact.authoritative_tests
 
     print("Docs-sensitive changes detected:", flush=True)
-    for path in docs_sensitive_files:
+    for path in impact.changed_files:
         print(f"  - {path}", flush=True)
 
-    if review_paths is None:
+    if impact.docs_site_required and review_paths is None:
         print("Running the default review-page set.", flush=True)
-    else:
+    elif impact.docs_site_required:
         print(
             "Running targeted review paths: " + ", ".join(review_paths),
             flush=True,
         )
-    print(
-        "Authoritative Ubuntu visual suites: " + ", ".join(authoritative_tests),
-        flush=True,
-    )
-    print(
-        "Failure classes: build/link, generated-asset, browser-dom, browser-a11y, browser-snapshot",
-        flush=True,
-    )
+    else:
+        print(
+            "README-only docs impact; skipping site build and browser validation.",
+            flush=True,
+        )
+
+    if impact.docs_site_required:
+        print(
+            "Authoritative Ubuntu visual suites: " + ", ".join(authoritative_tests),
+            flush=True,
+        )
+        print(
+            "Failure classes: build/link, generated-asset, browser-dom, browser-a11y, browser-snapshot",
+            flush=True,
+        )
 
     env = os.environ.copy()
     env["MPLBACKEND"] = "Agg"
     env["DOCS_BASE_URL"] = DEFAULT_DOCS_BASE_URL
     env["DOCS_VISUAL_BUILD_PROFILE"] = DEFAULT_BUILD_PROFILE
+
+    if impact.readme_required:
+        run(
+            [resolve_python_command(), "scripts/render_readme.py"],
+            stage=ValidationStage(
+                label="Refresh generated README",
+                failure_class="build-readme-sync",
+                likely_layer="Generated README sync from template and examples",
+                next_step="Inspect README.template.md and examples/, then rerun the README generator.",
+            ),
+            env=env,
+        )
+        ensure_clean_generated_diff(["README.md"], label="Generated README refresh")
+
+    if impact.benchmark_artifacts_required:
+        run(
+            [python_command, "scripts/build_benchmark_artifacts.py", "--check"],
+            stage=ValidationStage(
+                label="Benchmark artifact source freshness",
+                failure_class="benchmark-artifact-stale",
+                likely_layer="Committed benchmark snapshots versus tracked benchmark source inputs",
+                next_step="Regenerate the benchmark artifacts in the authoritative benchmark workflow, review the updates, and commit the refreshed benchmarks/artifacts outputs.",
+            ),
+            env=env,
+        )
+
+    if impact.d2_required:
+        run(
+            [python_command, "scripts/render_d2_diagrams.py"],
+            stage=ValidationStage(
+                label="Rebuild D2 diagrams",
+                failure_class="generated-asset-build",
+                likely_layer="D2 diagram generation",
+                next_step="Fix the diagram sources or D2 installation issue, then rerun the asset build.",
+            ),
+            env=env,
+        )
+        ensure_clean_generated_diff(
+            ["docs/assets/diagrams"],
+            label="D2 diagram refresh",
+        )
+
+    if not impact.docs_site_required:
+        return 0
 
     run(
         [python_command, "scripts/check_docs_source_links.py"],
@@ -508,32 +366,24 @@ def main() -> int:
         env=env,
     )
 
-    if should_rebuild_assets:
-        run(
-            [python_command, "scripts/render_d2_diagrams.py"],
-            stage=ValidationStage(
-                label="Rebuild D2 diagrams",
-                failure_class="generated-asset-build",
-                likely_layer="D2 diagram generation",
-                next_step="Fix the diagram sources or D2 installation issue, then rerun the asset build.",
-            ),
-            env=env,
-        )
+    if impact.visual_assets_required:
         run(
             [
                 python_command,
-                "scripts/build_visual_artifacts.py",
-                "all",
-                "--profile",
-                DEFAULT_BUILD_PROFILE,
+                "scripts/run_ci_visual_regression.py",
+                "build-assets",
             ],
             stage=ValidationStage(
-                label="Rebuild visual artifacts",
+                label="Rebuild visual artifacts in authoritative Ubuntu container",
                 failure_class="generated-asset-build",
-                likely_layer="SVG/PNG visual artifact generation",
-                next_step="Inspect the visual artifact generator inputs and rerun the build for the affected assets.",
+                likely_layer="Authoritative Ubuntu SVG/PNG visual artifact generation",
+                next_step="Inspect the visual artifact generator inputs or Dockerized Ubuntu build output, then rerun the asset build.",
             ),
             env=env,
+        )
+        ensure_clean_generated_diff(
+            ["docs/assets/generated"],
+            label="Generated docs asset refresh",
         )
     else:
         print(

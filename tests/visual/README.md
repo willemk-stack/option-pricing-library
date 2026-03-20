@@ -84,6 +84,17 @@ python ../../scripts/run_local_visual_regression.py verify --skip-build --tests 
 The docs pre-push hook now requires Docker for docs-sensitive pushes. It still runs the
 fast local strict-build, smoke, DOM, and targeted accessibility checks first, then runs
 the authoritative Ubuntu snapshot suites in Docker against the same filtered review paths.
+It also refreshes linked generated outputs before validating: `README.md` from
+`README.template.md` and `examples/`, D2 diagrams from `docs/assets/diagrams/src/`,
+and docs figures under `docs/assets/generated/` when their linked sources change.
+Those docs figures now rebuild through the same CI-like Ubuntu container used for
+authoritative snapshot verification, so native Windows rendering differences no
+longer cause false stale-asset failures in the pre-push hook.
+If any of those refreshes modify tracked files, the hook now blocks the push so you can
+review and stage the updated generated outputs instead of pushing stale snapshots.
+When the touched change can invalidate the published performance evidence, the hook also
+checks the committed benchmark source manifest and blocks until the benchmark snapshot is
+refreshed in the authoritative benchmark workflow.
 For targeted page edits, the Docker step always includes `sentinel.spec.ts` and the
 representative `pages.spec.ts` subset, and adds component or embedded-panel suites only
 when the changed paths touch pages that own those snapshots.
@@ -146,6 +157,27 @@ When you need authoritative snapshot updates that match CI, prefer:
 
 ```bash
 python ../../scripts/run_ci_visual_regression.py update
+```
+
+For a fast local freshness check of generated docs assets, you can run:
+
+```bash
+python ../../scripts/build_visual_artifacts.py all --profile ci --check
+```
+
+That direct check uses the local renderer, so on Windows it is useful for iteration but
+not authoritative. For the authoritative Ubuntu refresh path that matches CI, use:
+
+```bash
+python ../../scripts/run_ci_visual_regression.py build-assets
+```
+
+For committed performance evidence, you can check whether the tracked benchmark-source
+inputs still match the current benchmark snapshot without rerunning the full benchmark
+suite:
+
+```bash
+python ../../scripts/build_benchmark_artifacts.py --check
 ```
 
 That Ubuntu container path is also the preferred way to investigate snapshot mismatches.
