@@ -25,6 +25,13 @@ MANIFEST
 tests/visual/node_modules/
 tests/visual/test-results/
 artifacts/visual-state/
+/agent/
+/agent_bundle*/
+/vr-ci-agent-bundle/
+/logs_*/
+/tmp_validate_logs/
+/tmp-ci/
+/.benchmarks/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
