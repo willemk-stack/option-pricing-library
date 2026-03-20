@@ -951,6 +951,12 @@ def _run_digital_family(
         .sort_values("refinement_spread")
         .reset_index(drop=True)
     )
+    stability_labels = {
+        "CN + none": "CN\nnone",
+        "Rannacher + none": "Rannacher\nnone",
+        "Rannacher + cell average": "Rannacher\ncell avg",
+        "Rannacher + L2 projection": "Rannacher\nL2 proj",
+    }
 
     def render(theme: str):
         with publishing_style(theme=theme) as plt:
@@ -968,13 +974,6 @@ def _run_digital_family(
                     linewidth=2,
                     label=label,
                 )
-                ax_stability.plot(
-                    sub["grid_points"].to_numpy(),
-                    sub["monotonicity_breaks"].to_numpy(),
-                    marker="o",
-                    linewidth=2,
-                    label=label,
-                )
             ax_tradeoff.set_xscale("log")
             ax_tradeoff.set_yscale("log")
             ax_tradeoff.set_xlabel("Median runtime (ms)")
@@ -982,14 +981,19 @@ def _run_digital_family(
             ax_tradeoff.set_title("Digital remedy tradeoff")
             ax_tradeoff.legend()
 
-            ax_stability.bar(
-                spread["config"].to_list(),
+            positions = np.arange(len(spread), dtype=float)
+            ax_stability.barh(
+                positions,
                 spread["refinement_spread"].to_numpy(),
                 color=["#55a868", "#4c72b0", "#ccb974", "#c44e52"],
             )
-            ax_stability.set_ylabel("Price spread across tested grids")
+            ax_stability.set_xlabel("Price spread across tested grids")
             ax_stability.set_title("Grid-refinement stability")
-            ax_stability.tick_params(axis="x", labelrotation=20)
+            ax_stability.set_yticks(
+                positions,
+                [stability_labels.get(label, label) for label in spread["config"]],
+            )
+            ax_stability.margins(y=0.12)
             return fig
 
     figure_path = _save_themed_plot(
