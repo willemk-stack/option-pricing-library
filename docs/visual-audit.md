@@ -126,6 +126,8 @@ Both the local guard and the Docker runner print a failure class and likely laye
 failed push can be triaged quickly as a build/link issue, generated-asset issue,
 DOM/a11y issue, or Ubuntu-authoritative snapshot issue.
 For manual reproduction, run `pre-commit run docs-pre-push-guard --hook-stage pre-push -v`.
+If the hook fails, inspect `artifacts/pre_push/docs_pre_push_last_failure.log` for the
+full stage output from the most recent failed run.
 If Docker Desktop is installed but its Linux engine is temporarily unavailable, you can
 opt into degraded local mode with `DOCS_PRE_PUSH_ALLOW_NO_DOCKER=1`. That keeps the
 non-Docker checks running locally, skips the Docker-only Ubuntu stages, and prints a

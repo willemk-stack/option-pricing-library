@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -18,6 +19,10 @@ from docs_impact import (
 ROOT = Path(__file__).resolve().parents[1]
 TESTS_VISUAL_DIR = ROOT / "tests" / "visual"
 DOCS_VISUAL_CONFIG_PATH = ROOT / "scripts" / "visual_audit" / "docs_visual_config.json"
+PRE_PUSH_LOG_DIR = ROOT / "artifacts" / "pre_push"
+PRE_PUSH_RUN_LOG = PRE_PUSH_LOG_DIR / "docs_pre_push_last_run.log"
+PRE_PUSH_FAILURE_LOG = PRE_PUSH_LOG_DIR / "docs_pre_push_last_failure.log"
+FAILURE_SUMMARY_TAIL_LINES = 25
 
 
 def load_docs_visual_config() -> dict[str, str]:
@@ -50,12 +55,14 @@ class HookFailure(Exception):
         failure_class: str | None = None,
         likely_layer: str | None = None,
         next_step: str | None = None,
+        log_path: Path | None = None,
     ) -> None:
         super().__init__(message)
         self.exit_code = exit_code
         self.failure_class = failure_class
         self.likely_layer = likely_layer
         self.next_step = next_step
+        self.log_path = log_path
 
 
 def parse_args() -> argparse.Namespace:
@@ -81,38 +88,106 @@ def run(
     cwd: Path = ROOT,
     env: dict[str, str] | None = None,
 ) -> None:
-    printable = " ".join(command)
+    printable = subprocess.list2cmdline(command)
     print(f"\n[{stage.label}]", flush=True)
     print(f"> {printable}", flush=True)
+
+    append_run_log(f"\n[{stage.label}]\n> {printable}\n")
+    tail: deque[str] = deque(maxlen=FAILURE_SUMMARY_TAIL_LINES)
+
     try:
-        subprocess.run(command, cwd=cwd, env=env, check=True)
-    except subprocess.CalledProcessError as exc:
+        with PRE_PUSH_RUN_LOG.open("a", encoding="utf8") as log_file:
+            process = subprocess.Popen(
+                command,
+                cwd=cwd,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            assert process.stdout is not None
+            for line in process.stdout:
+                print(line, end="", flush=True)
+                log_file.write(line)
+                tail.append(line.rstrip())
+            return_code = process.wait()
+    except OSError as exc:
+        failure_log = snapshot_failure_log()
         raise HookFailure(
             "\n".join(
                 [
-                    f"{stage.label} failed.",
+                    f"{stage.label} could not start.",
                     f"Failure class: {stage.failure_class}",
                     f"Likely layer: {stage.likely_layer}",
                     f"Command: {printable}",
-                    f"Exit code: {exc.returncode}",
+                    f"OS error: {exc}",
                     f"Next step: {stage.next_step}",
                 ]
             ),
-            exit_code=exc.returncode or 1,
+            exit_code=1,
             failure_class=stage.failure_class,
             likely_layer=stage.likely_layer,
             next_step=stage.next_step,
+            log_path=failure_log,
+        ) from None
+
+    if return_code != 0:
+        failure_log = snapshot_failure_log()
+        summary_lines = [
+            f"{stage.label} failed.",
+            f"Failure class: {stage.failure_class}",
+            f"Likely layer: {stage.likely_layer}",
+            f"Command: {printable}",
+            f"Exit code: {return_code}",
+            f"Next step: {stage.next_step}",
+        ]
+        output_tail = [line for line in tail if line]
+        if output_tail:
+            summary_lines.append("Output tail:")
+            summary_lines.extend(f"  {line}" for line in output_tail)
+        raise HookFailure(
+            "\n".join(summary_lines),
+            exit_code=return_code,
+            failure_class=stage.failure_class,
+            likely_layer=stage.likely_layer,
+            next_step=stage.next_step,
+            log_path=failure_log,
         ) from None
 
 
+def prepare_run_log() -> None:
+    PRE_PUSH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    PRE_PUSH_RUN_LOG.write_text("Docs pre-push guard log\n", encoding="utf8")
+
+
+def append_run_log(message: str) -> None:
+    PRE_PUSH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    with PRE_PUSH_RUN_LOG.open("a", encoding="utf8") as log_file:
+        log_file.write(message)
+
+
+def snapshot_failure_log() -> Path:
+    PRE_PUSH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    if PRE_PUSH_RUN_LOG.exists():
+        shutil.copyfile(PRE_PUSH_RUN_LOG, PRE_PUSH_FAILURE_LOG)
+    else:
+        PRE_PUSH_FAILURE_LOG.write_text(
+            "Docs pre-push guard failed before any stage output was captured.\n",
+            encoding="utf8",
+        )
+    return PRE_PUSH_FAILURE_LOG
+
+
 def git_stdout(args: list[str]) -> str:
-    subprocess.run(
+    result = subprocess.run(
         ["git", *args],
         cwd=ROOT,
         check=True,
         capture_output=True,
         text=True,
     )
+    return result.stdout
 
 
 def resolve_python_command() -> str:
@@ -281,6 +356,7 @@ def stage_for_authoritative_tests(authoritative_tests: list[str]) -> ValidationS
 
 
 def main() -> int:
+    prepare_run_log()
     args = parse_args()
     changed_files = collect_changed_files(args.files)
     impact = classify_docs_impact(changed_files)
@@ -527,6 +603,9 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except HookFailure as exc:
+        failure_log = exc.log_path
+        if failure_log is None:
+            failure_log = snapshot_failure_log()
         print("\nDocs pre-push guard failed.", file=sys.stderr, flush=True)
         print(
             "This push was blocked by the local pre-push hook before GitHub could reject any refs.",
@@ -534,4 +613,10 @@ if __name__ == "__main__":
             flush=True,
         )
         print(str(exc), file=sys.stderr, flush=True)
+        print(f"Full hook log: {failure_log}", file=sys.stderr, flush=True)
+        print(
+            "Manual reproduction: pre-commit run docs-pre-push-guard --hook-stage pre-push -v",
+            file=sys.stderr,
+            flush=True,
+        )
         raise SystemExit(exc.exit_code) from None

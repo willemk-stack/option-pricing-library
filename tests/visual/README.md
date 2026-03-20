@@ -84,6 +84,9 @@ python ../../scripts/run_local_visual_regression.py verify --skip-build --tests 
 The docs pre-push hook now requires Docker for docs-sensitive pushes. It still runs the
 fast local strict-build, smoke, DOM, and targeted accessibility checks first, then runs
 the authoritative Ubuntu snapshot suites in Docker against the same filtered review paths.
+When the hook fails, it also writes the full output to
+`artifacts/pre_push/docs_pre_push_last_failure.log` so the failing stage can be
+inspected without digging through Git's generic push error.
 It also refreshes linked generated outputs before validating: `README.md` from
 `README.template.md` and `examples/`, D2 diagrams from `docs/assets/diagrams/src/`,
 and docs figures under `docs/assets/generated/` when their linked sources change.
