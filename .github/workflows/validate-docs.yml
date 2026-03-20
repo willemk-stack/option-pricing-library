@@ -43,6 +43,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -247,7 +249,6 @@ jobs:
           if-no-files-found: ignore
           path: |
             artifacts/visual-state/**
-            ${{ steps.docs_site_contract.outputs.site_dir }}/**
             tests/visual/test-results/**
 
   visual-regression:
