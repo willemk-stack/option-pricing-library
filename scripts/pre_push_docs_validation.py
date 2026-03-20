@@ -28,6 +28,8 @@ DOCS_VISUAL_CONFIG = load_docs_visual_config()
 DEFAULT_DOCS_BASE_URL = DOCS_VISUAL_CONFIG["docs_base_url"]
 DEFAULT_BUILD_PROFILE = DOCS_VISUAL_CONFIG["build_profile"]
 
+ALLOW_NO_DOCKER_ENV = "DOCS_PRE_PUSH_ALLOW_NO_DOCKER"
+
 
 @dataclass(frozen=True, slots=True)
 class ValidationStage:
@@ -188,7 +190,7 @@ def resolve_docker_command() -> str:
     )
 
 
-def ensure_docker_available() -> None:
+def docker_available_detail() -> tuple[bool, str | None]:
     docker_command = resolve_docker_command()
     result = subprocess.run(
         [docker_command, "info", "--format", "{{.ServerVersion}}"],
@@ -198,15 +200,32 @@ def ensure_docker_available() -> None:
         text=True,
     )
     if result.returncode == 0:
-        return
+        return True, None
 
     detail = (result.stderr or result.stdout).strip() or "Unknown Docker error."
-    raise HookFailure(
+    return False, detail
+
+
+def allow_no_docker() -> bool:
+    return os.environ.get(ALLOW_NO_DOCKER_ENV, "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def docker_unavailable_failure(detail: str) -> HookFailure:
+    return HookFailure(
         "Docs-sensitive pushes require Docker for authoritative Ubuntu visual checks.\n"
-        f"Docker was found but is not ready: {detail}",
+        f"Docker was found but is not ready: {detail}\n"
+        f"Set {ALLOW_NO_DOCKER_ENV}=1 to continue with local non-Docker docs checks and defer authoritative Ubuntu visual validation to CI.",
         failure_class="environment-docker",
         likely_layer="Local Docker daemon",
-        next_step="Start Docker Desktop or fix the local Docker daemon before retrying the push.",
+        next_step=(
+            "Start Docker Desktop, or opt into local degraded mode by setting "
+            f"{ALLOW_NO_DOCKER_ENV}=1 before retrying the push."
+        ),
     )
 
 
@@ -274,7 +293,13 @@ def main() -> int:
 
     python_command = resolve_python_command()
     ensure_playwright_dependencies()
-    ensure_docker_available()
+
+    docker_ready = True
+    docker_detail: str | None = None
+    if impact.docs_site_required:
+        docker_ready, docker_detail = docker_available_detail()
+        if not docker_ready and not allow_no_docker():
+            raise docker_unavailable_failure(docker_detail or "Unknown Docker error.")
 
     review_paths = impact.review_paths
     authoritative_tests = impact.authoritative_tests
@@ -305,6 +330,13 @@ def main() -> int:
             "Failure classes: build/link, generated-asset, browser-dom, browser-a11y, browser-snapshot",
             flush=True,
         )
+        if not docker_ready:
+            print(
+                f"WARNING: Docker is unavailable; local authoritative Ubuntu checks are deferred to CI because {ALLOW_NO_DOCKER_ENV}=1.",
+                flush=True,
+            )
+            if docker_detail:
+                print(f"Docker detail: {docker_detail}", flush=True)
 
     env = os.environ.copy()
     env["MPLBACKEND"] = "Agg"
@@ -367,24 +399,30 @@ def main() -> int:
     )
 
     if impact.visual_assets_required:
-        run(
-            [
-                python_command,
-                "scripts/run_ci_visual_regression.py",
-                "build-assets",
-            ],
-            stage=ValidationStage(
-                label="Rebuild visual artifacts in authoritative Ubuntu container",
-                failure_class="generated-asset-build",
-                likely_layer="Authoritative Ubuntu SVG/PNG visual artifact generation",
-                next_step="Inspect the visual artifact generator inputs or Dockerized Ubuntu build output, then rerun the asset build.",
-            ),
-            env=env,
-        )
-        ensure_clean_generated_diff(
-            ["docs/assets/generated"],
-            label="Generated docs asset refresh",
-        )
+        if docker_ready:
+            run(
+                [
+                    python_command,
+                    "scripts/run_ci_visual_regression.py",
+                    "build-assets",
+                ],
+                stage=ValidationStage(
+                    label="Rebuild visual artifacts in authoritative Ubuntu container",
+                    failure_class="generated-asset-build",
+                    likely_layer="Authoritative Ubuntu SVG/PNG visual artifact generation",
+                    next_step="Inspect the visual artifact generator inputs or Dockerized Ubuntu build output, then rerun the asset build.",
+                ),
+                env=env,
+            )
+            ensure_clean_generated_diff(
+                ["docs/assets/generated"],
+                label="Generated docs asset refresh",
+            )
+        else:
+            print(
+                "\nSkipping Dockerized visual-asset rebuild locally; CI remains authoritative for generated SVG/PNG docs assets.",
+                flush=True,
+            )
     else:
         print(
             "\nSkipping generated-asset rebuild; no generator inputs changed.",
@@ -461,20 +499,26 @@ def main() -> int:
             env=a11y_env,
         )
 
-    docker_env = env.copy()
-    if review_paths:
-        docker_env["REVIEW_PATHS"] = ",".join(review_paths)
-    run(
-        [
-            python_command,
-            "scripts/run_ci_visual_regression.py",
-            "verify",
-            "--tests",
-            *authoritative_tests,
-        ],
-        stage=stage_for_authoritative_tests(authoritative_tests),
-        env=docker_env,
-    )
+    if docker_ready:
+        docker_env = env.copy()
+        if review_paths:
+            docker_env["REVIEW_PATHS"] = ",".join(review_paths)
+        run(
+            [
+                python_command,
+                "scripts/run_ci_visual_regression.py",
+                "verify",
+                "--tests",
+                *authoritative_tests,
+            ],
+            stage=stage_for_authoritative_tests(authoritative_tests),
+            env=docker_env,
+        )
+    else:
+        print(
+            "\nSkipping authoritative Ubuntu visual verification locally; rely on CI for the final containerized snapshot gate.",
+            flush=True,
+        )
 
     return 0
 
