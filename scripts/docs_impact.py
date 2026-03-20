@@ -16,6 +16,12 @@ README_INPUTS = (
     "scripts/render_readme.py",
 )
 
+PERFORMANCE_PAGE_INPUTS = (
+    "benchmarks/artifacts/",
+    "scripts/render_performance_page.py",
+    "scripts/templates/performance.md.template",
+)
+
 BENCHMARK_INPUTS = (
     "benchmarks/conftest.py",
     "benchmarks/test_bench_iv.py",
@@ -48,6 +54,7 @@ DOCS_SITE_INPUTS = (
     "benchmarks/artifacts/",
     "docs/",
     "mkdocs.yml",
+    "scripts/render_performance_page.py",
     "src/",
     "tests/visual/",
     "scripts/build_benchmark_artifacts.py",
@@ -66,6 +73,7 @@ FULL_REVIEW_INPUTS = (
     "docs/assets/diagrams/",
     "docs/assets/javascripts/",
     "mkdocs.yml",
+    "scripts/render_performance_page.py",
     "src/",
     "tests/visual/",
     "scripts/build_benchmark_artifacts.py",
@@ -129,6 +137,7 @@ class DocsImpact:
     docs_sensitive: bool
     docs_site_required: bool
     readme_required: bool
+    performance_page_required: bool
     benchmark_artifacts_required: bool
     d2_required: bool
     visual_assets_required: bool
@@ -149,6 +158,7 @@ def _matches(path: str, patterns: tuple[str, ...]) -> bool:
 def is_docs_sensitive(path: str) -> bool:
     return (
         _matches(path, README_INPUTS)
+        or _matches(path, PERFORMANCE_PAGE_INPUTS)
         or _matches(path, BENCHMARK_INPUTS)
         or _matches(path, D2_INPUTS)
         or _matches(path, VISUAL_ASSET_INPUTS)
@@ -238,8 +248,12 @@ def classify_docs_impact(changed_files: list[str]) -> DocsImpact:
     readme_required = any(
         _matches(path, README_INPUTS) for path in docs_sensitive_files
     )
+    performance_page_required = any(
+        _matches(path, PERFORMANCE_PAGE_INPUTS) for path in docs_sensitive_files
+    )
     benchmark_artifacts_required = any(
-        _matches(path, BENCHMARK_INPUTS) for path in docs_sensitive_files
+        _matches(path, BENCHMARK_INPUTS) or _matches(path, PERFORMANCE_PAGE_INPUTS)
+        for path in docs_sensitive_files
     )
     d2_required = any(_matches(path, D2_INPUTS) for path in docs_sensitive_files)
     visual_assets_required = any(
@@ -255,6 +269,7 @@ def classify_docs_impact(changed_files: list[str]) -> DocsImpact:
         docs_sensitive=bool(docs_sensitive_files),
         docs_site_required=docs_site_required,
         readme_required=readme_required,
+        performance_page_required=performance_page_required,
         benchmark_artifacts_required=benchmark_artifacts_required,
         d2_required=d2_required,
         visual_assets_required=visual_assets_required,
@@ -414,6 +429,9 @@ def write_github_outputs(impact: DocsImpact) -> None:
             f"readme_required={'true' if impact.readme_required else 'false'}\n"
         )
         handle.write(
+            f"performance_page_required={'true' if impact.performance_page_required else 'false'}\n"
+        )
+        handle.write(
             f"benchmark_artifacts_required={'true' if impact.benchmark_artifacts_required else 'false'}\n"
         )
         handle.write(f"d2_required={'true' if impact.d2_required else 'false'}\n")
@@ -444,6 +462,7 @@ def main() -> int:
             docs_sensitive=True,
             docs_site_required=True,
             readme_required=True,
+            performance_page_required=True,
             benchmark_artifacts_required=True,
             d2_required=True,
             visual_assets_required=True,

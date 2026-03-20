@@ -16,6 +16,7 @@ jobs:
     env:
       MPLBACKEND: Agg
       DOCS_BASE_URL: http://127.0.0.1:8000/option-pricing-library/
+      D2_VERSION: "v0.7.1"
 
     steps:
       - name: Checkout
@@ -40,7 +41,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[docs,plot]"
+          python -m pip install -c scripts/ci-constraints.txt -e ".[docs,plot]"
 
       - name: Install Playwright dependencies
         working-directory: tests/visual
@@ -49,9 +50,7 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Install D2
-        run: |
-          curl -fsSL https://d2lang.com/install.sh | sh -s --
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        run: bash scripts/install_d2.sh "${D2_VERSION}"
 
       - name: Render D2 diagrams
         run: python scripts/render_d2_diagrams.py

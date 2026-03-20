@@ -98,7 +98,7 @@ markdown_extensions:
       toc_depth: 3
 extra_javascript:
   - javascripts/mathjax.js
-  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-svg.js
+  - javascripts/vendor/tex-mml-chtml.js
 
 # add custom tweaks from (docs/stylesheets/extra.css)
 extra_css:
@@ -135,7 +135,9 @@ nav:
       - Pricers: api/pricers.md
       - Volatility: api/vol.md
       - Exceptions: api/exceptions.md
-  - Architecture: architecture.md
+  - Architecture:
+      - Overview: architecture.md
+      - Docs pipeline: architecture/docs-pipeline.md
   - Performance evidence: performance.md
   - Notes:
       - Overview: notes/index.md
