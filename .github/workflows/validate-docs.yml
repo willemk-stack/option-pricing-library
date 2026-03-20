@@ -1,0 +1,13 @@
+name: deprecated-validate-docs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  notice:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print deprecation notice
+        run: |
+          echo "This workflow is a compatibility stub."
+          echo "Use docs-ci.yml for blocking docs validation."
