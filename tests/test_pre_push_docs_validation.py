@@ -65,3 +65,22 @@ def test_run_failure_includes_output_tail_and_snapshots_log(
     assert "output line 0" in run_log_text
     assert f"output line {total_lines - 1}" in run_log_text
     assert failure_log_text == run_log_text
+
+
+def test_prepare_run_log_replaces_stale_failure_log(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    run_log = tmp_path / "docs_pre_push_last_run.log"
+    failure_log = tmp_path / "docs_pre_push_last_failure.log"
+
+    monkeypatch.setattr(hook, "PRE_PUSH_LOG_DIR", tmp_path)
+    monkeypatch.setattr(hook, "PRE_PUSH_RUN_LOG", run_log)
+    monkeypatch.setattr(hook, "PRE_PUSH_FAILURE_LOG", failure_log)
+
+    failure_log.write_text("stale failure\n", encoding="utf8")
+
+    hook.prepare_run_log()
+
+    assert run_log.read_text(encoding="utf8") == "Docs pre-push guard log\n"
+    assert failure_log.read_text(encoding="utf8") == "Docs pre-push guard log\n"
