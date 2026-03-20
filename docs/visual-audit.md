@@ -125,6 +125,11 @@ smaller than the broader smoke/DOM/a11y audit matrix.
 Both the local guard and the Docker runner print a failure class and likely layer so a
 failed push can be triaged quickly as a build/link issue, generated-asset issue,
 DOM/a11y issue, or Ubuntu-authoritative snapshot issue.
+For manual reproduction, run `pre-commit run docs-pre-push-guard --hook-stage pre-push -v`.
+If Docker Desktop is installed but its Linux engine is temporarily unavailable, you can
+opt into degraded local mode with `DOCS_PRE_PUSH_ALLOW_NO_DOCKER=1`. That keeps the
+non-Docker checks running locally, skips the Docker-only Ubuntu stages, and prints a
+warning that the authoritative visual contract is deferred to CI.
 The GitHub Actions summary can also show warning-level visual-state advisories when the
 report finds non-blocking medium-severity issues, so the PR UI can surface cleanup items
 without failing the job.
