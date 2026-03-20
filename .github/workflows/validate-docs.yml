@@ -323,7 +323,7 @@ jobs:
           python scripts/visual_audit/write_github_step_summary.py
 
       - name: Upload visual regression artifacts
-        if: always()
+        if: always() && steps.docs_site_contract.conclusion == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: docs-visual-regression-artifacts
@@ -428,7 +428,7 @@ jobs:
           python scripts/visual_audit/write_github_step_summary.py
 
       - name: Upload Windows browser check artifacts
-        if: always()
+        if: always() && steps.docs_site_contract.conclusion == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: docs-windows-browser-check-artifacts

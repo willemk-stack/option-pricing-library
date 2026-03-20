@@ -319,6 +319,16 @@ def guess_push_base(target_ref: str) -> str:
 
 
 def git_changed_files(base_ref: str, head_ref: str) -> list[str]:
+    missing_refs = [ref for ref in (base_ref, head_ref) if not ref_exists(ref)]
+    if missing_refs:
+        missing_list = ", ".join(missing_refs)
+        raise RuntimeError(
+            "Cannot determine changed files because git refs are unavailable locally: "
+            f"{missing_list}. This usually means the checkout is shallow or the "
+            "workflow fetched only the PR merge commit. Fetch full history or at "
+            "least the base/head commits before running docs_impact selection."
+        )
+
     result = subprocess.run(
         [
             "git",
@@ -328,10 +338,16 @@ def git_changed_files(base_ref: str, head_ref: str) -> list[str]:
             f"{base_ref}..{head_ref}",
         ],
         cwd=ROOT,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip() or "Unknown git diff failure."
+        raise RuntimeError(
+            "Failed to determine changed files from git diff for refs "
+            f"{base_ref}..{head_ref}: {detail}"
+        )
     return [path for path in result.stdout.splitlines() if path.strip()]
 
 

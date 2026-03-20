@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from scripts.docs_impact import classify_docs_impact
+import pytest
+
+from scripts.docs_impact import classify_docs_impact, git_changed_files
 
 
 def test_examples_only_change_requires_readme_but_not_docs_site() -> None:
@@ -70,3 +72,8 @@ def test_benchmark_source_change_targets_performance_page() -> None:
     assert impact.docs_site_required is False
     assert impact.benchmark_artifacts_required is True
     assert impact.review_paths == []
+
+
+def test_git_changed_files_reports_missing_refs_actionably() -> None:
+    with pytest.raises(RuntimeError, match="checkout is shallow|base/head commits"):
+        git_changed_files("refs/heads/definitely-missing-docs-impact-ref", "HEAD")
