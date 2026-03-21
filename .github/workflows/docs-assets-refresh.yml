@@ -74,6 +74,9 @@ jobs:
         if: inputs.refresh_visual_assets
         run: python scripts/build_visual_artifacts.py all --profile ci
 
+      - name: Refresh benchmark source manifest
+        run: python scripts/build_benchmark_artifacts.py --write-source-manifest
+
       - name: Refresh performance page
         if: inputs.refresh_performance_page
         run: python scripts/render_performance_page.py

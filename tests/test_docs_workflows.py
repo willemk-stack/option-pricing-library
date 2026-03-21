@@ -43,6 +43,10 @@ def test_docs_assets_refresh_remains_the_write_mode_generator() -> None:
     assert (
         "run: python scripts/build_visual_artifacts.py all --profile ci\n" in workflow
     )
+    assert (
+        "run: python scripts/build_benchmark_artifacts.py --write-source-manifest"
+        in workflow
+    )
 
 
 def test_docs_ci_runs_docs_impact_selected_authoritative_visual_suites() -> None:
