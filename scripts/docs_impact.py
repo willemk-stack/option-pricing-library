@@ -22,6 +22,14 @@ PERFORMANCE_PAGE_INPUTS = (
     "scripts/templates/performance.md.template",
 )
 
+BENCHMARK_SNAPSHOT_INPUTS = (
+    "benchmarks/",
+    "docs/performance.md",
+    "scripts/build_benchmark_artifacts.py",
+    "scripts/render_performance_page.py",
+    "scripts/templates/performance.md.template",
+)
+
 BENCHMARK_INPUTS = (
     "benchmarks/conftest.py",
     "benchmarks/test_bench_iv.py",
@@ -208,7 +216,7 @@ def determine_review_paths(changed_files: list[str]) -> list[str] | None:
         if review_path:
             review_paths.add(review_path)
 
-        if _matches(path, BENCHMARK_INPUTS):
+        if _matches(path, BENCHMARK_SNAPSHOT_INPUTS):
             review_paths.add("/performance/")
 
         review_paths.update(generated_asset_to_review_paths(path))
@@ -252,8 +260,7 @@ def classify_docs_impact(changed_files: list[str]) -> DocsImpact:
         _matches(path, PERFORMANCE_PAGE_INPUTS) for path in docs_sensitive_files
     )
     benchmark_artifacts_required = any(
-        _matches(path, BENCHMARK_INPUTS) or _matches(path, PERFORMANCE_PAGE_INPUTS)
-        for path in docs_sensitive_files
+        _matches(path, BENCHMARK_SNAPSHOT_INPUTS) for path in docs_sensitive_files
     )
     d2_required = any(_matches(path, D2_INPUTS) for path in docs_sensitive_files)
     visual_assets_required = any(
