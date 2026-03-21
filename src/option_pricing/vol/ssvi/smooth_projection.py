@@ -31,7 +31,7 @@ def _validation_expiries(expiries: np.ndarray, n: int) -> np.ndarray:
     if exp.size == 1 or n <= exp.size:
         return exp
     dense = np.linspace(float(exp[0]), float(exp[-1]), int(n), dtype=np.float64)
-    return np.unique(np.concatenate([exp, dense])).astype(np.float64)
+    return np.asarray(np.unique(np.concatenate([exp, dense])), dtype=np.float64)
 
 
 def _unit_market() -> PricingContext:

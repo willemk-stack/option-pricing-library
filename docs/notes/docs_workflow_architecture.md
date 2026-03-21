@@ -27,6 +27,7 @@ The only workflows that intentionally rewrite committed generated docs assets ar
 
 Local hooks and CI intentionally have different weight.
 
+- `benchmark-source-manifest-refresh` runs in pre-commit for benchmark-sensitive source edits and refreshes `benchmarks/artifacts/benchmark_source_manifest.json` before the change is committed.
 - `docs-pre-push-guard` runs `scripts/pre_push_docs_validation.py --mode fast` and keeps the default push path portable: no Playwright, no Docker, and no browser gate.
 - `docs-manual-guard` runs `scripts/pre_push_docs_validation.py --mode manual` for contributors who want the heavier local browser and Dockerized snapshot checks.
 - PR CI remains authoritative for the full browser contract, including smoke, DOM, accessibility, and docs-impact-selected authoritative visual suites.

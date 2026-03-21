@@ -212,3 +212,42 @@ def test_main_manual_mode_checks_playwright_for_docs_site(
 
     assert hook.main() == 0
     assert calls == ["playwright"]
+
+
+def test_main_benchmark_sensitive_src_change_checks_snapshot_freshness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[list[str]] = []
+
+    monkeypatch.setattr(
+        hook,
+        "parse_args",
+        lambda: argparse.Namespace(
+            mode="fast",
+            files=["src/option_pricing/models/black_scholes/bs.py"],
+        ),
+    )
+    monkeypatch.setattr(hook, "prepare_run_log", lambda: None)
+    monkeypatch.setattr(hook, "clear_failure_log", lambda: None)
+    monkeypatch.setattr(hook, "resolve_python_command", lambda: "python")
+    monkeypatch.setattr(
+        hook,
+        "ensure_playwright_dependencies",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected Playwright check")),
+    )
+    monkeypatch.setattr(
+        hook,
+        "docker_available_detail",
+        lambda: (_ for _ in ()).throw(AssertionError("unexpected Docker check")),
+    )
+    monkeypatch.setattr(
+        hook,
+        "run",
+        lambda command, **kwargs: commands.append(command),
+    )
+    monkeypatch.setattr(
+        hook, "ensure_clean_generated_diff", lambda *args, **kwargs: None
+    )
+
+    assert hook.main() == 0
+    assert ["python", "scripts/build_benchmark_artifacts.py", "--check"] in commands

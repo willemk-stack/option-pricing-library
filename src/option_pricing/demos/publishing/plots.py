@@ -213,7 +213,7 @@ def _choose_smile_maturities(T_vals: np.ndarray, *, max_curves: int = 6) -> np.n
     if Ts.size <= max_curves:
         return Ts
     idx = np.linspace(0, Ts.size - 1, max_curves).round().astype(int)
-    return np.unique(Ts[idx])
+    return np.asarray(np.unique(Ts[idx]), dtype=float)
 
 
 def _surface_heatmap(
