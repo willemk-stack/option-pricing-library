@@ -14,8 +14,8 @@ name: docs-visual-assets-auto-refresh
 #
 # RISK: --update-snapshots accepts any visual state as correct, including
 # broken or regressed renders.  To guard against silently committing bad
-# snapshots, a post-update verify step re-runs sentinel in verify mode.
-# If the verify step fails, the workflow exits non-zero and nothing is
+# snapshots, a post-update verify step re-runs sentinel and pages in verify
+# mode.  If the verify step fails, the workflow exits non-zero and nothing is
 # committed, surfacing the regression for manual inspection.
 #
 # Trigger paths are intentionally limited to files that can cause a
@@ -101,9 +101,13 @@ jobs:
         working-directory: tests/visual
         run: npx playwright test sentinel.spec.ts --update-snapshots
 
+      - name: Refresh authoritative pages snapshots
+        working-directory: tests/visual
+        run: npx playwright test pages.spec.ts --update-snapshots
+
       - name: Verify refreshed snapshots pass
         working-directory: tests/visual
-        run: npx playwright test sentinel.spec.ts
+        run: npx playwright test sentinel.spec.ts pages.spec.ts
 
       - name: Detect changes
         id: detect
@@ -121,5 +125,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/assets/generated/
           git add tests/visual/sentinel.spec.ts-snapshots/
+          git add tests/visual/pages.spec.ts-snapshots/
           git commit -m "docs: auto-refresh visual assets and snapshots"
           git push
