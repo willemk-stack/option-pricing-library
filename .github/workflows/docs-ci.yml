@@ -135,7 +135,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -c scripts/ci-constraints.txt -e ".[docs,plot]"
 
-      - name: Check benchmark source freshness
+      - name: Check performance snapshot freshness
         if: steps.docs_impact.outputs.benchmark_artifacts_required == 'true'
         run: python scripts/build_benchmark_artifacts.py --check
 

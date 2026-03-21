@@ -499,10 +499,10 @@ def main() -> int:
         run(
             [python_command, "scripts/build_benchmark_artifacts.py", "--check"],
             stage=ValidationStage(
-                label="Benchmark artifact source freshness",
+                label="Performance snapshot freshness",
                 failure_class="benchmark-artifact-stale",
-                likely_layer="Committed benchmark snapshots versus tracked benchmark source inputs",
-                next_step="Regenerate the benchmark artifacts in the authoritative benchmark workflow, review the updates, and commit the refreshed benchmarks/artifacts outputs.",
+                likely_layer="Committed performance snapshots versus tracked benchmark source inputs",
+                next_step="Refresh the benchmark/performance snapshot bundle in the dedicated performance workflow, review the updates, and commit the refreshed benchmarks/artifacts outputs.",
             ),
             env=env,
         )
