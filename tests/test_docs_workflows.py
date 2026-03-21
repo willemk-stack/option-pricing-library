@@ -110,8 +110,15 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     assert any(p.startswith("src/option_pricing") for p in watched_paths)
     assert "scripts/build_benchmark_artifacts.py" in watched_paths
     assert "scripts/build_visual_artifacts.py" in watched_paths
-    # Must also trigger on docs content changes so sentinel snapshots stay current.
-    assert any(p.startswith("docs/") for p in watched_paths)
+    # Must cover CSS/JS/theme overrides and the MkDocs config — the only docs/
+    # subdirectories that can cause pixel-level changes in sentinel renders.
+    assert "docs/stylesheets/**" in watched_paths
+    assert "docs/overrides/**" in watched_paths
+    assert "docs/assets/**" in watched_paths
+    assert "mkdocs.yml" in watched_paths
+    # Must NOT use the broad docs/** glob — pure markdown text edits do not
+    # affect pixel output and should not fire the full expensive pipeline.
+    assert "docs/**" not in watched_paths
 
     # Must have write permission to push back refreshed assets.
     assert workflow["permissions"]["contents"] == "write"
@@ -138,3 +145,22 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     # The commit must stage both generated assets and snapshots together.
     commit_run = next(r for r in step_runs if "git commit" in r and "git push" in r)
     assert "sentinel.spec.ts-snapshots" in commit_run
+
+    # RISK MITIGATION: after --update-snapshots a verify run (without the flag)
+    # must confirm the new snapshots are stable.  If the verify fails, the
+    # workflow exits non-zero and nothing is committed, surfacing the regression.
+    update_idx = next(
+        i
+        for i, r in enumerate(step_runs)
+        if "sentinel.spec.ts" in r and "--update-snapshots" in r
+    )
+    verify_runs_after_update = [
+        r
+        for r in step_runs[update_idx + 1 :]
+        if "playwright" in r and "sentinel.spec.ts" in r and "--update-snapshots" not in r
+    ]
+    assert verify_runs_after_update, (
+        "A verify step (npx playwright test sentinel.spec.ts without "
+        "--update-snapshots) must follow the update step to guard against "
+        "committing regressions."
+    )

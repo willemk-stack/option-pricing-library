@@ -2,15 +2,26 @@ name: docs-visual-assets-auto-refresh
 
 # Automatically regenerate docs/assets/generated/ and refresh authoritative
 # Playwright sentinel snapshots on any non-main push that touches source code
-# or docs content which feeds into those visuals.  Running in the exact same
-# Ubuntu 24.04 environment (and with the same pinned deps) as docs-ci means
-# the pixel-identical check in docs-ci always passes.
+# or visual-affecting docs content.  Running in the exact same Ubuntu 24.04
+# environment (and with the same pinned deps) as docs-ci means the
+# pixel-identical check in docs-ci always passes.
 #
 # When this job commits refreshed assets and snapshots back to the branch,
 # docs-ci re-runs on that new commit with up-to-date assets and succeeds.
 #
 # The "github.actor != 'github-actions[bot]'" guard prevents the bot's own
 # push from triggering another refresh cycle.
+#
+# RISK: --update-snapshots accepts any visual state as correct, including
+# broken or regressed renders.  To guard against silently committing bad
+# snapshots, a post-update verify step re-runs sentinel in verify mode.
+# If the verify step fails, the workflow exits non-zero and nothing is
+# committed, surfacing the regression for manual inspection.
+#
+# Trigger paths are intentionally limited to files that can cause a
+# pixel-level change in the sentinel renders: generated assets, CSS/JS
+# overrides, and the MkDocs site config.  Pure markdown text edits do not
+# affect pixel output and should not fire the full pipeline.
 
 on:
   push:
@@ -20,7 +31,11 @@ on:
       - '.github/workflows/docs-ci.yml'
       - '.github/workflows/docs-visual-assets-auto-refresh.yml'
       - 'benchmarks/artifacts/**'
-      - 'docs/**'
+      - 'docs/assets/**'
+      - 'docs/javascripts/**'
+      - 'docs/overrides/**'
+      - 'docs/stylesheets/**'
+      - 'mkdocs.yml'
       - 'src/option_pricing/**'
       - 'scripts/build_benchmark_artifacts.py'
       - 'scripts/build_visual_artifacts.py'
@@ -38,6 +53,8 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       MPLBACKEND: Agg
+      SKIP_DOCS_PREBUILD: "1"
+      SERVE_PREBUILT_SITE: "1"
 
     steps:
       - name: Checkout
@@ -82,10 +99,11 @@ jobs:
 
       - name: Refresh authoritative sentinel snapshots
         working-directory: tests/visual
-        env:
-          SKIP_DOCS_PREBUILD: "1"
-          SERVE_PREBUILT_SITE: "1"
         run: npx playwright test sentinel.spec.ts --update-snapshots
+
+      - name: Verify refreshed snapshots pass
+        working-directory: tests/visual
+        run: npx playwright test sentinel.spec.ts
 
       - name: Detect changes
         id: detect
