@@ -91,3 +91,36 @@ def test_pre_commit_refreshes_benchmark_source_manifest_for_benchmark_inputs() -
 
 def test_dev_extras_include_pre_commit_for_local_docs_guards() -> None:
     assert "pre-commit==4.5.1" in dev_dependencies()
+
+
+def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops() -> None:
+    workflow = yaml.safe_load(
+        workflow_text("docs-visual-assets-auto-refresh.yml")
+    )
+
+    # In PyYAML, the YAML keyword `on` is parsed as boolean True.
+    on_push = workflow[True]["push"]
+
+    # Must trigger on push to non-main branches when source files change.
+    assert "main" in on_push["branches-ignore"]
+    watched_paths = on_push["paths"]
+    assert any(p.startswith("src/option_pricing") for p in watched_paths)
+    assert "scripts/build_visual_artifacts.py" in watched_paths
+
+    # Must have write permission to push back refreshed assets.
+    assert workflow["permissions"]["contents"] == "write"
+
+    job = next(iter(workflow["jobs"].values()))
+
+    # Must guard against infinite push loops triggered by the bot's own commit.
+    assert "github-actions[bot]" in job["if"]
+
+    # Must run on the same Ubuntu version as docs-ci to produce identical pixels.
+    assert job["runs-on"] == "ubuntu-24.04"
+
+    # Must regenerate and commit assets when they change.
+    step_runs = [s.get("run", "") for s in job["steps"]]
+    assert any(
+        "build_visual_artifacts.py all --profile ci" in r for r in step_runs
+    )
+    assert any("git commit" in r and "git push" in r for r in step_runs)
