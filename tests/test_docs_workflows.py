@@ -142,27 +142,40 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
         "playwright" in r and "sentinel.spec.ts" in r and "update-snapshots" in r
         for r in step_runs
     )
-    # The commit must stage both generated assets and snapshots together.
+    # Must also refresh pages.spec.ts snapshots — docs-ci ALWAYS runs pages.spec.ts
+    # as part of the authoritative-visual job, so those snapshots must also be kept
+    # current or docs-ci fails even after a successful sentinel refresh.
+    assert any(
+        "playwright" in r and "pages.spec.ts" in r and "update-snapshots" in r
+        for r in step_runs
+    )
+    # The commit must stage generated assets, sentinel snapshots, and pages
+    # snapshots together.
     commit_run = next(r for r in step_runs if "git commit" in r and "git push" in r)
     assert "sentinel.spec.ts-snapshots" in commit_run
+    assert "pages.spec.ts-snapshots" in commit_run
 
     # RISK MITIGATION: after --update-snapshots a verify run (without the flag)
     # must confirm the new snapshots are stable.  If the verify fails, the
     # workflow exits non-zero and nothing is committed, surfacing the regression.
-    update_idx = next(
-        i
-        for i, r in enumerate(step_runs)
-        if "sentinel.spec.ts" in r and "--update-snapshots" in r
+    last_update_idx = max(
+        i for i, r in enumerate(step_runs) if "--update-snapshots" in r
     )
     verify_runs_after_update = [
         r
-        for r in step_runs[update_idx + 1 :]
+        for r in step_runs[last_update_idx + 1 :]
         if "playwright" in r
         and "sentinel.spec.ts" in r
         and "--update-snapshots" not in r
     ]
     assert verify_runs_after_update, (
-        "A verify step (npx playwright test sentinel.spec.ts without "
-        "--update-snapshots) must follow the update step to guard against "
+        "A verify step (npx playwright test without "
+        "--update-snapshots) must follow the update steps to guard against "
         "committing regressions."
     )
+    # The verify step must cover pages.spec.ts as well as sentinel.spec.ts
+    # since both are always run by docs-ci authoritative-visual.
+    assert any(
+        "pages.spec.ts" in r and "--update-snapshots" not in r
+        for r in verify_runs_after_update
+    ), "The verify step must also cover pages.spec.ts"
