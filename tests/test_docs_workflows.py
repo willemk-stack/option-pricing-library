@@ -110,6 +110,15 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     assert any(p.startswith("src/option_pricing") for p in watched_paths)
     assert "scripts/build_benchmark_artifacts.py" in watched_paths
     assert "scripts/build_visual_artifacts.py" in watched_paths
+    # Must cover CSS/JS/theme overrides and the MkDocs config — the only docs/
+    # subdirectories that can cause pixel-level changes in sentinel renders.
+    assert "docs/stylesheets/**" in watched_paths
+    assert "docs/overrides/**" in watched_paths
+    assert "docs/assets/**" in watched_paths
+    assert "mkdocs.yml" in watched_paths
+    # Must NOT use the broad docs/** glob — pure markdown text edits do not
+    # affect pixel output and should not fire the full expensive pipeline.
+    assert "docs/**" not in watched_paths
 
     # Must have write permission to push back refreshed assets.
     assert workflow["permissions"]["contents"] == "write"
@@ -122,7 +131,51 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     # Must run on the same Ubuntu version as docs-ci to produce identical pixels.
     assert job["runs-on"] == "ubuntu-24.04"
 
-    # Must regenerate and commit assets when they change.
+    # Must regenerate visual assets and commit them.
     step_runs = [s.get("run", "") for s in job["steps"]]
     assert any("build_visual_artifacts.py all --profile ci" in r for r in step_runs)
     assert any("git commit" in r and "git push" in r for r in step_runs)
+
+    # Must also refresh authoritative Playwright sentinel snapshots so that
+    # docs-ci visual checks pass after any asset or docs content change.
+    assert any(
+        "playwright" in r and "sentinel.spec.ts" in r and "update-snapshots" in r
+        for r in step_runs
+    )
+    # Must also refresh pages.spec.ts snapshots — docs-ci ALWAYS runs pages.spec.ts
+    # as part of the authoritative-visual job, so those snapshots must also be kept
+    # current or docs-ci fails even after a successful sentinel refresh.
+    assert any(
+        "playwright" in r and "pages.spec.ts" in r and "update-snapshots" in r
+        for r in step_runs
+    )
+    # The commit must stage generated assets, sentinel snapshots, and pages
+    # snapshots together.
+    commit_run = next(r for r in step_runs if "git commit" in r and "git push" in r)
+    assert "sentinel.spec.ts-snapshots" in commit_run
+    assert "pages.spec.ts-snapshots" in commit_run
+
+    # RISK MITIGATION: after --update-snapshots a verify run (without the flag)
+    # must confirm the new snapshots are stable.  If the verify fails, the
+    # workflow exits non-zero and nothing is committed, surfacing the regression.
+    last_update_idx = max(
+        i for i, r in enumerate(step_runs) if "--update-snapshots" in r
+    )
+    verify_runs_after_update = [
+        r
+        for r in step_runs[last_update_idx + 1 :]
+        if "playwright" in r
+        and "sentinel.spec.ts" in r
+        and "--update-snapshots" not in r
+    ]
+    assert verify_runs_after_update, (
+        "A verify step (npx playwright test without "
+        "--update-snapshots) must follow the update steps to guard against "
+        "committing regressions."
+    )
+    # The verify step must cover pages.spec.ts as well as sentinel.spec.ts
+    # since both are always run by docs-ci authoritative-visual.
+    assert any(
+        "pages.spec.ts" in r and "--update-snapshots" not in r
+        for r in verify_runs_after_update
+    ), "The verify step must also cover pages.spec.ts"
