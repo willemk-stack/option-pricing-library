@@ -3,30 +3,30 @@
     "scenario":"ATM 1Y",
     "strike":100.0,
     "tau":1.0,
-    "runtime_ms":0.4495000001,
-    "min_ms":0.4242,
-    "mean_ms":0.4572888888,
-    "median_ms":0.4495000001,
-    "std_ms":0.028995304
+    "runtime_ms":0.4919999992,
+    "min_ms":0.4835,
+    "mean_ms":0.4973444447,
+    "median_ms":0.4919999992,
+    "std_ms":0.0128487885
   },
   {
     "scenario":"ATM 2W",
     "strike":100.0,
     "tau":0.02,
-    "runtime_ms":0.4420999999,
-    "min_ms":0.4252000001,
-    "mean_ms":0.5275888889,
-    "median_ms":0.4420999999,
-    "std_ms":0.1337475603
+    "runtime_ms":0.506999997,
+    "min_ms":0.4855000007,
+    "mean_ms":0.5195777776,
+    "median_ms":0.506999997,
+    "std_ms":0.0312085386
   },
   {
     "scenario":"OTM 1Y",
     "strike":140.0,
     "tau":1.0,
-    "runtime_ms":0.4294999999,
-    "min_ms":0.425,
-    "mean_ms":0.4386333333,
-    "median_ms":0.4294999999,
-    "std_ms":0.0208361331
+    "runtime_ms":0.4674000011,
+    "min_ms":0.4190999971,
+    "mean_ms":0.4656555563,
+    "median_ms":0.4674000011,
+    "std_ms":0.0324320534
   }
 ]

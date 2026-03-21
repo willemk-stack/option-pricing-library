@@ -6,7 +6,7 @@
     "Nx":301,
     "Nt":301,
     "stage":"local_vol_ms",
-    "runtime_ms":0.7600000001,
+    "runtime_ms":0.6853000014,
     "final_price":0.966247873
   },
   {
@@ -16,7 +16,7 @@
     "Nx":301,
     "Nt":301,
     "stage":"pde_reprice_ms",
-    "runtime_ms":307.0103999999,
+    "runtime_ms":258.4586000012,
     "final_price":0.966247873
   },
   {
@@ -26,7 +26,7 @@
     "Nx":301,
     "Nt":301,
     "stage":"quote_mesh_ms",
-    "runtime_ms":4.7655000001,
+    "runtime_ms":3.1027000005,
     "final_price":0.966247873
   },
   {
@@ -36,7 +36,7 @@
     "Nx":301,
     "Nt":301,
     "stage":"surface_fit_ms",
-    "runtime_ms":702.9837,
+    "runtime_ms":583.9485000033,
     "final_price":0.966247873
   },
   {
@@ -46,7 +46,7 @@
     "Nx":301,
     "Nt":301,
     "stage":"surface_handoff_ms",
-    "runtime_ms":5.96,
+    "runtime_ms":5.6092999948,
     "final_price":0.966247873
   },
   {
@@ -56,7 +56,7 @@
     "Nx":201,
     "Nt":201,
     "stage":"local_vol_ms",
-    "runtime_ms":0.513,
+    "runtime_ms":0.4255000022,
     "final_price":0.9091601448
   },
   {
@@ -66,7 +66,7 @@
     "Nx":201,
     "Nt":201,
     "stage":"pde_reprice_ms",
-    "runtime_ms":173.6865,
+    "runtime_ms":147.7769000048,
     "final_price":0.9091601448
   },
   {
@@ -76,7 +76,7 @@
     "Nx":201,
     "Nt":201,
     "stage":"quote_mesh_ms",
-    "runtime_ms":1.0867999999,
+    "runtime_ms":1.0945999966,
     "final_price":0.9091601448
   },
   {
@@ -86,7 +86,7 @@
     "Nx":201,
     "Nt":201,
     "stage":"surface_fit_ms",
-    "runtime_ms":321.1789000002,
+    "runtime_ms":284.0836999967,
     "final_price":0.9091601448
   },
   {
@@ -96,7 +96,7 @@
     "Nx":201,
     "Nt":201,
     "stage":"surface_handoff_ms",
-    "runtime_ms":9.9573,
+    "runtime_ms":8.0955999947,
     "final_price":0.9091601448
   },
   {
@@ -106,7 +106,7 @@
     "Nx":101,
     "Nt":101,
     "stage":"local_vol_ms",
-    "runtime_ms":0.4309000001,
+    "runtime_ms":0.3529999958,
     "final_price":0.6584116815
   },
   {
@@ -116,7 +116,7 @@
     "Nx":101,
     "Nt":101,
     "stage":"pde_reprice_ms",
-    "runtime_ms":71.6129,
+    "runtime_ms":61.0210000013,
     "final_price":0.6584116815
   },
   {
@@ -126,7 +126,7 @@
     "Nx":101,
     "Nt":101,
     "stage":"quote_mesh_ms",
-    "runtime_ms":0.6174,
+    "runtime_ms":0.5614000038,
     "final_price":0.6584116815
   },
   {
@@ -136,7 +136,7 @@
     "Nx":101,
     "Nt":101,
     "stage":"surface_fit_ms",
-    "runtime_ms":218.5841,
+    "runtime_ms":196.1654999977,
     "final_price":0.6584116815
   },
   {
@@ -146,7 +146,7 @@
     "Nx":101,
     "Nt":101,
     "stage":"surface_handoff_ms",
-    "runtime_ms":6.0963000001,
+    "runtime_ms":5.8239999998,
     "final_price":0.6584116815
   }
 ]
