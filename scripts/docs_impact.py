@@ -44,6 +44,8 @@ BENCHMARK_INPUTS = (
     "src/option_pricing/vol/",
 )
 
+BENCHMARK_FRESHNESS_INPUTS = (*BENCHMARK_SNAPSHOT_INPUTS, *BENCHMARK_INPUTS)
+
 D2_INPUTS = (
     "docs/assets/diagrams/src/",
     "scripts/render_d2_diagrams.py",
@@ -260,7 +262,7 @@ def classify_docs_impact(changed_files: list[str]) -> DocsImpact:
         _matches(path, PERFORMANCE_PAGE_INPUTS) for path in docs_sensitive_files
     )
     benchmark_artifacts_required = any(
-        _matches(path, BENCHMARK_SNAPSHOT_INPUTS) for path in docs_sensitive_files
+        _matches(path, BENCHMARK_FRESHNESS_INPUTS) for path in docs_sensitive_files
     )
     d2_required = any(_matches(path, D2_INPUTS) for path in docs_sensitive_files)
     visual_assets_required = any(
