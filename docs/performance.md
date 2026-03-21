@@ -13,10 +13,10 @@ This page is the committed benchmark snapshot for the workflows that matter most
 
 | Family | Conditions | Reference | What the committed snapshot shows |
 | --- | --- | --- | --- |
-| Implied-vol inversion | Scalar BS inversion and Black-76 slice inversion on 21-801 strikes | Scalar loop baseline | The vectorized slice path reaches 389x speedup at 801 strikes while preserving zero measured vol difference versus the scalar loop. Scalar single-option inversions stay around 0.47 ms to 0.51 ms. |
-| Vanilla PDE | Black-Scholes European call, Nx=Nt from 101 to 801 | Analytic Black-Scholes price | Absolute error falls from about 1.74e-02 at 101x101 to about 2.28e-04 at 801x801. Runtime rises from about 33.6 ms to about 974.6 ms. |
+| Implied-vol inversion | Scalar BS inversion and Black-76 slice inversion on 21-801 strikes | Scalar loop baseline | The vectorized slice path reaches 434x speedup at 801 strikes while preserving zero measured vol difference versus the scalar loop. Scalar single-option inversions stay around 0.45 ms to 0.51 ms. |
+| Vanilla PDE | Black-Scholes European call, Nx=Nt from 101 to 801 | Analytic Black-Scholes price | Absolute error falls from about 1.74e-02 at 101x101 to about 2.28e-04 at 801x801. Runtime rises from about 30.7 ms to about 892.8 ms. |
 | Digital PDE remedies | Digital call, Nx=Nt in {101, 201, 401} | Analytic digital price | The untreated path keeps an ~1.18e-02 refinement spread, while Rannacher + cell average cuts it to 3.00e-05 and Rannacher + L2 projection cuts it to 1.43e-05. |
-| End-to-end macro pipeline | Synthetic SVI quote mesh -> fitted surface -> handoff probe -> local-vol surface -> representative local-vol PDE | Stage-level timing only | Surface fitting dominates the measured stage budget (196.2 ms, 284.1 ms, 583.9 ms for small, medium, large), with PDE repricing second (61.0 ms, 147.8 ms, 258.5 ms). |
+| End-to-end macro pipeline | Synthetic SVI quote mesh -> fitted surface -> handoff probe -> local-vol surface -> representative local-vol PDE | Stage-level timing only | Surface fitting dominates the measured stage budget (194.8 ms, 312.2 ms, 591.1 ms for small, medium, large), with PDE repricing second (60.8 ms, 152.9 ms, 265.5 ms). |
 
 ## Implied-vol inversion
 
@@ -25,7 +25,7 @@ This page is the committed benchmark snapshot for the workflows that matter most
   ![IV scaling figure: vectorized slice inversion versus scalar-loop inversion, plus scalar single-option latency scenarios.](assets/generated/benchmarks/iv_scaling.dark.png){ .diagram-img .diagram-dark }
 </figure>
 
-Use the vectorized slice inverter whenever the workload is a smile or surface rather than an isolated option. At 801 strikes the committed snapshot records about 0.92 ms for the vectorized slice path versus about 358.23 ms for the scalar-loop baseline.
+Use the vectorized slice inverter whenever the workload is a smile or surface rather than an isolated option. At 801 strikes the committed snapshot records about 0.81 ms for the vectorized slice path versus about 351.36 ms for the scalar-loop baseline.
 
 ## PDE runtime versus error
 
@@ -52,7 +52,7 @@ This is the clearest benchmark family for domain-aware numerical engineering. Le
   ![Macro pipeline benchmark: stacked stage timing for the synthetic surface-to-local-vol-to-PDE workflow.](assets/generated/benchmarks/macro_pipeline_summary.dark.png){ .diagram-img .diagram-dark }
 </figure>
 
-For the integrated benchmark, the key observation is where time actually goes. In this snapshot the handoff itself stays cheap at 5.82 ms to 5.61 ms, the local-vol extraction step stays around 0.35 ms to 0.69 ms, and the expensive parts are fitting the surface and running the PDE. That is useful when discussing optimization priorities because it argues against spending engineering effort on the wrong stage.
+For the integrated benchmark, the key observation is where time actually goes. In this snapshot the handoff itself stays cheap at 5.73 ms to 5.62 ms, the local-vol extraction step stays around 0.36 ms to 0.72 ms, and the expensive parts are fitting the surface and running the PDE. That is useful when discussing optimization priorities because it argues against spending engineering effort on the wrong stage.
 
 ## Additional families
 
@@ -62,8 +62,8 @@ The published local-vol extraction run compares `strike_coordinate="K"` and `str
 
 | Coordinate | Largest tested grid | Median runtime | Interior invalid share |
 | --- | --- | --- | --- |
-| `K` | `121 x 241` | 1.11 ms | 0.0% |
-| `logK` | `121 x 241` | 1.09 ms | 0.0% |
+| `K` | `121 x 241` | 1.14 ms | 0.0% |
+| `logK` | `121 x 241` | 1.10 ms | 0.0% |
 
 The full figure is available at [localvol_scaling.png](assets/generated/benchmarks/localvol_scaling.png).
 
@@ -73,9 +73,9 @@ The CRR benchmark remains useful for convergence discussion, but the published n
 
 | `n_steps` | Median runtime | Absolute error vs Black-Scholes |
 | --- | --- | --- |
-| `200` | 14.4 ms | 9.90e-03 |
-| `1000` | 784.4 ms | 1.98e-03 |
-| `5000` | 17.5 s | 3.96e-04 |
+| `200` | 14.3 ms | 9.90e-03 |
+| `1000` | 769.0 ms | 1.98e-03 |
+| `5000` | 17.2 s | 3.96e-04 |
 
 The full figure is available at [tree_scaling.png](assets/generated/benchmarks/tree_scaling.png).
 

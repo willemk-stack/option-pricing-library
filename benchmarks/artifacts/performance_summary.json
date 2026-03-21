@@ -24,7 +24,7 @@
         "json": "benchmarks/artifacts/iv_speedup.json"
       },
       "figure": "docs/assets/generated/benchmarks/iv_scaling.png",
-      "max_speedup_x": 389.3407784543973
+      "max_speedup_x": 433.88219516558706
     },
     "pde": {
       "snapshot": {
