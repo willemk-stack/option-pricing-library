@@ -34,6 +34,15 @@ repos:
 
   - repo: local
     hooks:
+      - id: benchmark-source-manifest-refresh
+        name: benchmark source manifest refresh
+        entry: python
+        args: [scripts/build_benchmark_artifacts.py, --write-source-manifest]
+        language: system
+        pass_filenames: false
+        files: ^(benchmarks/(conftest\.py|test_bench_(iv|localvol|macro|pde|tree)\.py)|scripts/build_benchmark_artifacts\.py|src/option_pricing/(models/.*\.py|numerics/.*\.py|pricers/.*\.py|types\.py|vol/.*\.py))$
+        stages: [pre-commit]
+
       - id: docs-source-link-guard
         name: docs source link guard
         entry: python
@@ -59,4 +68,3 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [manual]
-

@@ -69,6 +69,7 @@ This workflow is scheduled or manually triggered for the heavier audits.
 
 ## Local contributor contract
 
+- Install the default hooks with `pre-commit install --hook-type pre-commit --hook-type pre-push`; the pre-commit hook refreshes `benchmarks/artifacts/benchmark_source_manifest.json` automatically when benchmark-sensitive sources change.
 - Use `python scripts/docs_doctor.py` or `python scripts/pre_push_docs_validation.py --mode fast` for the same portable pre-push checks that run locally by default.
 - Use `python scripts/render_readme.py` and `python scripts/render_performance_page.py` when updating generated text artifacts intentionally.
 - Use `python scripts/run_ci_visual_regression.py build-assets` when the authoritative Ubuntu visual-asset refresh matters more than native Windows rendering.
