@@ -24,7 +24,7 @@ def _apply_control_variate(X: np.ndarray, Y: np.ndarray, EY: float) -> np.ndarra
 
     cov = float(np.cov(X, Y, ddof=1)[0, 1])
     b = cov / var_y
-    return X - b * (Y - float(EY))
+    return np.asarray(X - b * (Y - float(EY)), dtype=FloatDType)
 
 
 @dataclass(frozen=True, slots=True)

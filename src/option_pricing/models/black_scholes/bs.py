@@ -361,7 +361,7 @@ def black76_put_price_vec(
     """Vectorized discounted Black-76 put via parity: P = C - df*(F-K)."""
     K = np.asarray(strikes, dtype=FloatDType)
     C = black76_call_price_vec(forward=forward, strikes=K, sigma=sigma, tau=tau, df=df)
-    return C - df * (float(forward) - K)
+    return np.asarray(C - df * (float(forward) - K), dtype=FloatDType)
 
 
 def black76_call_price_vega_vec(
