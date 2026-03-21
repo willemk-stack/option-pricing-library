@@ -110,6 +110,8 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     assert any(p.startswith("src/option_pricing") for p in watched_paths)
     assert "scripts/build_benchmark_artifacts.py" in watched_paths
     assert "scripts/build_visual_artifacts.py" in watched_paths
+    # Must also trigger on docs content changes so sentinel snapshots stay current.
+    assert any(p.startswith("docs/") for p in watched_paths)
 
     # Must have write permission to push back refreshed assets.
     assert workflow["permissions"]["contents"] == "write"
@@ -122,7 +124,17 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     # Must run on the same Ubuntu version as docs-ci to produce identical pixels.
     assert job["runs-on"] == "ubuntu-24.04"
 
-    # Must regenerate and commit assets when they change.
+    # Must regenerate visual assets and commit them.
     step_runs = [s.get("run", "") for s in job["steps"]]
     assert any("build_visual_artifacts.py all --profile ci" in r for r in step_runs)
     assert any("git commit" in r and "git push" in r for r in step_runs)
+
+    # Must also refresh authoritative Playwright sentinel snapshots so that
+    # docs-ci visual checks pass after any asset or docs content change.
+    assert any(
+        "playwright" in r and "sentinel.spec.ts" in r and "update-snapshots" in r
+        for r in step_runs
+    )
+    # The commit must stage both generated assets and snapshots together.
+    commit_run = next(r for r in step_runs if "git commit" in r and "git push" in r)
+    assert "sentinel.spec.ts-snapshots" in commit_run
