@@ -6,14 +6,14 @@
     "Nx":101,
     "Nt":101,
     "grid_points":10201,
-    "runtime_ms":31.8352000031,
+    "runtime_ms":34.2512999996,
     "price":8.4507294895,
     "reference_price":8.4333186901,
     "abs_error":0.0174107994,
-    "min_ms":30.4351999948,
-    "mean_ms":31.4960999992,
-    "median_ms":31.8352000031,
-    "std_ms":0.766266462
+    "min_ms":33.2298000067,
+    "mean_ms":34.1044000039,
+    "median_ms":34.2512999996,
+    "std_ms":0.6623322571
   },
   {
     "family":"black_scholes_vanilla",
@@ -22,14 +22,14 @@
     "Nx":101,
     "Nt":101,
     "grid_points":10201,
-    "runtime_ms":33.5675000024,
+    "runtime_ms":30.7444999999,
     "price":8.4506789596,
     "reference_price":8.4333186901,
     "abs_error":0.0173602695,
-    "min_ms":33.4479999947,
-    "mean_ms":34.0504000002,
-    "median_ms":33.5675000024,
-    "std_ms":0.7689721
+    "min_ms":30.5363000007,
+    "mean_ms":30.7012,
+    "median_ms":30.7444999999,
+    "std_ms":0.1209041764
   },
   {
     "family":"black_scholes_vanilla",
@@ -38,14 +38,14 @@
     "Nx":201,
     "Nt":201,
     "grid_points":40401,
-    "runtime_ms":83.6211999995,
+    "runtime_ms":86.561899996,
     "price":8.4342720206,
     "reference_price":8.4333186901,
     "abs_error":0.0009533304,
-    "min_ms":83.5159999988,
-    "mean_ms":84.2452666645,
-    "median_ms":83.6211999995,
-    "std_ms":0.9579144318
+    "min_ms":83.8784000007,
+    "mean_ms":85.8787999993,
+    "median_ms":86.561899996,
+    "std_ms":1.437996877
   },
   {
     "family":"black_scholes_vanilla",
@@ -54,14 +54,14 @@
     "Nx":201,
     "Nt":201,
     "grid_points":40401,
-    "runtime_ms":91.1376000004,
+    "runtime_ms":83.8206000044,
     "price":8.4342593261,
     "reference_price":8.4333186901,
     "abs_error":0.000940636,
-    "min_ms":90.9836999999,
-    "mean_ms":96.1984666646,
-    "median_ms":91.1376000004,
-    "std_ms":7.2662416483
+    "min_ms":82.2629999966,
+    "mean_ms":83.4818000003,
+    "median_ms":83.8206000044,
+    "std_ms":0.8896926232
   },
   {
     "family":"black_scholes_vanilla",
@@ -70,14 +70,14 @@
     "Nx":401,
     "Nt":401,
     "grid_points":160801,
-    "runtime_ms":301.1871999988,
+    "runtime_ms":284.1688999979,
     "price":8.4342342723,
     "reference_price":8.4333186901,
     "abs_error":0.0009155822,
-    "min_ms":264.8556999993,
-    "mean_ms":297.4046666665,
-    "median_ms":301.1871999988,
-    "std_ms":25.1743949038
+    "min_ms":278.5124000002,
+    "mean_ms":288.9687666684,
+    "median_ms":284.1688999979,
+    "std_ms":11.032179894
   },
   {
     "family":"black_scholes_vanilla",
@@ -86,14 +86,14 @@
     "Nx":401,
     "Nt":401,
     "grid_points":160801,
-    "runtime_ms":270.6779,
+    "runtime_ms":258.5730999999,
     "price":8.4342310991,
     "reference_price":8.4333186901,
     "abs_error":0.000912409,
-    "min_ms":263.9593999993,
-    "mean_ms":271.6277333335,
-    "median_ms":270.6779,
-    "std_ms":6.6827717852
+    "min_ms":253.2460000002,
+    "mean_ms":257.3706000015,
+    "median_ms":258.5730999999,
+    "std_ms":2.99983332
   },
   {
     "family":"black_scholes_vanilla",
@@ -102,14 +102,14 @@
     "Nx":801,
     "Nt":801,
     "grid_points":641601,
-    "runtime_ms":922.0515000052,
+    "runtime_ms":876.5112000037,
     "price":8.4335479323,
     "reference_price":8.4333186901,
     "abs_error":0.0002292422,
-    "min_ms":910.8345999994,
-    "mean_ms":919.4547333342,
-    "median_ms":922.0515000052,
-    "std_ms":6.2538212804
+    "min_ms":855.773700001,
+    "mean_ms":871.3819666688,
+    "median_ms":876.5112000037,
+    "std_ms":11.2507357177
   },
   {
     "family":"black_scholes_vanilla",
@@ -118,14 +118,14 @@
     "Nx":801,
     "Nt":801,
     "grid_points":641601,
-    "runtime_ms":974.6419000003,
+    "runtime_ms":892.8200000009,
     "price":8.4335471388,
     "reference_price":8.4333186901,
     "abs_error":0.0002284487,
-    "min_ms":963.7883999967,
-    "mean_ms":975.5196666665,
-    "median_ms":974.6419000003,
-    "std_ms":9.9562511966
+    "min_ms":860.8559999993,
+    "mean_ms":882.5529333335,
+    "median_ms":892.8200000009,
+    "std_ms":15.3493911506
   },
   {
     "family":"local_vol_digital",
@@ -134,14 +134,14 @@
     "Nx":101,
     "Nt":101,
     "grid_points":10201,
-    "runtime_ms":64.6871499994,
+    "runtime_ms":66.6898500021,
     "price":0.6584116815,
     "reference_price":1.221711447,
     "abs_error":0.5632997655,
-    "min_ms":64.2724999998,
-    "mean_ms":64.6871499994,
-    "median_ms":64.6871499994,
-    "std_ms":0.4146499996
+    "min_ms":61.7495000042,
+    "mean_ms":66.6898500021,
+    "median_ms":66.6898500021,
+    "std_ms":4.9403499979
   },
   {
     "family":"local_vol_digital",
@@ -150,14 +150,14 @@
     "Nx":201,
     "Nt":201,
     "grid_points":40401,
-    "runtime_ms":151.7274499965,
+    "runtime_ms":144.4047499972,
     "price":0.9091601448,
     "reference_price":1.221711447,
     "abs_error":0.3125513022,
-    "min_ms":151.1039999968,
-    "mean_ms":151.7274499965,
-    "median_ms":151.7274499965,
-    "std_ms":0.6234499997
+    "min_ms":144.2447000009,
+    "mean_ms":144.4047499972,
+    "median_ms":144.4047499972,
+    "std_ms":0.1600499963
   },
   {
     "family":"local_vol_digital",
@@ -166,14 +166,14 @@
     "Nx":301,
     "Nt":301,
     "grid_points":90601,
-    "runtime_ms":273.594250004,
+    "runtime_ms":253.4567999974,
     "price":0.966247873,
     "reference_price":1.221711447,
     "abs_error":0.255463574,
-    "min_ms":268.4904000052,
-    "mean_ms":273.594250004,
-    "median_ms":273.594250004,
-    "std_ms":5.1038499987
+    "min_ms":252.2061999989,
+    "mean_ms":253.4567999974,
+    "median_ms":253.4567999974,
+    "std_ms":1.2505999985
   },
   {
     "family":"local_vol_digital",
@@ -182,13 +182,13 @@
     "Nx":401,
     "Nt":401,
     "grid_points":160801,
-    "runtime_ms":395.2111499966,
+    "runtime_ms":387.6748000039,
     "price":1.1392052135,
     "reference_price":1.221711447,
     "abs_error":0.0825062335,
-    "min_ms":383.1733999978,
-    "mean_ms":395.2111499966,
-    "median_ms":395.2111499966,
-    "std_ms":12.0377499989
+    "min_ms":386.2100000042,
+    "mean_ms":387.6748000039,
+    "median_ms":387.6748000039,
+    "std_ms":1.4647999997
   }
 ]
