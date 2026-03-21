@@ -93,10 +93,10 @@ def test_dev_extras_include_pre_commit_for_local_docs_guards() -> None:
     assert "pre-commit==4.5.1" in dev_dependencies()
 
 
-def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops() -> None:
-    workflow = yaml.safe_load(
-        workflow_text("docs-visual-assets-auto-refresh.yml")
-    )
+def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops() -> (
+    None
+):
+    workflow = yaml.safe_load(workflow_text("docs-visual-assets-auto-refresh.yml"))
 
     # In PyYAML, the YAML keyword `on` is parsed as boolean True.
     on_push = workflow[True]["push"]
@@ -120,7 +120,5 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
 
     # Must regenerate and commit assets when they change.
     step_runs = [s.get("run", "") for s in job["steps"]]
-    assert any(
-        "build_visual_artifacts.py all --profile ci" in r for r in step_runs
-    )
+    assert any("build_visual_artifacts.py all --profile ci" in r for r in step_runs)
     assert any("git commit" in r and "git push" in r for r in step_runs)
