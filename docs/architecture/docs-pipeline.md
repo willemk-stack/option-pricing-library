@@ -1,6 +1,6 @@
 # Docs pipeline
 
-This repo treats docs as a built product rather than a pile of independently refreshed generated files. The stable contract is: one blocking docs CI workflow builds the site from source, one refresh workflow regenerates tracked docs artifacts on demand, and deploy publishes the already-built site artifact from CI.
+This repo treats docs as a built product rather than a pile of independently refreshed generated files. The stable contract is: one blocking docs CI workflow validates committed docs state, builds the site artifact when required, and deploys that exact validated artifact on `main`; explicit refresh workflows are the only write-mode generators for tracked docs assets.
 
 ## Source versus generated
 
@@ -8,8 +8,8 @@ This repo treats docs as a built product rather than a pile of independently ref
 | --- | --- | --- | --- | --- |
 | `README.md` | `README.template.md` plus `examples/` snippets | `python scripts/render_readme.py` | Yes | Yes, via sync check |
 | `docs/performance.md` | `benchmarks/artifacts/*` plus `scripts/templates/performance.md.template` | `python scripts/render_performance_page.py` | Yes | Yes, via sync check |
-| `docs/assets/diagrams/*` | `docs/assets/diagrams/src/*` | `python scripts/render_d2_diagrams.py` | Yes | Built in CI, refreshed in the asset workflow |
-| `docs/assets/generated/*` | code and benchmark sources under `src/`, `scripts/`, and `benchmarks/artifacts/` | `python scripts/build_visual_artifacts.py all --profile ci` | Yes today, but treated as build outputs first | Only targeted media checks block |
+| `docs/assets/diagrams/*` | `docs/assets/diagrams/src/*` | `python scripts/render_d2_diagrams.py` | Yes | Yes, via check-only drift validation |
+| `docs/assets/generated/*` | code and benchmark sources under `src/`, `scripts/`, and `benchmarks/artifacts/` | `python scripts/build_visual_artifacts.py all --profile ci` | Yes | Yes, via check-only drift validation and targeted browser suites |
 | `benchmarks/artifacts/*` | benchmark tests plus pricing/numerics source inputs | `python scripts/build_benchmark_artifacts.py` | Yes | Freshness check only when benchmark or performance inputs change |
 | built docs site | `docs/`, `mkdocs.yml`, generated assets, package API docs | `python -m mkdocs build --strict` | No | Yes |
 
@@ -22,10 +22,11 @@ This is the authoritative blocking docs workflow on pull requests.
 - installs the pinned docs/test environment from `scripts/ci-constraints.txt`
 - checks `README.md` and `docs/performance.md` synchronization
 - checks benchmark snapshot freshness only when benchmark or performance inputs changed
-- builds diagrams and visual assets only when those inputs changed
-- runs strict MkDocs plus internal asset integrity checks
-- runs a small blocking Playwright smoke suite against the prebuilt site artifact
-- runs targeted embedded-panel verification only for affected proof and benchmark pages
+- validates D2 diagrams and generated visual assets in check-only mode so stale committed outputs fail CI instead of being silently repaired
+- builds the MkDocs site once, uploads the built-site artifact, and reuses that artifact for downstream browser audits and Pages deploy
+- runs blocking Playwright smoke and DOM audits against the prebuilt site artifact
+- runs targeted accessibility checks on curated impacted paths
+- runs the docs-impact-selected authoritative visual suites (`sentinel`, `pages`, plus `components` and `embedded-panels` when selected)
 
 ### `docs-assets-refresh`
 
@@ -33,6 +34,7 @@ This is the manual regeneration path for tracked docs artifacts.
 
 - refreshes README, diagrams, generated visual assets, and the rendered performance page
 - validates the regenerated site with strict MkDocs
+- is the primary write-mode path for tracked docs assets
 - opens a draft PR when there is something to review
 
 ### `benchmarks`
@@ -45,13 +47,14 @@ This is the authoritative benchmark refresh path.
 - uploads raw and derived benchmark evidence
 - opens a draft PR with refreshed benchmark outputs
 
-### `deploy-docs`
+### Deployment in `docs-ci`
 
-This workflow deploys the artifact already built by `docs-ci` on `main`.
+Deployment lives inside `docs-ci` rather than in a separate cross-run workflow.
 
-- downloads the published site artifact from the successful `docs-ci` run
-- verifies the artifact layout with `scripts/docs_site_contract.py`
-- publishes to GitHub Pages
+- it only runs on `push` to `main`
+- it only runs when `docs_site_required == true`
+- it stages and deploys the same built-site artifact that passed blocking validation earlier in the workflow
+- it verifies curated live public docs routes after deploy with `python scripts/docs_site_contract.py verify-public`
 
 ### `docs-advisory`
 
@@ -62,12 +65,14 @@ This workflow is scheduled or manually triggered for the heavier audits.
 - broader accessibility passes
 - full Ubuntu-authoritative snapshot verification
 - Windows browser checks
+- check-only validation for generated docs assets
 
 ## Local contributor contract
 
-- Use `python scripts/docs_doctor.py` for the same fast blocking checks that CI expects by default.
+- Use `python scripts/docs_doctor.py` or `python scripts/pre_push_docs_validation.py --mode fast` for the same portable pre-push checks that run locally by default.
 - Use `python scripts/render_readme.py` and `python scripts/render_performance_page.py` when updating generated text artifacts intentionally.
 - Use `python scripts/run_ci_visual_regression.py build-assets` when the authoritative Ubuntu visual-asset refresh matters more than native Windows rendering.
+- Use `python scripts/pre_push_docs_validation.py --mode manual` if you want local Playwright and Docker-backed checks before pushing.
 - Use the `benchmarks` workflow instead of manually editing `benchmarks/artifacts/*`.
 
 ## Failure layers
@@ -79,5 +84,5 @@ Docs failures are grouped by layer so the next action is obvious:
 - benchmark snapshot freshness
 - generated visual asset build or integrity
 - strict MkDocs build
-- browser smoke or targeted media checks
+- browser smoke, DOM, accessibility, or docs-impact-selected authoritative visual checks
 - advisory-only audit failures

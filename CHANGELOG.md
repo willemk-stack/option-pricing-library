@@ -11,8 +11,10 @@ The format is based on *Keep a Changelog*, and this project aims to follow *Sema
 - (Add bullets here as you work; move them into the next release at tag time.)
 
 ### Changed
+- Docs workflow architecture notes now describe the single-workflow `docs-ci` validate/build/deploy contract and the split between fast local pre-push checks and heavier manual/CI browser validation.
 
 ### Fixed
+- Locked the docs workflow contract in tests so blocking CI remains check-only for committed generated docs assets, deployment stays in `docs-ci`, and the docs-impact-selected authoritative visual suites remain the blocking source of truth.
 
 ### Deprecated
 
