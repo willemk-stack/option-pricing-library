@@ -84,6 +84,10 @@ jobs:
       - name: Validate strict MkDocs build
         run: python -m mkdocs build --strict
 
+      - name: Refresh authoritative visual snapshots
+        if: inputs.refresh_diagrams || inputs.refresh_visual_assets || inputs.refresh_performance_page
+        run: python scripts/run_ci_visual_regression.py update --skip-build
+
       - name: Show refreshed files
         run: git status --short --untracked-files=all
 

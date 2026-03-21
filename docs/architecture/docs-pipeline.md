@@ -33,6 +33,7 @@ This is the authoritative blocking docs workflow on pull requests.
 This is the manual regeneration path for tracked docs artifacts.
 
 - refreshes README, diagrams, generated visual assets, and the rendered performance page
+- refreshes authoritative Playwright snapshots after visual asset, diagram, or performance-page updates so the write-mode refresh path does not leave blocking baselines stale
 - validates the regenerated site with strict MkDocs
 - is the primary write-mode path for tracked docs assets
 - opens a draft PR when there is something to review
