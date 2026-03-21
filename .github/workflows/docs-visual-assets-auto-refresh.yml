@@ -16,7 +16,11 @@ on:
     branches-ignore:
       - main
     paths:
+      - '.github/workflows/docs-ci.yml'
+      - '.github/workflows/docs-visual-assets-auto-refresh.yml'
+      - 'benchmarks/artifacts/**'
       - 'src/option_pricing/**'
+      - 'scripts/build_benchmark_artifacts.py'
       - 'scripts/build_visual_artifacts.py'
 
 permissions:
