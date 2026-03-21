@@ -114,7 +114,7 @@ def _robust_rhoprime(z: NDArray[np.float64], loss: str) -> NDArray[np.float64]:
 
     if loss == "soft_l1":
         # rho(z) = 2*(sqrt(1+z)-1)  => rho'(z) = 1/sqrt(1+z)
-        return 1.0 / np.sqrt(1.0 + z)
+        return np.asarray(1.0 / np.sqrt(1.0 + z), dtype=np.float64)
 
     if loss == "huber":
         # rho(z)=z if z<=1 else 2*sqrt(z)-1  => rho'(z)=1 if z<=1 else 1/sqrt(z)
@@ -125,11 +125,11 @@ def _robust_rhoprime(z: NDArray[np.float64], loss: str) -> NDArray[np.float64]:
 
     if loss == "cauchy":
         # rho(z)=ln(1+z) => rho'(z)=1/(1+z)
-        return 1.0 / (1.0 + z)
+        return np.asarray(1.0 / (1.0 + z), dtype=np.float64)
 
     if loss == "arctan":
         # rho(z)=arctan(z) => rho'(z)=1/(1+z^2)
-        return 1.0 / (1.0 + z * z)
+        return np.asarray(1.0 / (1.0 + z * z), dtype=np.float64)
 
     raise ValueError(f"Unknown loss: {loss}")
 

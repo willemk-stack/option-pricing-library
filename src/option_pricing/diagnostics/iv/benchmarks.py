@@ -48,7 +48,7 @@ def make_synthetic_smile(
     def _sigma(K: np.ndarray) -> np.ndarray:
         K = np.asarray(K, dtype=float)
         x = np.log(K / k0)
-        return atm_vol + skew * x + smile * (x**2)
+        return np.asarray(atm_vol + skew * x + smile * (x**2), dtype=float)
 
     return _sigma
 
