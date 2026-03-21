@@ -1,10 +1,6 @@
 {
   "environment": {
-    "timestamp_utc": "2026-03-20T15:51:33.652833+00:00",
-    "platform": "Windows-11-10.0.26200-SP0",
-    "python_executable": "C:\\Users\\ouwez\\Documents\\Quant\\option-pricing-library\\.venv\\Scripts\\python.exe",
     "cpu_count": 16,
-    "processor": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
     "versions": {
       "python": "3.12.0",
       "numpy": "2.4.0rc1",
@@ -28,7 +24,7 @@
         "json": "benchmarks/artifacts/iv_speedup.json"
       },
       "figure": "docs/assets/generated/benchmarks/iv_scaling.png",
-      "max_speedup_x": 407.1814706876007
+      "max_speedup_x": 389.3407784543973
     },
     "pde": {
       "snapshot": {
