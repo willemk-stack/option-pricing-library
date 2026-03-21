@@ -157,7 +157,9 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     verify_runs_after_update = [
         r
         for r in step_runs[update_idx + 1 :]
-        if "playwright" in r and "sentinel.spec.ts" in r and "--update-snapshots" not in r
+        if "playwright" in r
+        and "sentinel.spec.ts" in r
+        and "--update-snapshots" not in r
     ]
     assert verify_runs_after_update, (
         "A verify step (npx playwright test sentinel.spec.ts without "
