@@ -104,7 +104,11 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     # Must trigger on push to non-main branches when source files change.
     assert "main" in on_push["branches-ignore"]
     watched_paths = on_push["paths"]
+    assert ".github/workflows/docs-ci.yml" in watched_paths
+    assert ".github/workflows/docs-visual-assets-auto-refresh.yml" in watched_paths
+    assert "benchmarks/artifacts/**" in watched_paths
     assert any(p.startswith("src/option_pricing") for p in watched_paths)
+    assert "scripts/build_benchmark_artifacts.py" in watched_paths
     assert "scripts/build_visual_artifacts.py" in watched_paths
 
     # Must have write permission to push back refreshed assets.
