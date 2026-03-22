@@ -1,1 +1,0 @@
-{"stage": "install-python-deps", "status": "failed", "failure_class": "environment-container-python", "likely_layer": "Container Python dependency install", "next_step": "Inspect Python dependency resolution inside the Ubuntu runner image."}
