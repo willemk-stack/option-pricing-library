@@ -6,7 +6,7 @@ hide:
 
 # Local-vol and PDE validation
 
-This page is the numerics proof page: it shows a local-vol workflow that is validated with repricing error, error structure, and convergence evidence instead of a single headline price.
+With the handoff smoothed, the remaining question is numerical: does the local-vol and PDE workflow reprice cleanly, show where error lives, and behave sensibly as the grid is refined?
 
 <div class="cta-row cta-row--trio" markdown="1">
 [Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/08_localvol_pde_repricing.ipynb){ .md-button .md-button--primary }
@@ -36,20 +36,22 @@ This page is the numerics proof page: it shows a local-vol workflow that is vali
 
 </div>
 
-## Hard problem
+## What should a reviewer ask?
 
-Local-vol and PDE workflows are easy to overstate. A plausible repricing answer can still hide unstable local-vol extraction, poor mesh choices, or unexplained error concentration.
+- Does repricing stay close to the target surface across the grid, not just on average?
+- Where do price and implied-vol errors concentrate across strike and maturity?
+- Is the chosen mesh a visible tradeoff rather than an arbitrary numerical setting?
 
-## Method
+## What the figures answer
 
-The library treats this as a diagnostics-first numerical workflow:
+The library answers those questions with a diagnostics-first numerical workflow:
 
 - start from the smoothed eSSVI handoff rather than a rough slice stack
 - expose invalid masks, denominator diagnostics, and worst-point behavior
 - reprice a representative option grid against the originating implied surface
 - run at least one convergence sweep so the PDE mesh choice is inspectable
 
-## Evidence
+## Aggregate repricing result
 
 | Metric | Published bundle value |
 | --- | --- |
@@ -60,8 +62,4 @@ The library treats this as a diagnostics-first numerical workflow:
 | Max abs IV error | `18.7059 bp` |
 
 This is the page where the repo proves the workflow is validated rather than merely implemented. The figures show where error lives, and the table gives the aggregate repricing result.
-
-## Best next click
-
-- Open [Performance evidence](../performance.md) for the measured scaling, digital-remedy tradeoffs, and end-to-end stage-budget benchmarks.
-- Open [Architecture](../architecture.md) if the next question is how the surface, local-vol, PDE, and diagnostics layers fit together.
+For the measured scaling story, continue to [Performance evidence](../performance.md). For how the surface, local-vol, PDE, and diagnostics layers fit together, continue to [Architecture](../architecture.md).

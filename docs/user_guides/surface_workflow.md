@@ -6,7 +6,7 @@ hide:
 
 # Surface repair workflow
 
-This page shows the static-surface problem the library handles well: noisy option quotes rarely arrive in a form that is smooth, interpretable, or ready for downstream numerics.
+Start the proof sequence with the failure mode itself: noisy option quotes rarely arrive in a form that is smooth, interpretable, or ready for downstream numerics.
 
 <div class="cta-row cta-row--duo" markdown="1">
 [Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/06_surface_noarb_svi_repair.ipynb){ .md-button .md-button--primary }
@@ -35,23 +35,23 @@ This page shows the static-surface problem the library handles well: noisy optio
 
 </div>
 
-## Hard problem
+## Raw failure modes
 
 Static implied-vol surfaces have two failure modes that matter in practice:
 
 - the quotes are noisy and inconsistent across maturities
 - a fitted surface can look smooth while still hiding slice-level fit stress or static-arbitrage problems
 
-## Method
+## What to inspect in the repair
 
-The workflow here keeps the surface engineering explicit:
+The workflow keeps the surface engineering explicit:
 
 - ingest quoted implied vols into `VolSurface.from_grid(...)`
 - fit analytic SVI slices with `VolSurface.from_svi(...)`
 - run static no-arbitrage diagnostics before and after repair
 - compare the repaired fit to the original quote structure instead of replacing the quote view with one summary surface
 
-## Evidence
+## Slice-level evidence
 
 | Expiry `T` | Mean abs SVI IV residual (bp) | Max abs SVI IV residual (bp) | Slice diagnostics after repair |
 | --- | --- | --- | --- |
@@ -61,7 +61,4 @@ The workflow here keeps the surface engineering explicit:
 | `2.00` | `6.80` | `20.45` | `pass` |
 
 The main result is not that every slice becomes trivial. It is that the repo makes fit quality, flagged slices, and repair tradeoffs visible enough to defend.
-
-## Best next click
-
-If the next question is "what should feed local vol?", move directly to [eSSVI smooth handoff](essvi_smooth_handoff.md). That page is where the smoother Dupire-oriented handoff is proven, rather than assumed.
+If the next question is what should feed local vol, continue to [eSSVI smooth handoff](essvi_smooth_handoff.md), where the proof path shifts from static repair quality to the Dupire-oriented handoff.

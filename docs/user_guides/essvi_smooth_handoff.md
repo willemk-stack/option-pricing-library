@@ -6,7 +6,7 @@ hide:
 
 # eSSVI smooth handoff
 
-This page covers the hard transition between a repaired static surface and a local-vol workflow that needs time derivatives to behave well.
+The repaired surface is still a stack of slices. This step focuses on what changes once those nodes are projected into a smooth eSSVI surface, because Dupire depends on that change more than on the static repair alone.
 
 <div class="cta-row cta-row--duo" markdown="1">
 [Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/07_essvi_smooth_surface_for_dupire.ipynb){ .md-button .md-button--primary }
@@ -35,11 +35,11 @@ This page covers the hard transition between a repaired static surface and a loc
 
 </div>
 
-## Hard problem
+## What changes after smoothing
 
 Slice-wise SVI is useful for static-surface repair, but it is not the cleanest object to hand to Dupire. The issue is time continuity: downstream local-vol extraction needs a surface whose term structure and `w_T` behavior are smooth enough to trust.
 
-## Method
+## Why that matters for the handoff
 
 The eSSVI workflow addresses that directly:
 
@@ -48,7 +48,7 @@ The eSSVI workflow addresses that directly:
 - compare the nodal and smoothed surfaces instead of hiding the smoothing step
 - hand the smoothed surface into `LocalVolSurface.from_implied(...)`
 
-## Evidence
+## Seam and projection evidence
 
 | Knot / metric | Repaired SVI seam jump | Smoothed eSSVI seam jump | Note |
 | --- | --- | --- | --- |
@@ -58,7 +58,4 @@ The eSSVI workflow addresses that directly:
 | Projection summary | `price_rmse = 0.02494` | `max_abs_price_error = 0.11453` | `projection_dupire_invalid_count = 0` |
 
 The important result is not perfect nodal fidelity. It is that the projected surface materially reduces seam stress while keeping the final Dupire-invalid projection count at zero.
-
-## Best next click
-
-Continue to [Local-vol and PDE validation](localvol_pde_validation.md) to see what this smoother handoff buys in repricing accuracy, error structure, and convergence evidence.
+That smoother handoff sets up [Local-vol and PDE validation](localvol_pde_validation.md), where the next question is what the reduced seam stress buys in repricing accuracy, error structure, and convergence evidence.

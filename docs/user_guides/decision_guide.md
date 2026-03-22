@@ -6,7 +6,7 @@ hide:
 
 # Decision guide
 
-Use this page when you want the fastest route to the strongest engineering proof in the repo. The public story has three steps: repair a noisy implied-vol surface, make the Dupire handoff smooth enough to trust, then show local-vol and PDE repricing evidence.
+Use this page to route into the strongest engineering proof in the repo. The proof sequence has three steps: repair a noisy implied-vol surface, make the Dupire handoff smooth enough to trust, then show local-vol and PDE repricing evidence.
 
 <div class="cta-row cta-row--trio" markdown="1">
 [Start with surface repair](surface_workflow.md){ .md-button .md-button--primary }
@@ -24,15 +24,10 @@ Use this page when you want the fastest route to the strongest engineering proof
 | The benchmark story is real and reproducible | [Performance evidence](../performance.md) | Benchmark artifacts under `benchmarks/artifacts/` | This is where scaling, remedy tradeoffs, and end-to-end stage budgets are measured. |
 | The system design is deliberate and typed | [Architecture](../architecture.md) | [09_surface_to_localvol_pde_integration.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/09_surface_to_localvol_pde_integration.ipynb) | The architecture page explains how the pricing, volatility, numerics, and validation layers fit together. |
 
-## Fastest full path
+## Proof sequence
 
 1. Read [Surface repair workflow](surface_workflow.md).
 2. Continue to [eSSVI smooth handoff](essvi_smooth_handoff.md).
 3. Finish with [Local-vol and PDE validation](localvol_pde_validation.md).
-4. Use [Performance evidence](../performance.md) and [Architecture](../architecture.md) for the scaling and system-design follow-up questions.
 
-## Best next click
-
-- Start with [Surface repair workflow](surface_workflow.md) if you want the cleanest first proof page.
-- Jump straight to [Local-vol and PDE validation](localvol_pde_validation.md) if the interview is more numerical than modeling-focused.
-- Open [Performance evidence](../performance.md) if the first question is about scaling, cost, or preferred practical paths.
+Use [Performance evidence](../performance.md) and [Architecture](../architecture.md) after that sequence when the follow-up questions turn to scaling, cost, or system design.
