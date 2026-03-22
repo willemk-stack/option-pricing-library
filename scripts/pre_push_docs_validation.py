@@ -17,6 +17,7 @@ from docs_impact import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+TESTS_VISUAL_DIR = ROOT / "tests" / "visual"
 DOCS_VISUAL_CONFIG_PATH = ROOT / "scripts" / "visual_audit" / "docs_visual_config.json"
 PRE_PUSH_LOG_DIR = ROOT / "artifacts" / "pre_push"
 PRE_PUSH_RUN_LOG = PRE_PUSH_LOG_DIR / "docs_pre_push_last_run.log"
@@ -222,6 +223,59 @@ def resolve_python_command() -> str:
     return sys.executable
 
 
+def resolve_node_command() -> str:
+    for candidate in ("node.exe", "node"):
+        resolved = shutil.which(candidate)
+        if resolved:
+            return resolved
+
+    raise HookFailure(
+        "Docs manual guard requires Node.js for local Playwright dependency checks.\n"
+        "Install Node.js, then retry the manual docs guard.",
+        failure_class="environment-node",
+        likely_layer="Local Node.js installation",
+        next_step="Install Node.js and confirm `node --version` succeeds in this shell.",
+    )
+
+
+def playwright_command(*args: str) -> list[str]:
+    cli_path = TESTS_VISUAL_DIR / "node_modules" / "playwright" / "cli.js"
+    if not cli_path.exists():
+        raise HookFailure(
+            "Docs manual guard requires Playwright test dependencies under tests/visual.\n"
+            "Run `cd tests/visual && npm ci`, then retry the manual docs guard.",
+            failure_class="environment-playwright",
+            likely_layer="Local Playwright test dependencies",
+            next_step="Install the pinned tests/visual dependencies with `npm ci`.",
+        )
+
+    return [resolve_node_command(), str(cli_path), *args]
+
+
+def ensure_playwright_dependencies() -> None:
+    command = playwright_command("--version")
+    result = subprocess.run(
+        command,
+        cwd=TESTS_VISUAL_DIR,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return
+
+    detail = (
+        result.stderr or result.stdout
+    ).strip() or "Unknown Playwright startup failure."
+    raise HookFailure(
+        "Docs manual guard requires a working local Playwright CLI.\n"
+        f"Playwright dependency check failed: {detail}",
+        failure_class="environment-playwright",
+        likely_layer="Local Playwright CLI or Node installation",
+        next_step="Run `cd tests/visual && npm ci`, then retry after confirming Playwright starts successfully.",
+    )
+
+
 def resolve_docker_command() -> str:
     for candidate in ("docker.exe", "docker"):
         resolved = shutil.which(candidate)
@@ -366,6 +420,8 @@ def main() -> int:
 
     docker_ready = False
     docker_detail: str | None = None
+    if manual_mode and impact.docs_site_required:
+        ensure_playwright_dependencies()
     if manual_mode and impact.docs_site_required:
         docker_ready, docker_detail = docker_available_detail()
         if not docker_ready and not allow_no_docker():
