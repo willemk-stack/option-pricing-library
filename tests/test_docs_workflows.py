@@ -136,46 +136,37 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     assert any("build_visual_artifacts.py all --profile ci" in r for r in step_runs)
     assert any("git commit" in r and "git push" in r for r in step_runs)
 
-    # Must also refresh authoritative Playwright sentinel snapshots so that
-    # docs-ci visual checks pass after any asset or docs content change.
+    # Must refresh and verify snapshots through the same runner-container wrapper
+    # that docs-ci uses. Running raw Playwright on the host runner can produce
+    # font/rasterization drift that breaks the container-based authoritative job.
     assert any(
-        "playwright" in r and "sentinel.spec.ts" in r and "update-snapshots" in r
-        for r in step_runs
+        "run_ci_visual_regression.py update --skip-build" in r for r in step_runs
     )
-    # Must also refresh pages.spec.ts snapshots — docs-ci ALWAYS runs pages.spec.ts
-    # as part of the authoritative-visual job, so those snapshots must also be kept
-    # current or docs-ci fails even after a successful sentinel refresh.
     assert any(
-        "playwright" in r and "pages.spec.ts" in r and "update-snapshots" in r
-        for r in step_runs
+        "run_ci_visual_regression.py verify --skip-build" in r for r in step_runs
     )
-    # The commit must stage generated assets, sentinel snapshots, and pages
-    # snapshots together.
+    assert not any("npx playwright test" in r for r in step_runs)
+    # The commit must stage generated assets plus all committed authoritative
+    # snapshot suites that the wrapper can refresh.
     commit_run = next(r for r in step_runs if "git commit" in r and "git push" in r)
     assert "sentinel.spec.ts-snapshots" in commit_run
     assert "pages.spec.ts-snapshots" in commit_run
+    assert "components.spec.ts-snapshots" in commit_run
 
-    # RISK MITIGATION: after --update-snapshots a verify run (without the flag)
-    # must confirm the new snapshots are stable.  If the verify fails, the
+    # RISK MITIGATION: after the update wrapper runs, a verify wrapper run
+    # must confirm the refreshed snapshots are stable. If the verify fails, the
     # workflow exits non-zero and nothing is committed, surfacing the regression.
     last_update_idx = max(
-        i for i, r in enumerate(step_runs) if "--update-snapshots" in r
+        i
+        for i, r in enumerate(step_runs)
+        if "run_ci_visual_regression.py update --skip-build" in r
     )
     verify_runs_after_update = [
         r
         for r in step_runs[last_update_idx + 1 :]
-        if "playwright" in r
-        and "sentinel.spec.ts" in r
-        and "--update-snapshots" not in r
+        if "run_ci_visual_regression.py verify --skip-build" in r
     ]
     assert verify_runs_after_update, (
-        "A verify step (npx playwright test without "
-        "--update-snapshots) must follow the update steps to guard against "
-        "committing regressions."
+        "A verify step must follow the update step to guard against committing "
+        "regressions."
     )
-    # The verify step must cover pages.spec.ts as well as sentinel.spec.ts
-    # since both are always run by docs-ci authoritative-visual.
-    assert any(
-        "pages.spec.ts" in r and "--update-snapshots" not in r
-        for r in verify_runs_after_update
-    ), "The verify step must also cover pages.spec.ts"

@@ -84,3 +84,12 @@ def test_pip_install_command_disables_progress_noise() -> None:
         "off",
         "--break-system-packages",
     ]
+
+
+def test_browser_snapshot_stage_metadata_points_to_uploaded_artifact_bundle() -> None:
+    failure_class, likely_layer, next_step = runner.STAGE_METADATA["playwright-pages"]
+
+    assert failure_class == "browser-snapshot-page"
+    assert likely_layer == "Ubuntu representative full-page snapshots"
+    assert "docs-ci-authoritative-visual-artifacts ZIP" in next_step
+    assert "tests/visual/test-results/**" in next_step
