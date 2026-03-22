@@ -17,7 +17,6 @@ from docs_impact import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-TESTS_VISUAL_DIR = ROOT / "tests" / "visual"
 DOCS_VISUAL_CONFIG_PATH = ROOT / "scripts" / "visual_audit" / "docs_visual_config.json"
 PRE_PUSH_LOG_DIR = ROOT / "artifacts" / "pre_push"
 PRE_PUSH_RUN_LOG = PRE_PUSH_LOG_DIR / "docs_pre_push_last_run.log"
@@ -78,7 +77,7 @@ def parse_args() -> argparse.Namespace:
         default="fast",
         help=(
             "Fast mode keeps the default pre-push hook portable and avoids browser "
-            "dependencies. Manual mode adds the heavier local browser and Dockerized "
+            "dependencies. Manual mode adds the heavier Dockerized browser and "
             "authoritative checks."
         ),
     )
@@ -221,54 +220,6 @@ def resolve_python_command() -> str:
         return str(posix_python)
 
     return sys.executable
-
-
-def ensure_playwright_dependencies() -> None:
-    cli_path = TESTS_VISUAL_DIR / "node_modules" / "playwright" / "cli.js"
-    if (TESTS_VISUAL_DIR / "node_modules").exists() and cli_path.exists():
-        return
-
-    raise HookFailure(
-        "Missing Playwright dependencies under tests/visual/node_modules.\n"
-        "Run `cd tests/visual && npm ci` once, then retry the push.",
-        failure_class="environment-dependency",
-        likely_layer="Local Playwright dependency install",
-        next_step="Install Node dependencies under tests/visual before retrying the push.",
-    )
-
-
-def resolve_node_command() -> str:
-    for candidate in ("node.exe", "node"):
-        resolved = shutil.which(candidate)
-        if resolved:
-            return resolved
-
-    raise HookFailure(
-        "Could not find `node` on PATH.\n"
-        "Install Node.js and ensure `node` is available before using the docs pre-push hook.",
-        failure_class="environment-dependency",
-        likely_layer="Local Node.js runtime",
-        next_step="Install Node.js and reopen the terminal so `node` resolves on PATH.",
-    )
-
-
-def resolve_playwright_command() -> list[str]:
-    cli_path = TESTS_VISUAL_DIR / "node_modules" / "playwright" / "cli.js"
-    if not cli_path.exists():
-        raise HookFailure(
-            "Could not find the local Playwright CLI under "
-            "`tests/visual/node_modules/playwright/cli.js`.\n"
-            "Run `cd tests/visual && npm ci` once, then retry the push.",
-            failure_class="environment-dependency",
-            likely_layer="Local Playwright CLI install",
-            next_step="Reinstall tests/visual dependencies so the Playwright CLI exists locally.",
-        )
-
-    return [resolve_node_command(), str(cli_path)]
-
-
-def playwright_command(*args: str) -> list[str]:
-    return [*resolve_playwright_command(), *args]
 
 
 def resolve_docker_command() -> str:
@@ -416,7 +367,6 @@ def main() -> int:
     docker_ready = False
     docker_detail: str | None = None
     if manual_mode and impact.docs_site_required:
-        ensure_playwright_dependencies()
         docker_ready, docker_detail = docker_available_detail()
         if not docker_ready and not allow_no_docker():
             raise docker_unavailable_failure(docker_detail or "Unknown Docker error.")
@@ -448,7 +398,7 @@ def main() -> int:
                 flush=True,
             )
             print(
-                "Failure classes: build/link, generated-asset, browser-dom, browser-a11y, browser-snapshot",
+                "Failure classes: build/link, generated-asset, browser-dom, browser-math, browser-a11y, browser-snapshot",
                 flush=True,
             )
         else:
@@ -597,27 +547,45 @@ def main() -> int:
         clear_failure_log()
         return 0
 
-    playwright_env = env.copy()
-    playwright_env["SKIP_DOCS_PREBUILD"] = "1"
-    playwright_env["SERVE_PREBUILT_SITE"] = "1"
+    docker_env = env.copy()
     if review_paths:
-        playwright_env["REVIEW_PATHS"] = ",".join(review_paths)
+        docker_env["REVIEW_PATHS"] = ",".join(review_paths)
 
     run(
-        playwright_command(
-            "test",
+        [
+            python_command,
+            "scripts/run_ci_visual_regression.py",
+            "verify",
+            "--skip-build",
+            "--tests",
             "smoke.spec.ts",
             "dom-audits.spec.ts",
-            "--retries=1",
-        ),
+        ],
         stage=ValidationStage(
-            label="Playwright smoke and DOM audits",
+            label="Dockerized smoke and DOM audits",
             failure_class="browser-dom",
-            likely_layer="Rendered docs DOM, CSS layout, console errors, or missing routes",
-            next_step="Inspect tests/visual/test-results for DOM overflow, console, or missing-page findings on the affected review paths.",
+            likely_layer="Ubuntu Playwright DOM, CSS layout, console, or missing-route checks inside the CI-like container",
+            next_step="Inspect tests/visual/test-results for DOM overflow, console, or missing-page findings on the affected review paths in the Dockerized Ubuntu run.",
         ),
-        cwd=TESTS_VISUAL_DIR,
-        env=playwright_env,
+        env=docker_env,
+    )
+
+    run(
+        [
+            python_command,
+            "scripts/run_ci_visual_regression.py",
+            "verify",
+            "--skip-build",
+            "--tests",
+            "math-audits.spec.ts",
+        ],
+        stage=ValidationStage(
+            label="Dockerized math audits",
+            failure_class="browser-math",
+            likely_layer="Ubuntu Playwright math typesetting, MathJax console failures, or SVG math layout inside the CI-like container",
+            next_step="Inspect tests/visual/test-results for the affected math route and fix the TeX source, MathJax configuration, or math-specific CSS overflow in the Dockerized Ubuntu run.",
+        ),
+        env=docker_env,
     )
 
     a11y_paths = determine_a11y_paths(review_paths)
@@ -629,32 +597,34 @@ def main() -> int:
 
     else:
         a11y_env = env.copy()
-        a11y_env["SKIP_DOCS_PREBUILD"] = "1"
-        a11y_env["SERVE_PREBUILT_SITE"] = "1"
         if a11y_paths:
             a11y_env["REVIEW_PATHS"] = ",".join(a11y_paths)
 
-        run(
-            playwright_command("test", "a11y.spec.ts", "--retries=1"),
-            stage=ValidationStage(
-                label="Playwright accessibility checks",
-                failure_class="browser-a11y",
-                likely_layer="Rendered docs accessibility issues on curated blocking pages",
-                next_step="Inspect the accessibility violations in tests/visual/test-results and fix the affected page markup or theme styling.",
-            ),
-            cwd=TESTS_VISUAL_DIR,
-            env=a11y_env,
-        )
-
-    if docker_ready:
-        docker_env = env.copy()
-        if review_paths:
-            docker_env["REVIEW_PATHS"] = ",".join(review_paths)
         run(
             [
                 python_command,
                 "scripts/run_ci_visual_regression.py",
                 "verify",
+                "--skip-build",
+                "--tests",
+                "a11y.spec.ts",
+            ],
+            stage=ValidationStage(
+                label="Dockerized accessibility checks",
+                failure_class="browser-a11y",
+                likely_layer="Ubuntu Playwright accessibility issues on curated blocking pages inside the CI-like container",
+                next_step="Inspect the accessibility violations in tests/visual/test-results and fix the affected page markup or theme styling in the Dockerized Ubuntu run.",
+            ),
+            env=a11y_env,
+        )
+
+    if docker_ready:
+        run(
+            [
+                python_command,
+                "scripts/run_ci_visual_regression.py",
+                "verify",
+                "--skip-build",
                 "--tests",
                 *authoritative_tests,
             ],

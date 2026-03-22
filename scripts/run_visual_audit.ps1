@@ -15,5 +15,15 @@ $ErrorActionPreference = "Stop"
 Set-Location "$PSScriptRoot\.."
 
 $python = Get-PythonCommand
-$mode = if ($UpdateSnapshots) { "update" } else { "verify" }
-& $python .\scripts\run_local_visual_regression.py $mode
+if ($UpdateSnapshots) {
+    & $python .\scripts\run_ci_visual_regression.py update
+    exit $LASTEXITCODE
+}
+
+& $python .\scripts\run_ci_visual_regression.py verify --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts a11y.spec.ts
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+& $python .\scripts\run_ci_visual_regression.py verify --skip-build
+exit $LASTEXITCODE

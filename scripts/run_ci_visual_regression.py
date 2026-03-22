@@ -53,6 +53,16 @@ STAGE_METADATA = {
         "MkDocs strict build inside the Ubuntu runner image",
         "Fix the strict MkDocs build failure before retrying snapshot verification.",
     ),
+    "playwright-browser-audits": (
+        "browser-dom",
+        "Ubuntu Playwright smoke, DOM, or math audits",
+        "Inspect the uploaded browser-audit artifacts for console errors, missing routes, raw TeX, or layout overflow on the affected docs route.",
+    ),
+    "playwright-browser-a11y": (
+        "browser-a11y",
+        "Ubuntu Playwright accessibility checks",
+        "Inspect the uploaded browser-audit artifacts for the reported accessibility violations on the affected curated docs route.",
+    ),
     "playwright-sentinel-pages-embedded-panels": (
         "browser-snapshot-or-embedded-asset",
         "Ubuntu Playwright sentinel, full-page, or embedded-panel checks",
@@ -261,6 +271,13 @@ def stage_status_setup_command() -> str:
 
 def classify_parallel_tests(parallel_tests: list[str]) -> str:
     unique_tests = list(dict.fromkeys(parallel_tests))
+    unique_test_set = set(unique_tests)
+    browser_audit_tests = {"smoke.spec.ts", "dom-audits.spec.ts", "math-audits.spec.ts"}
+
+    if unique_test_set == {"a11y.spec.ts"}:
+        return "playwright-browser-a11y"
+    if unique_test_set and unique_test_set <= browser_audit_tests:
+        return "playwright-browser-audits"
     if unique_tests == ["sentinel.spec.ts", "repo-facts.spec.ts"]:
         return "playwright-sentinel-repo-facts"
     if unique_tests == ["sentinel.spec.ts"]:

@@ -1,12 +1,17 @@
 These notes will cover some common methods used to handle discontinuities in payoffs when using a PDE pricer.
 
 # Convergence remedies
-When saying convergence remedies I mean methods that we can employ to re-obtain the expected rate of convergence which before was decreased due to discontinuities in methods that assume smooth funcions
+When saying convergence remedies I mean methods that we can employ to re-obtain the expected rate of convergence that
+is otherwise lost when the payoff is not smooth.
 
 ## Averaging cells of Initial Conditions
 In this method, nodal values are replaced with averages of surrounding values in the form:
 
-$$f_i = \frac{1}{S_{i + \frac12} - S_{i - \frac12} \int _{S_{i - \frac12}}^{S_{i + \frac12}} f(S_i - y)dy$$
+$$
+f_i =
+\frac{1}{S_{i+\frac12} - S_{i-\frac12}}
+\int_{S_{i-\frac12}}^{S_{i+\frac12}} f(y)\,dy
+$$
 
 where $f$ denotes an option's payoff
 
