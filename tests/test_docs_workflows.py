@@ -28,12 +28,17 @@ def dev_dependencies() -> list[str]:
 
 def test_docs_ci_checks_generated_assets_without_rewriting_them() -> None:
     workflow = workflow_text("docs-ci.yml")
+    parsed = yaml.safe_load(workflow)
 
     assert "run: python scripts/render_d2_diagrams.py --check" in workflow
     assert (
         "run: python scripts/build_visual_artifacts.py all --profile ci --check"
         in workflow
     )
+    assert parsed[True]["workflow_run"]["workflows"] == [
+        "docs-visual-assets-auto-refresh"
+    ]
+    assert parsed[True]["workflow_run"]["types"] == ["completed"]
 
 
 def test_docs_assets_refresh_remains_the_write_mode_generator() -> None:
@@ -124,6 +129,10 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
 
     # Must have write permission to push back refreshed assets.
     assert workflow["permissions"]["contents"] == "write"
+    assert (
+        workflow["concurrency"]["group"]
+        == "docs-visual-assets-auto-refresh-${{ github.event.pull_request.head.ref || github.ref_name }}"
+    )
 
     job = next(iter(workflow["jobs"].values()))
 
@@ -180,4 +189,24 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     assert verify_runs_after_update, (
         "A verify step must follow the update step to guard against committing "
         "regressions."
+    )
+
+
+def test_docs_ci_reruns_after_auto_refresh_on_latest_branch_head() -> None:
+    workflow = yaml.safe_load(workflow_text("docs-ci.yml"))
+
+    assert (
+        workflow["concurrency"]["group"]
+        == "docs-ci-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_branch || github.ref }}"
+    )
+
+    build_job = workflow["jobs"]["build"]
+    assert build_job["if"] == (
+        "github.event_name != 'workflow_run' || "
+        "github.event.workflow_run.conclusion == 'success'"
+    )
+
+    checkout_step = next(s for s in build_job["steps"] if s.get("name") == "Checkout")
+    assert checkout_step["with"]["ref"] == (
+        "${{ github.event.workflow_run.head_branch || github.ref }}"
     )

@@ -59,7 +59,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: docs-visual-assets-auto-refresh-${{ github.ref }}
+  group: docs-visual-assets-auto-refresh-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
