@@ -98,7 +98,7 @@ markdown_extensions:
       toc_depth: 3
 extra_javascript:
   - javascripts/mathjax.js
-  - javascripts/vendor/tex-mml-chtml.js
+  - javascripts/vendor/tex-mml-svg.js
 
 # add custom tweaks from (docs/stylesheets/extra.css)
 extra_css:

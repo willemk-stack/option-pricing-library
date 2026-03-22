@@ -24,6 +24,7 @@ SERIAL_TESTS = {"pages.spec.ts", "components.spec.ts"}
 DEFAULT_VERIFY_TESTS = [
     "smoke.spec.ts",
     "dom-audits.spec.ts",
+    "math-audits.spec.ts",
     "a11y.spec.ts",
     "sentinel.spec.ts",
     "repo-facts.spec.ts",

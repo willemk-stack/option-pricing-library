@@ -621,6 +621,57 @@ figure.homepage-proof-panel figcaption {
     opacity: 1;
 }
 
+/* MathJax SVG math */
+.md-typeset .arithmatex {
+    color: inherit;
+}
+
+.md-typeset mjx-container[jax="SVG"] {
+    color: inherit;
+}
+
+.md-typeset span.arithmatex mjx-container[jax="SVG"] {
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: -0.12em;
+}
+
+.md-typeset span.arithmatex mjx-container[jax="SVG"] > svg {
+    height: auto;
+    max-width: 100%;
+}
+
+.md-typeset div.arithmatex {
+    margin: 1.05rem 0;
+    padding: 0.2rem 0.1rem 0.3rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+.md-typeset div.arithmatex mjx-container[jax="SVG"] {
+    display: inline-block;
+    min-width: max-content;
+    max-width: none;
+}
+
+.md-typeset div.arithmatex mjx-container[jax="SVG"] > svg {
+    display: block;
+    height: auto;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .arithmatex,
+[data-md-color-scheme="slate"] .md-typeset mjx-container[jax="SVG"] {
+    color: var(--md-default-fg-color);
+}
+
+@media screen and (max-width: 44.984375em) {
+    .md-typeset div.arithmatex {
+        margin: 0.9rem 0;
+        padding-inline: 0;
+    }
+}
+
 @media print {
 
     /* Ensure something prints even if the scheme is slate. */

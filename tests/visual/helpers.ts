@@ -243,6 +243,32 @@ export async function waitForPageStable(page: Page): Promise<void> {
       await document.fonts.ready;
     }
 
+    const maybeMathJax = (
+      window as Window & {
+        MathJax?: {
+          startup?: { promise?: Promise<unknown> };
+        };
+      }
+    ).MathJax;
+
+    if (document.querySelector(".arithmatex")) {
+      try {
+        await maybeMathJax?.startup?.promise;
+      } catch {
+        // Math-specific audits will report the actual failure details.
+      }
+
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        const allTypeset = Array.from(document.querySelectorAll(".arithmatex")).every(
+          (node) => !!node.querySelector("mjx-container")
+        );
+        if (allTypeset) {
+          break;
+        }
+        await settleFrames(1);
+      }
+    }
+
     const trackedElements = Array.from(
       document.querySelectorAll<HTMLElement>(
         "main, figure.diagram, figure.diagram img, .snapshot-grid, .md-content img"

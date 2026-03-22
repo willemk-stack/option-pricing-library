@@ -30,24 +30,10 @@ jobs:
           cache-dependency-path: |
             pyproject.toml
 
-      - name: Set up Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: |
-            tests/visual/package-lock.json
-
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -c scripts/ci-constraints.txt -e ".[docs,plot]"
-
-      - name: Install Playwright dependencies
-        working-directory: tests/visual
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
 
       - name: Install D2
         run: bash scripts/install_d2.sh "${D2_VERSION}"
@@ -61,14 +47,11 @@ jobs:
       - name: Build MkDocs site strictly
         run: python -m mkdocs build --strict
 
-      - name: Run portable Playwright audits
-        working-directory: tests/visual
-        env:
-          SKIP_DOCS_PREBUILD: "1"
+      - name: Run CI-like Playwright audits
         run: |
-          npx playwright test smoke.spec.ts
-          npx playwright test dom-audits.spec.ts
-          npx playwright test embedded-panels.spec.ts
+          python scripts/run_ci_visual_regression.py verify \
+            --skip-build \
+            --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts embedded-panels.spec.ts
 
       - name: Generate improvement report
         run: python scripts/visual_audit/score_pages.py

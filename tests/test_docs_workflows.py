@@ -67,6 +67,28 @@ def test_docs_ci_runs_docs_impact_selected_authoritative_visual_suites() -> None
     assert "--tests ${{ needs.build.outputs.selected_tests }}" in workflow
 
 
+def test_docs_ci_runs_browser_audits_via_ci_like_container() -> None:
+    workflow = workflow_text("docs-ci.yml")
+
+    assert "Run CI-like smoke and DOM audits" in workflow
+    assert (
+        "run_ci_visual_regression.py verify \\\n            --skip-build \\\n            --tests smoke.spec.ts dom-audits.spec.ts"
+        in workflow
+    )
+    assert "Run CI-like math audits" in workflow
+    assert (
+        "run_ci_visual_regression.py verify \\\n            --skip-build \\\n            --tests math-audits.spec.ts"
+        in workflow
+    )
+    assert "Run CI-like accessibility checks" in workflow
+    assert (
+        "run_ci_visual_regression.py verify \\\n            --skip-build \\\n            --tests a11y.spec.ts"
+        in workflow
+    )
+    assert "npx playwright test smoke.spec.ts dom-audits.spec.ts" not in workflow
+    assert "npx playwright test math-audits.spec.ts" not in workflow
+
+
 def test_docs_ci_owns_deploy_and_deploy_docs_workflow_is_gone() -> None:
     workflow = workflow_text("docs-ci.yml")
 

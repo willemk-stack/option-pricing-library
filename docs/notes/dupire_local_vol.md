@@ -1,72 +1,112 @@
 # Dupire local vol
 
-**goals**
-- describe the "problem"/aims
+Dupire local volatility replaces the constant-volatility assumption with a deterministic surface
+\(\sigma_{\mathrm{loc}}(S,t)\) chosen so that the model reproduces a continuum of European vanilla prices.
 
 ## Context
 
-Black-Scholes is a popular instrument in the world of option-pricing, partly due to it's simplicity in pricing vanilla options. However, it's simplicity is also it's limiting factor. The assumption of the underlying with a constant volatility can hardly ever be true. One attempt at a more realistic moedl is described by dupire. His approach assumes the underlying asset follows the following stochastic-process:
+Under the risk-neutral measure, the local-vol model writes
 
-$$
-\frac{dS}{S} = \mu _t,\dt + \sigma,\(S_t, t; S_0),\dZ
-$$
+\[
+dS_t = \bigl(r(t)-q(t)\bigr) S_t\,dt + \sigma_{\mathrm{loc}}(S_t,t)\,S_t\,dW_t^{\mathbb{Q}},
+\qquad S_0 > 0.
+\]
 
-Where $\mu _t = r(t) - D(t)$ is the risk-neutral drift with $r(t)$, $D(t)$ the risk-free and dividend rate.
+Here \(r(t)\) is the risk-free rate and \(q(t)\) is the dividend yield. The objective is not to forecast future
+realized volatility. It is to find a deterministic diffusion that matches the market's vanilla option prices across
+strike and maturity.
 
-We try to find a function for the local volatility so that our risk-neutral price process generates (maybe be more specific) all observed market prices.
+## Core Dupire math
 
+### From call prices to density
 
-## Core dupire local vol math
+Let \(C(K,T)\) be the discounted price of a European call with strike \(K\) and maturity \(T\). In the absence of
+static arbitrage:
 
-### Explain getting neutral density func from (euro) option prices
-Given a range of call prices $C(K, T)$, for a fixed maturity T, we can calculate the risk-neutral density. following from the definition
+- \(C(K,T)\) is decreasing in \(K\),
+- \(C(K,T)\) is convex in \(K\),
+- and the curvature \(C_{KK}(K,T)\) is proportional to the risk-neutral density.
 
-- Why the risk-neutral density must satisfy the Fokker-Planck equation
-- Marginal distributions vs term-structure / time evolution
-    - Different diffusion processes can generate the same distribution (See Dupire), however the joint distrubions at different times of the processes can vary greatly => affects hedging ($\frac{dC}{dS}$) => affects pricing
-- Local vol from call prices formula (bs form, black form, $x = \log(K)$ log strike)
+That convexity matters because Dupire uses second strike derivatives. A surface that is visually smooth but not
+convex enough can produce negative or unstable local variance.
 
-### Engeneering notes / Dupire local vol approximation from a call grid
+### Dupire formula in strike space
 
-## Model choices
-- Why interpolation in log strike
-    - Provide formula
-    - Convexity ()
-    - No explicit K in denumerator (can amplify num noise)
-- Masking boundaries?
+For discounted call prices, the codebase uses
 
+\[
+\sigma_{\mathrm{loc}}^2(K,T)
+=
+\frac{2\left(C_T + \bigl(r(T)-q(T)\bigr)K C_K + q(T) C\right)}
+{K^2 C_{KK}}.
+\]
 
-## 
-### Check where to fit in
+If you work with forward or undiscounted call prices \(c(K,T)\), the numerator changes to
 
-1.  Dupire formula + what’s being differentiated (call PV vs forward price)
-1. SVI, SSVI parametrization.
-    - Fitting unconstrained (softplus ect ect)
+\[
+\sigma_{\mathrm{loc}}^2(K,T)
+=
+\frac{2\left(c_T + \bigl(r(T)-q(T)\bigr)\bigl(K c_K - c\bigr)\right)}
+{K^2 c_{KK}}.
+\]
 
-## Assumptions when pricing under local vol
-When pricing under local vol we assume a deterministic volatility a function of only spot price and time to expiry given a fixed strike prices. We also assume a complete market.
+### Why the code often works in log strike
 
-## SVI Calibration
+With \(x = \log K\), the derivatives satisfy
 
-1.  Your guardrails (trim, denom floor, curvature threshold, NaN masking) — what each prevents
-1.  Why derivatives are fragile (piecewise linear surfaces, wings, calendar kinks)
+\[
+K C_K = C_x,
+\qquad
+K^2 C_{KK} = C_{xx} - C_x.
+\]
 
-### Diagnostics
-1.  “How to read the diagnostics” — where local vol is unreliable
+So the discounted-call formula becomes
 
+\[
+\sigma_{\mathrm{loc}}^2(x,T)
+=
+\frac{2\left(C_T + \bigl(r(T)-q(T)\bigr) C_x + q(T) C\right)}
+{C_{xx} - C_x}.
+\]
 
-## Failure modes / what can go wrong
-A short “known failure modes” section (noise → spikes, convexity violations, extrapolation artifacts)
+This is often numerically preferable because it removes the explicit \(K^2\) factor from the denominator. In noisy
+wing data, that can reduce avoidable amplification.
 
-If you must do finite differences, use smoothing that penalizes curvature “wiggles,” e.g.
+## Why matching marginals is not the whole story
 
+Breeden-Litzenberger tells you about the marginal distribution at one maturity. Dupire is stronger: it specifies a
+full time-inhomogeneous diffusion. Two models can agree on a single maturity distribution and still produce very
+different dynamics between maturities. That difference matters for hedging, path-dependent pricing, and PDE behavior.
 
-### Interesting further reading
-Tikhonov / ridge-type penalties on second derivatives,
-smoothing splines,
-filtering (carefully, because filtering can violate arbitrage constraints unless imposed jointly).
+## Engineering notes
 
+- Local vol is derivative-hungry. You need a surface that is stable in maturity and sufficiently smooth in strike.
+- Piecewise-linear behavior in total variance can make \(w_T\) piecewise constant, which shows up as visible banding
+  in local vol.
+- That is why the docs recommend a smooth eSSVI projection for Dupire-oriented workflows rather than a raw stack of
+  repaired slices.
+- Boundary points are the least trustworthy part of the surface. Trimming and masking are a feature, not a failure.
 
-### References:
-PRICING AND HEDGING WITH SMILES, Bruno Dupire
-Jim Gatheral - The Volatility Surface
+## Assumptions behind local-vol pricing
+
+- The market is modeled as complete enough for a deterministic local volatility surface to be meaningful.
+- Vanilla option prices are arbitrage-consistent across strike and maturity.
+- The required derivatives exist in a stable numerical sense after interpolation or smoothing.
+
+## Diagnostics and failure modes
+
+The main warning signs are:
+
+- noisy or sign-flipping curvature \(C_{KK}\),
+- denominator values that are too small or non-positive,
+- negative local variance after differentiation,
+- boundary artifacts from sparse wings or short maturity spacing,
+- and seam or banding artifacts when \(w_T\) is not time-smooth.
+
+When a local-vol report masks points as invalid, that usually means the differentiation problem is ill-conditioned at
+those coordinates, not that the diagnostics are being overly conservative.
+
+## References
+
+- Bruno Dupire, *Pricing and Hedging with Smiles*
+- Jim Gatheral, *The Volatility Surface*
