@@ -140,9 +140,10 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     assert "github-actions[bot]" in job["if"]
     # Must only attempt branch updates from pull requests whose head branch
     # lives in the same repository; forks do not have safe write access.
-    assert "github.event.pull_request.head.repo.full_name == github.repository" in job[
-        "if"
-    ]
+    assert (
+        "github.event.pull_request.head.repo.full_name == github.repository"
+        in job["if"]
+    )
 
     # Must run on the same Ubuntu version as docs-ci to produce identical pixels.
     assert job["runs-on"] == "ubuntu-24.04"
