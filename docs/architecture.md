@@ -1,6 +1,8 @@
-# Architecture & Design
+# Architecture
 
-This page summarizes the architecture and design choices for option_pricing.
+option_pricing is structured as a typed library first: public pricing APIs at the top, volatility models and PDE numerics underneath, and diagnostics at the edge where they can inspect the workflow without polluting the core engines.
+
+If you are reviewing the repo rather than just installing it, pair this page with the [Decision guide](user_guides/decision_guide.md) and [Performance evidence](performance.md). Together they show what the library does, how the pieces fit, and where the measured proof lives.
 
 ## Design goals
 
@@ -11,13 +13,13 @@ This page summarizes the architecture and design choices for option_pricing.
 - Preserve layered APIs: flat inputs for quick use, instrument-based for clarity, curves-first for term structures
 - Emphasize validation and convergence (analytic baselines, remedies for discontinuities, repricing consistency, CI-executed notebooks)
 
-## Public API map (canonical vs convenience)
+## Public API map
 
-Recommended public entry point: instrument-based API
-VanillaOption + instrument pricers are the recommended entry point
+- Recommended public entry point: instrument-based API
+  VanillaOption + instrument pricers are the recommended entry point.
 
-Top-level exports (public API)
-The package re-exports public symbols from __init__.py, including:
+- Top-level exports (public API)
+  The package re-exports public symbols from `__init__.py`, including:
 
 - Types: OptionType, OptionSpec, MarketData, PricingInputs
 - Instruments: ExerciseStyle, VanillaPayoff, VanillaOption
@@ -26,13 +28,13 @@ The package re-exports public symbols from __init__.py, including:
 - Implied vol: `implied_vol_bs`, `implied_vol_bs_result`
 - Vol objects: VolSurface, Smile
 
-The volatility namespace `option_pricing.vol` additionally exposes the eSSVI stack:
+- The volatility namespace `option_pricing.vol` additionally exposes the eSSVI stack:
 
 - Term structures: `ThetaTermStructure`, `PsiTermStructure`, `EtaTermStructure`, `ESSVITermStructures`
 - Surface objects: `ESSVIImpliedSurface`, `ESSVINodalSurface`, `ESSVISmoothedSurface`
 - Calibration and validation: `calibrate_essvi`, `project_essvi_nodes`, `validate_essvi_continuous`, `validate_essvi_nodes`
 
-Canonical vs convenience vs advanced paths
+- Recommended paths
 
 - Canonical: instrument-based pricing (VanillaOption + `bs_price_instrument`, `mc_price_instrument`, `binom_price_instrument`)
 - Convenience / legacy: flat input path (`PricingInputs`, `bs_price`, `mc_price`, `binom_price`)
@@ -40,7 +42,7 @@ Canonical vs convenience vs advanced paths
 
 ## Layered architecture (with dependency direction)
 
-Layer responsibilities
+- Layer responsibilities
 
 - Types and instruments: contract specs and payoff interfaces (`OptionSpec`, `DigitalSpec`, `VanillaOption`, `DigitalOption`, `TerminalPayoff`)
 - Market / curves: discount and forward curves, curves-first context (`PricingContext`, `FlatDiscountCurve`, `FlatCarryForwardCurve`)
@@ -50,7 +52,7 @@ Layer responsibilities
 - Pricers: public engines (BS / MC / CRR / PDE)
 - Diagnostics: surface diagnostics and repricing audits
 
-Dependency direction (audit)
+- Dependency direction (audit)
 
 - Core pricing paths depend on numerics/models/volatility modules but do not import diagnostics in the PDE pricers or numerics solver inspected
 - Diagnostics explicitly depend on vol + pricers (e.g., `run_surface_diagnostics` calls `check_surface_noarb`; repricing diagnostics call `local_vol_price_pde_european`)
@@ -62,9 +64,9 @@ Dependency direction (audit)
   <figcaption>Dependencies flow downward and right; diagnostics sit below the pricing stack.</figcaption>
 </figure>
 
-## Flagship demo suite (surface -> eSSVI bridge -> local vol -> PDE)
+## Proof workflow (surface -> eSSVI -> local vol -> PDE)
 
-The repo now presents this workflow as a **split demo suite** rather than one hero notebook:
+The strongest reviewer-facing workflow is split across focused notebooks and pages instead of one overloaded notebook:
 
 - `demos/06_surface_noarb_svi_repair.ipynb` for static-surface engineering
 - `demos/07_essvi_smooth_surface_for_dupire.ipynb` for the smooth Dupire bridge
@@ -72,45 +74,40 @@ The repo now presents this workflow as a **split demo suite** rather than one he
 - `demos/09_surface_to_localvol_pde_integration.ipynb` for the integration proof
 - `demos/05_pde_pricing_and_diagnostics.ipynb` as the PDE-only appendix
 
-1) Quotes -> smiles -> surface
-  - Build surface from quotes: `VolSurface.from_grid(rows, forward=...)`
-  - Alternative: per-expiry SVI fit via `VolSurface.from_svi(..., calibrate_kwargs=...)` using `calibrate_svi`
-
-2) No-arbitrage diagnostics + SVI fit/repair
-  - Surface checks: `check_smile_price_monotonicity`, `check_smile_call_convexity`, `check_surface_noarb`
-  - SVI calibration: `calibrate_svi(...)` -> `SVIFitResult`
-  - SVI repair hooks: `repair_butterfly_raw`, `repair_butterfly_jw_optimal`, `repair_butterfly_with_fallback`
-  - Diagnostics table: `svi_fit_table(surface)`
-
-3) eSSVI calibration + projection
-  - Direct parameter surface: `ESSVIImpliedSurface(params)`
-  - Market calibration: `calibrate_essvi(...)` -> `ESSVIFitResult`
-  - Exact nodal interpolation: `ESSVINodalSurface(fit.nodes)`
-  - Smooth Dupire-oriented projection: `project_essvi_nodes(fit.nodes)` -> `ESSVIProjectionResult`
-  - Validation: `evaluate_essvi_constraints`, `validate_essvi_nodes`, `validate_essvi_continuous`
-
-4) Local vol extraction
-  - Gatheral (from implied surface): `LocalVolSurface.from_implied(...)`, `LocalVolSurface.local_var(...)`, `LocalVolSurface.local_var_diagnostics(...)`
-  - Preferred continuous-time surface for Dupire: `ESSVISmoothedSurface`
-  - Dupire (from call price grids): `local_vol_from_call_grid(...)` and diagnostics `local_vol_from_call_grid_diagnostics(...)`
-  - Diagnostics reason codes: `LVInvalidReason`, `GatheralLVReport`, `DupireLVReport`
-
-5) PDE wiring + solve
-  - Domain selection: BSDomainConfig, `bs_compute_bounds`
-  - PDE wiring: `bs_pde_wiring` and `local_vol_pde_wiring` for vanilla options
-  - Solver: `solve_pde_1d(problem, grid_cfg=..., method=..., advection=...)`
-  - Convergence remedies for discontinuous payoffs: `ICRemedy`, `ic_cell_average`, `ic_l2_projection`
-  - Rannacher time stepping: `RannacherCN1D`
-
-6) Repricing and validation loop
-  - Repricing grid: `localvol_pde_repricing_grid(...)` compares PDE prices to implied Black-76 targets
-  - Convergence sweep: `localvol_pde_single_option_convergence_sweep(...)`
-  - CI notebook execution: pytest -q demos --nbmake
+1. Quotes -> smiles -> surface
+   - Build surface from quotes: `VolSurface.from_grid(rows, forward=...)`
+   - Alternative: per-expiry SVI fit via `VolSurface.from_svi(..., calibrate_kwargs=...)` using `calibrate_svi`
+2. No-arbitrage diagnostics + SVI fit/repair
+   - Surface checks: `check_smile_price_monotonicity`, `check_smile_call_convexity`, `check_surface_noarb`
+   - SVI calibration: `calibrate_svi(...)` -> `SVIFitResult`
+   - SVI repair hooks: `repair_butterfly_raw`, `repair_butterfly_jw_optimal`, `repair_butterfly_with_fallback`
+   - Diagnostics table: `svi_fit_table(surface)`
+3. eSSVI calibration + projection
+   - Direct parameter surface: `ESSVIImpliedSurface(params)`
+   - Market calibration: `calibrate_essvi(...)` -> `ESSVIFitResult`
+   - Exact nodal interpolation: `ESSVINodalSurface(fit.nodes)`
+   - Smooth Dupire-oriented projection: `project_essvi_nodes(fit.nodes)` -> `ESSVIProjectionResult`
+   - Validation: `evaluate_essvi_constraints`, `validate_essvi_nodes`, `validate_essvi_continuous`
+4. Local vol extraction
+   - Gatheral (from implied surface): `LocalVolSurface.from_implied(...)`, `LocalVolSurface.local_var(...)`, `LocalVolSurface.local_var_diagnostics(...)`
+   - Preferred continuous-time surface for Dupire: `ESSVISmoothedSurface`
+   - Dupire (from call price grids): `local_vol_from_call_grid(...)` and diagnostics `local_vol_from_call_grid_diagnostics(...)`
+   - Diagnostics reason codes: `LVInvalidReason`, `GatheralLVReport`, `DupireLVReport`
+5. PDE wiring + solve
+   - Domain selection: BSDomainConfig, `bs_compute_bounds`
+   - PDE wiring: `bs_pde_wiring` and `local_vol_pde_wiring` for vanilla options
+   - Solver: `solve_pde_1d(problem, grid_cfg=..., method=..., advection=...)`
+   - Convergence remedies for discontinuous payoffs: `ICRemedy`, `ic_cell_average`, `ic_l2_projection`
+   - Rannacher time stepping: `RannacherCN1D`
+6. Repricing and validation loop
+   - Repricing grid: `localvol_pde_repricing_grid(...)` compares PDE prices to implied Black-76 targets
+   - Convergence sweep: `localvol_pde_single_option_convergence_sweep(...)`
+   - CI notebook execution: `pytest -q demos --nbmake`
 
 <figure markdown class="diagram" style="--diagram-max-width: 1100px">
   ![Surface to local-vol to PDE workflow](assets/diagrams/workflow_surface_to_pde.light.svg){ .diagram-img .diagram-light }
   ![Surface to local-vol to PDE workflow](assets/diagrams/workflow_surface_to_pde.dark.svg){ .diagram-img .diagram-dark }
-<figcaption>SVI owns the static-surface story; the smoothed eSSVI path is the preferred Dupire handoff into local-vol and PDE repricing.</figcaption>
+<figcaption>SVI owns the static-surface repair story; the smoothed eSSVI path is the preferred Dupire handoff into local-vol and PDE repricing.</figcaption>
 </figure>
 
 ## Key domain objects (definitions)
@@ -143,7 +140,7 @@ The repo now presents this workflow as a **split demo suite** rather than one he
 
 ## Validation and confidence (tests + CI evidence)
 
-Strongest tests (8 to 12)
+- Strongest tests (8 to 12)
 
 - `test_dupire_recovers_constant_vol` (Dupire local vol recovery from Black-76 grid)
 - `test_localvol_pde_vanilla_matches_bs_on_constant_surface` (local-vol PDE vs BS baseline)
@@ -157,15 +154,14 @@ Strongest tests (8 to 12)
 - `test_noarb_worst_points_and_run_surface_diagnostics` (diagnostic tables + JSON report)
 - `test_localvol_digital_convergence_sweep_over_strikes_and_maturities` (local-vol digital convergence sweep)
 
-Showcase notebooks executed in CI
-
-- CI runs pytest -q demos --nbmake
-- Showcase demos:
-  - `demos/05_pde_pricing_and_diagnostics.ipynb`
-  - `demos/06_surface_noarb_svi_repair.ipynb`
-  - `demos/07_essvi_smooth_surface_for_dupire.ipynb`
-  - `demos/08_localvol_pde_repricing.ipynb`
-  - `demos/09_surface_to_localvol_pde_integration.ipynb`
+- Showcase notebooks executed in CI
+  - CI runs `pytest -q demos --nbmake`
+  - Showcase demos:
+    - `demos/05_pde_pricing_and_diagnostics.ipynb`
+    - `demos/06_surface_noarb_svi_repair.ipynb`
+    - `demos/07_essvi_smooth_surface_for_dupire.ipynb`
+    - `demos/08_localvol_pde_repricing.ipynb`
+    - `demos/09_surface_to_localvol_pde_integration.ipynb`
 
 <figure markdown class="diagram">
   ![Validation stack](assets/diagrams/validation_stack.light.svg){ .diagram-img .diagram-light }

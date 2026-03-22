@@ -1,3 +1,5 @@
+default_install_hook_types: [pre-commit, pre-push]
+
 default_language_version:
   python: python3.12
 
@@ -30,3 +32,39 @@ repos:
           - pandas==2.2.3
           - pandas-stubs==2.2.3.241126
 
+  - repo: local
+    hooks:
+      - id: benchmark-source-manifest-refresh
+        name: benchmark source manifest refresh
+        entry: python
+        args: [scripts/build_benchmark_artifacts.py, --write-source-manifest]
+        language: system
+        pass_filenames: false
+        files: ^(benchmarks/(conftest\.py|test_bench_(iv|localvol|macro|pde|tree)\.py)|scripts/build_benchmark_artifacts\.py|src/option_pricing/(models/.*\.py|numerics/.*\.py|pricers/.*\.py|types\.py|vol/.*\.py))$
+        stages: [pre-commit]
+
+      - id: docs-source-link-guard
+        name: docs source link guard
+        entry: python
+        args: [scripts/check_docs_source_links.py]
+        language: system
+        files: ^docs/.*\.md$
+        stages: [pre-commit, pre-push]
+
+      - id: docs-pre-push-guard
+        name: docs pre-push guard
+        entry: python
+        args: [scripts/pre_push_docs_validation.py, --mode, fast]
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: docs-manual-guard
+        name: docs manual guard
+        entry: python
+        args: [scripts/pre_push_docs_validation.py, --mode, manual]
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [manual]

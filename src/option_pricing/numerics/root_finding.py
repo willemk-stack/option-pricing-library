@@ -412,7 +412,7 @@ ROOT_METHODS: dict[RootMethod, Callable[..., RootResult]] = {
 
 
 def get_root_method(method: RootMethod) -> Callable[..., RootResult]:
-    """Return the concrete solver function associated with a :class:`RootMethod`.
+    """Return the concrete solver function associated with a `RootMethod`.
 
     Parameters
     ----------
@@ -422,8 +422,8 @@ def get_root_method(method: RootMethod) -> Callable[..., RootResult]:
     Returns
     -------
     Callable[..., RootResult]
-        A root-finder function (e.g., :func:`bisection_method`, :func:`newton_method`,
-        :func:`bracketed_newton`) suitable for calling as::
+        A root-finder function (for example `bisection_method`, `newton_method`,
+        or `bracketed_newton`) suitable for calling as::
 
             solver(Fn, x_lo, x_hi, *, x0=..., dFn=..., tol_f=..., tol_x=..., max_iter=...)
 

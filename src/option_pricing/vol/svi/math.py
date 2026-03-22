@@ -169,7 +169,7 @@ def _validate_jw(jw: JWParams, T: float, *, tol: float = 1e-12) -> None:
 def svi_total_variance(y: NDArray[np.float64], p: SVIParams) -> NDArray[np.float64]:
     z = y - p.m
     s = np.hypot(z, p.sigma)
-    return p.a + p.b * (p.rho * z + s)
+    return np.asarray(p.a + p.b * (p.rho * z + s), dtype=np.float64)
 
 
 def svi_total_variance_dy(y: NDArray[np.float64], p: SVIParams) -> NDArray[np.float64]:

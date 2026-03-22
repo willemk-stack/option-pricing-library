@@ -1,0 +1,13 @@
+name: deprecated-validate-docs-artifacts
+
+on:
+  workflow_dispatch:
+
+jobs:
+  notice:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print deprecation notice
+        run: |
+          echo "This workflow is a compatibility stub."
+          echo "Use docs-ci.yml or docs-assets-refresh.yml for docs artifact validation."

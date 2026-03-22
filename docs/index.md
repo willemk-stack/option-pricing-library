@@ -1,117 +1,91 @@
-# Option Pricing Library
+---
+hide:
+  - navigation
+  - toc
+---
 
-A typed Python library for **vanilla option pricing**, **implied-volatility workflows**, **volatility surfaces**, and **finite-difference PDE pricing**.
+<h1 class="homepage-hero__title homepage-page-title">Option Pricing Library</h1>
 
-The project started as a compact pricing library for textbook models, and now also includes a stronger numerics stack for:
+<div class="portfolio-hero homepage-hero">
+  <p class="hero-kicker">Typed pricing, surface repair, and validated numerics</p>
+  <p class="hero-copy homepage-hero__copy">This library prices vanilla options, repairs noisy implied-vol surfaces, smooths the Dupire handoff with eSSVI, and validates the local-vol/PDE workflow with repricing and convergence evidence.</p>
+  <div class="cta-row cta-row--trio homepage-cta-row">
+    <a class="md-button md-button--primary" href="user_guides/decision_guide.md">Read the proof path</a>
+    <a class="md-button" href="user_guides/instruments.md">Start with the recommended API</a>
+    <a class="md-button" href="performance.md">Review performance evidence</a>
+  </div>
+</div>
 
-- **Black–Scholes(-Merton)** analytic pricing and Greeks
-- **CRR binomial tree** pricing
-- **Monte Carlo under GBM**
-- **Implied volatility inversion**
-- **Smile and surface construction**
-- **SVI and eSSVI calibration / validation workflows**
-- **No-arbitrage diagnostics**
-- **Local-volatility extraction and diagnostics**
-- **Finite-difference PDE pricing and convergence checks**
+<div class="homepage-proof-section" markdown="1">
+  <div class="homepage-proof-section__header">
+    <p class="homepage-section-kicker">Featured proof panel</p>
+    <p class="homepage-proof-section__copy">One scan across quoted-to-repaired surface evidence, the smooth Dupire handoff, and local-vol/PDE validation.</p>
+  </div>
+  <figure class="diagram homepage-proof-panel" style="--diagram-max-width: 1180px">
+    <img alt="Reviewer proof panel showing surface repair, eSSVI smoothing, local-vol extraction, and PDE repricing with tracked evidence callouts" src="assets/generated/showcase/reviewer_proof_panel.light.svg" class="diagram-img diagram-light" />
+    <img alt="Reviewer proof panel showing surface repair, eSSVI smoothing, local-vol extraction, and PDE repricing with tracked evidence callouts" src="assets/generated/showcase/reviewer_proof_panel.dark.svg" class="diagram-img diagram-dark" />
+    <figcaption>Quoted-to-repaired surface evidence, smooth Dupire handoff evidence, and local-vol/PDE validation in one panel.</figcaption>
+  </figure>
+</div>
 
-## Best places to start
+## Validation snapshot
 
-### New to the library
-- [Installation](installation.md)
-- [Quickstart](user_guides/quickstart.md)
-- [API reference](api/index.md)
+<div class="snapshot-grid homepage-snapshot-grid">
+  <div class="snapshot-card homepage-snapshot-card homepage-snapshot-card--transition">
+    <p class="snapshot-label">Seam control</p>
+    <p class="snapshot-copy">Worst observed <code>w_T</code> seam jump</p>
+    <p class="metric-pair">
+      <span class="metric-number">8.07e-2</span>
+      <span class="metric-arrow">&rarr;</span>
+      <span class="metric-number metric-number--good">8.17e-5</span>
+    </p>
+  </div>
+  <div class="snapshot-card homepage-snapshot-card homepage-snapshot-card--zero">
+    <p class="snapshot-label">Dupire handoff</p>
+    <p class="snapshot-copy"><code>projection_dupire_invalid_count</code></p>
+    <p class="metric-line">
+      <span class="metric-number metric-number--good">0</span>
+    </p>
+  </div>
+  <div class="snapshot-card homepage-snapshot-card homepage-snapshot-card--detail">
+    <p class="snapshot-label">PDE repricing</p>
+    <p class="snapshot-copy">Published repricing sweep</p>
+    <p class="metric-line">
+      <span class="metric-number">154</span>
+      <span class="metric-caption">options repriced</span>
+    </p>
+    <p class="metric-inline">
+      <span class="metric-key">Mean abs price error</span>
+      <span class="metric-value">8.1e-4</span>
+    </p>
+    <p class="metric-inline">
+      <span class="metric-key">Max abs IV error</span>
+      <span class="metric-value">18.7 bp</span>
+    </p>
+  </div>
+</div>
 
-### Flagship workflows
-- [Local volatility](user_guides/local_vol.md)
-- [PDE pricing](user_guides/pde_pricing.md)
-- [Roadmap](roadmap.md)
+## First clicks
 
-### Theory and background
-- [Notes index](notes/index.md)
+| If you want to review... | Open this |
+| --- | --- |
+| The strongest end-to-end proof path | [Decision guide](user_guides/decision_guide.md) |
+| The recommended public API | [Instruments](user_guides/instruments.md) |
+| The measured runtime and scaling story | [Performance evidence](performance.md) |
+| The system design and module boundaries | [Architecture](architecture.md) |
+| The generated API reference | [API reference](api/index.md) |
 
-## Recommended API path
+## What makes this repo credible quickly
 
-The library supports a few ways to work. The intended starting point for most users is the instrument-based workflow, with the other styles documented as convenience or advanced paths:
+- The public API is typed and layered rather than notebook-only.
+- The surface workflow shows quoted data, repair diagnostics, and fit stress instead of a single polished chart.
+- The eSSVI handoff page shows why the time-derivative problem matters before local-vol extraction begins.
+- The local-vol/PDE page publishes repricing and convergence evidence, and the benchmark page publishes runtime/error tradeoffs from committed artifacts.
 
-### Recommended API: instrument-based workflow
-Use `VanillaOption` with the instrument pricers when you want the clearest separation between **what** is being priced and **how** it is priced. This is the intended public entry point for most users.
+## Continue by intent
 
-### Convenience API: flat inputs
-Use `PricingInputs` and the flat-input pricers when you want compact examples, tutorials, or quick checks.
-
-### Advanced API: curves / surfaces / PDE modules
-Use `PricingContext`, the volatility modules, and PDE tooling when you need term structures, surface construction, local-vol extraction, or diagnostic-heavy workflows.
-
-## Flagship capstones
-
-### Capstone 1 — Volatility surfaces, no-arbitrage, SVI, and eSSVI
-
-This capstone focuses on building and validating implied-volatility structures:
-
-- implied-volatility inversion
-- smile construction
-- surface interpolation
-- no-arbitrage diagnostics
-- SVI fitting and repair workflows
-- eSSVI calibration, validation, and smooth-surface projection
-
-A good place to begin is the vol-surface guide, the [eSSVI guide](user_guides/essvi.md), and the related surface diagnostics pages.
-
-### Capstone 2 — Local Vol + PDE Pricing + Diagnostics
-
-This is the main numerics-focused capstone in the repo:
-
-**surface quotes → implied surface → local-vol diagnostics → PDE pricing → convergence / repricing checks**
-
-This part of the project is designed to show that local volatility is not treated as “just a formula,” but as a **numerical engineering workflow** with validation and diagnostics.
-
-It includes:
-- local-vol extraction from surfaces
-- instability and invalid-region diagnostics
-- PDE pricing under local volatility
-- convergence checks
-- discontinuous-payoff remedies
-- validation against analytic baselines and reference implementations
-
-Start here:
-- [Local volatility guide](user_guides/local_vol.md)
-- [PDE pricing guide](user_guides/pde_pricing.md)
-
-## Validation philosophy
-
-This library is meant to be **test-backed** and **numerically transparent**.
-
-That means the project emphasizes:
-- analytic cross-checks where available
-- convergence and stability checks
-- explicit diagnostics for surfaces and local volatility
-- notebook demos that illustrate the workflows end to end
-
-## Documentation map
-
-- **Getting started**
-  - [Installation](installation.md)
-  - [Quickstart](user_guides/quickstart.md)
-
-- **User guides**
-  - [Local volatility](user_guides/local_vol.md)
-  - [PDE pricing](user_guides/pde_pricing.md)
-
-- **Reference**
-  - [API reference](api/index.md)
-
-- **Background**
-  - [Notes index](notes/index.md)
-
-- **Project planning**
-  - [Roadmap](roadmap.md)
-
-## Scope
-
-The library is strongest today in:
-- vanilla pricing workflows
-- implied-volatility tooling
-- surface diagnostics
-- local-vol / PDE capstone work
-
-Some modules are still better understood as **advanced research / portfolio components** rather than fully productized end-user workflows. The roadmap calls out what is complete, what is experimental, and what comes next.
+- [Installation](installation.md) for a local checkout or editable setup
+- [Guides](user_guides/index.md) for the API and workflow map
+- [Performance evidence](performance.md) for committed benchmark plots and summaries
+- [Architecture](architecture.md) for package structure and dependency direction
+- [Future work](roadmap.md) for what is still exploratory

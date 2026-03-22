@@ -1,0 +1,31 @@
+page_key: homepage
+page_path: docs/index.md
+archetype: homepage
+intent:
+  - Establish what the library does within one screen.
+  - Make the proof path, recommended API path, and performance evidence easy to reach.
+  - Present the featured reviewer panel as core evidence rather than background decoration.
+quality_targets:
+  - No overflow or clipping at supported breakpoints.
+  - Hero copy, CTA row, and validation snapshot scan in under 15 seconds.
+  - The featured proof panel looks complete and non-empty in light and dark mode.
+  - Snapshot cards read as one group with consistent height, spacing, and emphasis.
+required_sections:
+  - portfolio hero
+  - primary CTA row
+  - featured proof panel
+  - validation snapshot cards
+  - first-click navigation table
+allowed_edits:
+  - Refine hero spacing, CTA layout, and section ordering.
+  - Improve snapshot-card rhythm and alignment.
+  - Improve featured-panel framing, captions, and theme treatment.
+forbidden_edits:
+  - Change headline claims without an explicit content request.
+  - Remove the proof-path CTA or the featured reviewer panel.
+  - Replace evidence sections with generic marketing copy.
+review_rules:
+  heading_hierarchy: Strong single h1, clear h2 grouping, no skipped section intent.
+  visual_density: Hero and snapshot sections should feel substantial, not sparse or crowded.
+  theme_parity: Light and dark variants must feel equally complete and readable.
+  primary_vs_secondary: Hero and featured proof panel are primary; link tables are secondary.

@@ -1,0 +1,20 @@
+component_key: visual_panel
+selectors:
+  - figure.diagram
+  - .diagram-img
+intent:
+  - Frame a chart, SVG, or composite proof panel as readable evidence.
+quality_targets:
+  - No blank-looking core regions.
+  - No clipped labels, legends, or captions.
+  - Light and dark variants both appear complete and intentional.
+allowed_edits:
+  - Improve panel framing, spacing, caption treatment, and theme-specific styles.
+  - Fix the generator or source asset when the visual itself is defective.
+forbidden_edits:
+  - Hand-edit generated outputs when a source fix is viable.
+  - Hide broken regions with cropping instead of fixing the cause.
+review_rules:
+  - Required theme pair exists when the panel is theme-aware.
+  - Captions support interpretation and do not duplicate the title.
+  - Panel width and height feel proportional at mobile, tablet, and desktop widths.

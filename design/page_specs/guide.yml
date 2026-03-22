@@ -1,0 +1,30 @@
+page_key: long_form_guide
+page_path: docs/user_guides/surface_workflow.md
+archetype: long-form guide
+intent:
+  - Explain one workflow clearly enough for a reviewer to trust the method and evidence.
+  - Keep the next-step CTA visible without interrupting the narrative.
+  - Use figures and tables to support the argument rather than duplicate it.
+quality_targets:
+  - No overflow, clipping, or collapse at supported breakpoints.
+  - Figures and captions maintain a readable rhythm through the page.
+  - Evidence tables remain legible on tablet and desktop and degrade cleanly on mobile.
+  - The guide remains understandable in both themes without one feeling visually flatter.
+required_sections:
+  - h1 with a clear problem statement
+  - CTA row to the notebook or next guide
+  - at least one primary evidence figure above the fold
+  - hard problem, method, and evidence sections
+allowed_edits:
+  - Reorder sections when it improves comprehension.
+  - Adjust figure grouping, caption style, and CTA placement.
+  - Improve table presentation and responsive behavior.
+forbidden_edits:
+  - Remove the evidence table or degrade figure visibility.
+  - Change technical claims or numbers without explicit source updates.
+  - Split the page into multiple routes unless explicitly requested.
+review_rules:
+  heading_hierarchy: Problem, method, and evidence must remain visually distinct.
+  visual_density: Narrative blocks should alternate with evidence blocks to avoid walls of text.
+  theme_parity: Figures, captions, and tables must remain readable in light and dark mode.
+  primary_vs_secondary: Evidence figures and the main argument take precedence over navigation elements.

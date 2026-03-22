@@ -1,0 +1,42 @@
+{
+  "pages": [
+    "/",
+    "/architecture/",
+    "/installation/",
+    "/performance/",
+    "/user_guides/quickstart/",
+    "/user_guides/instruments/",
+    "/user_guides/market_api/",
+    "/user_guides/decision_guide/",
+    "/user_guides/surface_workflow/",
+    "/user_guides/essvi_smooth_handoff/",
+    "/user_guides/localvol_pde_validation/",
+    "/api/",
+    "/api/public/",
+    "/api/pricers/",
+    "/api/vol/"
+  ],
+  "page_snapshot_pages": [
+    "/",
+    "/user_guides/surface_workflow/",
+    "/api/"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "widths": [
+    375,
+    768,
+    1280,
+    1536
+  ],
+  "page_snapshot_widths": [
+    375,
+    1280
+  ],
+  "priority_asset_globs": [
+    "docs/assets/generated/**/*.svg",
+    "docs/assets/generated/**/*.png"
+  ]
+}

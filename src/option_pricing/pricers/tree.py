@@ -340,7 +340,7 @@ def binom_price_instrument(
     n_steps: int,
     method: Literal["tree", "closed_form"] = "tree",
 ) -> float:
-    """Convenience wrapper accepting flat :class:`~option_pricing.types.MarketData`."""
+    """Convenience wrapper accepting flat `MarketData`."""
     return binom_price_instrument_from_ctx(
         ctx=_to_ctx(market), inst=inst, sigma=sigma, n_steps=n_steps, method=method
     )

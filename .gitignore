@@ -20,6 +20,18 @@ MANIFEST
 
 # Build/output artifacts
 /out/
+/site/
+/test-results/
+tests/visual/node_modules/
+tests/visual/test-results/
+artifacts/visual-state/
+/agent/
+/agent_bundle*/
+/vr-ci-agent-bundle/
+/logs_*/
+/tmp_validate_logs/
+/tmp-ci/
+/.benchmarks/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -103,3 +115,6 @@ Thumbs.db
 
 # Temporary output from scripts/render_d2_diagrams.py
 .tmp_d2_render/
+
+# Prompting
+prompts/

@@ -1,8 +1,8 @@
 class InvalidOptionPriceError(ValueError):
     """Raised when an input option price violates no-arbitrage bounds.
 
-    This error is raised by :func:`_validate_bounds` (and therefore by
-    :func:`implied_vol_bs_result` / :func:`implied_vol_bs`) when the provided market
+    This error is raised by `_validate_bounds` (and therefore by
+    `implied_vol_bs_result` / `implied_vol_bs`) when the provided market
     option price is inconsistent with tight no-arbitrage bounds for European options
     under continuous rates and dividend yield.
 

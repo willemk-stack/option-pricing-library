@@ -144,7 +144,7 @@ class VolSurface:
         expiry_round_decimals:
             Bucketing tolerance for float maturities.
         calibrate_kwargs:
-            Optional kwargs forwarded to :func:`option_pricing.vol.svi.calibrate_svi`.
+            Optional kwargs forwarded to `option_pricing.vol.svi.calibrate_svi`.
 
         Returns
         -------
@@ -218,7 +218,7 @@ class VolSurface:
         """Return a callable single-expiry smile slice at maturity T.
 
         - Node expiry: returns the stored slice (grid or SVI).
-        - Off-node: returns :class:`InterpolatedSmileSlice`, linear in total variance.
+        - Off-node: returns `InterpolatedSmileSlice`, linear in total variance.
 
         Notes
         -----

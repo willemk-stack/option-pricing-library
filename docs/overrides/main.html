@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+{{ super() }}
+<script>
+  (() => {
+    function labelNavigationLandmarks() {
+      const counts = new Map();
+
+      document.querySelectorAll("nav.md-nav").forEach((nav, index) => {
+        const title = nav.querySelector(".md-nav__title");
+        const rawLabel = title?.textContent?.trim().replace(/\s+/g, " ") || `Navigation ${index + 1}`;
+        const seen = counts.get(rawLabel) || 0;
+        counts.set(rawLabel, seen + 1);
+
+        const uniqueLabel = seen === 0 ? rawLabel : `${rawLabel} ${seen + 1}`;
+        nav.setAttribute("aria-label", uniqueLabel);
+      });
+
+      document.querySelectorAll("nav.md-code__nav").forEach((nav, index) => {
+        const codeBlockTitle = nav
+          .closest(".highlight")
+          ?.querySelector(".filename, figcaption, summary");
+        const rawLabel =
+          codeBlockTitle?.textContent?.trim().replace(/\s+/g, " ") ||
+          `Code block actions ${index + 1}`;
+        nav.setAttribute("aria-label", rawLabel);
+      });
+    }
+
+    function makeScrollableRegionsFocusable() {
+      document.querySelectorAll(".md-typeset__scrollwrap").forEach((region, index) => {
+        if (!region.hasAttribute("tabindex")) {
+          region.setAttribute("tabindex", "0");
+        }
+
+        if (!region.hasAttribute("aria-label")) {
+          region.setAttribute("aria-label", `Scrollable content ${index + 1}`);
+        }
+      });
+    }
+
+    function refreshA11yEnhancements() {
+      labelNavigationLandmarks();
+      makeScrollableRegionsFocusable();
+    }
+
+    document.addEventListener("DOMContentLoaded", refreshA11yEnhancements);
+    window.addEventListener("load", refreshA11yEnhancements);
+    new MutationObserver(refreshA11yEnhancements).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+  })();
+</script>
+{% if page and page.meta and page.meta.robots %}
+<meta name="robots" content="{{ page.meta.robots }}" />
+{% endif %}
+{% if page and page.meta and page.meta.canonical_url %}
+<link rel="canonical" href="{{ config.site_url ~ page.meta.canonical_url }}" />
+{% endif %}
+{% endblock %}

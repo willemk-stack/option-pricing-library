@@ -130,9 +130,13 @@ def run_surface_to_localvol_pde_integration(
         "essvi_nodal": essvi_bridge.nodal_surface,
         "essvi_smoothed": essvi_bridge.smoothed_surface,
     }
+    surface_meta = dict(surface_demo.meta)
     meta = {
         "profile": scenario.profile,
-        "surface_demo": dict(surface_demo.meta),
+        # Preserve the original capstone notebook contract while also exposing
+        # the namespaced integration metadata structure.
+        **surface_meta,
+        "surface_demo": surface_meta,
         "essvi_bridge": dict(essvi_bridge.meta),
         "localvol_pde_demo": dict(localvol_demo.meta),
     }

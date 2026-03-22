@@ -1,0 +1,7 @@
+{
+    "docs_base_url": "http://127.0.0.1:8000/option-pricing-library/",
+    "build_profile": "ci",
+    "built_site_artifact_name": "docs-built-site",
+    "built_site_dir": "site",
+    "built_site_entrypoint": "index.html"
+}

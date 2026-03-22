@@ -1,37 +1,24 @@
-# Local vol + PDE flagship
+---
+title: Legacy redirect: local-vol and PDE validation
+robots: noindex,follow
+canonical_url: user_guides/localvol_pde_validation/
+hide:
+  - navigation
+  - toc
+---
 
-This is the repo's main **numerics flagship**.
+<meta http-equiv="refresh" content="0; url=../localvol_pde_validation/" />
 
-Primary notebook:
+<div class="compat-redirect" data-search-exclude markdown="1">
 
-- `demos/08_localvol_pde_repricing.ipynb`
+# Legacy redirect: local-vol and PDE validation
 
-Supporting notebook:
+This legacy proof-path URL now redirects to [Local-vol and PDE validation](localvol_pde_validation.md).
 
-- `demos/05_pde_pricing_and_diagnostics.ipynb`
+<div class="cta-row cta-row--trio" markdown="1">
+[Open the current page](localvol_pde_validation.md){ .md-button .md-button--primary }
+[Review performance evidence](../performance.md){ .md-button }
+[See architecture](../architecture.md){ .md-button }
+</div>
 
-## Thesis
-
-The key claim is:
-
-> Given a Dupire-ready implied surface, the library can build local vol carefully, expose instability explicitly, and price with a validated finite-difference PDE workflow.
-
-## What it shows
-
-- `LocalVolSurface.from_implied(...)` driven by `ESSVISmoothedSurface`
-- invalid masks, denominator diagnostics, and worst-point reporting
-- one PDE anchor to keep solver credibility visible
-- repricing grids against the originating implied surface
-- a compact convergence sweep
-
-## Module signals
-
-- `LocalVolSurface`
-- `option_pricing.pricers.pde.*`
-- repricing and convergence diagnostics
-
-## Positioning
-
-- This notebook intentionally does **not** spend most of its time re-teaching SVI repair.
-- The surface-building story lives upstream in the Surface flagship and the eSSVI bridge.
-- The PDE-only notebook remains useful when you want to defend the solver before talking about surfaces at all.
+</div>

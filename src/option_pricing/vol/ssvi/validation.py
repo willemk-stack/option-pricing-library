@@ -39,7 +39,10 @@ def _validation_expiry_grid(expiries: np.ndarray) -> np.ndarray:
     if expiries.size == 1:
         return expiries
     midpoints = 0.5 * (expiries[:-1] + expiries[1:])
-    return np.unique(np.concatenate([expiries, midpoints])).astype(np.float64)
+    return np.asarray(
+        np.unique(np.concatenate([expiries, midpoints])),
+        dtype=np.float64,
+    )
 
 
 @dataclass(frozen=True, slots=True)

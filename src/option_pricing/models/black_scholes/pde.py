@@ -137,7 +137,7 @@ def bs_pde_coeffs(
 
         def a(x: ArrayLike, tau: float) -> Array:
             x = np.asarray(x, dtype=float)  # x is S here
-            return 0.5 * sig * sig * (x * x)
+            return np.asarray(0.5 * sig * sig * (x * x), dtype=float)
 
         def b(x: ArrayLike, tau: float) -> Array:
             x = np.asarray(x, dtype=float)

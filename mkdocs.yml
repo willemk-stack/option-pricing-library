@@ -7,7 +7,9 @@ docs_dir: docs
 
 theme:
   name: material
+  custom_dir: docs/overrides
   language: en
+  font: false
   icon:
     repo: fontawesome/brands/github
 
@@ -63,8 +65,8 @@ plugins:
             show_root_heading: false
             show_root_toc_entry: false
 
-            # Keep mkdocstrings headings below your Markdown headings
-            heading_level: 4  
+            # Nest API object headings cleanly under page-level H2 sections
+            heading_level: 3
 
             # Nice defaults
             members_order: source
@@ -96,7 +98,7 @@ markdown_extensions:
       toc_depth: 3
 extra_javascript:
   - javascripts/mathjax.js
-  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+  - javascripts/vendor/tex-mml-chtml.js
 
 # add custom tweaks from (docs/stylesheets/extra.css)
 extra_css:
@@ -104,16 +106,12 @@ extra_css:
 
 nav:
   - Home: index.md
-  - Roadmap: roadmap.md
-  - Performance: performance.md
-  - Architecture: architecture.md
-  
-  - User guides:
-      - Overview: user_guides/index.md
+  - Quickstart:
+      - Recommended API: user_guides/instruments.md
+      - Convenience quickstart: user_guides/quickstart.md
       - Installation: installation.md
-      - Quickstart: user_guides/quickstart.md
+      - Guides: user_guides/index.md
       - Market APIs: user_guides/market_api.md
-      - Instruments: user_guides/instruments.md
       - Black-Scholes: user_guides/black_scholes.md
       - Monte Carlo: user_guides/monte_carlo.md
       - Binomial CRR: user_guides/binomial_crr.md
@@ -125,12 +123,22 @@ nav:
       - SVI: user_guides/svi.md
       - SVI repair: user_guides/svi_repair.md
       - Local volatility: user_guides/local_vol.md
-      - Flagship demos:
-          - Decision guide: user_guides/flagship_capstone2_page.md
-          - Surface flagship: user_guides/flagship_surface.md
-          - eSSVI bridge: user_guides/flagship_essvi_bridge.md
-          - Local vol + PDE flagship: user_guides/flagship_localvol_pde.md
-
+  - Proof path:
+      - Decision guide: user_guides/decision_guide.md
+      - Surface repair workflow: user_guides/surface_workflow.md
+      - eSSVI smooth handoff: user_guides/essvi_smooth_handoff.md
+      - Local-vol and PDE validation: user_guides/localvol_pde_validation.md
+  - API:
+      - Overview: api/index.md
+      - Public: api/public.md
+      - Curves: api/curves.md
+      - Pricers: api/pricers.md
+      - Volatility: api/vol.md
+      - Exceptions: api/exceptions.md
+  - Architecture:
+      - Overview: architecture.md
+      - Docs pipeline: architecture/docs-pipeline.md
+  - Performance evidence: performance.md
   - Notes:
       - Overview: notes/index.md
       - Black-Scholes pricing: notes/bs_pricing.md
@@ -145,11 +153,4 @@ nav:
       - Interpolation: notes/interpolation.md
       - PDE convergence: notes/pde/PDE_convergence.md
       - PDE diagnostics notes: notes/diagnostics_notes.md
-
-  - API:
-      - Overview: api/index.md
-      - Public: api/public.md
-      - Curves: api/curves.md
-      - Pricers: api/pricers.md
-      - Volatility: api/vol.md
-      - Exceptions: api/exceptions.md
+  - Future work: roadmap.md

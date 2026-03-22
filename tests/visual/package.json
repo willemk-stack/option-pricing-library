@@ -1,0 +1,33 @@
+{
+  "name": "option-pricing-docs-visual-tests",
+  "private": true,
+  "scripts": {
+    "test": "python ../../scripts/run_local_visual_regression.py verify",
+    "test:raw": "playwright test",
+    "test:local:quick": "python ../../scripts/run_local_visual_regression.py verify --tests smoke.spec.ts dom-audits.spec.ts a11y.spec.ts sentinel.spec.ts repo-facts.spec.ts",
+    "test:local:full": "python ../../scripts/run_local_visual_regression.py verify",
+    "test:local:update": "python ../../scripts/run_local_visual_regression.py update",
+    "test:baseline": "playwright test pages.spec.ts --workers=1",
+    "test:update": "npm run test:update:all",
+    "test:update:all": "python ../../scripts/run_local_visual_regression.py update",
+    "test:update:sentinel": "playwright test sentinel.spec.ts --update-snapshots",
+    "test:update:pages": "playwright test pages.spec.ts --workers=1 --update-snapshots",
+    "test:update:components": "playwright test components.spec.ts --workers=1 --update-snapshots",
+    "test:update:artifacts": "playwright test embedded-panels.spec.ts --update-snapshots",
+    "test:a11y": "playwright test a11y.spec.ts",
+    "test:smoke": "playwright test smoke.spec.ts",
+    "test:audits": "playwright test dom-audits.spec.ts",
+    "test:sentinel": "playwright test sentinel.spec.ts --max-failures=1",
+    "test:repo-facts": "playwright test repo-facts.spec.ts --max-failures=1",
+    "test:components": "playwright test components.spec.ts --workers=1",
+    "test:artifacts": "playwright test embedded-panels.spec.ts",
+    "test:capture": "playwright test review-capture.spec.ts",
+    "test:ci": "python ../../scripts/run_local_visual_regression.py verify"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
+    "@playwright/test": "1.58.2",
+    "@types/node": "^22.15.21",
+    "typescript": "^5.8.3"
+  }
+}

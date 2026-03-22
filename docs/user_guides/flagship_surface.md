@@ -1,34 +1,23 @@
-# Surface flagship
+---
+title: Legacy redirect: surface repair workflow
+robots: noindex,follow
+canonical_url: user_guides/surface_workflow/
+hide:
+  - navigation
+  - toc
+---
 
-This is the notebook and doc path for the repo's **static-surface engineering** story.
+<meta http-equiv="refresh" content="0; url=../surface_workflow/" />
 
-Primary notebook:
+<div class="compat-redirect" data-search-exclude markdown="1">
 
-- `demos/06_surface_noarb_svi_repair.ipynb`
+# Legacy redirect: surface repair workflow
 
-## Thesis
+This legacy proof-path URL now redirects to [Surface repair workflow](surface_workflow.md).
 
-The key claim is:
+<div class="cta-row cta-row--duo" markdown="1">
+[Open the current page](surface_workflow.md){ .md-button .md-button--primary }
+[Next: eSSVI smooth handoff](essvi_smooth_handoff.md){ .md-button }
+</div>
 
-> Given a noisy quote set, the library can build an implied surface, diagnose static arbitrage issues, fit analytic SVI smiles, repair bad slices, and compare interpolation choices in a disciplined way.
-
-## What it shows
-
-- quote ingestion and `VolSurface.from_grid(...)`
-- per-expiry SVI fitting through `VolSurface.from_svi(...)`
-- no-arbitrage diagnostics via `check_surface_noarb(...)`
-- repair-aware workflows built around the SVI toolbox
-- interpolation judgment for slice-stack surfaces
-
-## Module signals
-
-- `option_pricing.vol`
-- `option_pricing.vol.svi`
-- `option_pricing.diagnostics.vol_surface.*`
-
-## What it does not try to prove
-
-- It is **not** the main Dupire/local-vol story anymore.
-- The generic slice-stack path remains useful for demos and audits, but the repo now positions the smooth eSSVI projection as the stronger Dupire handoff.
-
-If the audience asks, "what should feed local vol?", move directly to [eSSVI bridge](flagship_essvi_bridge.md).
+</div>

@@ -1,60 +1,51 @@
 # Installation
 
-## Requirements
+This repo targets Python 3.12+ and supports a small core install plus extras for plotting, notebooks, docs, and development.
 
-- Python **3.12+** (tested with 3.12)
-- Core dependencies: **numpy**, **scipy**
+## Fastest install from GitHub
 
-Optional extras are available for plotting and notebook workflows.
+```bash
+pip install "git+https://github.com/willemk-stack/option-pricing-library.git"
+```
 
-## Install from a local checkout
+Quick import check:
+
+```bash
+python -c "import option_pricing; print(option_pricing.__name__)"
+```
+
+## Editable local checkout
 
 From the repository root:
 
 ```bash
 python -m venv .venv
-# activate it (Windows)
+# Windows
 .\.venv\Scripts\activate
-# or (macOS/Linux)
+# macOS / Linux
 # source .venv/bin/activate
 
 python -m pip install --upgrade pip
 pip install -e .
 ```
 
-Editable install (`-e`) is the nicest setup while you’re iterating on the library.
+Use the editable install while working on the library, notebooks, or docs.
 
-## Optional extras
+## Supported extras
 
-If your `pyproject.toml` defines extras (recommended), you can install them like:
+These extras come directly from `pyproject.toml`:
 
-```bash
-# Plotting helpers (matplotlib)
-pip install -e ".[plot]"
+| Extra | Install command | Use it for |
+| --- | --- | --- |
+| Core only | `pip install -e .` | Pricing library development without optional tooling |
+| Plotting | `pip install -e ".[plot]"` | Matplotlib and pandas-backed diagnostics or figure generation |
+| Notebooks | `pip install -e ".[notebooks]"` | Jupyter-based demo and exploration workflows |
+| Development | `pip install -e ".[dev]"` | Tests, benchmarks, linting, formatting, and type checks |
+| Docs | `pip install -e ".[docs]"` | MkDocs Material and API-reference generation |
 
-# Notebook workflow (jupyter + matplotlib + pandas)
-pip install -e ".[notebooks]"
+## Common local commands
 
-# Dev tools (pytest, ruff, black, mypy, …)
-pip install -e ".[dev]"
-```
-
-## Development quality-of-life
-
-### Pre-commit
-
-If you use pre-commit hooks in this repo:
-
-```bash
-pip install pre-commit
-pre-commit install
-pre-commit install --hook-type pre-push
-```
-
-- On commit: **ruff** + **black** keep formatting consistent.
-- On push: **mypy** can run type checks (often slower, so it’s commonly `pre-push`).
-
-### Run the same checks as CI
+Run the same checks used throughout the repo:
 
 ```bash
 ruff check .
@@ -63,8 +54,15 @@ pytest -q
 mypy
 ```
 
-## Coverage (local)
+Build the published-style benchmark bundle:
 
 ```bash
-pytest --cov=option_pricing --cov-report=term-missing --cov-report=xml --cov-report=html
+RUN_BENCHMARKS=1 pytest benchmarks -q --benchmark-only --benchmark-json benchmarks/artifacts/pytest-benchmark.json --benchmark-verbose
+python scripts/build_benchmark_artifacts.py --pytest-benchmark-json benchmarks/artifacts/pytest-benchmark.json
+```
+
+Build the docs locally after installing `.[docs]`:
+
+```bash
+mkdocs serve
 ```

@@ -31,9 +31,7 @@ def main() -> None:
     print("BS:", bs_price(p))
     print("Greeks:", bs_greeks(p))
 
-    cfg_mc = MCConfig(
-        n_paths=_mc_paths(200_000), antithetic=True, random=RandomConfig(seed=0)
-    )
+    cfg_mc = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=0))
     price_mc, se = mc_price(p, cfg=cfg_mc)
     print("MC:", price_mc, "(SE=", se, ")")
 
