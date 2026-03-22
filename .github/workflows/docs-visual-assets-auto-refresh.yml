@@ -1,8 +1,8 @@
 name: docs-visual-assets-auto-refresh
 
 # Automatically regenerate docs/assets/generated/ and refresh authoritative
-# Playwright sentinel snapshots on any non-main push that touches source code
-# or visual-affecting docs content.  Running in the exact same Ubuntu 24.04
+# Playwright snapshots whenever a same-repo branch update touches source code
+# or visual-affecting docs content. Running in the exact same Ubuntu 24.04
 # environment (and with the same pinned deps) as docs-ci means the
 # pixel-identical check in docs-ci always passes.
 #
@@ -10,7 +10,9 @@ name: docs-visual-assets-auto-refresh
 # docs-ci re-runs on that new commit with up-to-date assets and succeeds.
 #
 # The "github.actor != 'github-actions[bot]'" guard prevents the bot's own
-# push from triggering another refresh cycle.
+# push from triggering another refresh cycle. The pull_request trigger is a
+# backstop for bot-authored branch pushes where GitHub can leave the push event
+# workflow in an "action_required" state without running any jobs.
 #
 # RISK: --update-snapshots accepts any visual state as correct, including
 # broken or regressed renders.  To guard against silently committing bad
@@ -39,6 +41,19 @@ on:
       - 'src/option_pricing/**'
       - 'scripts/build_benchmark_artifacts.py'
       - 'scripts/build_visual_artifacts.py'
+  pull_request:
+    paths:
+      - '.github/workflows/docs-ci.yml'
+      - '.github/workflows/docs-visual-assets-auto-refresh.yml'
+      - 'benchmarks/artifacts/**'
+      - 'docs/assets/**'
+      - 'docs/javascripts/**'
+      - 'docs/overrides/**'
+      - 'docs/stylesheets/**'
+      - 'mkdocs.yml'
+      - 'src/option_pricing/**'
+      - 'scripts/build_benchmark_artifacts.py'
+      - 'scripts/build_visual_artifacts.py'
 
 permissions:
   contents: write
@@ -49,7 +64,7 @@ concurrency:
 
 jobs:
   auto-refresh:
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
     env:
       MPLBACKEND: Agg
@@ -58,7 +73,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ github.head_ref || github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5

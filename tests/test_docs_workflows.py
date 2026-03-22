@@ -100,6 +100,7 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
 
     # In PyYAML, the YAML keyword `on` is parsed as boolean True.
     on_push = workflow[True]["push"]
+    on_pull_request = workflow[True]["pull_request"]
 
     # Must trigger on push to non-main branches when source files change.
     assert "main" in on_push["branches-ignore"]
@@ -119,6 +120,7 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     # Must NOT use the broad docs/** glob — pure markdown text edits do not
     # affect pixel output and should not fire the full expensive pipeline.
     assert "docs/**" not in watched_paths
+    assert on_pull_request["paths"] == watched_paths
 
     # Must have write permission to push back refreshed assets.
     assert workflow["permissions"]["contents"] == "write"
@@ -127,9 +129,18 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
 
     # Must guard against infinite push loops triggered by the bot's own commit.
     assert "github-actions[bot]" in job["if"]
+    # Must only attempt branch updates from pull requests whose head branch
+    # lives in the same repository; forks do not have safe write access.
+    assert "github.event.pull_request.head.repo.full_name == github.repository" in job[
+        "if"
+    ]
 
     # Must run on the same Ubuntu version as docs-ci to produce identical pixels.
     assert job["runs-on"] == "ubuntu-24.04"
+    # On pull_request the workflow must operate on the head branch, not the
+    # synthetic merge ref, so refreshed assets push back to the PR branch.
+    checkout_step = next(s for s in job["steps"] if s.get("name") == "Checkout")
+    assert checkout_step["with"]["ref"] == "${{ github.head_ref || github.ref }}"
 
     # Must regenerate visual assets and commit them.
     step_runs = [s.get("run", "") for s in job["steps"]]
