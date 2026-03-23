@@ -138,6 +138,8 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     assert any(p.startswith("src/option_pricing") for p in watched_paths)
     assert "scripts/build_benchmark_artifacts.py" in watched_paths
     assert "scripts/build_visual_artifacts.py" in watched_paths
+    assert "scripts/install_d2.sh" in watched_paths
+    assert "scripts/render_d2_diagrams.py" in watched_paths
     # Must cover CSS/JS/theme overrides and the MkDocs config — the only docs/
     # subdirectories that can cause pixel-level changes in sentinel renders.
     assert "docs/stylesheets/**" in watched_paths
@@ -167,15 +169,19 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
         in job["if"]
     )
 
-    # Must run on the same Ubuntu version as docs-ci to produce identical pixels.
+    # Must run on the same Ubuntu version and D2 version as docs-ci to
+    # produce identical pixels.
     assert job["runs-on"] == "ubuntu-24.04"
+    assert job["env"]["D2_VERSION"] == "v0.7.1"
     # On pull_request the workflow must operate on the head branch, not the
     # synthetic merge ref, so refreshed assets push back to the PR branch.
     checkout_step = next(s for s in job["steps"] if s.get("name") == "Checkout")
     assert checkout_step["with"]["ref"] == "${{ github.head_ref || github.ref }}"
 
-    # Must regenerate visual assets and commit them.
+    # Must regenerate D2 diagrams, visual assets, and commit them.
     step_runs = [s.get("run", "") for s in job["steps"]]
+    assert any('bash scripts/install_d2.sh "${D2_VERSION}"' in r for r in step_runs)
+    assert any("render_d2_diagrams.py" in r for r in step_runs)
     assert any("build_visual_artifacts.py all --profile ci" in r for r in step_runs)
     assert any("git commit" in r and "git push" in r for r in step_runs)
 
@@ -192,6 +198,7 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     # The commit must stage generated assets plus all committed authoritative
     # snapshot suites that the wrapper can refresh.
     commit_run = next(r for r in step_runs if "git commit" in r and "git push" in r)
+    assert "docs/assets/diagrams/" in commit_run
     assert "sentinel.spec.ts-snapshots" in commit_run
     assert "pages.spec.ts-snapshots" in commit_run
     assert "components.spec.ts-snapshots" in commit_run

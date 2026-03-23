@@ -1,10 +1,10 @@
 name: docs-visual-assets-auto-refresh
 
-# Automatically regenerate docs/assets/generated/ and refresh authoritative
-# Playwright snapshots whenever a same-repo branch update touches source code
-# or visual-affecting docs content. Running in the exact same Ubuntu 24.04
-# environment (and with the same pinned deps) as docs-ci means the
-# pixel-identical check in docs-ci always passes.
+# Automatically regenerate docs/assets/generated/, refresh D2 diagrams, and
+# refresh authoritative Playwright snapshots whenever a same-repo branch update
+# touches source code or visual-affecting docs content. Running in the exact
+# same Ubuntu 24.04 environment (and with the same pinned deps) as docs-ci
+# means the pixel-identical check in docs-ci always passes.
 #
 # When this job commits refreshed assets and snapshots back to the branch,
 # docs-ci re-runs on that new commit with up-to-date assets and succeeds.
@@ -21,9 +21,9 @@ name: docs-visual-assets-auto-refresh
 # committed, surfacing the regression for manual inspection.
 #
 # Trigger paths are intentionally limited to files that can cause a
-# pixel-level change in the sentinel renders: generated assets, CSS/JS
-# overrides, and the MkDocs site config.  Pure markdown text edits do not
-# affect pixel output and should not fire the full pipeline.
+# pixel-level change in the sentinel renders: generated assets, D2-backed
+# diagrams, CSS/JS overrides, and the MkDocs site config. Pure markdown text
+# edits do not affect pixel output and should not fire the full pipeline.
 
 on:
   push:
@@ -41,6 +41,8 @@ on:
       - 'src/option_pricing/**'
       - 'scripts/build_benchmark_artifacts.py'
       - 'scripts/build_visual_artifacts.py'
+      - 'scripts/install_d2.sh'
+      - 'scripts/render_d2_diagrams.py'
   pull_request:
     paths:
       - '.github/workflows/docs-ci.yml'
@@ -54,6 +56,8 @@ on:
       - 'src/option_pricing/**'
       - 'scripts/build_benchmark_artifacts.py'
       - 'scripts/build_visual_artifacts.py'
+      - 'scripts/install_d2.sh'
+      - 'scripts/render_d2_diagrams.py'
 
 permissions:
   contents: write
@@ -68,6 +72,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       MPLBACKEND: Agg
+      D2_VERSION: "v0.7.1"
 
     steps:
       - name: Checkout
@@ -87,6 +92,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -c scripts/ci-constraints.txt -e ".[docs,plot]"
+
+      - name: Install D2
+        run: bash scripts/install_d2.sh "${D2_VERSION}"
+
+      - name: Regenerate D2 diagrams
+        run: python scripts/render_d2_diagrams.py
 
       - name: Regenerate visual assets
         run: python scripts/build_visual_artifacts.py all --profile ci
@@ -114,9 +125,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/assets/diagrams/
           git add docs/assets/generated/
           git add tests/visual/sentinel.spec.ts-snapshots/
           git add tests/visual/pages.spec.ts-snapshots/
           git add tests/visual/components.spec.ts-snapshots/
-          git commit -m "docs: auto-refresh visual assets and snapshots"
+          git commit -m "docs: auto-refresh diagrams, visual assets, and snapshots"
           git push
