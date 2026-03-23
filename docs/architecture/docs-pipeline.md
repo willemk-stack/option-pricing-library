@@ -38,6 +38,16 @@ This is the manual regeneration path for tracked docs artifacts.
 - is the primary write-mode path for tracked docs assets
 - opens a draft PR when there is something to review
 
+### `docs-visual-assets-auto-refresh`
+
+This is the automatic same-branch repair path for visual drift that docs-ci only
+checks.
+
+- runs on same-repo `push` and `pull_request` events, including `main`
+- refreshes D2 diagrams, generated visual assets, and authoritative visual snapshots
+- uses the same pinned Ubuntu docs environment as docs-ci so refreshed assets match the blocking checks
+- pushes refreshed files back to the branch and lets docs-ci rerun on the refreshed branch head via `workflow_run`
+
 ### `benchmarks`
 
 This is the authoritative benchmark refresh path.

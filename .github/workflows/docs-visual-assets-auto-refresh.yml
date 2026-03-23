@@ -11,8 +11,8 @@ name: docs-visual-assets-auto-refresh
 #
 # The "github.actor != 'github-actions[bot]'" guard prevents the bot's own
 # push from triggering another refresh cycle. The pull_request trigger is a
-# backstop for bot-authored branch pushes where GitHub can leave the push event
-# workflow in an "action_required" state without running any jobs.
+# backstop for bot-authored same-repo PR branches where GitHub can leave the
+# push event workflow in an "action_required" state without running any jobs.
 #
 # RISK: --update-snapshots accepts any visual state as correct, including
 # broken or regressed renders.  To guard against silently committing bad
@@ -27,8 +27,6 @@ name: docs-visual-assets-auto-refresh
 
 on:
   push:
-    branches-ignore:
-      - main
     paths:
       - '.github/workflows/docs-ci.yml'
       - '.github/workflows/docs-visual-assets-auto-refresh.yml'

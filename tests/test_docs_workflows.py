@@ -129,8 +129,10 @@ def test_docs_visual_assets_auto_refresh_runs_on_push_and_guards_against_loops()
     on_push = workflow[True]["push"]
     on_pull_request = workflow[True]["pull_request"]
 
-    # Must trigger on push to non-main branches when source files change.
-    assert "main" in on_push["branches-ignore"]
+    # Must trigger on push to same-repo branches, including main, when source
+    # files change so stale generated assets are auto-refreshed before docs-ci
+    # revalidates the refreshed branch head.
+    assert "branches-ignore" not in on_push
     watched_paths = on_push["paths"]
     assert ".github/workflows/docs-ci.yml" in watched_paths
     assert ".github/workflows/docs-visual-assets-auto-refresh.yml" in watched_paths
@@ -227,7 +229,7 @@ def test_docs_ci_reruns_after_auto_refresh_on_latest_branch_head() -> None:
 
     assert (
         workflow["concurrency"]["group"]
-        == "docs-ci-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_branch || github.ref }}"
+        == "docs-ci-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_branch || github.ref_name }}"
     )
 
     build_job = workflow["jobs"]["build"]
