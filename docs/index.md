@@ -1,8 +1,5 @@
----
 hide:
-  - navigation
-  - toc
----
+    - toc
 
 <h1 class="homepage-hero__title homepage-page-title">Option Pricing Library</h1>
 

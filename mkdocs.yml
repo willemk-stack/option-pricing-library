@@ -74,6 +74,8 @@ plugins:
             separate_signature: true
 
 markdown_extensions:
+  - meta
+
   # Better Markdown ergonomics for Material
   - admonition
   - pymdownx.details

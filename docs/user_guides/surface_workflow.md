@@ -1,8 +1,5 @@
----
 hide:
-  - navigation
-  - toc
----
+    - toc
 
 # Surface repair workflow
 
