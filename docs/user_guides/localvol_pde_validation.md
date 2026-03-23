@@ -1,8 +1,5 @@
----
 hide:
-  - navigation
-  - toc
----
+    - toc
 
 # Local-vol and PDE validation
 

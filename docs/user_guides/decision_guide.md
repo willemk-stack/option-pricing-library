@@ -1,8 +1,5 @@
----
 hide:
-  - navigation
-  - toc
----
+    - toc
 
 # Decision guide
 
