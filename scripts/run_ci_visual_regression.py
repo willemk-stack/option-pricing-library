@@ -66,37 +66,37 @@ STAGE_METADATA = {
     "playwright-sentinel-pages-embedded-panels": (
         "browser-snapshot-or-embedded-asset",
         "Ubuntu Playwright sentinel, full-page, or embedded-panel checks",
-        "Inspect the uploaded docs-ci-authoritative-visual-artifacts ZIP (it contains tests/visual/test-results/** from the runner) and any linked docs/assets/generated files.",
+        "Inspect the uploaded visual regression artifact bundle (it contains tests/visual/test-results/** from the runner) and any linked docs/assets/generated files.",
     ),
     "playwright-sentinel-pages": (
         "browser-snapshot-page",
         "Ubuntu Playwright sentinel or full-page snapshots",
-        "Inspect the uploaded docs-ci-authoritative-visual-artifacts ZIP; it contains tests/visual/test-results/** from the runner snapshot job.",
+        "Inspect the uploaded visual regression artifact bundle; it contains tests/visual/test-results/** from the runner snapshot job.",
     ),
     "playwright-pages": (
         "browser-snapshot-page",
         "Ubuntu representative full-page snapshots",
-        "Inspect the uploaded docs-ci-authoritative-visual-artifacts ZIP; it contains the representative page diffs under tests/visual/test-results/** from the runner.",
+        "Inspect the uploaded visual regression artifact bundle; it contains the representative page diffs under tests/visual/test-results/** from the runner.",
     ),
     "playwright-sentinel-repo-facts": (
         "browser-snapshot-page",
         "Ubuntu Playwright sentinel and repository-facts checks",
-        "Inspect the uploaded docs-ci-authoritative-visual-artifacts ZIP; it contains the sentinel or repo-facts output under tests/visual/test-results/** from the runner.",
+        "Inspect the uploaded visual regression artifact bundle; it contains the sentinel or repo-facts output under tests/visual/test-results/** from the runner.",
     ),
     "playwright-sentinel-repo-facts-embedded-panels": (
         "browser-snapshot-or-embedded-asset",
         "Ubuntu Playwright sentinel, repository-facts, or embedded-panel checks",
-        "Inspect the uploaded docs-ci-authoritative-visual-artifacts ZIP (it contains tests/visual/test-results/** from the runner) and any linked docs/assets/generated files.",
+        "Inspect the uploaded visual regression artifact bundle (it contains tests/visual/test-results/** from the runner) and any linked docs/assets/generated files.",
     ),
     "playwright-components": (
         "browser-snapshot-component",
         "Ubuntu Playwright component snapshots",
-        "Inspect the uploaded docs-ci-authoritative-visual-artifacts ZIP; it contains the component snapshot diffs under tests/visual/test-results/** from the runner.",
+        "Inspect the uploaded visual regression artifact bundle; it contains the component snapshot diffs under tests/visual/test-results/** from the runner.",
     ),
     "playwright-embedded-panels": (
         "browser-snapshot-or-embedded-asset",
         "Ubuntu Playwright embedded-panel checks or generated proof assets",
-        "Inspect the uploaded docs-ci-authoritative-visual-artifacts ZIP for runner-side evidence and the linked SVG/PNG assets under docs/assets/generated.",
+        "Inspect the uploaded visual regression artifact bundle for runner-side evidence and the linked SVG/PNG assets under docs/assets/generated.",
     ),
 }
 

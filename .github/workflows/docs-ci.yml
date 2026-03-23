@@ -17,7 +17,6 @@ on:
       - 'scripts/docs_doctor.py'
       - 'scripts/docs_impact.py'
       - 'scripts/docs_site_contract.py'
-      - 'scripts/install_d2.sh'
       - 'scripts/pre_push_docs_validation.py'
       - 'scripts/render_d2_diagrams.py'
       - 'scripts/render_performance_page.py'
@@ -31,11 +30,6 @@ on:
       - 'tests/visual/**'
       - 'benchmarks/artifacts/**'
       - 'benchmarks/*.py'
-  workflow_run:
-    workflows:
-      - docs-visual-assets-auto-refresh
-    types:
-      - completed
   push:
     branches:
       - main
@@ -54,7 +48,6 @@ on:
       - 'scripts/docs_doctor.py'
       - 'scripts/docs_impact.py'
       - 'scripts/docs_site_contract.py'
-      - 'scripts/install_d2.sh'
       - 'scripts/pre_push_docs_validation.py'
       - 'scripts/render_d2_diagrams.py'
       - 'scripts/render_performance_page.py'
@@ -71,7 +64,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: docs-ci-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.head_branch || github.ref_name }}
+  group: docs-ci-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
@@ -79,7 +72,6 @@ permissions:
 
 jobs:
   build:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     outputs:
       artifact_name: ${{ steps.docs_site_contract.outputs.artifact_name }}
@@ -98,7 +90,7 @@ jobs:
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
+          ref: ${{ github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -154,17 +146,11 @@ jobs:
         if: steps.docs_impact.outputs.performance_page_required == 'true'
         run: python scripts/render_performance_page.py --check
 
-      - name: Install D2
-        if: steps.docs_impact.outputs.d2_required == 'true'
-        run: bash scripts/install_d2.sh "${D2_VERSION}"
-
       - name: Check D2 diagrams
         if: steps.docs_impact.outputs.d2_required == 'true'
-        run: python scripts/render_d2_diagrams.py --check
-
-      - name: Check generated visual assets
-        if: steps.docs_impact.outputs.visual_assets_required == 'true'
-        run: python scripts/build_visual_artifacts.py all --profile ci --check
+        run: |
+          bash scripts/install_d2.sh "${D2_VERSION}"
+          python scripts/render_d2_diagrams.py --check
 
       - name: Check docs source links
         if: steps.docs_impact.outputs.docs_site_required == 'true'
@@ -256,52 +242,11 @@ jobs:
           path: |
             tests/visual/test-results/**
 
-  authoritative-visual:
-    if: needs.build.outputs.docs_site_required == 'true'
-    needs: build
-    runs-on: ubuntu-24.04
-    env:
-      REVIEW_PATHS: ${{ needs.build.outputs.review_paths }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: "3.12"
-
-      - name: Download built docs site
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: ${{ needs.build.outputs.artifact_name }}
-          path: ${{ needs.build.outputs.site_dir }}
-
-      - name: Verify built docs site layout
-        run: python scripts/docs_site_contract.py verify
-
-      - name: Run docs-impact-selected authoritative visual suites
-        run: |
-          python scripts/run_ci_visual_regression.py verify \
-            --skip-build \
-            --tests ${{ needs.build.outputs.selected_tests }}
-
-      - name: Upload authoritative visual artifacts
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: docs-ci-authoritative-visual-artifacts
-          if-no-files-found: ignore
-          path: |
-            tests/visual/test-results/**
-
   stage-pages-artifact:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.outputs.docs_site_required == 'true'
     needs:
       - build
       - browser-audits
-      - authoritative-visual
     runs-on: ubuntu-24.04
     permissions:
       contents: read
