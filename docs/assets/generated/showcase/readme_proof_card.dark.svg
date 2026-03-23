@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
+  <title id="title">README proof card for the option pricing library</title>
+  <desc id="desc">Four readable proof tiles for README width covering surface repair, smooth Dupire handoff, local-vol and PDE validation, and benchmark plus delivery evidence. Metrics are loaded from the published proof pages and committed performance artifacts.</desc>
+
+  <rect width="1280" height="760" fill="#08101F" />
+  <rect x="24" y="24" width="1232" height="712" rx="30" ry="30" fill="#0F172A" stroke="#334155" stroke-width="2" />
+
+  <rect x="64" y="66" width="170" height="34" rx="17" ry="17" fill="#16243A" />
+  <text x="86" y="89" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1" fill="#BEE3FF">PROOF AT A GLANCE</text>
+  <text x="64" y="148" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="42" font-weight="700" fill="#E5EDF7">What is already proven in this repo</text>
+  <text x="64" y="184" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#A8B5C7">Readable at GitHub README width, generated from the same published proof pages and benchmark artifacts as the docs.</text>
+
+  <rect x="64" y="228" width="552" height="214" rx="24" ry="24" fill="#111C2F" stroke="#334155" stroke-width="2" />
+  <text x="96" y="276" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#E5EDF7">Surface repair</text>
+  <text x="96" y="316" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#A8B5C7">Quoted versus repaired surfaces stay visible.</text>
+  <text x="96" y="350" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#A8B5C7">No-arbitrage checks and per-expiry SVI residuals stay reviewable.</text>
+  <text x="96" y="398" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" font-weight="700" fill="#8CC9FF">Open: Surface workflow and decision guide</text>
+
+  <rect x="664" y="228" width="552" height="214" rx="24" ry="24" fill="#111C2F" stroke="#334155" stroke-width="2" />
+  <text x="696" y="276" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#E5EDF7">Smooth Dupire handoff</text>
+  <text x="696" y="322" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="36" font-weight="700" fill="#8CC9FF">8.07e-2 -&gt; 8.2e-5</text>
+  <text x="696" y="356" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#A8B5C7">Worst published seam jump after smoothing.</text>
+  <text x="696" y="396" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#A8B5C7">Dupire invalid-count check stays at <tspan font-weight="700" fill="#91E0D7">0</tspan>.</text>
+
+  <rect x="64" y="474" width="552" height="214" rx="24" ry="24" fill="#111C2F" stroke="#334155" stroke-width="2" />
+  <text x="96" y="522" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#E5EDF7">Local-vol and PDE validation</text>
+  <text x="96" y="568" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="36" font-weight="700" fill="#8CC9FF">154 repricings</text>
+  <text x="96" y="602" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#A8B5C7">Mean abs price error 8.1e-4.</text>
+  <text x="96" y="636" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#A8B5C7">Max abs IV error 18.7 bp on the published sweep.</text>
+
+  <rect x="664" y="474" width="552" height="214" rx="24" ry="24" fill="#111C2F" stroke="#334155" stroke-width="2" />
+  <text x="696" y="522" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#E5EDF7">Benchmarks and delivery</text>
+  <text x="696" y="568" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="36" font-weight="700" fill="#8CC9FF">379x IV slice speedup</text>
+  <text x="696" y="602" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#A8B5C7">Published at 801 strikes from committed benchmark artifacts.</text>
+  <text x="696" y="636" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#A8B5C7">README, docs visuals, and proof pages are regenerated and checked in CI.</text>
+</svg>

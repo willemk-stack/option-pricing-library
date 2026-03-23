@@ -156,6 +156,14 @@ PRESET_SPECS: dict[str, tuple[PlotSpec, ...]] = {
     "showcase": (
         PlotSpec(
             preset="showcase",
+            filename="readme_proof_card.svg",
+            renderer="readme_proof_card",
+            datasets=(),
+            title="README proof card",
+            kwargs={},
+        ),
+        PlotSpec(
+            preset="showcase",
             filename="reviewer_proof_panel.svg",
             renderer="reviewer_proof_panel",
             datasets=(),
@@ -705,6 +713,125 @@ def _load_reviewer_proof_panel_metrics() -> dict[str, str]:
     }
 
 
+def _fmt_speedup(value: float) -> str:
+    if value >= 100:
+        return f"{value:.0f}x"
+    return f"{value:.1f}x"
+
+
+def _fmt_compact_sci(value: float, *, decimals: int) -> str:
+    mantissa, exponent = f"{value:.{decimals}e}".split("e")
+    return f"{mantissa}e{int(exponent)}"
+
+
+def _fmt_bp(value: float) -> str:
+    return f"{value:.1f} bp"
+
+
+def _load_readme_proof_card_metrics() -> dict[str, str]:
+    metrics = _load_reviewer_proof_panel_metrics()
+    iv_speedup_rows = pd.read_csv(ROOT / "benchmarks" / "artifacts" / "iv_speedup.csv")
+    iv_last = iv_speedup_rows.sort_values("n_strikes").iloc[-1]
+    metrics["seam_svi"] = _fmt_compact_sci(float(metrics["seam_svi"]), decimals=2)
+    metrics["seam_smoothed"] = _fmt_compact_sci(
+        float(metrics["seam_smoothed"]), decimals=1
+    )
+    metrics["mean_abs_price_error"] = _fmt_compact_sci(
+        float(metrics["mean_abs_price_error"]), decimals=1
+    )
+    metrics["max_abs_iv_error"] = _fmt_bp(
+        float(metrics["max_abs_iv_error"].removesuffix(" bp"))
+    )
+    metrics["iv_speedup"] = _fmt_speedup(float(iv_last["vectorized_speedup_x"]))
+    metrics["iv_strikes"] = str(int(iv_last["n_strikes"]))
+    return metrics
+
+
+def _readme_proof_card(
+    datasets: dict[str, pd.DataFrame],
+    *,
+    spec: PlotSpec,
+    out_path: Path,
+    dpi: int,
+    theme: str,
+) -> Path:
+    del datasets, spec, dpi
+
+    metrics = _load_readme_proof_card_metrics()
+    palette = publishing_palette(theme)
+    font_stack = SVG_TEXT_FONT_STACK
+
+    if theme == "dark":
+        colors = {
+            "page_bg": "#08101F",
+            "panel_bg": "#0F172A",
+            "panel_stroke": "#334155",
+            "card_bg": "#111C2F",
+            "card_stroke": "#334155",
+            "accent": "#8CC9FF",
+            "success": "#91E0D7",
+            "text": palette["text"],
+            "muted": palette["muted_text"],
+            "pill_bg": "#16243A",
+            "pill_text": "#BEE3FF",
+        }
+    else:
+        colors = {
+            "page_bg": "#EEF3F8",
+            "panel_bg": "#FFFFFF",
+            "panel_stroke": "#D7E0EA",
+            "card_bg": "#F8FBFD",
+            "card_stroke": "#D7E0EA",
+            "accent": "#0B5CAB",
+            "success": "#0F766E",
+            "text": palette["text"],
+            "muted": "#4A6277",
+            "pill_bg": "#EAF1F8",
+            "pill_text": "#0B5CAB",
+        }
+
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
+  <title id="title">README proof card for the option pricing library</title>
+  <desc id="desc">Four readable proof tiles for README width covering surface repair, smooth Dupire handoff, local-vol and PDE validation, and benchmark plus delivery evidence. Metrics are loaded from the published proof pages and committed performance artifacts.</desc>
+
+  <rect width="1280" height="760" fill="{colors["page_bg"]}" />
+  <rect x="24" y="24" width="1232" height="712" rx="30" ry="30" fill="{colors["panel_bg"]}" stroke="{colors["panel_stroke"]}" stroke-width="2" />
+
+  <rect x="64" y="66" width="170" height="34" rx="17" ry="17" fill="{colors["pill_bg"]}" />
+  <text x="86" y="89" font-family="{font_stack}" font-size="16" font-weight="700" letter-spacing="1" fill="{colors["pill_text"]}">PROOF AT A GLANCE</text>
+  <text x="64" y="148" font-family="{font_stack}" font-size="42" font-weight="700" fill="{colors["text"]}">What is already proven in this repo</text>
+  <text x="64" y="184" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Readable at GitHub README width, generated from the same published proof pages and benchmark artifacts as the docs.</text>
+
+  <rect x="64" y="228" width="552" height="214" rx="24" ry="24" fill="{colors["card_bg"]}" stroke="{colors["card_stroke"]}" stroke-width="2" />
+  <text x="96" y="276" font-family="{font_stack}" font-size="28" font-weight="700" fill="{colors["text"]}">Surface repair</text>
+  <text x="96" y="316" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Quoted versus repaired surfaces stay visible.</text>
+  <text x="96" y="350" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">No-arbitrage checks and per-expiry SVI residuals stay reviewable.</text>
+  <text x="96" y="398" font-family="{font_stack}" font-size="18" font-weight="700" fill="{colors["accent"]}">Open: Surface workflow and decision guide</text>
+
+  <rect x="664" y="228" width="552" height="214" rx="24" ry="24" fill="{colors["card_bg"]}" stroke="{colors["card_stroke"]}" stroke-width="2" />
+  <text x="696" y="276" font-family="{font_stack}" font-size="28" font-weight="700" fill="{colors["text"]}">Smooth Dupire handoff</text>
+  <text x="696" y="322" font-family="{font_stack}" font-size="36" font-weight="700" fill="{colors["accent"]}">{metrics["seam_svi"]} -&gt; {metrics["seam_smoothed"]}</text>
+  <text x="696" y="356" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Worst published seam jump after smoothing.</text>
+  <text x="696" y="396" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Dupire invalid-count check stays at <tspan font-weight="700" fill="{colors["success"]}">{metrics["projection_invalid_count"]}</tspan>.</text>
+
+  <rect x="64" y="474" width="552" height="214" rx="24" ry="24" fill="{colors["card_bg"]}" stroke="{colors["card_stroke"]}" stroke-width="2" />
+  <text x="96" y="522" font-family="{font_stack}" font-size="28" font-weight="700" fill="{colors["text"]}">Local-vol and PDE validation</text>
+  <text x="96" y="568" font-family="{font_stack}" font-size="36" font-weight="700" fill="{colors["accent"]}">{metrics["repriced_options"]} repricings</text>
+  <text x="96" y="602" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Mean abs price error {metrics["mean_abs_price_error"]}.</text>
+  <text x="96" y="636" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Max abs IV error {metrics["max_abs_iv_error"]} on the published sweep.</text>
+
+  <rect x="664" y="474" width="552" height="214" rx="24" ry="24" fill="{colors["card_bg"]}" stroke="{colors["card_stroke"]}" stroke-width="2" />
+  <text x="696" y="522" font-family="{font_stack}" font-size="28" font-weight="700" fill="{colors["text"]}">Benchmarks and delivery</text>
+  <text x="696" y="568" font-family="{font_stack}" font-size="36" font-weight="700" fill="{colors["accent"]}">{metrics["iv_speedup"]} IV slice speedup</text>
+  <text x="696" y="602" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Published at {metrics["iv_strikes"]} strikes from committed benchmark artifacts.</text>
+  <text x="696" y="636" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">README, docs visuals, and proof pages are regenerated and checked in CI.</text>
+</svg>
+"""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(svg, encoding="utf-8")
+    return out_path
+
+
 def _reviewer_proof_panel(
     datasets: dict[str, pd.DataFrame],
     *,
@@ -942,6 +1069,7 @@ RENDERERS = {
         dpi=dpi,
         theme=theme,
     ),
+    "readme_proof_card": _readme_proof_card,
     "reviewer_proof_panel": _reviewer_proof_panel,
 }
 
