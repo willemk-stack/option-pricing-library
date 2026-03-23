@@ -31,7 +31,10 @@ def test_docs_ci_stays_a_deterministic_blocking_docs_gate() -> None:
     parsed = yaml.safe_load(workflow)
 
     assert "python scripts/render_d2_diagrams.py --check" in workflow
-    assert "python scripts/build_visual_artifacts.py all --profile ci --check" not in workflow
+    assert (
+        "python scripts/build_visual_artifacts.py all --profile ci --check"
+        not in workflow
+    )
     assert "workflow_run" not in parsed[True]
 
 
@@ -56,7 +59,10 @@ def test_docs_assets_refresh_remains_the_write_mode_generator() -> None:
 def test_docs_advisory_owns_visual_drift_checks() -> None:
     workflow = workflow_text("docs-advisory.yml")
 
-    assert "run: python scripts/build_visual_artifacts.py all --profile ci --check" in workflow
+    assert (
+        "run: python scripts/build_visual_artifacts.py all --profile ci --check"
+        in workflow
+    )
     assert "Run full authoritative visual regression" in workflow
     assert "python scripts/run_ci_visual_regression.py verify" in workflow
     assert "--skip-build" in workflow
@@ -119,7 +125,10 @@ def test_dev_extras_include_pre_commit_for_local_docs_guards() -> None:
 def test_docs_ci_no_longer_depends_on_workflow_run_or_authoritative_snapshots() -> None:
     workflow = yaml.safe_load(workflow_text("docs-ci.yml"))
 
-    assert workflow["concurrency"]["group"] == "docs-ci-${{ github.event.pull_request.number || github.ref_name }}"
+    assert (
+        workflow["concurrency"]["group"]
+        == "docs-ci-${{ github.event.pull_request.number || github.ref_name }}"
+    )
 
     build_job = workflow["jobs"]["build"]
     assert "if" not in build_job
@@ -127,4 +136,7 @@ def test_docs_ci_no_longer_depends_on_workflow_run_or_authoritative_snapshots() 
     checkout_step = next(s for s in build_job["steps"] if s.get("name") == "Checkout")
     assert checkout_step["with"]["ref"] == "${{ github.ref }}"
     assert "authoritative-visual" not in workflow["jobs"]
-    assert workflow["jobs"]["stage-pages-artifact"]["needs"] == ["build", "browser-audits"]
+    assert workflow["jobs"]["stage-pages-artifact"]["needs"] == [
+        "build",
+        "browser-audits",
+    ]
