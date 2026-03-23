@@ -4,8 +4,8 @@
 
 `.github/workflows/docs-ci.yml` is the authoritative blocking workflow for docs changes.
 
-- It uses `scripts/docs_impact.py` as the single selector for docs scope, review paths, accessibility scope, and authoritative visual suites.
-- It validates generated outputs in check-only mode for README, performance docs, D2 diagrams, benchmark artifacts, and generated visual assets.
+- It uses `scripts/docs_impact.py` as the single selector for docs scope, review paths, and accessibility scope.
+- It validates generated outputs in check-only mode for README, performance docs, D2 diagrams, and benchmark artifacts.
 - It builds the MkDocs site once, publishes the built-site artifact, and reuses that artifact for browser audits and deployment.
 
 ## Deployment workflow
@@ -21,7 +21,7 @@
 The only workflows that intentionally rewrite committed generated docs assets are explicit refresh/update workflows.
 
 - `.github/workflows/docs-assets-refresh.yml` is the write-mode workflow for README, D2 diagrams, generated visual assets, and the performance page.
-- Blocking CI and advisory CI both use check-only validation for those generated assets.
+- `.github/workflows/docs-advisory.yml` owns the heavier generated-asset and full-page snapshot drift checks.
 
 ## Local vs CI
 
@@ -30,4 +30,4 @@ Local hooks and CI intentionally have different weight.
 - `benchmark-source-manifest-refresh` runs in pre-commit for benchmark-sensitive source edits and refreshes `benchmarks/artifacts/benchmark_source_manifest.json` before the change is committed.
 - `docs-pre-push-guard` runs `scripts/pre_push_docs_validation.py --mode fast` and keeps the default push path portable: no Playwright, no Docker, and no browser gate.
 - `docs-manual-guard` runs `scripts/pre_push_docs_validation.py --mode manual` for contributors who want the heavier local browser and Dockerized snapshot checks.
-- PR CI remains authoritative for the full browser contract, including smoke, DOM, accessibility, and docs-impact-selected authoritative visual suites.
+- PR CI stays focused on sync/build plus smoke, DOM, math, and curated accessibility checks; advisory/manual workflows own the full-page snapshot drift checks.

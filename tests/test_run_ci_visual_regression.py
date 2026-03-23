@@ -91,5 +91,5 @@ def test_browser_snapshot_stage_metadata_points_to_uploaded_artifact_bundle() ->
 
     assert failure_class == "browser-snapshot-page"
     assert likely_layer == "Ubuntu representative full-page snapshots"
-    assert "docs-ci-authoritative-visual-artifacts ZIP" in next_step
+    assert "visual regression artifact bundle" in next_step
     assert "tests/visual/test-results/**" in next_step

@@ -22,11 +22,11 @@ This is the authoritative blocking docs workflow on pull requests.
 - installs the pinned docs/test environment from `scripts/ci-constraints.txt`
 - checks `README.md` and `docs/performance.md` synchronization
 - checks benchmark snapshot freshness only when benchmark or performance inputs changed
-- validates D2 diagrams and generated visual assets in check-only mode so stale committed outputs fail CI instead of being silently repaired
+- validates D2 diagrams in check-only mode
 - builds the MkDocs site once, uploads the built-site artifact, and reuses that artifact for downstream browser audits and Pages deploy
 - runs blocking Playwright smoke and DOM audits against the prebuilt site artifact
 - runs targeted accessibility checks on curated impacted paths
-- runs the docs-impact-selected authoritative visual suites (`sentinel`, `pages`, plus `components` and `embedded-panels` when selected)
+- keeps the blocking gate focused on deterministic sync/build/smoke checks instead of full-page snapshot drift
 
 ### `docs-assets-refresh`
 
@@ -61,12 +61,13 @@ Deployment lives inside `docs-ci` rather than in a separate cross-run workflow.
 
 This workflow is scheduled or manually triggered for the heavier audits.
 
+- generated visual asset drift checks
 - external link checks
 - DOM/CSS audits beyond the blocking smoke set
 - broader accessibility passes
 - full Ubuntu-authoritative snapshot verification
 - Windows browser checks
-- check-only validation for generated docs assets
+- check-only validation for generated docs assets and full-page visual drift that is informative but too noisy for the blocking gate
 
 ## Local contributor contract
 
