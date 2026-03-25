@@ -63,10 +63,10 @@ If you are reviewing the repo rather than just installing it, pair this page wit
 - Diagnostics explicitly depend on vol + pricers (e.g., `run_surface_diagnostics` calls `check_surface_noarb`; repricing diagnostics call `local_vol_price_pde_european`)
 - No `option_pricing.diagnostics` imports appear in core pricing modules beyond the diagnostics package itself
 
-<figure markdown class="diagram">
+<figure markdown class="diagram diagram--architecture-overview">
   ![Layered architecture](assets/diagrams/architecture_layers.light.svg){ .diagram-img .diagram-light }
   ![Layered architecture](assets/diagrams/architecture_layers.dark.svg){ .diagram-img .diagram-dark }
-  <figcaption>Dependencies flow downward and right; diagnostics sit below the pricing stack.</figcaption>
+  <figcaption>High-level overview only; the detailed layer-responsibility list above carries the concrete types, modules, and public APIs.</figcaption>
 </figure>
 
 ## Proof workflow (surface -> eSSVI -> local vol -> PDE)

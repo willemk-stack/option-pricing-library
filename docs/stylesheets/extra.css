@@ -512,6 +512,11 @@ figure.diagram {
     overflow: visible;
 }
 
+figure.diagram--architecture-overview {
+    --diagram-max-width: 900px;
+    padding: 0.75rem 0.85rem 0.65rem;
+}
+
 figure.diagram>p {
     margin: 0;
 }

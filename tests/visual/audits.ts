@@ -442,6 +442,25 @@ export async function collectDomAuditFindings(
                         );
                     });
                 }
+
+                const overviewFigure = diagrams[0];
+                if (window.innerWidth >= 1024 && isVisible(overviewFigure)) {
+                    const overviewRect = overviewFigure.getBoundingClientRect();
+                    const aspectRatio = overviewRect.height / Math.max(overviewRect.width, 1);
+                    if (aspectRatio > 1.6) {
+                        pushFinding(
+                            "major",
+                            "layout",
+                            "architecture-overview-too-tall",
+                            `Architecture overview diagram is still portrait-dominant at ${Math.round(overviewRect.width)}x${Math.round(overviewRect.height)}`,
+                            {
+                                aspectRatio: Number(aspectRatio.toFixed(2)),
+                                height: Math.round(overviewRect.height),
+                                width: Math.round(overviewRect.width),
+                            }
+                        );
+                    }
+                }
             }
         }
 

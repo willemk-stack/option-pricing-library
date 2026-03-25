@@ -1,6 +1,6 @@
 """Layered architecture diagram."""
 
-direction: down
+direction: right
 
 classes: {
   card: {
@@ -35,52 +35,14 @@ classes: {
   }
 }
 
-row_1: "" {
-  class: row
-  direction: right
+interfaces: "Public interfaces\nspecs, instruments,\nmarket context"
+interfaces.class: card
 
-  types: "Types & Instruments\nOptionSpec, DigitalSpec"
-  types.class: card
+core_stack: "Core pricing stack\nvolatility, models,\nnumerics, pricers"
+core_stack.class: accent
 
-  market: "Market & Curves\nPricingContext, curves"
-  market.class: card
+diagnostics: "Diagnostics\nsurface reports,\nrepricing audits"
+diagnostics.class: warm
 
-  vol: "Volatility\nSurface, smile, local vol"
-  vol.class: card
-
-  types -> market
-  market -> vol
-}
-
-row_2: "" {
-  class: row
-  direction: right
-
-  models: "Models\nPDE coefficients"
-  models.class: accent
-
-  numerics: "Numerics\nGrids, solver, remedies"
-  numerics.class: accent
-
-  pricers: "Pricers\nBS, MC, Tree, PDE"
-  pricers.class: accent
-
-  models -> numerics
-  numerics -> pricers
-}
-
-row_3: "" {
-  class: row
-  direction: right
-
-  diagnostics: "Diagnostics\nSurface reports, PDE repricing"
-  diagnostics.class: warm
-}
-
-row_1.types -> row_2.models
-row_1.market -> row_2.numerics
-row_1.vol -> row_2.pricers
-
-row_2.models -> row_3.diagnostics
-row_2.numerics -> row_3.diagnostics
-row_2.pricers -> row_3.diagnostics
+interfaces -> core_stack
+core_stack -> diagnostics
