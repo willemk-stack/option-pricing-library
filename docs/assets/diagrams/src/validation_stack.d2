@@ -16,7 +16,6 @@ classes: {
       stroke-width: 2
       border-radius: 10
       shadow: true
-      fill-pattern: lines
     }
   }
 
@@ -25,7 +24,6 @@ classes: {
       stroke-width: 2
       border-radius: 12
       shadow: true
-      fill-pattern: grain
     }
   }
 
@@ -41,25 +39,13 @@ row_1: "" {
   class: row
   direction: right
 
-  analytic: |md
-**Analytic baselines**
-
-`bs_price_from_ctx`
-|
+  analytic: "Analytic baselines\nbs_price_from_ctx"
   analytic.class: card
 
-  pde_stack: |md
-**PDE stack**
-
-`bs_price_pde_european`
-|
+  pde_stack: "PDE stack\nbs_price_pde_european"
   pde_stack.class: accent
 
-  validation: |md
-**Validation**
-
-`test_pde_pricer.py`
-|
+  validation: "Validation\ntest_pde_pricer.py"
   validation.class: warm
 
   analytic -> pde_stack -> validation

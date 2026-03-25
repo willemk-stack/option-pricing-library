@@ -18,6 +18,7 @@
   ],
   "page_snapshot_pages": [
     "/",
+    "/architecture/",
     "/user_guides/surface_workflow/",
     "/api/"
   ],
@@ -36,6 +37,7 @@
     1280
   ],
   "priority_asset_globs": [
+    "docs/assets/diagrams/**/*.svg",
     "docs/assets/generated/**/*.svg",
     "docs/assets/generated/**/*.png"
   ]

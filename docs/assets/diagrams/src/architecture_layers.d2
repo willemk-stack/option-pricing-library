@@ -16,7 +16,6 @@ classes: {
       stroke-width: 2
       border-radius: 10
       shadow: true
-      fill-pattern: lines
     }
   }
 
@@ -25,7 +24,6 @@ classes: {
       stroke-width: 2
       border-radius: 12
       shadow: true
-      fill-pattern: grain
     }
   }
 
@@ -41,25 +39,13 @@ row_1: "" {
   class: row
   direction: right
 
-  types: |md
-**Types & Instruments**
-
-`OptionSpec`, `DigitalSpec`
-|
+  types: "Types & Instruments\nOptionSpec, DigitalSpec"
   types.class: card
 
-  market: |md
-**Market & Curves**
-
-`PricingContext`, curves
-|
+  market: "Market & Curves\nPricingContext, curves"
   market.class: card
 
-  vol: |md
-**Volatility**
-
-Surface, smile, local vol
-|
+  vol: "Volatility\nSurface, smile, local vol"
   vol.class: card
 
   types -> market
@@ -70,25 +56,13 @@ row_2: "" {
   class: row
   direction: right
 
-  models: |md
-**Models**
-
-PDE coefficients
-|
+  models: "Models\nPDE coefficients"
   models.class: accent
 
-  numerics: |md
-**Numerics**
-
-Grids, solver, remedies
-|
+  numerics: "Numerics\nGrids, solver, remedies"
   numerics.class: accent
 
-  pricers: |md
-**Pricers**
-
-BS, MC, Tree, PDE
-|
+  pricers: "Pricers\nBS, MC, Tree, PDE"
   pricers.class: accent
 
   models -> numerics
@@ -99,11 +73,7 @@ row_3: "" {
   class: row
   direction: right
 
-  diagnostics: |md
-**Diagnostics**
-
-Surface reports, PDE repricing
-|
+  diagnostics: "Diagnostics\nSurface reports, PDE repricing"
   diagnostics.class: warm
 }
 

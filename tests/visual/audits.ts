@@ -404,6 +404,86 @@ export async function collectDomAuditFindings(
             }
         }
 
+        const d2DiagramSources = Array.from(
+            document.querySelectorAll<HTMLImageElement>("figure.diagram img")
+        )
+            .map((img) => img.getAttribute("src") || "")
+            .filter((src) => /assets\/diagrams\/.+\.svg(?:$|\?)/.test(src));
+
+        for (const src of new Set(d2DiagramSources)) {
+            try {
+                const absoluteUrl = new URL(src, document.baseURI).toString();
+                const response = await fetch(absoluteUrl);
+                if (!response.ok) {
+                    pushFinding(
+                        "critical",
+                        "media",
+                        "d2-svg-fetch-failed",
+                        `Failed to load D2 SVG source for contract checks: ${absoluteUrl}`,
+                        { src: absoluteUrl, status: response.status }
+                    );
+                    continue;
+                }
+
+                const svgText = await response.text();
+                const parsed = new DOMParser().parseFromString(svgText, "image/svg+xml");
+                const parseError = parsed.querySelector("parsererror");
+                if (parseError) {
+                    pushFinding(
+                        "critical",
+                        "media",
+                        "d2-svg-parse-error",
+                        `D2 SVG could not be parsed for contract checks: ${absoluteUrl}`
+                    );
+                    continue;
+                }
+
+                const foreignObjectCount = parsed.querySelectorAll("foreignObject").length;
+                if (foreignObjectCount > 0) {
+                    pushFinding(
+                        "critical",
+                        "media",
+                        "d2-svg-foreign-object",
+                        `D2 SVG contains fragile foreignObject nodes: ${absoluteUrl}`,
+                        { src: absoluteUrl, foreignObjectCount }
+                    );
+                }
+
+                const imageCount = parsed.querySelectorAll("image").length;
+                if (imageCount > 0) {
+                    pushFinding(
+                        "critical",
+                        "media",
+                        "d2-svg-image-node",
+                        `D2 SVG contains embedded image nodes: ${absoluteUrl}`,
+                        { src: absoluteUrl, imageCount }
+                    );
+                }
+
+                const rootSvg = parsed.documentElement;
+                if (!rootSvg.getAttribute("viewBox")) {
+                    pushFinding(
+                        "major",
+                        "media",
+                        "d2-svg-missing-viewbox",
+                        `D2 SVG is missing a viewBox: ${absoluteUrl}`,
+                        { src: absoluteUrl }
+                    );
+                }
+            } catch (error) {
+                pushFinding(
+                    "critical",
+                    "media",
+                    "d2-svg-contract-check-error",
+                    `D2 SVG contract check failed: ${src}`,
+                    {
+                        src,
+                        error: error instanceof Error ? error.message : String(error),
+                    }
+                );
+            }
+        }
+
         const selectors = [
             "h1",
             "h2",

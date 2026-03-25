@@ -19,6 +19,8 @@ GRAPHIC_TAGS = {
     "use",
 }
 ROOT = Path(__file__).resolve().parents[2]
+GENERATED_ASSETS_DIR = ROOT / "docs" / "assets" / "generated"
+D2_DIAGRAMS_DIR = ROOT / "docs" / "assets" / "diagrams"
 
 
 def extract_href(element: ET.Element) -> str | None:
@@ -56,10 +58,22 @@ def load_priority_assets() -> list[Path]:
     if assets:
         return sorted(assets)
 
-    fallback = ROOT / "docs" / "assets" / "generated"
-    return sorted(
-        path for path in fallback.rglob("*") if path.suffix.lower() in {".svg", ".png"}
-    )
+    fallback_assets: set[Path] = set()
+    for fallback in (GENERATED_ASSETS_DIR, D2_DIAGRAMS_DIR):
+        if not fallback.exists():
+            continue
+        for path in fallback.rglob("*"):
+            if path.suffix.lower() in {".svg", ".png"}:
+                fallback_assets.add(path)
+    return sorted(fallback_assets)
+
+
+def is_d2_diagram(path: Path) -> bool:
+    try:
+        path.relative_to(D2_DIAGRAMS_DIR)
+    except ValueError:
+        return False
+    return True
 
 
 def check_theme_pair(path: Path) -> list[str]:
@@ -91,7 +105,10 @@ def check_svg(path: Path) -> list[str]:
         return [f"{path}: XML parse error: {exc}"]
 
     root = tree.getroot()
-    images = root.findall(".//svg:image", SVG_NS)
+    foreign_objects = [
+        element for element in root.iter() if local_name(element.tag) == "foreignObject"
+    ]
+    images = [element for element in root.iter() if local_name(element.tag) == "image"]
 
     width = parse_dimension(root.get("width"))
     height = parse_dimension(root.get("height"))
@@ -107,6 +124,16 @@ def check_svg(path: Path) -> list[str]:
     )
     if graphic_count == 0:
         issues.append(f"{path}: no visible graphic elements found")
+
+    if is_d2_diagram(path):
+        if foreign_objects:
+            issues.append(
+                f"{path}: D2 diagram contains fragile foreignObject nodes ({len(foreign_objects)})"
+            )
+        if images:
+            issues.append(
+                f"{path}: D2 diagram contains embedded image nodes ({len(images)})"
+            )
 
     for image in images:
         href = extract_href(image)
@@ -179,7 +206,7 @@ def check_png(path: Path) -> list[str]:
 def main() -> int:
     asset_paths = load_priority_assets()
     if not asset_paths:
-        print("No generated SVG or PNG assets found under docs/assets/generated")
+        print("No configured SVG or PNG assets found for docs asset integrity checks.")
         return 0
 
     all_issues: list[str] = []

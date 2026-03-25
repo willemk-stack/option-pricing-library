@@ -38,12 +38,14 @@ import os
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = ROOT / "docs" / "assets" / "diagrams" / "src"
 OUT_DIR = ROOT / "docs" / "assets" / "diagrams"
+FRAGILE_SVG_TAGS = {"foreignObject", "image"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +79,36 @@ def _d2_binary() -> str:
     )
 
 
+def _local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _validate_rendered_svg_contract(path: Path) -> None:
+    try:
+        tree = ET.parse(path)
+    except ET.ParseError as exc:
+        raise RuntimeError(
+            f"Rendered SVG is not well-formed XML: {path.relative_to(ROOT)} ({exc})"
+        ) from exc
+
+    counts: dict[str, int] = {}
+    for element in tree.getroot().iter():
+        name = _local_name(element.tag)
+        if name in FRAGILE_SVG_TAGS:
+            counts[name] = counts.get(name, 0) + 1
+
+    if not counts:
+        return
+
+    detail = ", ".join(f"{tag}={count}" for tag, count in sorted(counts.items()))
+    raise RuntimeError(
+        "Rendered SVG uses fragile constructs in "
+        f"{path.relative_to(ROOT)} ({detail}). "
+        "Prefer plain text labels and shape fills in the D2 source so the docs "
+        "render reliably on GitHub Pages and across browsers."
+    )
+
+
 def _render_one(src: Path, out: Path, *, theme: str, cfg: D2RenderConfig) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -94,6 +126,7 @@ def _render_one(src: Path, out: Path, *, theme: str, cfg: D2RenderConfig) -> Non
 
     cmd.extend([str(src), str(out)])
     subprocess.run(cmd, check=True)
+    _validate_rendered_svg_contract(out)
 
 
 def main(argv: list[str] | None = None) -> None:
