@@ -8,6 +8,7 @@ import os
 import platform
 import sys
 import warnings
+from dataclasses import dataclass
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -39,10 +40,12 @@ from option_pricing.types import (
 from option_pricing.viz.publishing import (
     PUBLISHING_THEMES,
     SVG_TEXT_FONT_STACK,
+    SvgTextStyle,
     copy_light_variant,
-    file_to_data_uri,
     publishing_palette,
     publishing_style,
+    render_svg_contained_raster,
+    render_svg_text_block,
     save_figure,
     themed_asset_paths,
 )
@@ -1446,6 +1449,212 @@ def _save_themed_plot(out_path: Path, *, dpi: int, render) -> Path:
     return variants.base
 
 
+_BENCHMARK_OVERVIEW_PRIMARY_PANEL_WIDTH = 452.0
+_BENCHMARK_OVERVIEW_PRIMARY_PANEL_HEIGHT = 290.0
+_BENCHMARK_OVERVIEW_CALLOUT_WIDTH = 452.0
+_BENCHMARK_OVERVIEW_CALLOUT_HEIGHT = 224.0
+
+
+@dataclass(frozen=True)
+class _BenchmarkOverviewPrimaryPanel:
+    key: str
+    x: float
+    y: float
+    chip_text: str
+    chip_width: float
+    image_path: Path
+    headline: str
+    body: str
+    width: float = _BENCHMARK_OVERVIEW_PRIMARY_PANEL_WIDTH
+    height: float = _BENCHMARK_OVERVIEW_PRIMARY_PANEL_HEIGHT
+
+
+@dataclass(frozen=True)
+class _BenchmarkOverviewCalloutCard:
+    key: str
+    title: str
+    x: float
+    y: float
+    metric: str
+    body: str
+    metric_fill_key: str = "accent"
+    body_y_offset: float = 164.0
+    body_max_height: float = 60.0
+    width: float = _BENCHMARK_OVERVIEW_CALLOUT_WIDTH
+    height: float = _BENCHMARK_OVERVIEW_CALLOUT_HEIGHT
+
+
+def _render_benchmark_overview_primary_panel(
+    panel: _BenchmarkOverviewPrimaryPanel,
+    *,
+    colors: dict[str, str],
+    font_stack: str,
+) -> tuple[tuple[str, ...], str]:
+    text_clip_id = f"benchmarkOverviewPrimaryText-{panel.key}"
+    headline_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=18,
+        font_weight="700",
+        fill=colors["text"],
+        line_height=22,
+    )
+    body_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=16,
+        font_weight="400",
+        fill=colors["muted"],
+        line_height=20,
+    )
+    text_x = panel.x
+    text_width = panel.width
+    headline_y = panel.y + 342
+    body_y = panel.y + 388
+    raster_block = render_svg_contained_raster(
+        block_id=f"benchmarkOverviewImage-{panel.key}",
+        image_path=panel.image_path,
+        slot_x=panel.x,
+        slot_y=panel.y,
+        slot_width=panel.width,
+        slot_height=panel.height,
+        frame_radius=20,
+        frame_fill=colors["thumb_fill"],
+        source_label=str(panel.image_path.relative_to(ROOT)).replace("\\", "/"),
+    )
+    clip_paths = (
+        raster_block.clip_path,
+        (
+            f'    <clipPath id="{text_clip_id}">\n'
+            f'      <rect x="{panel.x:g}" y="{panel.y + 328:g}" '
+            f'width="{panel.width:g}" height="116" rx="12" ry="12" />\n'
+            "    </clipPath>"
+        ),
+    )
+    headline_svg = render_svg_text_block(
+        block_id=f"benchmark-overview-{panel.key}-headline",
+        text=panel.headline,
+        x=text_x,
+        y=headline_y,
+        max_width=text_width,
+        max_height=44,
+        style=headline_style,
+        overflow_label=f"Benchmark overview primary panel {panel.key}/headline",
+    )
+    body_svg = render_svg_text_block(
+        block_id=f"benchmark-overview-{panel.key}-body",
+        text=panel.body,
+        x=text_x,
+        y=body_y,
+        max_width=text_width,
+        max_height=40,
+        style=body_style,
+        overflow_label=f"Benchmark overview primary panel {panel.key}/body",
+    )
+    svg = "\n".join(
+        [
+            raster_block.svg,
+            (
+                f'  <rect x="{panel.x + 18:g}" y="{panel.y + 18:g}" '
+                f'width="{panel.chip_width:g}" height="30" rx="15" ry="15" '
+                f'fill="{colors["chip_fill"]}" opacity="0.84" />'
+            ),
+            (
+                f'  <text x="{panel.x + 36:g}" y="{panel.y + 39:g}" '
+                f'font-family="{font_stack}" font-size="16" font-weight="700" '
+                f'fill="{colors["chip_text"]}">{panel.chip_text}</text>'
+            ),
+            f'  <g clip-path="url(#{text_clip_id})">',
+            f"    {headline_svg}",
+            f"    {body_svg}",
+            "  </g>",
+        ]
+    )
+    return clip_paths, svg
+
+
+def _render_benchmark_overview_callout(
+    card: _BenchmarkOverviewCalloutCard,
+    *,
+    colors: dict[str, str],
+    font_stack: str,
+) -> tuple[str, str]:
+    content_clip_id = f"benchmarkOverviewCallout-{card.key}"
+    content_x = card.x + 26.0
+    content_width = card.width - 52.0
+    title_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=18,
+        font_weight="700",
+        fill=colors["text"],
+        line_height=22,
+    )
+    metric_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=34,
+        font_weight="700",
+        fill=colors[card.metric_fill_key],
+        line_height=38,
+    )
+    body_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=16,
+        font_weight="400",
+        fill=colors["muted"],
+        line_height=20,
+    )
+    clip_path = (
+        f'    <clipPath id="{content_clip_id}">\n'
+        f'      <rect x="{card.x:g}" y="{card.y:g}" '
+        f'width="{card.width:g}" height="{card.height:g}" '
+        'rx="18" ry="18" />\n'
+        "    </clipPath>"
+    )
+    title_svg = render_svg_text_block(
+        block_id=f"benchmark-overview-{card.key}-title",
+        text=card.title,
+        x=content_x,
+        y=card.y + 36,
+        max_width=content_width,
+        max_height=22,
+        style=title_style,
+        overflow_label=f"Benchmark overview callout {card.key}/title",
+    )
+    metric_svg = render_svg_text_block(
+        block_id=f"benchmark-overview-{card.key}-metric",
+        text=card.metric,
+        x=content_x,
+        y=card.y + 84,
+        max_width=content_width,
+        max_height=76,
+        style=metric_style,
+        overflow_label=f"Benchmark overview callout {card.key}/metric",
+    )
+    body_svg = render_svg_text_block(
+        block_id=f"benchmark-overview-{card.key}-body",
+        text=card.body,
+        x=content_x,
+        y=card.y + card.body_y_offset,
+        max_width=content_width,
+        max_height=card.body_max_height,
+        style=body_style,
+        overflow_label=f"Benchmark overview callout {card.key}/body",
+    )
+    svg = "\n".join(
+        [
+            (
+                f'  <rect x="{card.x:g}" y="{card.y:g}" width="{card.width:g}" '
+                f'height="{card.height:g}" rx="24" ry="24" fill="{colors["section_fill"]}" '
+                f'stroke="{colors["section_stroke"]}" stroke-width="2" />'
+            ),
+            f'  <g clip-path="url(#{content_clip_id})">',
+            f"    {title_svg}",
+            f"    {metric_svg}",
+            f"    {body_svg}",
+            "  </g>",
+        ]
+    )
+    return clip_path, svg
+
+
 def build_benchmark_overview_asset(
     *,
     artifacts_dir: Path,
@@ -1498,13 +1707,9 @@ def build_benchmark_overview_asset(
         base_palette = publishing_palette(theme)
         image_suffix = "dark" if theme == "dark" else "light"
         font_stack = SVG_TEXT_FONT_STACK
-        iv_panel_uri = file_to_data_uri(plot_dir / f"iv_scaling.{image_suffix}.png")
-        pde_panel_uri = file_to_data_uri(
-            plot_dir / f"pde_runtime_error_tradeoff.{image_suffix}.png"
-        )
-        macro_panel_uri = file_to_data_uri(
-            plot_dir / f"macro_pipeline_summary.{image_suffix}.png"
-        )
+        iv_panel_path = plot_dir / f"iv_scaling.{image_suffix}.png"
+        pde_panel_path = plot_dir / f"pde_runtime_error_tradeoff.{image_suffix}.png"
+        macro_panel_path = plot_dir / f"macro_pipeline_summary.{image_suffix}.png"
         if theme == "dark":
             colors = {
                 "page_bg": "#08101F",
@@ -1541,80 +1746,227 @@ def build_benchmark_overview_asset(
                 "muted": base_palette["muted_text"],
                 "thumb_fill": "#DCE7F1",
             }
+
+        primary_panels = (
+            _BenchmarkOverviewPrimaryPanel(
+                key="iv-scaling",
+                x=74,
+                y=264,
+                chip_text="IV inversion scaling",
+                chip_width=186,
+                image_path=iv_panel_path,
+                headline=(
+                    f"801-strike slice: {_fmt_runtime_ms(iv_vec_ms)} vectorized vs "
+                    f"{_fmt_runtime_ms(iv_scalar_ms)} scalar loop"
+                ),
+                body=(
+                    f"Measured max speedup at that size: {iv_speedup_801:.0f}x, with "
+                    "zero observed vol difference vs the scalar loop."
+                ),
+            ),
+            _BenchmarkOverviewPrimaryPanel(
+                key="pde-cost-accuracy",
+                x=574,
+                y=264,
+                chip_text="PDE cost / accuracy",
+                chip_width=176,
+                image_path=pde_panel_path,
+                headline=(
+                    "Vanilla BS PDE, Rannacher: 401x401 -> 801x801 cuts abs error"
+                ),
+                body=(
+                    f"{_fmt_sci(float(pde_401['abs_error']))} -> "
+                    f"{_fmt_sci(float(pde_801['abs_error']))} while runtime rises "
+                    f"{_fmt_runtime_ms(float(pde_401['runtime_ms']))} -> "
+                    f"{_fmt_runtime_ms(float(pde_801['runtime_ms']))}."
+                ),
+            ),
+            _BenchmarkOverviewPrimaryPanel(
+                key="macro-stage-budget",
+                x=1074,
+                y=264,
+                chip_text="Macro stage budget",
+                chip_width=196,
+                image_path=macro_panel_path,
+                headline=(
+                    "Surface fit dominates the integrated path budget across tested sizes."
+                ),
+                body=(
+                    "Surface-fit medians: "
+                    f"{_fmt_runtime_ms(fit_small)} / {_fmt_runtime_ms(fit_medium)} / "
+                    f"{_fmt_runtime_ms(fit_large)} for small / medium / large scenarios."
+                ),
+            ),
+        )
+        callout_cards = (
+            _BenchmarkOverviewCalloutCard(
+                key="digital-payoff-remedies",
+                title="Digital payoff remedies",
+                x=72,
+                y=734,
+                metric=(
+                    f"{_fmt_sci(float(digital_none['refinement_spread']))} -> "
+                    f"{_fmt_sci(float(digital_l2['refinement_spread']))}"
+                ),
+                body=(
+                    "Grid-to-grid price spread, Rannacher + none vs Rannacher + "
+                    "L2 projection.\n"
+                    "Best measured abs error with L2 projection: "
+                    f"{_fmt_sci(float(digital_l2['best_abs_error']))}."
+                ),
+                body_y_offset=150,
+                body_max_height=80,
+            ),
+            _BenchmarkOverviewCalloutCard(
+                key="local-vol-extraction",
+                title="Local-vol extraction",
+                x=574,
+                y=734,
+                metric="0.0% interior invalid share",
+                body=(
+                    "Largest tested 121x241 grids stayed interior-valid for both "
+                    "coordinate choices.\n"
+                    "Median runtime: "
+                    f"K = {_fmt_runtime_ms(float(localvol_k['runtime_ms']))}, "
+                    f"logK = {_fmt_runtime_ms(float(localvol_logk['runtime_ms']))}."
+                ),
+                metric_fill_key="success",
+            ),
+            _BenchmarkOverviewCalloutCard(
+                key="tree-framing",
+                title="Tree framing",
+                x=1076,
+                y=734,
+                width=450,
+                metric=_fmt_runtime_ms(float(tree_last["runtime_ms"])),
+                body=(
+                    "5000-step CRR runtime in the committed snapshot.\n"
+                    "Absolute error vs Black-Scholes at that depth: "
+                    f"{_fmt_sci(float(tree_last['abs_error']))}."
+                ),
+                body_y_offset=150,
+                body_max_height=60,
+            ),
+        )
+
+        intro_svg = render_svg_text_block(
+            block_id="benchmark-overview-intro",
+            text=(
+                "Compressed reviewer scan of the repo's measured scaling, "
+                "cost-versus-accuracy, and end-to-end stage budget story."
+            ),
+            x=72,
+            y=148,
+            max_width=1456,
+            max_height=56,
+            style=SvgTextStyle(
+                font_family=font_stack,
+                font_size=24,
+                font_weight="400",
+                fill=colors["muted"],
+                line_height=28,
+            ),
+            overflow_label="Benchmark overview intro text",
+        )
+        provenance_svg = render_svg_text_block(
+            block_id="benchmark-overview-provenance",
+            text=(
+                "Built from committed benchmark outputs under benchmarks/artifacts "
+                "and docs/assets/generated/benchmarks."
+            ),
+            x=72,
+            y=182,
+            max_width=1456,
+            max_height=22,
+            style=SvgTextStyle(
+                font_family=font_stack,
+                font_size=18,
+                font_weight="400",
+                fill=colors["muted"],
+                line_height=22,
+            ),
+            overflow_label="Benchmark overview provenance text",
+        )
+        footer_svg = render_svg_text_block(
+            block_id="benchmark-overview-footer",
+            text=(
+                "This asset summarizes the committed benchmark bundle. Use the "
+                "performance page for the full figures, conditions, and "
+                "reproducibility notes."
+            ),
+            x=72,
+            y=1012,
+            max_width=1456,
+            max_height=40,
+            style=SvgTextStyle(
+                font_family=font_stack,
+                font_size=16,
+                font_weight="400",
+                fill=colors["muted"],
+                line_height=20,
+            ),
+            overflow_label="Benchmark overview footer text",
+        )
+
+        primary_clip_paths: list[str] = []
+        primary_svg_blocks: list[str] = []
+        for panel in primary_panels:
+            clip_paths, panel_svg = _render_benchmark_overview_primary_panel(
+                panel,
+                colors=colors,
+                font_stack=font_stack,
+            )
+            primary_clip_paths.extend(clip_paths)
+            primary_svg_blocks.append(panel_svg)
+
+        callout_clip_paths: list[str] = []
+        callout_svg_blocks: list[str] = []
+        for card in callout_cards:
+            clip_path, card_svg = _render_benchmark_overview_callout(
+                card,
+                colors=colors,
+                font_stack=font_stack,
+            )
+            callout_clip_paths.append(clip_path)
+            callout_svg_blocks.append(card_svg)
+
+        defs_svg = "\n".join(
+            [
+                '    <linearGradient id="headerBg" x1="0%" y1="0%" x2="100%" y2="0%">',
+                f'      <stop offset="0%" stop-color="{colors["header_start"]}" />',
+                f'      <stop offset="100%" stop-color="{colors["header_end"]}" />',
+                "    </linearGradient>",
+                *primary_clip_paths,
+                *callout_clip_paths,
+            ]
+        )
+        primary_panels_svg = "\n".join(primary_svg_blocks)
+        callouts_svg = "\n".join(callout_svg_blocks)
+
         svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1080" viewBox="0 0 1600 1080" role="img" aria-labelledby="title desc">
   <title id="title">Benchmark overview for the option pricing library</title>
   <desc id="desc">Reviewer-facing benchmark summary showing IV scaling, PDE cost versus accuracy, macro pipeline stage budget, and concise measured callouts for digital remedies, local-vol extraction, and tree scaling.</desc>
   <defs>
-    <linearGradient id="headerBg" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="{colors["header_start"]}" />
-      <stop offset="100%" stop-color="{colors["header_end"]}" />
-    </linearGradient>
-    <clipPath id="ivThumb">
-      <rect x="74" y="264" width="452" height="290" rx="20" ry="20" />
-    </clipPath>
-    <clipPath id="pdeThumb">
-      <rect x="574" y="264" width="452" height="290" rx="20" ry="20" />
-    </clipPath>
-    <clipPath id="macroThumb">
-      <rect x="1074" y="264" width="452" height="290" rx="20" ry="20" />
-    </clipPath>
+{defs_svg}
   </defs>
 
   <rect width="1600" height="1080" fill="{colors["page_bg"]}" />
   <rect x="28" y="28" width="1544" height="1024" rx="34" ry="34" fill="{colors["card_bg"]}" stroke="{colors["card_stroke"]}" stroke-width="2" />
 
-  <text x="72" y="108" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="54" font-weight="700" fill="{colors["text"]}">Benchmark overview</text>
-  <text x="72" y="148" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="24" fill="{colors["muted"]}">Compressed reviewer scan of the repo's measured scaling, cost-versus-accuracy, and end-to-end stage budget story.</text>
-  <text x="72" y="182" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" fill="{colors["muted"]}">Built from committed benchmark outputs under benchmarks/artifacts and docs/assets/generated/benchmarks.</text>
+  <text x="72" y="108" font-family="{font_stack}" font-size="54" font-weight="700" fill="{colors["text"]}">Benchmark overview</text>
+  {intro_svg}
+  {provenance_svg}
 
   <rect x="72" y="220" width="1456" height="360" rx="28" ry="28" fill="url(#headerBg)" stroke="{colors["card_stroke"]}" stroke-width="2" />
-  <text x="102" y="254" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1" fill="{colors["accent"]}">PRIMARY PANELS</text>
+  <text x="102" y="254" font-family="{font_stack}" font-size="18" font-weight="700" letter-spacing="1" fill="{colors["accent"]}">PRIMARY PANELS</text>
+{primary_panels_svg}
 
-  <rect x="74" y="264" width="452" height="290" rx="20" ry="20" fill="{colors["thumb_fill"]}" />
-  <image x="74" y="264" width="452" height="290" href="{iv_panel_uri}" preserveAspectRatio="xMidYMid slice" clip-path="url(#ivThumb)" />
-  <rect x="92" y="282" width="186" height="30" rx="15" ry="15" fill="{colors["chip_fill"]}" opacity="0.84" />
-  <text x="110" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="{colors["chip_text"]}">IV inversion scaling</text>
-  <text x="74" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">801-strike slice: {_fmt_runtime_ms(iv_vec_ms)} vectorized vs {_fmt_runtime_ms(iv_scalar_ms)} scalar loop</text>
-  <text x="74" y="636" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Measured max speedup at that size: {iv_speedup_801:.0f}x, with zero observed vol difference vs the scalar loop.</text>
+  <text x="72" y="712" font-family="{font_stack}" font-size="18" font-weight="700" letter-spacing="1" fill="{colors["accent"]}">ADDITIONAL MEASURED CALLOUTS</text>
+{callouts_svg}
 
-  <rect x="574" y="264" width="452" height="290" rx="20" ry="20" fill="{colors["thumb_fill"]}" />
-  <image x="574" y="264" width="452" height="290" href="{pde_panel_uri}" preserveAspectRatio="xMidYMid slice" clip-path="url(#pdeThumb)" />
-  <rect x="592" y="282" width="176" height="30" rx="15" ry="15" fill="{colors["chip_fill"]}" opacity="0.84" />
-  <text x="610" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="{colors["chip_text"]}">PDE cost / accuracy</text>
-  <text x="574" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">Vanilla BS PDE, Rannacher: 401x401 -&gt; 801x801 cuts abs error</text>
-  <text x="574" y="634" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">{_fmt_sci(float(pde_401["abs_error"]))} -&gt; {_fmt_sci(float(pde_801["abs_error"]))} while runtime rises {_fmt_runtime_ms(float(pde_401["runtime_ms"]))} -&gt; {_fmt_runtime_ms(float(pde_801["runtime_ms"]))}.</text>
-
-  <rect x="1074" y="264" width="452" height="290" rx="20" ry="20" fill="{colors["thumb_fill"]}" />
-  <image x="1074" y="264" width="452" height="290" href="{macro_panel_uri}" preserveAspectRatio="xMidYMid slice" clip-path="url(#macroThumb)" />
-  <rect x="1092" y="282" width="196" height="30" rx="15" ry="15" fill="{colors["chip_fill"]}" opacity="0.84" />
-  <text x="1110" y="303" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="{colors["chip_text"]}">Macro stage budget</text>
-  <text x="1074" y="606" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">Surface fit dominates the integrated path budget across tested sizes.</text>
-  <text x="1074" y="634" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Surface-fit medians: {_fmt_runtime_ms(fit_small)} / {_fmt_runtime_ms(fit_medium)} / {_fmt_runtime_ms(fit_large)} for small / medium / large scenarios.</text>
-
-  <text x="72" y="712" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" letter-spacing="1" fill="{colors["accent"]}">ADDITIONAL MEASURED CALLOUTS</text>
-
-  <rect x="72" y="734" width="452" height="224" rx="24" ry="24" fill="{colors["section_fill"]}" stroke="{colors["section_stroke"]}" stroke-width="2" />
-  <text x="98" y="770" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">Digital payoff remedies</text>
-  <text x="98" y="818" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="{colors["accent"]}">{_fmt_sci(float(digital_none["refinement_spread"]))} -&gt; {_fmt_sci(float(digital_l2["refinement_spread"]))}</text>
-  <text x="98" y="850" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Grid-to-grid price spread, Rannacher + none vs Rannacher + L2 projection.</text>
-  <text x="98" y="882" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Best measured abs error with L2 projection: {_fmt_sci(float(digital_l2["best_abs_error"]))}.</text>
-
-  <rect x="574" y="734" width="452" height="224" rx="24" ry="24" fill="{colors["section_fill"]}" stroke="{colors["section_stroke"]}" stroke-width="2" />
-  <text x="600" y="770" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">Local-vol extraction</text>
-  <text x="600" y="818" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="{colors["success"]}">0.0% interior invalid share</text>
-  <text x="600" y="850" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Largest tested 121x241 grids stayed interior-valid for both coordinate choices.</text>
-  <text x="600" y="882" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Median runtime: K = {_fmt_runtime_ms(float(localvol_k["runtime_ms"]))}, logK = {_fmt_runtime_ms(float(localvol_logk["runtime_ms"]))}.</text>
-
-  <rect x="1076" y="734" width="450" height="224" rx="24" ry="24" fill="{colors["section_fill"]}" stroke="{colors["section_stroke"]}" stroke-width="2" />
-  <text x="1102" y="770" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="{colors["text"]}">Tree framing</text>
-  <text x="1102" y="818" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="{colors["accent"]}">{_fmt_runtime_ms(float(tree_last["runtime_ms"]))}</text>
-  <text x="1102" y="850" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">5000-step CRR runtime in the committed snapshot.</text>
-  <text x="1102" y="882" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">Absolute error vs Black-Scholes at that depth: {_fmt_sci(float(tree_last["abs_error"]))}.</text>
-
-  <text x="72" y="1012" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="16" fill="{colors["muted"]}">This asset summarizes the committed benchmark bundle. Use the performance page for the full figures, conditions, and reproducibility notes.</text>
+  {footer_svg}
 </svg>
 """
-        svg = svg.replace("Segoe UI, Inter, Arial, sans-serif", font_stack)
         variants.path_for(theme).write_text(svg, encoding="utf-8")
 
     copy_light_variant(variants)

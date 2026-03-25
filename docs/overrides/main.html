@@ -60,3 +60,48 @@
 <link rel="canonical" href="{{ config.site_url ~ page.meta.canonical_url }}" />
 {% endif %}
 {% endblock %}
+
+{% block site_nav %}
+  {% if nav %}
+    {% set singleton_nav = namespace(active_root = none, option_count = 0, is_singleton = false) %}
+    {% for item in nav.items %}
+      {% if item.active and singleton_nav.active_root is none %}
+        {% set singleton_nav.active_root = item %}
+      {% endif %}
+    {% endfor %}
+    {% if singleton_nav.active_root %}
+      {% if singleton_nav.active_root.children %}
+        {% set singleton_nav.option_count = singleton_nav.active_root.children | length %}
+      {% else %}
+        {% set singleton_nav.option_count = 1 %}
+      {% endif %}
+      {% if singleton_nav.option_count <= 1 %}
+        {% set singleton_nav.is_singleton = true %}
+      {% endif %}
+    {% endif %}
+
+    {% if page.meta and page.meta.hide %}
+      {% set nav_hidden = "hidden" if "navigation" in page.meta.hide %}
+    {% endif %}
+    {% set singleton_attr = 'data-nav-singleton="true"' if singleton_nav.is_singleton else "" %}
+    <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" {{ singleton_attr }} {{ nav_hidden }}>
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner">
+          {% include "partials/nav.html" %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+  {% if "toc.integrate" not in features %}
+    {% if page.meta and page.meta.hide %}
+      {% set toc_hidden = "hidden" if "toc" in page.meta.hide %}
+    {% endif %}
+    <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" {{ toc_hidden }}>
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner">
+          {% include "partials/toc.html" %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}

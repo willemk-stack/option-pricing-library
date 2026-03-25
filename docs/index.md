@@ -3,14 +3,14 @@ hide:
 
 <h1 class="homepage-hero__title homepage-page-title">Option Pricing Library</h1>
 
-<div class="portfolio-hero homepage-hero">
-  <p class="hero-kicker">Typed pricing, surface repair, and validated numerics</p>
-  <p class="hero-copy homepage-hero__copy">This library prices vanilla options, repairs noisy implied-vol surfaces, smooths the Dupire handoff with eSSVI, and validates the local-vol/PDE workflow with repricing and convergence evidence.</p>
-  <div class="cta-row cta-row--trio homepage-cta-row">
-    <a class="md-button md-button--primary" href="user_guides/decision_guide.md">Read the proof path</a>
-    <a class="md-button" href="user_guides/instruments.md">Start with the recommended API</a>
-    <a class="md-button" href="performance.md">Review performance evidence</a>
-  </div>
+<div class="portfolio-hero homepage-hero" markdown="1">
+<p class="hero-kicker">Typed pricing, surface repair, and validated numerics</p>
+<p class="hero-copy homepage-hero__copy">This library prices vanilla options, repairs noisy implied-vol surfaces, smooths the Dupire handoff with eSSVI, and validates the local-vol/PDE workflow with repricing and convergence evidence.</p>
+<div class="cta-row cta-row--trio homepage-cta-row" markdown="1">
+[Read the proof path](user_guides/decision_guide.md){ .md-button .md-button--primary }
+[Start with the recommended API](api/index.md){ .md-button }
+[Review performance evidence](performance.md){ .md-button }
+</div>
 </div>
 
 <div class="homepage-proof-section" markdown="1">

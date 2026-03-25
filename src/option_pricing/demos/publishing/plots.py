@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -9,10 +10,12 @@ import pandas as pd
 from option_pricing.viz.publishing import (
     PUBLISHING_THEMES,
     SVG_TEXT_FONT_STACK,
+    SvgTextStyle,
     copy_light_variant,
-    file_to_data_uri,
     publishing_palette,
     publishing_style,
+    render_svg_contained_raster,
+    render_svg_text_block,
     save_figure,
     style_colorbar,
     themed_asset_paths,
@@ -728,6 +731,205 @@ def _fmt_bp(value: float) -> str:
     return f"{value:.1f} bp"
 
 
+_README_PROOF_CARD_TILE_WIDTH = 552.0
+_README_PROOF_CARD_TILE_HEIGHT = 232.0
+
+
+@dataclass(frozen=True)
+class _ReadmeProofCardTile:
+    key: str
+    title: str
+    x: float
+    y: float
+    body: str
+    headline: str | None = None
+    footer: str | None = None
+    headline_fill_key: str = "accent"
+    width: float = _README_PROOF_CARD_TILE_WIDTH
+    height: float = _README_PROOF_CARD_TILE_HEIGHT
+
+
+def _build_readme_proof_card_tiles(
+    metrics: dict[str, str],
+) -> tuple[_ReadmeProofCardTile, ...]:
+    return (
+        _ReadmeProofCardTile(
+            key="surface-repair",
+            title="Surface repair",
+            x=64,
+            y=220,
+            body=(
+                "Quoted versus repaired surfaces stay visible.\n"
+                "No-arbitrage checks and per-expiry SVI residuals stay reviewable."
+            ),
+            footer="Open: Surface workflow and decision guide",
+        ),
+        _ReadmeProofCardTile(
+            key="smooth-dupire-handoff",
+            title="Smooth Dupire handoff",
+            x=664,
+            y=220,
+            headline=f'{metrics["seam_svi"]} -> {metrics["seam_smoothed"]}',
+            body=(
+                "Worst published seam jump after smoothing.\n"
+                f'Dupire invalid-count check stays at {metrics["projection_invalid_count"]}.'
+            ),
+        ),
+        _ReadmeProofCardTile(
+            key="local-vol-and-pde-validation",
+            title="Local-vol and PDE validation",
+            x=64,
+            y=484,
+            headline=f'{metrics["repriced_options"]} repricings',
+            body=(
+                f'Mean abs price error {metrics["mean_abs_price_error"]}.\n'
+                f'Max abs IV error {metrics["max_abs_iv_error"]} on the published sweep.'
+            ),
+        ),
+        _ReadmeProofCardTile(
+            key="benchmarks-and-delivery",
+            title="Benchmarks and delivery",
+            x=664,
+            y=484,
+            headline=f'{metrics["iv_speedup"]} IV slice speedup',
+            body=(
+                f'Published at {metrics["iv_strikes"]} strikes from committed benchmark artifacts.\n'
+                "README, docs visuals, and proof pages are regenerated and checked in CI."
+            ),
+        ),
+    )
+
+
+def _render_readme_proof_card_tile(
+    tile: _ReadmeProofCardTile,
+    *,
+    colors: dict[str, str],
+    font_stack: str,
+) -> tuple[str, str]:
+    content_x = tile.x + 32.0
+    content_width = tile.width - 64.0
+    clip_x = tile.x + 24.0
+    clip_y = tile.y + 24.0
+    clip_width = tile.width - 48.0
+    clip_height = tile.height - 48.0
+
+    title_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=28,
+        font_weight="700",
+        fill=colors["text"],
+        line_height=32,
+    )
+    headline_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=34,
+        font_weight="700",
+        fill=colors[tile.headline_fill_key],
+        line_height=38,
+    )
+    body_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=18,
+        font_weight="400",
+        fill=colors["muted"],
+        line_height=22,
+    )
+    footer_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=18,
+        font_weight="700",
+        fill=colors["accent"],
+        line_height=22,
+    )
+
+    blocks = [
+        render_svg_text_block(
+            block_id=f"readme-card-{tile.key}-title",
+            text=tile.title,
+            x=content_x,
+            y=tile.y + 48,
+            max_width=content_width,
+            max_height=32,
+            style=title_style,
+            overflow_label=f"README proof card block {tile.key}/title",
+        )
+    ]
+    if tile.headline is not None:
+        blocks.append(
+            render_svg_text_block(
+                block_id=f"readme-card-{tile.key}-headline",
+                text=tile.headline,
+                x=content_x,
+                y=tile.y + 90,
+                max_width=content_width,
+                max_height=38,
+                style=headline_style,
+                overflow_label=f"README proof card block {tile.key}/headline",
+            )
+        )
+        blocks.append(
+            render_svg_text_block(
+                block_id=f"readme-card-{tile.key}-body",
+                text=tile.body,
+                x=content_x,
+                y=tile.y + 128,
+                max_width=content_width,
+                max_height=92,
+                style=body_style,
+                overflow_label=f"README proof card block {tile.key}/body",
+            )
+        )
+    else:
+        blocks.append(
+            render_svg_text_block(
+                block_id=f"readme-card-{tile.key}-body",
+                text=tile.body,
+                x=content_x,
+                y=tile.y + 88,
+                max_width=content_width,
+                max_height=80,
+                style=body_style,
+                overflow_label=f"README proof card block {tile.key}/body",
+            )
+        )
+    if tile.footer is not None:
+        blocks.append(
+            render_svg_text_block(
+                block_id=f"readme-card-{tile.key}-footer",
+                text=tile.footer,
+                x=content_x,
+                y=tile.y + 182,
+                max_width=content_width,
+                max_height=22,
+                style=footer_style,
+                overflow_label=f"README proof card block {tile.key}/footer",
+            )
+        )
+
+    clip_path = (
+        f'    <clipPath id="readmeCardClip-{tile.key}">\n'
+        f'      <rect x="{clip_x:g}" y="{clip_y:g}" width="{clip_width:g}" '
+        f'height="{clip_height:g}" rx="18" ry="18" />\n'
+        "    </clipPath>"
+    )
+    card_svg = "\n".join(
+        [
+            (
+                f'  <rect x="{tile.x:g}" y="{tile.y:g}" width="{tile.width:g}" '
+                f'height="{tile.height:g}" rx="24" ry="24" fill="{colors["card_bg"]}" '
+                f'stroke="{colors["card_stroke"]}" stroke-width="2" />'
+            ),
+            (
+                f'  <g id="readme-card-{tile.key}" '
+                f'clip-path="url(#readmeCardClip-{tile.key})">'
+            ),
+            *[f"    {block}" for block in blocks],
+            "  </g>",
+        ]
+    )
+    return clip_path, card_svg
+
+
 def _load_readme_proof_card_metrics() -> dict[str, str]:
     metrics = _load_reviewer_proof_panel_metrics()
     iv_speedup_rows = pd.read_csv(ROOT / "benchmarks" / "artifacts" / "iv_speedup.csv")
@@ -790,9 +992,42 @@ def _readme_proof_card(
             "pill_text": "#0B5CAB",
         }
 
+    subtitle_svg = render_svg_text_block(
+        block_id="readme-card-intro-subtitle",
+        text=(
+            "Readable at GitHub README width, generated from the same published "
+            "proof pages and benchmark artifacts as the docs."
+        ),
+        x=64,
+        y=184,
+        max_width=1152,
+        max_height=48,
+        style=SvgTextStyle(
+            font_family=font_stack,
+            font_size=20,
+            font_weight="400",
+            fill=colors["muted"],
+            line_height=24,
+        ),
+        overflow_label="README proof card block intro/subtitle",
+    )
+    clip_paths: list[str] = []
+    card_blocks: list[str] = []
+    for tile in _build_readme_proof_card_tiles(metrics):
+        clip_path, card_svg = _render_readme_proof_card_tile(
+            tile,
+            colors=colors,
+            font_stack=font_stack,
+        )
+        clip_paths.append(clip_path)
+        card_blocks.append(card_svg)
+
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
   <title id="title">README proof card for the option pricing library</title>
   <desc id="desc">Four readable proof tiles for README width covering surface repair, smooth Dupire handoff, local-vol and PDE validation, and benchmark plus delivery evidence. Metrics are loaded from the published proof pages and committed performance artifacts.</desc>
+  <defs>
+{chr(10).join(clip_paths)}
+  </defs>
 
   <rect width="1280" height="760" fill="{colors["page_bg"]}" />
   <rect x="24" y="24" width="1232" height="712" rx="30" ry="30" fill="{colors["panel_bg"]}" stroke="{colors["panel_stroke"]}" stroke-width="2" />
@@ -800,36 +1035,60 @@ def _readme_proof_card(
   <rect x="64" y="66" width="170" height="34" rx="17" ry="17" fill="{colors["pill_bg"]}" />
   <text x="86" y="89" font-family="{font_stack}" font-size="16" font-weight="700" letter-spacing="1" fill="{colors["pill_text"]}">PROOF AT A GLANCE</text>
   <text x="64" y="148" font-family="{font_stack}" font-size="42" font-weight="700" fill="{colors["text"]}">What is already proven in this repo</text>
-  <text x="64" y="184" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Readable at GitHub README width, generated from the same published proof pages and benchmark artifacts as the docs.</text>
-
-  <rect x="64" y="228" width="552" height="214" rx="24" ry="24" fill="{colors["card_bg"]}" stroke="{colors["card_stroke"]}" stroke-width="2" />
-  <text x="96" y="276" font-family="{font_stack}" font-size="28" font-weight="700" fill="{colors["text"]}">Surface repair</text>
-  <text x="96" y="316" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Quoted versus repaired surfaces stay visible.</text>
-  <text x="96" y="350" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">No-arbitrage checks and per-expiry SVI residuals stay reviewable.</text>
-  <text x="96" y="398" font-family="{font_stack}" font-size="18" font-weight="700" fill="{colors["accent"]}">Open: Surface workflow and decision guide</text>
-
-  <rect x="664" y="228" width="552" height="214" rx="24" ry="24" fill="{colors["card_bg"]}" stroke="{colors["card_stroke"]}" stroke-width="2" />
-  <text x="696" y="276" font-family="{font_stack}" font-size="28" font-weight="700" fill="{colors["text"]}">Smooth Dupire handoff</text>
-  <text x="696" y="322" font-family="{font_stack}" font-size="36" font-weight="700" fill="{colors["accent"]}">{metrics["seam_svi"]} -&gt; {metrics["seam_smoothed"]}</text>
-  <text x="696" y="356" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Worst published seam jump after smoothing.</text>
-  <text x="696" y="396" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Dupire invalid-count check stays at <tspan font-weight="700" fill="{colors["success"]}">{metrics["projection_invalid_count"]}</tspan>.</text>
-
-  <rect x="64" y="474" width="552" height="214" rx="24" ry="24" fill="{colors["card_bg"]}" stroke="{colors["card_stroke"]}" stroke-width="2" />
-  <text x="96" y="522" font-family="{font_stack}" font-size="28" font-weight="700" fill="{colors["text"]}">Local-vol and PDE validation</text>
-  <text x="96" y="568" font-family="{font_stack}" font-size="36" font-weight="700" fill="{colors["accent"]}">{metrics["repriced_options"]} repricings</text>
-  <text x="96" y="602" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Mean abs price error {metrics["mean_abs_price_error"]}.</text>
-  <text x="96" y="636" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Max abs IV error {metrics["max_abs_iv_error"]} on the published sweep.</text>
-
-  <rect x="664" y="474" width="552" height="214" rx="24" ry="24" fill="{colors["card_bg"]}" stroke="{colors["card_stroke"]}" stroke-width="2" />
-  <text x="696" y="522" font-family="{font_stack}" font-size="28" font-weight="700" fill="{colors["text"]}">Benchmarks and delivery</text>
-  <text x="696" y="568" font-family="{font_stack}" font-size="36" font-weight="700" fill="{colors["accent"]}">{metrics["iv_speedup"]} IV slice speedup</text>
-  <text x="696" y="602" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">Published at {metrics["iv_strikes"]} strikes from committed benchmark artifacts.</text>
-  <text x="696" y="636" font-family="{font_stack}" font-size="20" fill="{colors["muted"]}">README, docs visuals, and proof pages are regenerated and checked in CI.</text>
+  {subtitle_svg}
+{chr(10).join(card_blocks)}
 </svg>
 """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(svg, encoding="utf-8")
     return out_path
+
+
+@dataclass(frozen=True)
+class _ReviewerProofThumbnail:
+    key: str
+    x: float
+    y: float
+    width: float
+    height: float
+    chip_text: str
+    chip_width: float
+    image_path: Path
+
+
+def _render_reviewer_proof_thumbnail(
+    thumbnail: _ReviewerProofThumbnail,
+    *,
+    colors: dict[str, str],
+    font_stack: str,
+) -> tuple[str, str]:
+    raster_block = render_svg_contained_raster(
+        block_id=f"reviewerProofThumb-{thumbnail.key}",
+        image_path=thumbnail.image_path,
+        slot_x=thumbnail.x,
+        slot_y=thumbnail.y,
+        slot_width=thumbnail.width,
+        slot_height=thumbnail.height,
+        frame_radius=20,
+        frame_fill=colors["surface_fill"],
+        source_label=str(thumbnail.image_path.relative_to(ROOT)).replace("\\", "/"),
+    )
+    svg = "\n".join(
+        [
+            raster_block.svg,
+            (
+                f'  <rect x="{thumbnail.x + 16:g}" y="{thumbnail.y + 16:g}" '
+                f'width="{thumbnail.chip_width:g}" height="30" rx="15" ry="15" '
+                f'fill="{colors["chip_fill"]}" opacity="0.82" />'
+            ),
+            (
+                f'  <text x="{thumbnail.x + 34:g}" y="{thumbnail.y + 37:g}" '
+                f'font-family="{font_stack}" font-size="16" font-weight="700" '
+                f'fill="{colors["chip_text"]}">{thumbnail.chip_text}</text>'
+            ),
+        ]
+    )
+    return raster_block.clip_path, svg
 
 
 def _reviewer_proof_panel(
@@ -846,7 +1105,7 @@ def _reviewer_proof_panel(
     palette = publishing_palette(theme)
     image_suffix = "dark" if theme == "dark" else "light"
     font_stack = SVG_TEXT_FONT_STACK
-    quote_compare_uri = file_to_data_uri(
+    quote_compare_path = (
         ROOT
         / "docs"
         / "assets"
@@ -854,7 +1113,7 @@ def _reviewer_proof_panel(
         / "static"
         / f"quote_surface_compare.{image_suffix}.png"
     )
-    smooth_surface_uri = file_to_data_uri(
+    smooth_surface_path = (
         ROOT
         / "docs"
         / "assets"
@@ -862,7 +1121,7 @@ def _reviewer_proof_panel(
         / "dupire"
         / f"essvi_smoothed_surface_heatmap.{image_suffix}.png"
     )
-    poster_uri = file_to_data_uri(
+    poster_path = (
         ROOT
         / "docs"
         / "assets"
@@ -902,6 +1161,69 @@ def _reviewer_proof_panel(
             "chip_text": "#FFFFFF",
         }
 
+    thumbnails = (
+        _ReviewerProofThumbnail(
+            key="quote-compare",
+            x=760,
+            y=450,
+            width=250,
+            height=155,
+            chip_text="Quote-fit comparison",
+            chip_width=174,
+            image_path=quote_compare_path,
+        ),
+        _ReviewerProofThumbnail(
+            key="smoothed-surface",
+            x=760,
+            y=622,
+            width=250,
+            height=155,
+            chip_text="Smoothed eSSVI surface",
+            chip_width=198,
+            image_path=smooth_surface_path,
+        ),
+        _ReviewerProofThumbnail(
+            key="proof-collage",
+            x=1030,
+            y=450,
+            width=464,
+            height=327,
+            chip_text="Local-vol and PDE proof collage",
+            chip_width=248,
+            image_path=poster_path,
+        ),
+    )
+    thumbnail_clip_paths: list[str] = []
+    thumbnail_blocks: list[str] = []
+    for thumbnail in thumbnails:
+        clip_path, thumbnail_svg = _render_reviewer_proof_thumbnail(
+            thumbnail,
+            colors=colors,
+            font_stack=font_stack,
+        )
+        thumbnail_clip_paths.append(clip_path)
+        thumbnail_blocks.append(thumbnail_svg)
+
+    supporting_note_svg = render_svg_text_block(
+        block_id="reviewer-proof-panel-supporting-note",
+        text=(
+            "Visual panel inlines tracked thumbnails so CI and docs screenshots do "
+            "not depend on nested browser fetches."
+        ),
+        x=760,
+        y=806,
+        max_width=734,
+        max_height=18,
+        style=SvgTextStyle(
+            font_family=font_stack,
+            font_size=14,
+            font_weight="400",
+            fill=colors["muted"],
+            line_height=18,
+        ),
+        overflow_label="Reviewer proof panel supporting note",
+    )
+
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
   <title id="title">Reviewer proof panel for the option pricing library</title>
   <desc id="desc">Workflow strip from static surface to eSSVI smoothing to local vol to PDE repricing, four published proof metrics, and three inlined thumbnails reused from tracked docs assets.</desc>
@@ -910,15 +1232,7 @@ def _reviewer_proof_panel(
       <stop offset="0%" stop-color="{colors["header_start"]}" />
       <stop offset="100%" stop-color="{colors["header_end"]}" />
     </linearGradient>
-    <clipPath id="thumbA">
-      <rect x="760" y="450" width="340" height="150" rx="20" ry="20" />
-    </clipPath>
-    <clipPath id="thumbB">
-      <rect x="1154" y="450" width="340" height="150" rx="20" ry="20" />
-    </clipPath>
-    <clipPath id="thumbC">
-      <rect x="760" y="628" width="734" height="178" rx="20" ry="20" />
-    </clipPath>
+{chr(10).join(thumbnail_clip_paths)}
   </defs>
 
   <rect width="1600" height="900" fill="{colors["page_bg"]}" />
@@ -981,21 +1295,8 @@ def _reviewer_proof_panel(
   <rect x="726" y="380" width="802" height="448" rx="28" ry="28" fill="{colors["card_bg"]}" stroke="{colors["card_stroke"]}" stroke-width="2" />
   <text x="760" y="416" font-family="{font_stack}" font-size="18" font-weight="700" letter-spacing="1" fill="{colors["accent"]}">SUPPORTING VISUALS REUSED FROM TRACKED ASSETS</text>
 
-  <rect x="760" y="450" width="340" height="150" rx="20" ry="20" fill="{colors["surface_fill"]}" />
-  <image x="760" y="450" width="340" height="150" href="{quote_compare_uri}" preserveAspectRatio="xMidYMid slice" clip-path="url(#thumbA)" />
-  <rect x="776" y="466" width="174" height="30" rx="15" ry="15" fill="{colors["chip_fill"]}" opacity="0.82" />
-  <text x="794" y="487" font-family="{font_stack}" font-size="16" font-weight="700" fill="{colors["chip_text"]}">Quote-fit comparison</text>
-
-  <rect x="1154" y="450" width="340" height="150" rx="20" ry="20" fill="{colors["surface_fill"]}" />
-  <image x="1154" y="450" width="340" height="150" href="{smooth_surface_uri}" preserveAspectRatio="xMidYMid slice" clip-path="url(#thumbB)" />
-  <rect x="1170" y="466" width="198" height="30" rx="15" ry="15" fill="{colors["chip_fill"]}" opacity="0.82" />
-  <text x="1188" y="487" font-family="{font_stack}" font-size="16" font-weight="700" fill="{colors["chip_text"]}">Smoothed eSSVI surface</text>
-
-  <rect x="760" y="628" width="734" height="178" rx="20" ry="20" fill="{colors["surface_fill"]}" />
-  <image x="760" y="628" width="734" height="178" href="{poster_uri}" preserveAspectRatio="xMidYMid slice" clip-path="url(#thumbC)" />
-  <rect x="776" y="644" width="248" height="30" rx="15" ry="15" fill="{colors["chip_fill"]}" opacity="0.82" />
-  <text x="794" y="665" font-family="{font_stack}" font-size="16" font-weight="700" fill="{colors["chip_text"]}">Local-vol and PDE proof collage</text>
-  <text x="760" y="850" font-family="{font_stack}" font-size="16" fill="{colors["muted"]}">Visual panel now inlines its supporting thumbnails so CI screenshots do not depend on nested browser fetches.</text>
+{chr(10).join(thumbnail_blocks)}
+  {supporting_note_svg}
 </svg>
 """
     out_path.parent.mkdir(parents=True, exist_ok=True)

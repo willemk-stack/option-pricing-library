@@ -24,6 +24,12 @@ pre,
     max-width: 1200px;
 }
 
+@media screen and (min-width: 76.25em) {
+    .md-sidebar--primary[data-nav-singleton="true"] {
+        display: none;
+    }
+}
+
 .md-typeset a:not(.md-button) {
     text-decoration-line: underline !important;
     text-decoration-thickness: 0.08em;

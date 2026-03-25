@@ -1,6 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760" role="img" aria-labelledby="title desc">
   <title id="title">README proof card for the option pricing library</title>
   <desc id="desc">Four readable proof tiles for README width covering surface repair, smooth Dupire handoff, local-vol and PDE validation, and benchmark plus delivery evidence. Metrics are loaded from the published proof pages and committed performance artifacts.</desc>
+  <defs>
+    <clipPath id="readmeCardClip-surface-repair">
+      <rect x="88" y="244" width="504" height="184" rx="18" ry="18" />
+    </clipPath>
+    <clipPath id="readmeCardClip-smooth-dupire-handoff">
+      <rect x="688" y="244" width="504" height="184" rx="18" ry="18" />
+    </clipPath>
+    <clipPath id="readmeCardClip-local-vol-and-pde-validation">
+      <rect x="88" y="508" width="504" height="184" rx="18" ry="18" />
+    </clipPath>
+    <clipPath id="readmeCardClip-benchmarks-and-delivery">
+      <rect x="688" y="508" width="504" height="184" rx="18" ry="18" />
+    </clipPath>
+  </defs>
 
   <rect width="1280" height="760" fill="#EEF3F8" />
   <rect x="24" y="24" width="1232" height="712" rx="30" ry="30" fill="#FFFFFF" stroke="#D7E0EA" stroke-width="2" />
@@ -8,29 +22,29 @@
   <rect x="64" y="66" width="170" height="34" rx="17" ry="17" fill="#EAF1F8" />
   <text x="86" y="89" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1" fill="#0B5CAB">PROOF AT A GLANCE</text>
   <text x="64" y="148" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="42" font-weight="700" fill="#0B1F33">What is already proven in this repo</text>
-  <text x="64" y="184" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#4A6277">Readable at GitHub README width, generated from the same published proof pages and benchmark artifacts as the docs.</text>
-
-  <rect x="64" y="228" width="552" height="214" rx="24" ry="24" fill="#F8FBFD" stroke="#D7E0EA" stroke-width="2" />
-  <text x="96" y="276" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#0B1F33">Surface repair</text>
-  <text x="96" y="316" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#4A6277">Quoted versus repaired surfaces stay visible.</text>
-  <text x="96" y="350" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#4A6277">No-arbitrage checks and per-expiry SVI residuals stay reviewable.</text>
-  <text x="96" y="398" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" font-weight="700" fill="#0B5CAB">Open: Surface workflow and decision guide</text>
-
-  <rect x="664" y="228" width="552" height="214" rx="24" ry="24" fill="#F8FBFD" stroke="#D7E0EA" stroke-width="2" />
-  <text x="696" y="276" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#0B1F33">Smooth Dupire handoff</text>
-  <text x="696" y="322" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="36" font-weight="700" fill="#0B5CAB">8.07e-2 -&gt; 8.2e-5</text>
-  <text x="696" y="356" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#4A6277">Worst published seam jump after smoothing.</text>
-  <text x="696" y="396" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#4A6277">Dupire invalid-count check stays at <tspan font-weight="700" fill="#0F766E">0</tspan>.</text>
-
-  <rect x="64" y="474" width="552" height="214" rx="24" ry="24" fill="#F8FBFD" stroke="#D7E0EA" stroke-width="2" />
-  <text x="96" y="522" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#0B1F33">Local-vol and PDE validation</text>
-  <text x="96" y="568" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="36" font-weight="700" fill="#0B5CAB">154 repricings</text>
-  <text x="96" y="602" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#4A6277">Mean abs price error 8.1e-4.</text>
-  <text x="96" y="636" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#4A6277">Max abs IV error 18.7 bp on the published sweep.</text>
-
-  <rect x="664" y="474" width="552" height="214" rx="24" ry="24" fill="#F8FBFD" stroke="#D7E0EA" stroke-width="2" />
-  <text x="696" y="522" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#0B1F33">Benchmarks and delivery</text>
-  <text x="696" y="568" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="36" font-weight="700" fill="#0B5CAB">379x IV slice speedup</text>
-  <text x="696" y="602" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#4A6277">Published at 801 strikes from committed benchmark artifacts.</text>
-  <text x="696" y="636" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" fill="#4A6277">README, docs visuals, and proof pages are regenerated and checked in CI.</text>
+  <text x="64" y="184" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="20" font-weight="400" fill="#4A6277" id="readme-card-intro-subtitle" data-max-width="1152" data-max-height="48" data-line-height="24"><tspan x="64" dy="0">Readable at GitHub README width, generated from the same published proof pages and benchmark artifacts as the docs.</tspan></text>
+  <rect x="64" y="220" width="552" height="232" rx="24" ry="24" fill="#F8FBFD" stroke="#D7E0EA" stroke-width="2" />
+  <g id="readme-card-surface-repair" clip-path="url(#readmeCardClip-surface-repair)">
+    <text x="96" y="268" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#0B1F33" id="readme-card-surface-repair-title" data-max-width="488" data-max-height="32" data-line-height="32"><tspan x="96" dy="0">Surface repair</tspan></text>
+    <text x="96" y="308" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" font-weight="400" fill="#4A6277" id="readme-card-surface-repair-body" data-max-width="488" data-max-height="80" data-line-height="22"><tspan x="96" dy="0">Quoted versus repaired surfaces stay visible.</tspan><tspan x="96" dy="22">No-arbitrage checks and per-expiry SVI residuals stay</tspan><tspan x="96" dy="22">reviewable.</tspan></text>
+    <text x="96" y="402" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" font-weight="700" fill="#0B5CAB" id="readme-card-surface-repair-footer" data-max-width="488" data-max-height="22" data-line-height="22"><tspan x="96" dy="0">Open: Surface workflow and decision guide</tspan></text>
+  </g>
+  <rect x="664" y="220" width="552" height="232" rx="24" ry="24" fill="#F8FBFD" stroke="#D7E0EA" stroke-width="2" />
+  <g id="readme-card-smooth-dupire-handoff" clip-path="url(#readmeCardClip-smooth-dupire-handoff)">
+    <text x="696" y="268" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#0B1F33" id="readme-card-smooth-dupire-handoff-title" data-max-width="488" data-max-height="32" data-line-height="32"><tspan x="696" dy="0">Smooth Dupire handoff</tspan></text>
+    <text x="696" y="310" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="34" font-weight="700" fill="#0B5CAB" id="readme-card-smooth-dupire-handoff-headline" data-max-width="488" data-max-height="38" data-line-height="38"><tspan x="696" dy="0">8.07e-2 -&gt; 8.2e-5</tspan></text>
+    <text x="696" y="348" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" font-weight="400" fill="#4A6277" id="readme-card-smooth-dupire-handoff-body" data-max-width="488" data-max-height="92" data-line-height="22"><tspan x="696" dy="0">Worst published seam jump after smoothing.</tspan><tspan x="696" dy="22">Dupire invalid-count check stays at 0.</tspan></text>
+  </g>
+  <rect x="64" y="484" width="552" height="232" rx="24" ry="24" fill="#F8FBFD" stroke="#D7E0EA" stroke-width="2" />
+  <g id="readme-card-local-vol-and-pde-validation" clip-path="url(#readmeCardClip-local-vol-and-pde-validation)">
+    <text x="96" y="532" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#0B1F33" id="readme-card-local-vol-and-pde-validation-title" data-max-width="488" data-max-height="32" data-line-height="32"><tspan x="96" dy="0">Local-vol and PDE validation</tspan></text>
+    <text x="96" y="574" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="34" font-weight="700" fill="#0B5CAB" id="readme-card-local-vol-and-pde-validation-headline" data-max-width="488" data-max-height="38" data-line-height="38"><tspan x="96" dy="0">154 repricings</tspan></text>
+    <text x="96" y="612" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" font-weight="400" fill="#4A6277" id="readme-card-local-vol-and-pde-validation-body" data-max-width="488" data-max-height="92" data-line-height="22"><tspan x="96" dy="0">Mean abs price error 8.1e-4.</tspan><tspan x="96" dy="22">Max abs IV error 18.7 bp on the published sweep.</tspan></text>
+  </g>
+  <rect x="664" y="484" width="552" height="232" rx="24" ry="24" fill="#F8FBFD" stroke="#D7E0EA" stroke-width="2" />
+  <g id="readme-card-benchmarks-and-delivery" clip-path="url(#readmeCardClip-benchmarks-and-delivery)">
+    <text x="696" y="532" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#0B1F33" id="readme-card-benchmarks-and-delivery-title" data-max-width="488" data-max-height="32" data-line-height="32"><tspan x="696" dy="0">Benchmarks and delivery</tspan></text>
+    <text x="696" y="574" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="34" font-weight="700" fill="#0B5CAB" id="readme-card-benchmarks-and-delivery-headline" data-max-width="488" data-max-height="38" data-line-height="38"><tspan x="696" dy="0">379x IV slice speedup</tspan></text>
+    <text x="696" y="612" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" font-weight="400" fill="#4A6277" id="readme-card-benchmarks-and-delivery-body" data-max-width="488" data-max-height="92" data-line-height="22"><tspan x="696" dy="0">Published at 801 strikes from committed benchmark</tspan><tspan x="696" dy="22">artifacts.</tspan><tspan x="696" dy="22">README, docs visuals, and proof pages are regenerated</tspan><tspan x="696" dy="22">and checked in CI.</tspan></text>
+  </g>
 </svg>

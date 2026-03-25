@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { assertImagesLoaded, assertNoMissingPage, gotoAndStabilize } from "./helpers";
-import { embeddedPanelProjectNames, themes } from "./targets";
+import { themes } from "./targets";
 
 type Region = {
   label: string;
@@ -21,9 +21,9 @@ const HIGH_RISK_ASSETS: RiskAsset[] = [
     pagePath: "/",
     srcIncludes: "reviewer_proof_panel",
     regions: [
-      { label: "thumb-a", x: 760 / 1600, y: 450 / 900, width: 340 / 1600, height: 150 / 900 },
-      { label: "thumb-b", x: 1154 / 1600, y: 450 / 900, width: 340 / 1600, height: 150 / 900 },
-      { label: "thumb-c", x: 760 / 1600, y: 628 / 900, width: 734 / 1600, height: 178 / 900 },
+      { label: "thumb-a", x: 760 / 1600, y: 450 / 900, width: 250 / 1600, height: 155 / 900 },
+      { label: "thumb-b", x: 760 / 1600, y: 622 / 900, width: 250 / 1600, height: 155 / 900 },
+      { label: "thumb-c", x: 1030 / 1600, y: 450 / 900, width: 464 / 1600, height: 327 / 900 },
     ],
   },
   {
@@ -114,6 +114,24 @@ async function regionStatsForImage(page: Parameters<typeof test>[0]["page"], src
   );
 }
 
+async function svgMarkupForImage(page: Parameters<typeof test>[0]["page"], srcIncludes: string) {
+  return await page.evaluate(async (srcIncludes) => {
+    const img = Array.from(document.querySelectorAll("img"))
+      .find((node) => (node as HTMLImageElement).src.includes(srcIncludes)) as HTMLImageElement | undefined;
+
+    if (!img) {
+      return null;
+    }
+
+    const response = await fetch(img.src);
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.text();
+  }, srcIncludes);
+}
+
 function suspiciousRegion(stats: RegionStats): boolean {
   // Designed to catch placeholder-like or nearly flat blank boxes in the known proof/benchmark ROIs.
   return stats.stdev < 10 || stats.uniqueBuckets < 12;
@@ -121,19 +139,18 @@ function suspiciousRegion(stats: RegionStats): boolean {
 
 for (const theme of themes) {
   for (const asset of HIGH_RISK_ASSETS) {
-    test(`embedded panels look non-blank on ${asset.pagePath} in ${theme} (${asset.srcIncludes})`, async ({ page }, testInfo) => {
-      test.skip(
-        !embeddedPanelProjectNames.has(testInfo.project.name),
-        "Embedded-panel checks only cover the representative desktop width by default."
-      );
-
+    test(`embedded panels look non-blank on ${asset.pagePath} in ${theme} (${asset.srcIncludes})`, async ({ page }) => {
       await gotoAndStabilize(page, asset.pagePath, theme);
       await assertNoMissingPage(page);
       await assertImagesLoaded(page);
 
       const result = await regionStatsForImage(page, asset.srcIncludes, asset.regions);
+      const markup = await svgMarkupForImage(page, asset.srcIncludes);
       expect(result.found, `Could not find rendered asset matching ${asset.srcIncludes} on ${asset.pagePath}`).toBeTruthy();
       expect((result as any).broken, `Rendered image for ${asset.srcIncludes} is broken`).not.toBeTruthy();
+      expect(markup, `Could not fetch SVG markup for ${asset.srcIncludes}`).toBeTruthy();
+      expect(markup).toContain('data-fit="contain"');
+      expect(markup).not.toContain("xMidYMid slice");
 
       const bad = (result.stats || []).filter(suspiciousRegion);
       expect(

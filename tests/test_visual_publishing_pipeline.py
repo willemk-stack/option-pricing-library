@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import numpy as np
@@ -13,11 +15,105 @@ from option_pricing.demos import (
     render_plot_presets,
 )
 from option_pricing.demos.integration import run_surface_to_localvol_pde_integration
-from option_pricing.viz.publishing import PUBLISHING_THEMES
+from option_pricing.viz.publishing import (
+    PUBLISHING_THEMES,
+    SvgTextStyle,
+    estimate_svg_text_width,
+    layout_svg_contained_raster,
+    render_svg_contained_raster,
+    wrap_svg_text,
+)
+from scripts.build_benchmark_artifacts import ROOT as REPO_ROOT
+from scripts.build_benchmark_artifacts import build_benchmark_overview_asset
+
+SVG_NS = {"svg": "http://www.w3.org/2000/svg"}
 
 
 def _required_columns(df: pd.DataFrame, columns: set[str]) -> None:
     assert columns.issubset(df.columns), f"Missing columns: {columns - set(df.columns)}"
+
+
+def _svg_text_lines(node: ET.Element) -> list[str]:
+    tspans = node.findall("svg:tspan", SVG_NS)
+    if tspans:
+        return [
+            "".join(tspan.itertext()).strip()
+            for tspan in tspans
+            if "".join(tspan.itertext()).strip()
+        ]
+
+    text = "".join(node.itertext()).strip()
+    return [text] if text else []
+
+
+def _assert_svg_text_nodes_fit(root: ET.Element) -> None:
+    text_nodes = root.findall(".//svg:text[@data-max-width]", SVG_NS)
+    assert text_nodes, "expected SVG text nodes with explicit width budgets"
+
+    for node in text_nodes:
+        node_id = node.attrib.get("id", "<missing-id>")
+        max_width = float(node.attrib["data-max-width"])
+        max_height = float(node.attrib["data-max-height"])
+        line_height = float(node.attrib["data-line-height"])
+        font_size = float(node.attrib["font-size"])
+        font_weight = node.attrib.get("font-weight", "400")
+        letter_spacing = float(node.attrib.get("letter-spacing", "0"))
+        lines = _svg_text_lines(node)
+
+        assert lines, f"{node_id} did not render any text lines"
+        assert (
+            len(lines) * line_height <= max_height + 1e-6
+        ), f"{node_id} exceeded vertical budget"
+        for line in lines:
+            assert (
+                estimate_svg_text_width(
+                    line,
+                    font_size=font_size,
+                    font_weight=font_weight,
+                    letter_spacing=letter_spacing,
+                )
+                <= max_width + 1e-6
+            ), f"{node_id} overflowed width budget"
+
+
+def _assert_svg_raster_nodes_contained(
+    root: ET.Element,
+    *,
+    expected_count: int | None = None,
+) -> None:
+    image_nodes = root.findall(".//svg:image[@data-fit='contain']", SVG_NS)
+    assert image_nodes, "expected SVG raster nodes with explicit contain metadata"
+    if expected_count is not None:
+        assert len(image_nodes) == expected_count
+
+    for node in image_nodes:
+        node_id = node.attrib.get("id", "<missing-id>")
+        slot_x = float(node.attrib["data-slot-x"])
+        slot_y = float(node.attrib["data-slot-y"])
+        slot_width = float(node.attrib["data-slot-width"])
+        slot_height = float(node.attrib["data-slot-height"])
+        image_x = float(node.attrib["data-image-x"])
+        image_y = float(node.attrib["data-image-y"])
+        image_width = float(node.attrib["data-image-width"])
+        image_height = float(node.attrib["data-image-height"])
+        source_width = float(node.attrib["data-source-width"])
+        source_height = float(node.attrib["data-source-height"])
+
+        assert node.attrib.get("preserveAspectRatio") == "none"
+        assert image_x >= slot_x - 1e-6, f"{node_id} exceeded slot left edge"
+        assert image_y >= slot_y - 1e-6, f"{node_id} exceeded slot top edge"
+        assert (
+            image_x + image_width <= slot_x + slot_width + 1e-6
+        ), f"{node_id} exceeded slot right edge"
+        assert (
+            image_y + image_height <= slot_y + slot_height + 1e-6
+        ), f"{node_id} exceeded slot bottom edge"
+        assert (
+            abs((image_width / image_height) - (source_width / source_height)) <= 1e-5
+        )
+
+    for node in root.findall(".//svg:image", SVG_NS):
+        assert "slice" not in node.attrib.get("preserveAspectRatio", "")
 
 
 @pytest.fixture(scope="module")
@@ -109,6 +205,197 @@ def test_visual_plot_presets_smoke(
     assert written
     assert len(written) == expected_count
     assert all(path.exists() for path in written)
+
+
+def test_wrap_svg_text_splits_long_copy_within_width_budget() -> None:
+    style = SvgTextStyle(font_size=18, line_height=22)
+    layout = wrap_svg_text(
+        "README, docs visuals, and proof pages are regenerated and checked in CI.",
+        max_width=240,
+        max_height=88,
+        style=style,
+    )
+
+    assert layout.fits
+    assert len(layout.lines) >= 2
+    assert all(
+        estimate_svg_text_width(
+            line,
+            font_size=style.font_size,
+            font_weight=style.font_weight,
+            letter_spacing=style.letter_spacing,
+        )
+        <= 240 + 1e-6
+        for line in layout.lines
+    )
+    assert layout.to_svg(x=96, y=128).count("<tspan") == len(layout.lines)
+
+
+def test_wrap_svg_text_reports_vertical_overflow() -> None:
+    style = SvgTextStyle(font_size=18, line_height=22)
+    layout = wrap_svg_text(
+        "README, docs visuals, and proof pages are regenerated and checked in CI.",
+        max_width=240,
+        max_height=22,
+        style=style,
+    )
+
+    assert layout.fits_width
+    assert not layout.fits_height
+    assert not layout.fits
+
+
+def test_layout_svg_contained_raster_preserves_aspect_ratio() -> None:
+    layout = layout_svg_contained_raster(
+        source_width=1890,
+        source_height=756,
+        slot_x=74,
+        slot_y=264,
+        slot_width=452,
+        slot_height=290,
+    )
+
+    assert layout.image_width == pytest.approx(452.0)
+    assert layout.image_height == pytest.approx(180.8)
+    assert layout.image_x == pytest.approx(74.0)
+    assert layout.image_y == pytest.approx(318.6)
+
+
+def test_render_svg_contained_raster_emits_containment_metadata() -> None:
+    asset_path = (
+        REPO_ROOT
+        / "docs"
+        / "assets"
+        / "generated"
+        / "benchmarks"
+        / "iv_scaling.light.png"
+    )
+    block = render_svg_contained_raster(
+        block_id="test-contained-raster",
+        image_path=asset_path,
+        slot_x=0,
+        slot_y=0,
+        slot_width=400,
+        slot_height=240,
+        frame_radius=20,
+        frame_fill="#FFFFFF",
+        source_label="docs/assets/generated/benchmarks/iv_scaling.light.png",
+    )
+
+    assert 'data-fit="contain"' in block.svg
+    assert (
+        'data-source-path="docs/assets/generated/benchmarks/iv_scaling.light.png"'
+        in block.svg
+    )
+    assert 'preserveAspectRatio="none"' in block.svg
+    assert block.layout.image_width == pytest.approx(400.0)
+    assert block.layout.image_height == pytest.approx(160.0)
+
+
+def test_showcase_readme_proof_card_uses_wrapped_svg_text(
+    visual_bundle_ci,
+    tmp_path: Path,
+) -> None:
+    result = visual_bundle_ci
+    out_root = tmp_path / "assets"
+
+    written = render_plot_presets(
+        result.manifest,
+        presets=["showcase"],
+        out_root=out_root,
+    )
+
+    assert any(path.name == "readme_proof_card.light.svg" for path in written)
+    for theme in PUBLISHING_THEMES:
+        path = out_root / "showcase" / f"readme_proof_card.{theme}.svg"
+        root = ET.fromstring(path.read_text(encoding="utf-8"))
+
+        assert (
+            root.find(
+                ".//svg:clipPath[@id='readmeCardClip-benchmarks-and-delivery']",
+                SVG_NS,
+            )
+            is not None
+        )
+        body = root.find(
+            ".//svg:text[@id='readme-card-benchmarks-and-delivery-body']",
+            SVG_NS,
+        )
+        assert body is not None
+        assert len(body.findall("svg:tspan", SVG_NS)) >= 3
+        _assert_svg_text_nodes_fit(root)
+
+
+def test_showcase_reviewer_proof_panel_uses_contained_raster_slots(
+    visual_bundle_ci,
+    tmp_path: Path,
+) -> None:
+    result = visual_bundle_ci
+    out_root = tmp_path / "assets"
+
+    render_plot_presets(
+        result.manifest,
+        presets=["showcase"],
+        out_root=out_root,
+    )
+
+    for theme in PUBLISHING_THEMES:
+        path = out_root / "showcase" / f"reviewer_proof_panel.{theme}.svg"
+        raw_svg = path.read_text(encoding="utf-8")
+        root = ET.fromstring(raw_svg)
+
+        assert "xMidYMid slice" not in raw_svg
+        _assert_svg_raster_nodes_contained(root, expected_count=3)
+
+
+def test_benchmark_overview_uses_wrapped_svg_text() -> None:
+    source_plot_dir = REPO_ROOT / "docs" / "assets" / "generated" / "benchmarks"
+    plot_dir = REPO_ROOT / "out" / "pytest_benchmark_overview_layout" / "benchmarks"
+    if plot_dir.exists():
+        shutil.rmtree(plot_dir)
+    plot_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        for stem in (
+            "iv_scaling",
+            "pde_runtime_error_tradeoff",
+            "macro_pipeline_summary",
+        ):
+            for theme in PUBLISHING_THEMES:
+                shutil.copyfile(
+                    source_plot_dir / f"{stem}.{theme}.png",
+                    plot_dir / f"{stem}.{theme}.png",
+                )
+
+        build_benchmark_overview_asset(
+            artifacts_dir=REPO_ROOT / "benchmarks" / "artifacts",
+            plot_dir=plot_dir,
+        )
+
+        for theme in PUBLISHING_THEMES:
+            path = plot_dir / f"benchmark_overview.{theme}.svg"
+            raw_svg = path.read_text(encoding="utf-8")
+            root = ET.fromstring(raw_svg)
+
+            assert (
+                root.find(
+                    ".//svg:clipPath[@id='benchmarkOverviewCallout-local-vol-extraction']",
+                    SVG_NS,
+                )
+                is not None
+            )
+            metric = root.find(
+                ".//svg:text[@id='benchmark-overview-local-vol-extraction-metric']",
+                SVG_NS,
+            )
+            assert metric is not None
+            assert len(metric.findall("svg:tspan", SVG_NS)) >= 2
+            assert "xMidYMid slice" not in raw_svg
+            _assert_svg_text_nodes_fit(root)
+            _assert_svg_raster_nodes_contained(root, expected_count=3)
+    finally:
+        if plot_dir.exists():
+            shutil.rmtree(plot_dir)
 
 
 def test_full_profile_dupire_compare_regression() -> None:

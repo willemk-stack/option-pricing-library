@@ -125,6 +125,23 @@ def check_svg(path: Path) -> list[str]:
         if not target.exists():
             issues.append(f"{path}: missing linked asset: {href}")
 
+    if path.name.startswith(("reviewer_proof_panel", "benchmark_overview")):
+        if not images:
+            issues.append(f"{path}: expected embedded raster panels, found none")
+        contain_images = [
+            image for image in images if image.get("data-fit") == "contain"
+        ]
+        if len(contain_images) != len(images):
+            issues.append(
+                f'{path}: expected all embedded raster panels to declare data-fit="contain"'
+            )
+        for image in images:
+            preserve = image.get("preserveAspectRatio", "")
+            if "slice" in preserve:
+                issues.append(
+                    f"{path}: embedded raster panel still uses cropped preserveAspectRatio={preserve!r}"
+                )
+
     return issues
 
 
