@@ -106,7 +106,7 @@ export async function collectDomAuditFindings(
     page: Page,
     reviewConfig: PageReviewConfig
 ): Promise<AuditFinding[]> {
-    return page.evaluate((config: PageReviewConfig) => {
+    return page.evaluate(async (config: PageReviewConfig) => {
         type Finding = {
             severity: AuditSeverity;
             category: AuditCategory;
@@ -404,6 +404,47 @@ export async function collectDomAuditFindings(
             }
         }
 
+        if (config.path === "/architecture/") {
+            const article = document.querySelector("main article");
+            if (isVisible(article)) {
+                const articleRect = article.getBoundingClientRect();
+                if (window.innerWidth >= 1400 && articleRect.width < 800) {
+                    pushFinding(
+                        "major",
+                        "layout",
+                        "architecture-article-too-narrow",
+                        `Architecture article width ${Math.round(articleRect.width)}px is narrower than expected for a wide viewport ${window.innerWidth}px`
+                    );
+                }
+
+                if (articleRect.width >= 480) {
+                    diagrams.forEach((figure, index) => {
+                        if (!isVisible(figure)) {
+                            return;
+                        }
+
+                        const figureRect = figure.getBoundingClientRect();
+                        const coverage = figureRect.width / articleRect.width;
+                        if (coverage >= 0.9) {
+                            return;
+                        }
+
+                        pushFinding(
+                            "major",
+                            "layout",
+                            "architecture-diagram-underfills-article",
+                            `Architecture diagram ${index + 1} only uses ${Math.round(coverage * 100)}% of the article width`,
+                            {
+                                articleWidth: Math.round(articleRect.width),
+                                figureWidth: Math.round(figureRect.width),
+                                index: index + 1,
+                            }
+                        );
+                    });
+                }
+            }
+        }
+
         const d2DiagramSources = Array.from(
             document.querySelectorAll<HTMLImageElement>("figure.diagram img")
         )
@@ -467,6 +508,16 @@ export async function collectDomAuditFindings(
                         "media",
                         "d2-svg-missing-viewbox",
                         `D2 SVG is missing a viewBox: ${absoluteUrl}`,
+                        { src: absoluteUrl }
+                    );
+                }
+
+                if (!rootSvg.getAttribute("width") || !rootSvg.getAttribute("height")) {
+                    pushFinding(
+                        "major",
+                        "media",
+                        "d2-svg-missing-root-size",
+                        `D2 SVG is missing intrinsic root width/height: ${absoluteUrl}`,
                         { src: absoluteUrl }
                     );
                 }

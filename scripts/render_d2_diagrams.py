@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -83,6 +84,88 @@ def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
+def _format_svg_dimension(value: float) -> str:
+    return str(int(value)) if value.is_integer() else f"{value:g}"
+
+
+def _parse_viewbox_dimensions(value: str | None) -> tuple[str, str] | None:
+    if not value:
+        return None
+
+    parts = value.replace(",", " ").split()
+    if len(parts) != 4:
+        return None
+
+    try:
+        width = float(parts[2])
+        height = float(parts[3])
+    except ValueError:
+        return None
+
+    if width <= 0 or height <= 0:
+        return None
+
+    return (_format_svg_dimension(width), _format_svg_dimension(height))
+
+
+def _infer_root_dimensions(root: ET.Element) -> tuple[str, str] | None:
+    nested_svg = next(
+        (child for child in root if _local_name(child.tag) == "svg"), None
+    )
+    if nested_svg is not None:
+        nested_width = nested_svg.get("width")
+        nested_height = nested_svg.get("height")
+        if nested_width and nested_height:
+            return (nested_width, nested_height)
+
+        nested_viewbox = _parse_viewbox_dimensions(nested_svg.get("viewBox"))
+        if nested_viewbox is not None:
+            return nested_viewbox
+
+    return _parse_viewbox_dimensions(root.get("viewBox"))
+
+
+def _normalize_rendered_svg_root(path: Path) -> None:
+    svg_text = path.read_text(encoding="utf-8")
+    start_tag = re.match(r"<svg\b([^>]*)>", svg_text)
+    if start_tag is None:
+        raise RuntimeError(
+            f"Rendered SVG is missing a root <svg> tag: {path.relative_to(ROOT)}"
+        )
+
+    try:
+        root = ET.fromstring(svg_text)
+    except ET.ParseError as exc:
+        raise RuntimeError(
+            f"Rendered SVG is not well-formed XML: {path.relative_to(ROOT)} ({exc})"
+        ) from exc
+
+    if _local_name(root.tag) != "svg":
+        raise RuntimeError(
+            f"Rendered asset is not an SVG document root: {path.relative_to(ROOT)}"
+        )
+
+    width = root.get("width")
+    height = root.get("height")
+    if not width or not height:
+        inferred = _infer_root_dimensions(root)
+        if inferred is None:
+            raise RuntimeError(
+                "Rendered SVG is missing root width/height and no fallback dimensions "
+                f"could be inferred: {path.relative_to(ROOT)}"
+            )
+        width = width or inferred[0]
+        height = height or inferred[1]
+
+    attrs = start_tag.group(1)
+    if not root.get("width"):
+        attrs += f' width="{width}"'
+    if not root.get("height"):
+        attrs += f' height="{height}"'
+
+    path.write_text(f"<svg{attrs}>{svg_text[start_tag.end():]}", encoding="utf-8")
+
+
 def _validate_rendered_svg_contract(path: Path) -> None:
     try:
         tree = ET.parse(path)
@@ -91,8 +174,24 @@ def _validate_rendered_svg_contract(path: Path) -> None:
             f"Rendered SVG is not well-formed XML: {path.relative_to(ROOT)} ({exc})"
         ) from exc
 
+    root = tree.getroot()
+    if _local_name(root.tag) != "svg":
+        raise RuntimeError(
+            f"Rendered asset is not an SVG document: {path.relative_to(ROOT)}"
+        )
+
+    missing_root_attrs = [
+        attr for attr in ("width", "height", "viewBox") if not root.get(attr)
+    ]
+    if missing_root_attrs:
+        detail = ", ".join(missing_root_attrs)
+        raise RuntimeError(
+            "Rendered SVG is missing required root attributes in "
+            f"{path.relative_to(ROOT)} ({detail})"
+        )
+
     counts: dict[str, int] = {}
-    for element in tree.getroot().iter():
+    for element in root.iter():
         name = _local_name(element.tag)
         if name in FRAGILE_SVG_TAGS:
             counts[name] = counts.get(name, 0) + 1
@@ -126,6 +225,7 @@ def _render_one(src: Path, out: Path, *, theme: str, cfg: D2RenderConfig) -> Non
 
     cmd.extend([str(src), str(out)])
     subprocess.run(cmd, check=True)
+    _normalize_rendered_svg_root(out)
     _validate_rendered_svg_contract(out)
 
 

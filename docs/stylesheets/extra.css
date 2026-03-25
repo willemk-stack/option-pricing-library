@@ -496,11 +496,20 @@ Then the CSS below will show the correct one.
 ------------------------------------------------------------------------- */
 
 figure.diagram {
+    /*
+     * Material sets figures to width: fit-content, which shrink-wraps D2 SVG
+     * cards once the browser falls back to tiny intrinsic image dimensions.
+     * Cap the frame by the intended diagram max width, but otherwise let it
+     * consume the available article column.
+     */
+    width: min(100%, calc(var(--diagram-max-width, 1000px) + 2rem));
+    max-width: 100%;
     margin: 1.2rem auto;
     padding: 0.85rem 1rem 0.7rem;
     border-radius: 16px;
     border: 1px solid var(--md-default-fg-color--lightest);
     background: var(--md-default-bg-color);
+    overflow: visible;
 }
 
 figure.diagram>p {

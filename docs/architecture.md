@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Architecture
 
 option_pricing is structured as a typed library first: public pricing APIs at the top, volatility models and PDE numerics underneath, and diagnostics at the edge where they can inspect the workflow without polluting the core engines.
