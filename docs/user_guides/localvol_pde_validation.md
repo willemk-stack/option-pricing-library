@@ -1,9 +1,15 @@
-hide:
-    - toc
-
 # Local-vol and PDE validation
 
-With the handoff smoothed, the remaining question is numerical: does the local-vol and PDE workflow reprice cleanly, show where error lives, and behave sensibly as the grid is refined?
+<div class="doc-intro" markdown="1">
+<p class="doc-intro__kicker">Proof path step 3</p>
+<p class="doc-intro__lead">With the handoff smoothed, the remaining question is numerical: does the local-vol and PDE workflow reprice cleanly, show where error lives, and behave sensibly as the grid is refined?</p>
+<p class="doc-intro__support">This page is where the repo proves the workflow is validated rather than merely implemented. The figures show structure, the table shows aggregate error, and the convergence view makes the mesh tradeoff explicit.</p>
+<div class="doc-pill-row">
+  <span class="doc-pill">Repricing scatter</span>
+  <span class="doc-pill">Error localization</span>
+  <span class="doc-pill">Convergence evidence</span>
+</div>
+</div>
 
 <div class="cta-row cta-row--trio" markdown="1">
 [Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/08_localvol_pde_repricing.ipynb){ .md-button .md-button--primary }
@@ -11,10 +17,28 @@ With the handoff smoothed, the remaining question is numerical: does the local-v
 [See architecture](../architecture.md){ .md-button }
 </div>
 
+<div class="doc-card-grid" markdown="1">
+<div class="doc-card" markdown="1">
+<p class="doc-card__eyebrow">Reviewer question</p>
+<p class="doc-card__title">Does it reprice cleanly?</p>
+- The repricing cloud should stay close to the identity line across the grid, not just on average.
+</div>
+<div class="doc-card" markdown="1">
+<p class="doc-card__eyebrow">Reviewer question</p>
+<p class="doc-card__title">Where does error live?</p>
+- Price and implied-vol error should be localized by strike and maturity rather than hidden inside one aggregate number.
+</div>
+<div class="doc-card" markdown="1">
+<p class="doc-card__eyebrow">Reviewer question</p>
+<p class="doc-card__title">Is the mesh defensible?</p>
+- The chosen PDE grid should look like a visible tradeoff, not an arbitrary hard-coded default.
+</div>
+</div>
+
 <figure markdown class="diagram">
   ![Scatter plot comparing local-vol PDE repriced values with target Black-76 prices across the repricing grid](../assets/generated/numerics/pde_roundtrip_scatter.light.png){ .diagram-img .diagram-light }
   ![Scatter plot comparing local-vol PDE repriced values with target Black-76 prices across the repricing grid](../assets/generated/numerics/pde_roundtrip_scatter.dark.png){ .diagram-img .diagram-dark }
-  <figcaption>The repricing cloud stays close to the identity line, so accuracy can be judged from visible structure rather than a single summary claim.</figcaption>
+  <figcaption>The repricing cloud stays close to the identity line, so accuracy can be judged from visible structure rather than from one summary claim.</figcaption>
 </figure>
 
 <div class="snapshot-grid" markdown="1">
@@ -28,25 +52,19 @@ With the handoff smoothed, the remaining question is numerical: does the local-v
 <figure class="diagram" style="--diagram-max-width: 720px" markdown="1">
 ![Convergence plot for a representative local-vol PDE solve as the numerical grid is refined](../assets/generated/numerics/pde_convergence.light.png){ .diagram-img .diagram-light }
 ![Convergence plot for a representative local-vol PDE solve as the numerical grid is refined](../assets/generated/numerics/pde_convergence.dark.png){ .diagram-img .diagram-dark }
-<figcaption>The convergence sweep makes the mesh tradeoff explicit instead of asking the reader to trust a single chosen grid.</figcaption>
+<figcaption>The convergence sweep makes the mesh tradeoff explicit instead of asking the reader to trust one chosen grid.</figcaption>
 </figure>
 
 </div>
 
-## What should a reviewer ask?
-
-- Does repricing stay close to the target surface across the grid, not just on average?
-- Where do price and implied-vol errors concentrate across strike and maturity?
-- Is the chosen mesh a visible tradeoff rather than an arbitrary numerical setting?
-
 ## What the figures answer
 
-The library answers those questions with a diagnostics-first numerical workflow:
+<p class="doc-section-lead">The local-vol/PDE page should answer three questions quickly: repricing quality, error structure, and mesh behavior.</p>
 
-- start from the smoothed eSSVI handoff rather than a rough slice stack
-- expose invalid masks, denominator diagnostics, and worst-point behavior
-- reprice a representative option grid against the originating implied surface
-- run at least one convergence sweep so the PDE mesh choice is inspectable
+- Start from the smoothed eSSVI handoff rather than a rough slice stack.
+- Expose invalid masks, denominator diagnostics, and worst-point behavior.
+- Reprice a representative option grid against the originating implied surface.
+- Run at least one convergence sweep so the PDE mesh choice is inspectable.
 
 ## Aggregate repricing result
 
@@ -58,5 +76,7 @@ The library answers those questions with a diagnostics-first numerical workflow:
 | Mean abs IV error | `1.0171 bp` |
 | Max abs IV error | `18.7059 bp` |
 
-This is the page where the repo proves the workflow is validated rather than merely implemented. The figures show where error lives, and the table gives the aggregate repricing result.
-For the measured scaling story, continue to [Performance evidence](../performance.md). For how the surface, local-vol, PDE, and diagnostics layers fit together, continue to [Architecture](../architecture.md).
+<div class="doc-panel" markdown="1">
+<p class="doc-panel__label">Main takeaway</p>
+The evidence here is deliberately two-layered: the figures show where the workflow is stressed, and the table shows that the aggregate repricing error stays small. Continue to <a href="../performance.md">Performance evidence</a> for the runtime story, or return to <a href="../architecture.md">Architecture</a> for the system-level dependency map behind the workflow.
+</div>
