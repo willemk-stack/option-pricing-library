@@ -4,9 +4,8 @@ Typed Python library for pricing vanilla options, repairing implied-volatility s
 
 [![Tests](https://github.com/willemk-stack/option-pricing-library/actions/workflows/tests.yaml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/tests.yaml)
 [![Codecov](https://codecov.io/gh/willemk-stack/option-pricing-library/branch/main/graph/badge.svg)](https://codecov.io/gh/willemk-stack/option-pricing-library)
-[![Docs](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/deploy-docs.yml)
+[![Docs](https://github.com/willemk-stack/option-pricing-library/actions/workflows/docs-ci.yml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/docs-ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
-
 Package / import name: `option_pricing`
 
 - Prices vanilla options through a typed public API that scales from single trades to surface-aware workflows.
