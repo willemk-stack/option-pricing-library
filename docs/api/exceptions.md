@@ -1,6 +1,6 @@
 # Exceptions
 
-<div class="doc-intro" markdown="1">
+<div class="doc-intro doc-intro--quiet" markdown="1">
 <p class="doc-intro__kicker">Error types</p>
 <p class="doc-intro__lead">These exceptions cover invalid prices, missing brackets, root-finding failures, and convergence breakdowns in the numerical helpers.</p>
 <p class="doc-intro__support">Catch these when you want to distinguish input validation failures from numerical solver failures.</p>

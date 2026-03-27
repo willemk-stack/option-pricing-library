@@ -1,30 +1,9 @@
 # Pricers
 
-<div class="doc-intro" markdown="1">
+<div class="doc-intro doc-intro--quiet" markdown="1">
 <p class="doc-intro__kicker">Execution layer</p>
 <p class="doc-intro__lead">The library exposes parallel entry points for the three supported usage styles: compact <code>PricingInputs</code> wrappers, curves-first functions, and instrument-based functions.</p>
-<p class="doc-intro__support">The point of this page is not to repeat the entire API surface in prose. It is to show how the entry points are grouped, and what kind of caller each group is meant to serve.</p>
-</div>
-
-<div class="doc-card-grid" markdown="1">
-<div class="doc-card" markdown="1">
-<p class="doc-card__eyebrow">Compact path</p>
-<p class="doc-card__title"><code>PricingInputs</code></p>
-- Best for short scripts, quick checks, and compact tutorials.
-- Keeps all required inputs in one typed container.
-</div>
-<div class="doc-card" markdown="1">
-<p class="doc-card__eyebrow">Explicit market path</p>
-<p class="doc-card__title">Curves-first</p>
-- Use `*_from_ctx` functions when discount and forward curves should stay explicit.
-- Best fit for term-structure-heavy workflows.
-</div>
-<div class="doc-card doc-card--accent" markdown="1">
-<p class="doc-card__eyebrow">Recommended path</p>
-<p class="doc-card__title">Instrument-based</p>
-- Use reusable contracts such as `VanillaOption`.
-- Best default public interface for pricing and Greeks.
-</div>
+<p class="doc-intro__support">This page stays reference-first. Use the section headings to jump to the interface style you are calling.</p>
 </div>
 
 ## Black-Scholes / Black-76 with `PricingInputs`

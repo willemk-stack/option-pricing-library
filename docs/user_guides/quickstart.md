@@ -1,8 +1,10 @@
 # Quickstart
 
-This guide shows the fastest path from inputs to prices.
-It uses the convenience `PricingInputs` workflow because it is compact and easy to read.
-For the recommended public API, start with the [Instruments](instruments.md) guide.
+<div class="doc-intro doc-intro--quiet" markdown="1">
+<p class="doc-intro__kicker">Compact path</p>
+<p class="doc-intro__lead">This guide shows the fastest path from typed inputs to prices. It uses the convenience <code>PricingInputs</code> workflow because it is compact and easy to read.</p>
+<p class="doc-intro__support">For the recommended public API, start with the <a href="instruments.md">Instruments</a> guide.</p>
+</div>
 
 ## 1) Build inputs
 

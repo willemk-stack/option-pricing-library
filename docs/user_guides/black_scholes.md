@@ -1,6 +1,10 @@
 # Black-Scholes
 
-This guide covers the analytic Black-Scholes / Black-76 pricing entry points for European vanilla options.
+<div class="doc-intro doc-intro--quiet" markdown="1">
+<p class="doc-intro__kicker">Analytic pricing</p>
+<p class="doc-intro__lead">This guide covers the analytic Black-Scholes / Black-76 pricing entry points for European vanilla options.</p>
+<p class="doc-intro__support">Use it when you want the closed-form benchmark before moving to tree, Monte Carlo, or PDE methods.</p>
+</div>
 
 ## Price a call or put with `PricingInputs`
 

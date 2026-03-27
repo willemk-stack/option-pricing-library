@@ -1,31 +1,9 @@
 # Volatility
 
-<div class="doc-intro" markdown="1">
+<div class="doc-intro doc-intro--quiet" markdown="1">
 <p class="doc-intro__kicker">Surface and handoff layer</p>
-<p class="doc-intro__lead">The volatility namespace covers implied-vol inversion, smile/surface objects, local-vol extraction, and the eSSVI toolbox used by the proof-path pages.</p>
-<p class="doc-intro__support">This page groups those objects by role so the reference is easier to scan than one continuous symbol list.</p>
-</div>
-
-<div class="doc-card-grid" markdown="1">
-<div class="doc-card" markdown="1">
-<p class="doc-card__eyebrow">Point tools</p>
-<p class="doc-card__title">Implied-vol inversion</p>
-- `implied_vol_bs`
-- `implied_vol_bs_result`
-</div>
-<div class="doc-card" markdown="1">
-<p class="doc-card__eyebrow">Surface objects</p>
-<p class="doc-card__title">Smiles and surfaces</p>
-- `VolSurface`
-- `Smile`
-- `LocalVolSurface`
-</div>
-<div class="doc-card doc-card--accent" markdown="1">
-<p class="doc-card__eyebrow">Proof-path stack</p>
-<p class="doc-card__title">eSSVI toolbox</p>
-- Term structures, nodal and smoothed surfaces
-- Calibration, projection, and validation entry points
-</div>
+<p class="doc-intro__lead">The volatility namespace covers implied-vol inversion, smile and surface objects, local-vol extraction, and the eSSVI toolbox used by the proof-path pages.</p>
+<p class="doc-intro__support">This page stays reference-first. Use it for the raw objects and entry points; the proof-path guides explain the engineering decisions around them.</p>
 </div>
 
 ## Implied volatility inversion
