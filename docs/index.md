@@ -5,85 +5,62 @@ hide:
 
 <div class="portfolio-hero homepage-hero" markdown="1">
 <p class="hero-kicker">Typed pricing, surface repair, and validated numerics</p>
-<p class="hero-copy homepage-hero__copy">This project is strongest when the review moves past vanilla pricing and into the workflow proof: repair a noisy implied-vol surface, make the Dupire handoff smooth enough to trust, and validate the local-vol/PDE path with repricing and convergence evidence.</p>
-<p class="hero-copy homepage-hero__copy">It is built like a reusable library rather than a notebook collection, but the point is not abstraction for its own sake. The docs surface the engineering judgment: which assumptions matter, where the workflow can break, and what evidence supports the chosen defaults.</p>
+<p class="hero-copy homepage-hero__copy">This repo is strongest when the review follows one workflow: repair noisy implied-vol quotes, make the Dupire handoff smooth enough to differentiate, and validate the local-vol/PDE leg with repricing and convergence evidence.</p>
+<p class="hero-copy homepage-hero__copy">The library surface is typed and reusable, but the main signal is judgment rather than abstraction. The docs keep assumptions, safeguards, and failure modes visible instead of hiding them behind one cleaned-up result.</p>
 <div class="cta-row cta-row--trio homepage-cta-row" markdown="1">
 [See the eSSVI handoff](user_guides/essvi_smooth_handoff.md){ .md-button .md-button--primary }
-[Review performance evidence](performance.md){ .md-button }
 [Start with surface repair](user_guides/surface_workflow.md){ .md-button }
+[Review performance evidence](performance.md){ .md-button }
 </div>
 </div>
 
 <div class="doc-intro doc-intro--quiet" markdown="1">
 <p class="doc-intro__kicker">Why this library matters</p>
-<p class="doc-intro__lead">The interesting part of the repo is not that it prices options. It is that pricing, surface repair, smooth eSSVI projection, and local-vol/PDE validation are connected into one reviewer-visible workflow instead of being hidden across disconnected demos.</p>
-<p class="doc-intro__support">If you are evaluating engineering maturity, the fastest route is the proof path rather than the full API catalog.</p>
+<p class="doc-intro__lead">The project is not just a pricing API. It shows the full proof path from noisy market quotes to a smooth surface, then through local-vol extraction and PDE validation, with the delicate parts left visible for review.</p>
+<p class="doc-intro__support">If you are evaluating quant depth or engineering maturity, the fastest route is the proof sequence rather than the full API catalog.</p>
 </div>
 
-<div class="homepage-proof-section" markdown="1">
-  <div class="homepage-proof-section__header">
-    <p class="homepage-section-kicker">Featured proof panel</p>
-    <p class="homepage-proof-section__copy">One scan across quoted-to-repaired surface evidence, the smooth Dupire handoff, and the local-vol/PDE validation loop.</p>
-  </div>
-  <figure class="diagram homepage-proof-panel" style="--diagram-max-width: 1180px">
-    <img alt="Reviewer proof panel showing surface repair, eSSVI smoothing, local-vol extraction, and PDE repricing with tracked evidence callouts" src="assets/generated/showcase/reviewer_proof_panel.light.svg" class="diagram-img diagram-light" />
-    <img alt="Reviewer proof panel showing surface repair, eSSVI smoothing, local-vol extraction, and PDE repricing with tracked evidence callouts" src="assets/generated/showcase/reviewer_proof_panel.dark.svg" class="diagram-img diagram-dark" />
-    <figcaption>The proof path is designed to make judgment visible: first repair, then smooth the handoff, then show the numerical consequences.</figcaption>
-  </figure>
+## Signature proof moment
+
+<p class="doc-section-lead">The proof object is the smoothed eSSVI surface used for the Dupire handoff, with smaller diagnostics showing the repair stage before it and the local-vol/PDE validation that follows.</p>
+
+<div class="homepage-signature-layout" markdown="1">
+<figure class="diagram diagram--hero homepage-signature-figure" style="--diagram-max-width: 980px" markdown="1">
+![3D surface of the smoothed eSSVI implied-vol handoff across moneyness and maturity](assets/generated/showcase/homepage_essvi_surface_3d.light.png){ .diagram-img .diagram-light }
+![3D surface of the smoothed eSSVI implied-vol handoff across moneyness and maturity](assets/generated/showcase/homepage_essvi_surface_3d.dark.png){ .diagram-img .diagram-dark }
+<figcaption>The standout object is the <a href="user_guides/essvi_smooth_handoff.md">smooth eSSVI handoff</a>: the surface that makes <code>w_T</code> usable for Dupire-oriented local-vol extraction instead of leaving the workflow at a repaired slice stack.</figcaption>
+</figure>
+
+<div class="snapshot-grid homepage-support-grid" markdown="1">
+<figure class="diagram diagram--quiet homepage-support-card" style="--diagram-max-width: 100%" markdown="1">
+![Quote fit comparison across maturity for repaired SVI and eSSVI surfaces](assets/generated/static/quote_surface_compare.light.png){ .diagram-img .diagram-light }
+![Quote fit comparison across maturity for repaired SVI and eSSVI surfaces](assets/generated/static/quote_surface_compare.dark.png){ .diagram-img .diagram-dark }
+<figcaption><a href="user_guides/surface_workflow.md">Surface repair</a> stays visible first, so the hero surface does not hide the quoted-versus-repaired comparison that starts the proof path.</figcaption>
+</figure>
+
+<figure class="diagram diagram--quiet homepage-support-card" style="--diagram-max-width: 100%" markdown="1">
+![Scatter plot comparing local-vol PDE repriced values with target prices](assets/generated/numerics/pde_roundtrip_scatter.light.png){ .diagram-img .diagram-light }
+![Scatter plot comparing local-vol PDE repriced values with target prices](assets/generated/numerics/pde_roundtrip_scatter.dark.png){ .diagram-img .diagram-dark }
+<figcaption><a href="user_guides/localvol_pde_validation.md">Local-vol / PDE validation</a> closes the loop with <code>154</code> repriced options and a published mean abs price error of <code>8.1e-4</code>.</figcaption>
+</figure>
+</div>
 </div>
 
-## Published proof strip
+## Open the proof pages
 
-<div class="snapshot-grid homepage-snapshot-grid">
-  <div class="snapshot-card homepage-snapshot-card homepage-snapshot-card--transition">
-    <p class="snapshot-label">Seam control</p>
-    <p class="snapshot-copy">Worst observed <code>w_T</code> seam jump</p>
-    <p class="metric-pair">
-      <span class="metric-number">8.07e-2</span>
-      <span class="metric-arrow">&rarr;</span>
-      <span class="metric-number metric-number--good">8.17e-5</span>
-    </p>
-  </div>
-  <div class="snapshot-card homepage-snapshot-card homepage-snapshot-card--zero">
-    <p class="snapshot-label">Dupire handoff</p>
-    <p class="snapshot-copy"><code>projection_dupire_invalid_count</code></p>
-    <p class="metric-line">
-      <span class="metric-number metric-number--good">0</span>
-    </p>
-  </div>
-  <div class="snapshot-card homepage-snapshot-card homepage-snapshot-card--detail">
-    <p class="snapshot-label">PDE repricing</p>
-    <p class="snapshot-copy">Published local-vol repricing sweep</p>
-    <p class="metric-line">
-      <span class="metric-number">154</span>
-      <span class="metric-caption">options repriced</span>
-    </p>
-    <p class="metric-inline">
-      <span class="metric-key">Mean abs price error</span>
-      <span class="metric-value">8.1e-4</span>
-    </p>
-    <p class="metric-inline">
-      <span class="metric-key">Max abs IV error</span>
-      <span class="metric-value">18.7 bp</span>
-    </p>
-  </div>
-</div>
+<div class="doc-card-grid doc-card-grid--quiet homepage-route-grid" markdown="1">
+[<span class="doc-card__eyebrow">Proof path step 1</span><span class="doc-link-card__title">Surface repair workflow</span><span class="doc-link-card__copy">See the quoted surface, the repaired SVI fit, and the slice-level stress before any smoothing tradeoff is accepted.</span>](user_guides/surface_workflow.md){ .doc-link-card .doc-link-card--quiet }
 
-## Start With The Strongest Pages
+[<span class="doc-card__eyebrow">Proof path step 2</span><span class="doc-link-card__title">eSSVI smooth handoff</span><span class="doc-link-card__copy">See why time continuity matters, how seam stress drops, and why the smoother surface is the preferred Dupire input.</span>](user_guides/essvi_smooth_handoff.md){ .doc-link-card .doc-link-card--quiet }
 
-<div class="doc-card-grid" markdown="1">
-[<span class="doc-card__eyebrow">Priority route 1</span><span class="doc-link-card__title">eSSVI smooth handoff</span><span class="doc-link-card__copy">The clearest page for why time continuity matters before local-vol extraction, and how the chosen projection is validated.</span>](user_guides/essvi_smooth_handoff.md){ .doc-link-card }
+[<span class="doc-card__eyebrow">Proof path step 3</span><span class="doc-link-card__title">Local-vol / PDE validation</span><span class="doc-link-card__copy">See repricing scatter, error localization, and convergence evidence for the final numerical leg of the workflow.</span>](user_guides/localvol_pde_validation.md){ .doc-link-card .doc-link-card--quiet }
 
-[<span class="doc-card__eyebrow">Priority route 2</span><span class="doc-link-card__title">Performance evidence</span><span class="doc-link-card__copy">Committed benchmark artifacts for implied-vol scaling, PDE runtime/error tradeoffs, digital remedies, and end-to-end stage budgets.</span>](performance.md){ .doc-link-card }
-
-[<span class="doc-card__eyebrow">Priority route 3</span><span class="doc-link-card__title">Surface repair workflow</span><span class="doc-link-card__copy">Quoted-versus-repaired evidence, static no-arbitrage diagnostics, and the point where the proof path starts.</span>](user_guides/surface_workflow.md){ .doc-link-card }
-
-[<span class="doc-card__eyebrow">Priority route 4</span><span class="doc-link-card__title">Local-vol / PDE validation</span><span class="doc-link-card__copy">Repricing scatter, error localization, and convergence evidence for the final numerical leg of the workflow.</span>](user_guides/localvol_pde_validation.md){ .doc-link-card }
+[<span class="doc-card__eyebrow">Benchmark case study</span><span class="doc-link-card__title">Performance evidence</span><span class="doc-link-card__copy">Open the authored benchmark page for implied-vol scaling, PDE runtime/error tradeoffs, digital remedies, and stage budgets.</span>](performance.md){ .doc-link-card .doc-link-card--quiet }
 </div>
 
 ## Secondary routes
 
 - [Architecture](architecture.md) for the recruiter-facing systems view and safeguard story
+- [Decision guide](user_guides/decision_guide.md) if you want the proof sequence in one routing page
 - [API reference](api/index.md) for the typed public surface and generated symbol docs
 - [Installation](installation.md) for local setup and editable development
-- [Decision guide](user_guides/decision_guide.md) if you want the proof sequence in one routing page

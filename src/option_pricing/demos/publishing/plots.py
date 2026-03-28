@@ -167,6 +167,20 @@ PRESET_SPECS: dict[str, tuple[PlotSpec, ...]] = {
         ),
         PlotSpec(
             preset="showcase",
+            filename="homepage_essvi_surface_3d.png",
+            renderer="surface_3d",
+            datasets=("surface/essvi_smoothed_grid",),
+            title="Smoothed eSSVI Surface",
+            kwargs={
+                "x_col": "moneyness",
+                "value_col": "iv",
+                "cmap": "viridis",
+                "elev": 29.0,
+                "azim": -58.0,
+            },
+        ),
+        PlotSpec(
+            preset="showcase",
             filename="reviewer_proof_panel.svg",
             renderer="reviewer_proof_panel",
             datasets=(),
@@ -264,6 +278,65 @@ def _surface_heatmap(
         ax.set_ylabel("Maturity T")
         colorbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label=value_col)
         style_colorbar(colorbar, theme=theme)
+        return save_figure(fig, out_path, dpi=dpi)
+
+
+def _surface_3d(
+    df: pd.DataFrame,
+    *,
+    spec: PlotSpec,
+    out_path: Path,
+    dpi: int,
+    theme: str,
+) -> Path:
+    x_col = str(spec.kwargs.get("x_col", "moneyness"))
+    value_col = str(spec.kwargs.get("value_col", "iv"))
+    cmap = str(spec.kwargs.get("cmap", "viridis"))
+    elev = float(spec.kwargs.get("elev", 28.0))
+    azim = float(spec.kwargs.get("azim", -60.0))
+    x_vals, T_vals, Z = _pivot_grid(df, x=x_col, y="T", value=value_col)
+    if Z.size == 0:
+        raise ValueError(f"{spec.filename}: empty grid")
+
+    X, Y = np.meshgrid(x_vals, T_vals)
+    z_min = float(np.nanmin(Z))
+    z_max = float(np.nanmax(Z))
+    z_span = max(z_max - z_min, 1e-6)
+    palette = publishing_palette(theme)
+    pane_fill = (
+        (0.09, 0.14, 0.22, 0.82) if theme == "dark" else (0.97, 0.985, 1.0, 0.96)
+    )
+
+    with publishing_style(theme=theme) as plt:
+        fig = plt.figure(figsize=(8.8, 6.4))
+        ax = fig.add_subplot(111, projection="3d")
+        ax.plot_surface(
+            X,
+            Y,
+            Z,
+            cmap=cmap,
+            linewidth=0.2,
+            antialiased=True,
+            shade=True,
+            rcount=min(Z.shape[0], 64),
+            ccount=min(Z.shape[1], 96),
+        )
+        ax.set_title(spec.title)
+        ax.set_xlabel("Moneyness K/F" if x_col == "moneyness" else "Log-moneyness y")
+        ax.set_ylabel("Maturity T")
+        ax.set_zlabel(value_col.upper())
+        ax.set_zlim(z_min - 0.02 * z_span, z_max + 0.04 * z_span)
+        ax.set_box_aspect((1.35, 1.0, 0.58))
+        ax.view_init(elev=elev, azim=azim)
+        ax.tick_params(colors=palette["text"], pad=1, labelsize=8)
+
+        for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
+            axis.pane.set_facecolor(pane_fill)
+            axis.pane.set_edgecolor(palette["spine"])
+            axis._axinfo["grid"]["color"] = palette["grid"]
+            axis._axinfo["grid"]["linewidth"] = 0.8
+
+        fig.subplots_adjust(left=0.0, right=0.98, bottom=0.04, top=0.94)
         return save_figure(fig, out_path, dpi=dpi)
 
 
@@ -1306,6 +1379,13 @@ def _reviewer_proof_panel(
 
 RENDERERS = {
     "surface_heatmap": lambda data, *, spec, out_path, dpi, theme: _surface_heatmap(
+        next(iter(data.values())),
+        spec=spec,
+        out_path=out_path,
+        dpi=dpi,
+        theme=theme,
+    ),
+    "surface_3d": lambda data, *, spec, out_path, dpi, theme: _surface_3d(
         next(iter(data.values())),
         spec=spec,
         out_path=out_path,
