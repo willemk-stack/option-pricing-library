@@ -1,93 +1,55 @@
-"""Surface → local-vol → PDE pipeline diagram."""
+"""Surface to local-vol to PDE workflow."""
 
 direction: right
 
 classes: {
-  card: {
+  step: {
     style: {
-      stroke-width: 2
-      border-radius: 10
-      shadow: true
+      fill: transparent
+      stroke-width: 1
+      border-radius: 32
     }
   }
 
   accent: {
     style: {
+      fill: transparent
+      stroke: "#0F66B7"
       stroke-width: 2
-      border-radius: 10
-      shadow: true
+      border-radius: 32
     }
   }
 
-  success: {
-    style: {
-      stroke: "#3f7a4c"
-      stroke-width: 2
-      border-radius: 10
-      shadow: true
-    }
-  }
-
-  row: {
+  result: {
     style: {
       fill: transparent
-      stroke: transparent
+      stroke: "#3F7A4C"
+      stroke-width: 2
+      border-radius: 32
     }
   }
 }
 
-quotes: "Quotes\nT, K, implied vol"
-quotes.class: card
+surface: "Surface inputs\nquotes or repaired SVI"
+surface.class: step
 
-paths: "" {
-  class: row
-  direction: down
+repair: "Repair"
+repair.class: step
 
-  from_grid_path: "" {
-    class: row
-    direction: right
+handoff: "Smooth handoff"
+handoff.class: accent
 
-    from_grid: "VolSurface.from_grid"
-    from_grid.class: card
+localvol: "Local-vol extract"
+localvol.class: step
 
-    check_surface: "check_surface_noarb"
-    check_surface.class: card
+pde: "PDE validate"
+pde.class: step
 
-    from_grid -> check_surface
-  }
+proof: "Proof outputs"
+proof.class: result
 
-  from_svi_path: "" {
-    class: row
-    direction: right
-
-    from_svi: "VolSurface.from_svi"
-    from_svi.class: card
-
-    calibrate_svi: "calibrate_svi"
-    calibrate_svi.class: accent
-
-    from_svi -> calibrate_svi
-  }
-}
-
-localvol: "LocalVolSurface.from_implied"
-localvol.class: card
-
-solve: "solve_pde_1d"
-solve.class: card
-
-repricing: "repricing"
-repricing.class: success
-
-implied_vol: "implied_vol"
-implied_vol.class: card
-
-quotes -> paths.from_grid_path.from_grid
-quotes -> paths.from_svi_path.from_svi
-
-paths.from_grid_path.check_surface -> localvol
-paths.from_svi_path.calibrate_svi -> localvol
-
-localvol -> solve: local_vol_price_pde
-localvol -> repricing
-repricing -> implied_vol
+surface -> repair
+repair -> handoff
+handoff -> localvol
+localvol -> pde
+pde -> proof

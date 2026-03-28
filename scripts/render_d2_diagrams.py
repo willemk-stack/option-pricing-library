@@ -47,6 +47,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = ROOT / "docs" / "assets" / "diagrams" / "src"
 OUT_DIR = ROOT / "docs" / "assets" / "diagrams"
 FRAGILE_SVG_TAGS = {"foreignObject", "image"}
+FULL_CANVAS_RECT_RE = re.compile(
+    r'(<svg class="d2-[^"]+ d2-svg"[^>]*>)'
+    r'(<rect\b[^>]*\brx="0\.000000"[^>]*\bstroke-width="0"\s*/>)',
+    re.S,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +132,7 @@ def _infer_root_dimensions(root: ET.Element) -> tuple[str, str] | None:
 
 def _normalize_rendered_svg_root(path: Path) -> None:
     svg_text = path.read_text(encoding="utf-8")
+    svg_text = FULL_CANVAS_RECT_RE.sub(r"\1", svg_text, count=1)
     start_tag = re.match(r"<svg\b([^>]*)>", svg_text)
     if start_tag is None:
         raise RuntimeError(

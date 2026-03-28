@@ -1,103 +1,123 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" data-d2-version="v0.7.1" preserveAspectRatio="xMidYMid meet" viewBox="0 0 661 105" width="661" height="105"><svg class="d2-1877705748 d2-svg" width="661" height="105" viewBox="11 11 661 105"><rect x="11.000000" y="11.000000" width="661.000000" height="105.000000" rx="0.000000" fill="#1E1E2E" class=" fill-N7" stroke-width="0" /><style type="text/css"><![CDATA[
-.d2-1877705748 .text-bold {
-	font-family: "d2-1877705748-font-bold";
-}
-@font-face {
-	font-family: d2-1877705748-font-bold;
-	src: url("data:application/font-woff;base64,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");
-}]]></style><style type="text/css"><![CDATA[.shape {
-  shape-rendering: geometricPrecision;
-  stroke-linejoin: round;
-}
-.connection {
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.blend {
-  mix-blend-mode: multiply;
-  opacity: 0.5;
-}
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 448" width="760" height="448" role="img" aria-labelledby="architecture-title architecture-desc">
+  <title id="architecture-title">Architecture systems view</title>
+  <desc id="architecture-desc">Typed public routes feed a reviewable workflow with explicit repair, smooth handoff, local-vol extraction, and PDE validation checkpoints before proof outputs and diagnostics remain downstream. Volatility, local-vol, and numerics sit below as supporting layers.</desc>
+  <defs>
+    <marker id="arrow-dark" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#88C7FF"/>
+    </marker>
+    <style>
+      text {
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        fill: #EEF5FF;
+      }
+      .eyebrow {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        fill: #9EB6CE;
+      }
+      .hero-title {
+        font-size: 27px;
+        font-weight: 700;
+      }
+      .hero-copy {
+        font-size: 15px;
+        fill: #B0C3D9;
+      }
+      .side-title {
+        font-size: 23px;
+        font-weight: 700;
+      }
+      .stage-title {
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .spine {
+        stroke: #88C7FF;
+        stroke-width: 6;
+        stroke-linecap: round;
+      }
+      .arrow {
+        stroke: #88C7FF;
+        stroke-width: 3;
+        stroke-linecap: round;
+      }
+      .connector {
+        stroke: #6B8CAD;
+        stroke-width: 2.2;
+        stroke-linecap: round;
+      }
+      .node {
+        fill: #88C7FF;
+        stroke: #132338;
+        stroke-width: 4;
+      }
+      .accent-line {
+        stroke: #5C83AA;
+        stroke-width: 3;
+        stroke-linecap: round;
+      }
+      .layer-title {
+        font-size: 19px;
+        font-weight: 700;
+      }
+      .layer-line {
+        stroke: #5C83AA;
+        stroke-width: 4;
+        stroke-linecap: round;
+      }
+    </style>
+  </defs>
 
-		.d2-1877705748 .fill-N1{fill:#CDD6F4;}
-		.d2-1877705748 .fill-N2{fill:#BAC2DE;}
-		.d2-1877705748 .fill-N3{fill:#A6ADC8;}
-		.d2-1877705748 .fill-N4{fill:#585B70;}
-		.d2-1877705748 .fill-N5{fill:#45475A;}
-		.d2-1877705748 .fill-N6{fill:#313244;}
-		.d2-1877705748 .fill-N7{fill:#1E1E2E;}
-		.d2-1877705748 .fill-B1{fill:#CBA6f7;}
-		.d2-1877705748 .fill-B2{fill:#CBA6f7;}
-		.d2-1877705748 .fill-B3{fill:#6C7086;}
-		.d2-1877705748 .fill-B4{fill:#585B70;}
-		.d2-1877705748 .fill-B5{fill:#45475A;}
-		.d2-1877705748 .fill-B6{fill:#313244;}
-		.d2-1877705748 .fill-AA2{fill:#f38BA8;}
-		.d2-1877705748 .fill-AA4{fill:#45475A;}
-		.d2-1877705748 .fill-AA5{fill:#313244;}
-		.d2-1877705748 .fill-AB4{fill:#45475A;}
-		.d2-1877705748 .fill-AB5{fill:#313244;}
-		.d2-1877705748 .stroke-N1{stroke:#CDD6F4;}
-		.d2-1877705748 .stroke-N2{stroke:#BAC2DE;}
-		.d2-1877705748 .stroke-N3{stroke:#A6ADC8;}
-		.d2-1877705748 .stroke-N4{stroke:#585B70;}
-		.d2-1877705748 .stroke-N5{stroke:#45475A;}
-		.d2-1877705748 .stroke-N6{stroke:#313244;}
-		.d2-1877705748 .stroke-N7{stroke:#1E1E2E;}
-		.d2-1877705748 .stroke-B1{stroke:#CBA6f7;}
-		.d2-1877705748 .stroke-B2{stroke:#CBA6f7;}
-		.d2-1877705748 .stroke-B3{stroke:#6C7086;}
-		.d2-1877705748 .stroke-B4{stroke:#585B70;}
-		.d2-1877705748 .stroke-B5{stroke:#45475A;}
-		.d2-1877705748 .stroke-B6{stroke:#313244;}
-		.d2-1877705748 .stroke-AA2{stroke:#f38BA8;}
-		.d2-1877705748 .stroke-AA4{stroke:#45475A;}
-		.d2-1877705748 .stroke-AA5{stroke:#313244;}
-		.d2-1877705748 .stroke-AB4{stroke:#45475A;}
-		.d2-1877705748 .stroke-AB5{stroke:#313244;}
-		.d2-1877705748 .background-color-N1{background-color:#CDD6F4;}
-		.d2-1877705748 .background-color-N2{background-color:#BAC2DE;}
-		.d2-1877705748 .background-color-N3{background-color:#A6ADC8;}
-		.d2-1877705748 .background-color-N4{background-color:#585B70;}
-		.d2-1877705748 .background-color-N5{background-color:#45475A;}
-		.d2-1877705748 .background-color-N6{background-color:#313244;}
-		.d2-1877705748 .background-color-N7{background-color:#1E1E2E;}
-		.d2-1877705748 .background-color-B1{background-color:#CBA6f7;}
-		.d2-1877705748 .background-color-B2{background-color:#CBA6f7;}
-		.d2-1877705748 .background-color-B3{background-color:#6C7086;}
-		.d2-1877705748 .background-color-B4{background-color:#585B70;}
-		.d2-1877705748 .background-color-B5{background-color:#45475A;}
-		.d2-1877705748 .background-color-B6{background-color:#313244;}
-		.d2-1877705748 .background-color-AA2{background-color:#f38BA8;}
-		.d2-1877705748 .background-color-AA4{background-color:#45475A;}
-		.d2-1877705748 .background-color-AA5{background-color:#313244;}
-		.d2-1877705748 .background-color-AB4{background-color:#45475A;}
-		.d2-1877705748 .background-color-AB5{background-color:#313244;}
-		.d2-1877705748 .color-N1{color:#CDD6F4;}
-		.d2-1877705748 .color-N2{color:#BAC2DE;}
-		.d2-1877705748 .color-N3{color:#A6ADC8;}
-		.d2-1877705748 .color-N4{color:#585B70;}
-		.d2-1877705748 .color-N5{color:#45475A;}
-		.d2-1877705748 .color-N6{color:#313244;}
-		.d2-1877705748 .color-N7{color:#1E1E2E;}
-		.d2-1877705748 .color-B1{color:#CBA6f7;}
-		.d2-1877705748 .color-B2{color:#CBA6f7;}
-		.d2-1877705748 .color-B3{color:#6C7086;}
-		.d2-1877705748 .color-B4{color:#585B70;}
-		.d2-1877705748 .color-B5{color:#45475A;}
-		.d2-1877705748 .color-B6{color:#313244;}
-		.d2-1877705748 .color-AA2{color:#f38BA8;}
-		.d2-1877705748 .color-AA4{color:#45475A;}
-		.d2-1877705748 .color-AA5{color:#313244;}
-		.d2-1877705748 .color-AB4{color:#45475A;}
-		.d2-1877705748 .color-AB5{color:#313244;}.appendix text.text{fill:#CDD6F4}.md{--color-fg-default:#CDD6F4;--color-fg-muted:#BAC2DE;--color-fg-subtle:#A6ADC8;--color-canvas-default:#1E1E2E;--color-canvas-subtle:#313244;--color-border-default:#CBA6f7;--color-border-muted:#CBA6f7;--color-neutral-muted:#313244;--color-accent-fg:#CBA6f7;--color-accent-emphasis:#CBA6f7;--color-attention-subtle:#BAC2DE;--color-danger-fg:red;}.sketch-overlay-B1{fill:url(#streaks-normal-d2-1877705748);mix-blend-mode:color-burn}.sketch-overlay-B2{fill:url(#streaks-normal-d2-1877705748);mix-blend-mode:color-burn}.sketch-overlay-B3{fill:url(#streaks-dark-d2-1877705748);mix-blend-mode:overlay}.sketch-overlay-B4{fill:url(#streaks-dark-d2-1877705748);mix-blend-mode:overlay}.sketch-overlay-B5{fill:url(#streaks-darker-d2-1877705748);mix-blend-mode:lighten}.sketch-overlay-B6{fill:url(#streaks-darker-d2-1877705748);mix-blend-mode:lighten}.sketch-overlay-AA2{fill:url(#streaks-normal-d2-1877705748);mix-blend-mode:color-burn}.sketch-overlay-AA4{fill:url(#streaks-darker-d2-1877705748);mix-blend-mode:lighten}.sketch-overlay-AA5{fill:url(#streaks-darker-d2-1877705748);mix-blend-mode:lighten}.sketch-overlay-AB4{fill:url(#streaks-darker-d2-1877705748);mix-blend-mode:lighten}.sketch-overlay-AB5{fill:url(#streaks-darker-d2-1877705748);mix-blend-mode:lighten}.sketch-overlay-N1{fill:url(#streaks-normal-d2-1877705748);mix-blend-mode:color-burn}.sketch-overlay-N2{fill:url(#streaks-normal-d2-1877705748);mix-blend-mode:color-burn}.sketch-overlay-N3{fill:url(#streaks-normal-d2-1877705748);mix-blend-mode:color-burn}.sketch-overlay-N4{fill:url(#streaks-dark-d2-1877705748);mix-blend-mode:overlay}.sketch-overlay-N5{fill:url(#streaks-darker-d2-1877705748);mix-blend-mode:lighten}.sketch-overlay-N6{fill:url(#streaks-darker-d2-1877705748);mix-blend-mode:lighten}.sketch-overlay-N7{fill:url(#streaks-darker-d2-1877705748);mix-blend-mode:lighten}.light-code{display: none}.dark-code{display: block}]]></style><defs>
-	<filter id="shadow-filter" width="200%" height="200%" x="-50%" y="-50%">
-		<feGaussianBlur stdDeviation="1.7 " in="SourceGraphic"></feGaussianBlur>
-		<feFlood flood-color="#3d4574" flood-opacity="0.4" result="ShadowFeFlood" in="SourceGraphic"></feFlood>
-		<feComposite in="ShadowFeFlood" in2="SourceAlpha" operator="in" result="ShadowFeComposite"></feComposite>
-		<feOffset dx="3" dy="5" result="ShadowFeOffset" in="ShadowFeComposite"></feOffset>
-		<feBlend in="SourceGraphic" in2="ShadowFeOffset" mode="normal" result="ShadowFeBlend"></feBlend>
-	</filter>
-</defs><g class="aW50ZXJmYWNlcw== card"><g class="shape" filter="url(#shadow-filter)" ><rect x="12.000000" y="12.000000" width="184.000000" height="98.000000" rx="10.000000" stroke="#CBA6f7" fill="#313244" class=" stroke-B1 fill-B6" style="stroke-width:2;" /></g><text x="104.000000" y="50.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="104.000000" dy="0.000000">Public interfaces</tspan><tspan x="104.000000" dy="17.666667">specs, instruments,</tspan><tspan x="104.000000" dy="17.666667">market context</tspan></text></g><g class="Y29yZV9zdGFjaw== accent"><g class="shape" filter="url(#shadow-filter)" ><rect x="266.000000" y="12.000000" width="174.000000" height="98.000000" rx="10.000000" stroke="#CBA6f7" fill="#313244" class=" stroke-B1 fill-B6" style="stroke-width:2;" /></g><text x="353.000000" y="50.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="353.000000" dy="0.000000">Core pricing stack</tspan><tspan x="353.000000" dy="17.666667">volatility, models,</tspan><tspan x="353.000000" dy="17.666667">numerics, pricers</tspan></text></g><g class="ZGlhZ25vc3RpY3M= warm"><g class="shape" filter="url(#shadow-filter)" ><rect x="510.000000" y="12.000000" width="158.000000" height="98.000000" rx="12.000000" stroke="#CBA6f7" fill="#313244" class=" stroke-B1 fill-B6" style="stroke-width:2;" /></g><text x="589.000000" y="50.500000" fill="#CDD6F4" class="text-bold fill-N1" style="text-anchor:middle;font-size:16px"><tspan x="589.000000" dy="0.000000">Diagnostics</tspan><tspan x="589.000000" dy="17.666667">surface reports,</tspan><tspan x="589.000000" dy="17.666667">repricing audits</tspan></text></g><g class="KGludGVyZmFjZXMgLSZndDsgY29yZV9zdGFjaylbMF0="><marker id="mk-d2-1877705748-3488378134" markerWidth="10.000000" markerHeight="12.000000" refX="7.000000" refY="6.000000" viewBox="0.000000 0.000000 10.000000 12.000000" orient="auto" markerUnits="userSpaceOnUse"> <polygon points="0.000000,0.000000 10.000000,6.000000 0.000000,12.000000" fill="#CBA6f7" class="connection fill-B1" stroke-width="2" /> </marker><path d="M 198.000000 61.000000 L 262.000000 61.000000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1877705748-3488378134)" mask="url(#d2-1877705748)" /></g><g class="KGNvcmVfc3RhY2sgLSZndDsgZGlhZ25vc3RpY3MpWzBd"><path d="M 442.000000 61.000000 L 506.000000 61.000000" stroke="#CBA6f7" fill="none" class="connection stroke-B1" style="stroke-width:2;" marker-end="url(#mk-d2-1877705748-3488378134)" mask="url(#d2-1877705748)" /></g><mask id="d2-1877705748" maskUnits="userSpaceOnUse" x="11" y="11" width="661" height="105">
-<rect x="11" y="11" width="661" height="105" fill="white"></rect>
+  <text class="eyebrow" x="380" y="44" text-anchor="middle">Reviewable quant core</text>
+  <text class="hero-title" x="380" y="76" text-anchor="middle">One reviewable workflow from</text>
+  <text class="hero-title" x="380" y="105" text-anchor="middle">public routes to proof outputs</text>
+  <text class="hero-copy" x="380" y="132" text-anchor="middle">Authority comes from visible checkpoints, not boxed subsystems.</text>
 
-</mask></svg></svg>
+  <text class="eyebrow" x="24" y="220">Public surface</text>
+  <text class="side-title" x="24" y="252">Typed</text>
+  <text class="side-title" x="24" y="280">routes</text>
+  <line class="accent-line" x1="24" y1="294" x2="114" y2="294"/>
+
+  <text class="eyebrow" x="748" y="220" text-anchor="end">Proof edge</text>
+  <text class="side-title" x="748" y="252" text-anchor="end">Proof</text>
+  <text class="side-title" x="748" y="280" text-anchor="end">outputs</text>
+  <text class="hero-copy" x="748" y="305" text-anchor="end">diagnostics</text>
+  <line class="accent-line" x1="650" y1="320" x2="748" y2="320"/>
+
+  <path class="spine" d="M 150 248 H 610"/>
+  <path class="arrow" d="M 112 248 H 210" fill="none" marker-end="url(#arrow-dark)"/>
+  <path class="arrow" d="M 614 248 H 648" fill="none" marker-end="url(#arrow-dark)"/>
+
+  <circle class="node" cx="224" cy="248" r="14"/>
+  <circle class="node" cx="352" cy="248" r="14"/>
+  <circle class="node" cx="480" cy="248" r="14"/>
+  <circle class="node" cx="608" cy="248" r="14"/>
+
+  <line class="connector" x1="224" y1="206" x2="224" y2="230"/>
+  <text class="stage-title" x="224" y="190" text-anchor="middle">Repair</text>
+
+  <line class="connector" x1="352" y1="194" x2="352" y2="230"/>
+  <text class="stage-title" x="352" y="156" text-anchor="middle">Smooth</text>
+  <text class="stage-title" x="352" y="182" text-anchor="middle">handoff</text>
+
+  <line class="connector" x1="480" y1="266" x2="480" y2="300"/>
+  <text class="stage-title" x="480" y="318" text-anchor="middle">Local-vol</text>
+  <text class="stage-title" x="480" y="344" text-anchor="middle">extraction</text>
+
+  <line class="connector" x1="608" y1="266" x2="608" y2="300"/>
+  <text class="stage-title" x="608" y="318" text-anchor="middle">PDE</text>
+  <text class="stage-title" x="608" y="344" text-anchor="middle">validation</text>
+
+  <text class="eyebrow" x="380" y="378" text-anchor="middle">Supporting layers</text>
+
+  <text class="layer-title" x="240" y="406" text-anchor="middle">Volatility</text>
+  <line class="layer-line" x1="184" y1="418" x2="296" y2="418"/>
+
+  <text class="layer-title" x="380" y="406" text-anchor="middle">Local-vol</text>
+  <line class="layer-line" x1="324" y1="418" x2="436" y2="418"/>
+
+  <text class="layer-title" x="520" y="406" text-anchor="middle">Numerics</text>
+  <line class="layer-line" x1="464" y1="418" x2="576" y2="418"/>
+</svg>
