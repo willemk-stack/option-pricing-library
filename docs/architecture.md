@@ -3,7 +3,11 @@
 <div class="doc-intro" markdown="1">
 <p class="doc-intro__kicker">Recruiter-facing systems view</p>
 <p class="doc-intro__lead"><code>option_pricing</code> is organized as a layered quant library: typed public routes enter a reviewable quant core, and diagnostics stay downstream where they can inspect the same workflow that produces the proof pages.</p>
+<<<<<<< HEAD
 <p class="doc-intro__support">The page walks the same stack as a workflow and safeguards story: repair, smooth handoff, local-vol extraction, PDE validation, and published proof outputs.</p>
+=======
+<p class="doc-intro__support">Start with the systems picture below if you want the recruiter-facing read. The second half of the page then walks the same stack as a workflow and safeguards story: repair, smooth handoff, local-vol extraction, PDE validation, and published proof outputs.</p>
+>>>>>>> 1eefa5d319d5af36b9d19b7f5f726c6df6800efb
 </div>
 
 ## Recruiter-Facing System Picture
@@ -13,12 +17,21 @@
 <figure markdown class="diagram diagram--architecture-overview">
   <p>
     <picture>
+<<<<<<< HEAD
       <source media="(max-width: 560px)" srcset="../assets/diagrams/architecture_layers.mobile.light.svg?v=20260328m">
       <img alt="Layered architecture" class="diagram-img diagram-light" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" srcset="../assets/diagrams/architecture_layers.svg?v=20260328m 1x" />
     </picture>
     <picture>
       <source media="(max-width: 560px)" srcset="../assets/diagrams/architecture_layers.mobile.dark.svg?v=20260328m">
       <img alt="Layered architecture" class="diagram-img diagram-dark" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" srcset="../assets/diagrams/architecture_layers.dark.svg?v=20260328m 1x" />
+=======
+      <source media="(max-width: 560px)" srcset="../assets/diagrams/architecture_layers.mobile.light.svg?v=20260328l">
+      <img alt="Layered architecture" class="diagram-img diagram-light" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" srcset="../assets/diagrams/architecture_layers.svg?v=20260328l 1x" />
+    </picture>
+    <picture>
+      <source media="(max-width: 560px)" srcset="../assets/diagrams/architecture_layers.mobile.dark.svg?v=20260328l">
+      <img alt="Layered architecture" class="diagram-img diagram-dark" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" srcset="../assets/diagrams/architecture_layers.dark.svg?v=20260328l 1x" />
+>>>>>>> 1eefa5d319d5af36b9d19b7f5f726c6df6800efb
     </picture>
   </p>
   <figcaption>The main systems graphic centers the reviewable workflow itself: public routes feed into repair, smooth handoff, local-vol extraction, and PDE validation, while proof outputs remain downstream where they can expose the safeguards without becoming hidden engine dependencies.</figcaption>
@@ -32,7 +45,11 @@
 
 ## Workflow And Safeguards Story
 
+<<<<<<< HEAD
 <p class="doc-section-lead">The technical story is the five checkpoints below: each one answers a different reviewer question before the workflow is allowed to move forward.</p>
+=======
+<p class="doc-section-lead">The recruiter-facing picture should collapse to one sentence. The technical story is the five checkpoints below: each one answers a different reviewer question before the workflow is allowed to move forward.</p>
+>>>>>>> 1eefa5d319d5af36b9d19b7f5f726c6df6800efb
 
 <div class="doc-panel doc-panel--quiet" markdown="1">
 <p class="doc-panel__label">Why this matters</p>
