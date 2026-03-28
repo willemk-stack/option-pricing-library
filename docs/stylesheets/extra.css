@@ -798,16 +798,18 @@ pre,
 }
 
 .surface-repair-proof-strip {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     margin-top: 0.72rem;
+    align-items: start;
 }
 
 .surface-repair-proof-strip .doc-card {
-    min-height: 100%;
+    min-height: 0;
+    align-self: start;
 }
 
 .surface-repair-proof-strip .doc-card__title {
-    min-height: 2.6rem;
+    min-height: 0;
 }
 
 .surface-repair-support-grid {
@@ -815,6 +817,39 @@ pre,
     gap: 0.85rem;
     margin: 0.95rem 0 1.35rem;
     align-items: start;
+}
+
+.essvi-signature-figure {
+    margin: 0 0 0.95rem;
+    padding: 0.88rem 0.98rem 0.86rem;
+}
+
+.essvi-signature-figure figcaption {
+    max-width: 53rem;
+    margin: 0.82rem 0 0;
+    text-align: left;
+    line-height: 1.58;
+}
+
+.essvi-proof-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 0.72rem;
+    align-items: start;
+}
+
+.essvi-proof-strip .doc-card {
+    min-height: 0;
+    align-self: start;
+}
+
+.essvi-proof-strip .doc-card__title {
+    min-height: 0;
+}
+
+.essvi-support-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.85rem;
+    margin: 0.95rem 0 1.35rem;
 }
 
 @media screen and (max-width: 44.984375em) {
@@ -892,6 +927,15 @@ pre,
     .surface-repair-signature-figure figcaption {
         max-width: none;
     }
+
+    .essvi-proof-strip,
+    .essvi-support-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .essvi-signature-figure figcaption {
+        max-width: none;
+    }
 }
 
 @media screen and (min-width: 45em) and (max-width: 63.984375em) {
@@ -918,6 +962,10 @@ pre,
     }
 
     .surface-repair-proof-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .essvi-proof-strip {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }

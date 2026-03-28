@@ -176,7 +176,10 @@ const pageReviewConfigOverrides: Record<string, Omit<PageReviewConfig, "path">> 
         requiresVisualEvidence: true,
         essentialMediaSelectors: ["figure.diagram img", ".snapshot-grid"],
         emptyContainerSelectors: ["figure.diagram", ".snapshot-grid"],
-        componentShots: [],
+        componentShots: [
+            { path: "/user_guides/essvi_smooth_handoff/", name: "essvi-handoff-primary-figure", selector: "figure.diagram" },
+            { path: "/user_guides/essvi_smooth_handoff/", name: "essvi-handoff-support-grid", selector: ".snapshot-grid" },
+        ],
     },
     "/user_guides/localvol_pde_validation/": {
         pageKey: "localvol_pde_validation",

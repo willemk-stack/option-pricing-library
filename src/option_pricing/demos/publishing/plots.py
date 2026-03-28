@@ -69,6 +69,18 @@ PRESET_SPECS: dict[str, tuple[PlotSpec, ...]] = {
     "dupire": (
         PlotSpec(
             preset="dupire",
+            filename="essvi_handoff_signature_composite.png",
+            renderer="essvi_handoff_signature",
+            datasets=(
+                "surface/essvi_smoothed_grid",
+                "calibration/essvi_time_smoothness",
+                "calibration/essvi_projection_summary",
+            ),
+            title="eSSVI Handoff Review Object",
+            kwargs={},
+        ),
+        PlotSpec(
+            preset="dupire",
             filename="essvi_smoothed_surface_heatmap.png",
             renderer="surface_heatmap",
             datasets=("surface/essvi_smoothed_grid",),
@@ -251,6 +263,20 @@ def _choose_smile_maturities(T_vals: np.ndarray, *, max_curves: int = 6) -> np.n
         return Ts
     idx = np.linspace(0, Ts.size - 1, max_curves).round().astype(int)
     return np.asarray(np.unique(Ts[idx]), dtype=float)
+
+
+def _choose_nearest_maturities(
+    T_vals: np.ndarray,
+    targets: tuple[float, ...],
+) -> np.ndarray:
+    Ts = np.asarray(sorted(set(np.asarray(T_vals, dtype=float))), dtype=float)
+    picked: list[float] = []
+    for target in targets:
+        idx = int(np.argmin(np.abs(Ts - float(target))))
+        candidate = float(Ts[idx])
+        if not any(np.isclose(candidate, existing) for existing in picked):
+            picked.append(candidate)
+    return np.asarray(picked, dtype=float)
 
 
 def _surface_heatmap(
@@ -636,6 +662,210 @@ def _surface_repair_signature(
         return save_figure(fig, out_path, dpi=dpi)
 
 
+def _essvi_handoff_signature(
+    datasets: dict[str, pd.DataFrame],
+    *,
+    spec: PlotSpec,
+    out_path: Path,
+    dpi: int,
+    theme: str,
+) -> Path:
+    smoothed = datasets["surface/essvi_smoothed_grid"].copy()
+    smoothness = datasets["calibration/essvi_time_smoothness"].copy()
+    projection = datasets["calibration/essvi_projection_summary"].copy()
+
+    smoothed["T"] = pd.to_numeric(smoothed["T"], errors="coerce")
+    smoothed["y"] = pd.to_numeric(smoothed["y"], errors="coerce")
+    smoothed["moneyness"] = pd.to_numeric(smoothed["moneyness"], errors="coerce")
+    smoothed["iv"] = pd.to_numeric(smoothed["iv"], errors="coerce")
+    smoothed["w_T"] = pd.to_numeric(smoothed["w_T"], errors="coerce")
+
+    smoothness["T_knot"] = pd.to_numeric(smoothness["T_knot"], errors="coerce")
+    smoothness["max_abs_wT_jump_svi"] = pd.to_numeric(
+        smoothness["max_abs_wT_jump_svi"],
+        errors="coerce",
+    )
+    smoothness["max_abs_wT_jump_smoothed"] = pd.to_numeric(
+        smoothness["max_abs_wT_jump_smoothed"],
+        errors="coerce",
+    )
+    smoothness = smoothness.sort_values("T_knot")
+
+    projection_row = projection.iloc[0]
+    price_rmse = float(pd.to_numeric(projection_row["price_rmse"], errors="coerce"))
+    max_abs_price_error = float(
+        pd.to_numeric(projection_row["max_abs_price_error"], errors="coerce")
+    )
+    projection_invalid_count = int(
+        pd.to_numeric(
+            projection_row["projection_dupire_invalid_count"],
+            errors="coerce",
+        )
+    )
+
+    x_vals, T_vals, Z = _pivot_grid(smoothed, x="moneyness", y="T", value="iv")
+    if Z.size == 0:
+        raise ValueError(f"{spec.filename}: empty smoothed surface grid")
+
+    X, Y = np.meshgrid(x_vals, T_vals)
+    z_min = float(np.nanmin(Z))
+    z_max = float(np.nanmax(Z))
+    z_span = max(z_max - z_min, 1e-6)
+    seam_floor = float(
+        np.nanmin(
+            smoothness["max_abs_wT_jump_smoothed"].to_numpy(dtype=float),
+        )
+    )
+    wt_slices = _choose_nearest_maturities(
+        smoothed["T"].to_numpy(dtype=float),
+        targets=(0.2, 0.5, 1.0, 1.5),
+    )
+    palette = publishing_palette(theme)
+
+    if theme == "dark":
+        colors = {
+            "seam_svi": "#7DB5FF",
+            "seam_smoothed": "#F59E0B",
+            "wt_slices": ("#F59E0B", "#F472B6", "#8CC9FF", "#91E0D7"),
+            "pane_fill": (0.09, 0.14, 0.22, 0.82),
+        }
+    else:
+        colors = {
+            "seam_svi": "#1D4ED8",
+            "seam_smoothed": "#C2410C",
+            "wt_slices": ("#C2410C", "#9D2E8C", "#0B5CAB", "#0F766E"),
+            "pane_fill": (0.97, 0.985, 1.0, 0.96),
+        }
+
+    with publishing_style(theme=theme) as plt:
+        fig = plt.figure(figsize=(12.7, 7.3), constrained_layout=True)
+        grid = fig.add_gridspec(
+            2,
+            2,
+            width_ratios=(1.58, 1.0),
+            height_ratios=(0.88, 1.12),
+        )
+        ax_surface = fig.add_subplot(grid[:, 0], projection="3d")
+        ax_seams = fig.add_subplot(grid[0, 1])
+        ax_wt = fig.add_subplot(grid[1, 1])
+
+        ax_surface.plot_surface(
+            X,
+            Y,
+            Z,
+            cmap="viridis",
+            linewidth=0.0,
+            antialiased=True,
+            shade=True,
+            alpha=0.9,
+            rcount=min(Z.shape[0], 64),
+            ccount=min(Z.shape[1], 96),
+        )
+        ax_surface.set_xlabel("Moneyness K/F")
+        ax_surface.set_ylabel("Maturity T")
+        ax_surface.set_zlabel("IV")
+        ax_surface.set_zlim(z_min - 0.02 * z_span, z_max + 0.04 * z_span)
+        ax_surface.set_box_aspect((1.35, 1.0, 0.62))
+        ax_surface.view_init(elev=27.0, azim=-58.0)
+        ax_surface.tick_params(colors=palette["text"], pad=1, labelsize=8)
+        ax_surface.text2D(
+            0.02,
+            0.97,
+            "eSSVI makes the Dupire handoff analytic in maturity.",
+            transform=ax_surface.transAxes,
+            color=palette["muted_text"],
+            fontsize=8,
+            va="top",
+        )
+
+        for axis in (ax_surface.xaxis, ax_surface.yaxis, ax_surface.zaxis):
+            axis.pane.set_facecolor(colors["pane_fill"])
+            axis.pane.set_edgecolor(palette["spine"])
+            axis._axinfo["grid"]["color"] = palette["grid"]
+            axis._axinfo["grid"]["linewidth"] = 0.8
+
+        seam_x = smoothness["T_knot"].to_numpy(dtype=float)
+        seam_svi = smoothness["max_abs_wT_jump_svi"].to_numpy(dtype=float)
+        seam_smoothed = smoothness["max_abs_wT_jump_smoothed"].to_numpy(dtype=float)
+        ax_seams.plot(
+            seam_x,
+            seam_svi,
+            marker="o",
+            linewidth=2.0,
+            color=colors["seam_svi"],
+            label="SVI repaired",
+        )
+        ax_seams.plot(
+            seam_x,
+            seam_smoothed,
+            marker="o",
+            linewidth=2.0,
+            color=colors["seam_smoothed"],
+            label="eSSVI smoothed",
+        )
+        ax_seams.set_yscale("log")
+        ax_seams.set_ylim(seam_floor * 0.7, float(np.nanmax(seam_svi)) * 1.3)
+        ax_seams.set_title("Seam jumps collapse after projection")
+        ax_seams.set_xlabel("Knot maturity")
+        ax_seams.set_ylabel("Max |jump in w_T|")
+        ax_seams.grid(axis="y", alpha=0.28, which="both")
+        ax_seams.legend(loc="upper right", fontsize=7)
+        ax_seams.text(
+            0.02,
+            0.97,
+            "Worst knot: 8.07e-02 -> 8.17e-05",
+            transform=ax_seams.transAxes,
+            color=palette["muted_text"],
+            fontsize=8,
+            va="top",
+        )
+        ax_seams.text(
+            0.02,
+            0.88,
+            f"Dupire invalid count after projection: {projection_invalid_count}",
+            transform=ax_seams.transAxes,
+            color=palette["muted_text"],
+            fontsize=8,
+            va="top",
+        )
+
+        ax_wt.set_title("Analytic w_T becomes inspectable")
+        for color, maturity in zip(colors["wt_slices"], wt_slices, strict=False):
+            maturity_slice = smoothed.loc[
+                np.isclose(smoothed["T"], float(maturity))
+            ].sort_values("y")
+            ax_wt.plot(
+                maturity_slice["y"],
+                maturity_slice["w_T"],
+                color=color,
+                linewidth=2.0,
+                label=f"T≈{float(maturity):.2f}",
+            )
+        ax_wt.set_xlabel("Log-moneyness y")
+        ax_wt.set_ylabel("w_T")
+        ax_wt.grid(alpha=0.25)
+        ax_wt.legend(loc="upper left", fontsize=7)
+        ax_wt.text(
+            0.02,
+            0.05,
+            f"price_rmse={price_rmse:.5f}; max_abs_price_error={max_abs_price_error:.5f}",
+            transform=ax_wt.transAxes,
+            color=palette["muted_text"],
+            fontsize=8,
+            va="bottom",
+        )
+
+        fig.suptitle(
+            spec.title,
+            x=0.065,
+            y=0.985,
+            ha="left",
+            fontsize=14,
+            fontweight="bold",
+        )
+        return save_figure(fig, out_path, dpi=dpi)
+
+
 def _localvol_heatmap(
     df: pd.DataFrame,
     *,
@@ -989,16 +1219,39 @@ def _load_reviewer_proof_panel_metrics() -> dict[str, str]:
         ROOT / "docs" / "user_guides" / "localvol_pde_validation.md"
     ).read_text(encoding="utf-8")
 
-    seam_match = _require_match(
-        r"\| `T = 0\.15` \| `([^`]+)` \| `([^`]+)` \|",
+    seam_match = re.search(
+        r"\| Worst seam jump \| `T = 0\.15`: `([^`]+) -> ([^`]+)` \|",
         essvi_text,
-        label="published seam-jump pair",
+        flags=re.MULTILINE,
     )
-    projection_match = _require_match(
-        r"\| Projection summary \| `price_rmse = ([^`]+)` \| `max_abs_price_error = ([^`]+)` \| `projection_dupire_invalid_count = ([^`]+)` \|",
+    if seam_match is None:
+        seam_match = _require_match(
+            r"\| `T = 0\.15` \| `([^`]+)` \| `([^`]+)` \|",
+            essvi_text,
+            label="published seam-jump pair",
+        )
+
+    projection_tradeoff_match = re.search(
+        r"\| Projection tradeoff \| `price_rmse = ([^`]+)`; `max_abs_price_error = ([^`]+)` \|",
         essvi_text,
-        label="projection summary",
+        flags=re.MULTILINE,
     )
+    projection_invalid_count: str
+    if projection_tradeoff_match is None:
+        projection_summary_match = _require_match(
+            r"\| Projection summary \| `price_rmse = ([^`]+)` \| `max_abs_price_error = ([^`]+)` \| `projection_dupire_invalid_count = ([^`]+)` \|",
+            essvi_text,
+            label="projection summary",
+        )
+        projection_invalid_count = projection_summary_match.group(3)
+    else:
+        projection_invalid_match = _require_match(
+            r"\| Dupire readiness \| `projection_dupire_invalid_count = ([^`]+)` \|",
+            essvi_text,
+            label="Dupire readiness summary",
+        )
+        projection_invalid_count = projection_invalid_match.group(1)
+
     repriced_options_match = _require_match(
         r"\| Repriced options \| `([^`]+)` \|",
         localvol_text,
@@ -1018,7 +1271,7 @@ def _load_reviewer_proof_panel_metrics() -> dict[str, str]:
     return {
         "seam_svi": seam_match.group(1),
         "seam_smoothed": seam_match.group(2),
-        "projection_invalid_count": projection_match.group(3),
+        "projection_invalid_count": projection_invalid_count,
         "repriced_options": repriced_options_match.group(1),
         "mean_abs_price_error": mean_abs_price_error_match.group(1),
         "max_abs_iv_error": max_abs_iv_error_match.group(1),
@@ -1643,6 +1896,7 @@ RENDERERS = {
         theme=theme,
     ),
     "surface_repair_signature": _surface_repair_signature,
+    "essvi_handoff_signature": _essvi_handoff_signature,
     "localvol_heatmap": lambda data, *, spec, out_path, dpi, theme: _localvol_heatmap(
         next(iter(data.values())),
         spec=spec,
