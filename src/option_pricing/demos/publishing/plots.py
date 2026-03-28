@@ -31,6 +31,18 @@ PRESET_SPECS: dict[str, tuple[PlotSpec, ...]] = {
     "static": (
         PlotSpec(
             preset="static",
+            filename="surface_repair_signature_composite.png",
+            renderer="surface_repair_signature",
+            datasets=(
+                "surface/quote_surface_compare",
+                "surface/svi_repaired_grid",
+                "calibration/svi_fit_compare",
+            ),
+            title="Surface Repair Review Object",
+            kwargs={},
+        ),
+        PlotSpec(
+            preset="static",
             filename="svi_repaired_surface_heatmap.png",
             renderer="surface_heatmap",
             datasets=("surface/svi_repaired_grid",),
@@ -397,6 +409,230 @@ def _quote_compare(
         ax.set_xlabel("Maturity T")
         ax.set_ylabel("Mean abs IV error (bp)")
         ax.legend(loc="best")
+        return save_figure(fig, out_path, dpi=dpi)
+
+
+def _surface_repair_signature(
+    datasets: dict[str, pd.DataFrame],
+    *,
+    spec: PlotSpec,
+    out_path: Path,
+    dpi: int,
+    theme: str,
+) -> Path:
+    quotes = datasets["surface/quote_surface_compare"].copy()
+    svi = datasets["surface/svi_repaired_grid"].copy()
+    fit = datasets["calibration/svi_fit_compare"].copy()
+
+    fit["T"] = pd.to_numeric(fit["T"], errors="coerce")
+    fit["diag_ok_fx"] = fit["diag_ok_fx"].map(
+        lambda value: (
+            bool(value)
+            if isinstance(value, (bool, np.bool_))
+            else str(value).strip().lower() == "true"
+        )
+    )
+    fit["min_g_fx"] = pd.to_numeric(fit["min_g_fx"], errors="coerce")
+    fit["failure_reason_fx"] = fit["failure_reason_fx"].fillna("").astype(str)
+    fit = fit.sort_values("T")
+
+    quotes["T"] = pd.to_numeric(quotes["T"], errors="coerce")
+    quotes["moneyness"] = pd.to_numeric(quotes["moneyness"], errors="coerce")
+    quotes["y"] = pd.to_numeric(quotes["y"], errors="coerce")
+    quotes["iv_obs"] = pd.to_numeric(quotes["iv_obs"], errors="coerce")
+    quotes["iv_svi"] = pd.to_numeric(quotes["iv_svi"], errors="coerce")
+    quotes["iv_resid_svi_bp"] = pd.to_numeric(
+        quotes["iv_resid_svi_bp"],
+        errors="coerce",
+    )
+    quotes = quotes.merge(fit[["T", "diag_ok_fx"]], on="T", how="left")
+    quotes["diag_ok_fx"] = quotes["diag_ok_fx"].fillna(True).astype(bool)
+
+    maturity_summary = (
+        quotes.groupby("T", as_index=False)
+        .agg(
+            mae_bp=("iv_resid_svi_bp", lambda s: float(np.mean(np.abs(s)))),
+            max_bp=("iv_resid_svi_bp", lambda s: float(np.max(np.abs(s)))),
+        )
+        .merge(
+            fit[["T", "diag_ok_fx", "min_g_fx", "failure_reason_fx"]],
+            on="T",
+            how="left",
+        )
+        .sort_values("T")
+    )
+    maturity_summary["diag_ok_fx"] = (
+        maturity_summary["diag_ok_fx"].fillna(True).astype(bool)
+    )
+    flagged_T = maturity_summary.loc[~maturity_summary["diag_ok_fx"], "T"].to_numpy(
+        dtype=float
+    )
+
+    if flagged_T.size == 0:
+        flagged_T = maturity_summary.nlargest(3, "mae_bp")["T"].to_numpy(dtype=float)
+
+    x_vals, T_vals, Z = _pivot_grid(svi, x="moneyness", y="T", value="iv")
+    if Z.size == 0:
+        raise ValueError(f"{spec.filename}: empty repaired surface grid")
+
+    X, Y = np.meshgrid(x_vals, T_vals)
+    z_min = float(np.nanmin(Z))
+    z_max = float(np.nanmax(Z))
+    z_span = max(z_max - z_min, 1e-6)
+    palette = publishing_palette(theme)
+
+    if theme == "dark":
+        colors = {
+            "bar_pass": "#91E0D7",
+            "bar_flag": "#F59E0B",
+            "slice_colors": ("#F59E0B", "#F472B6", "#8CC9FF"),
+            "pane_fill": (0.09, 0.14, 0.22, 0.82),
+        }
+    else:
+        colors = {
+            "bar_pass": "#0F766E",
+            "bar_flag": "#C2410C",
+            "slice_colors": ("#C2410C", "#8B3A86", "#0B5CAB"),
+            "pane_fill": (0.97, 0.985, 1.0, 0.96),
+        }
+
+    with publishing_style(theme=theme) as plt:
+        fig = plt.figure(figsize=(12.6, 7.2), constrained_layout=True)
+        grid = fig.add_gridspec(
+            2,
+            2,
+            width_ratios=(1.55, 1.0),
+            height_ratios=(0.9, 1.1),
+        )
+        ax_surface = fig.add_subplot(grid[:, 0], projection="3d")
+        ax_residuals = fig.add_subplot(grid[0, 1])
+        ax_slices = fig.add_subplot(grid[1, 1])
+
+        ax_surface.plot_surface(
+            X,
+            Y,
+            Z,
+            cmap="viridis",
+            linewidth=0.0,
+            antialiased=True,
+            shade=True,
+            alpha=0.86,
+            rcount=min(Z.shape[0], 64),
+            ccount=min(Z.shape[1], 96),
+        )
+        ax_surface.set_xlabel("Moneyness K/F")
+        ax_surface.set_ylabel("Maturity T")
+        ax_surface.set_zlabel("IV")
+        ax_surface.set_zlim(z_min - 0.02 * z_span, z_max + 0.04 * z_span)
+        ax_surface.set_box_aspect((1.35, 1.0, 0.62))
+        ax_surface.view_init(elev=26.0, azim=-57.0)
+        ax_surface.tick_params(colors=palette["text"], pad=1, labelsize=8)
+        ax_surface.text2D(
+            0.02,
+            0.97,
+            "The surface stays clean here; stressed quote checks stay at right.",
+            transform=ax_surface.transAxes,
+            color=palette["muted_text"],
+            fontsize=8,
+            va="top",
+        )
+
+        for axis in (ax_surface.xaxis, ax_surface.yaxis, ax_surface.zaxis):
+            axis.pane.set_facecolor(colors["pane_fill"])
+            axis.pane.set_edgecolor(palette["spine"])
+            axis._axinfo["grid"]["color"] = palette["grid"]
+            axis._axinfo["grid"]["linewidth"] = 0.8
+
+        maturity_positions = np.arange(len(maturity_summary), dtype=float)
+        mae_values = maturity_summary["mae_bp"].to_numpy(dtype=float)
+        diag_ok_values = maturity_summary["diag_ok_fx"].to_numpy(dtype=bool)
+        bar_colors = [
+            colors["bar_pass"] if passed else colors["bar_flag"]
+            for passed in diag_ok_values
+        ]
+        ax_residuals.bar(
+            maturity_positions,
+            mae_values,
+            color=bar_colors,
+            width=0.72,
+        )
+        ax_residuals.set_title("Per-expiry residuals with static checks")
+        ax_residuals.set_ylabel("Mean abs IV residual (bp)")
+        ax_residuals.set_xlabel("Maturity T")
+        ax_residuals.set_xticks(maturity_positions)
+        ax_residuals.set_xticklabels(
+            [f"{float(T):g}" for T in maturity_summary["T"].to_numpy(dtype=float)],
+            rotation=45,
+            ha="right",
+        )
+        ax_residuals.grid(axis="y", alpha=0.28)
+        ax_residuals.text(
+            0.02,
+            0.97,
+            f"{len(flagged_T)}/{len(maturity_summary)} expiries flagged by the static g-floor.",
+            transform=ax_residuals.transAxes,
+            color=palette["muted_text"],
+            fontsize=8,
+            va="top",
+        )
+        for idx, (mae_bp, diag_ok) in enumerate(
+            zip(mae_values, diag_ok_values, strict=False)
+        ):
+            if not diag_ok:
+                ax_residuals.text(
+                    idx,
+                    float(mae_bp) + 0.9,
+                    "g<0",
+                    color=colors["bar_flag"],
+                    fontsize=8,
+                    ha="center",
+                    va="bottom",
+                    fontweight="bold",
+                )
+
+        ax_slices.set_title("Flagged slices stay inspectable")
+        for color, T in zip(colors["slice_colors"], flagged_T[:3], strict=False):
+            maturity_slice = quotes.loc[np.isclose(quotes["T"], float(T))].sort_values(
+                "moneyness"
+            )
+            ax_slices.plot(
+                maturity_slice["moneyness"],
+                maturity_slice["iv_svi"],
+                color=color,
+                linewidth=2.0,
+                label=f"T={float(T):g} repaired",
+            )
+            ax_slices.scatter(
+                maturity_slice["moneyness"],
+                maturity_slice["iv_obs"],
+                s=14,
+                color=color,
+                alpha=0.56,
+            )
+        ax_slices.set_xlabel("Moneyness K/F")
+        ax_slices.set_ylabel("IV")
+        ax_slices.set_xlim(
+            float(np.nanmin(quotes["moneyness"])),
+            float(np.nanmax(quotes["moneyness"])),
+        )
+        ax_slices.text(
+            0.02,
+            0.96,
+            "Observed points remain attached to the stressed maturities.",
+            transform=ax_slices.transAxes,
+            color=palette["muted_text"],
+            fontsize=8,
+            va="top",
+        )
+        ax_slices.legend(loc="upper right", fontsize=7)
+        fig.suptitle(
+            spec.title,
+            x=0.065,
+            y=0.985,
+            ha="left",
+            fontsize=14,
+            fontweight="bold",
+        )
         return save_figure(fig, out_path, dpi=dpi)
 
 
@@ -1406,6 +1642,7 @@ RENDERERS = {
         dpi=dpi,
         theme=theme,
     ),
+    "surface_repair_signature": _surface_repair_signature,
     "localvol_heatmap": lambda data, *, spec, out_path, dpi, theme: _localvol_heatmap(
         next(iter(data.values())),
         spec=spec,
