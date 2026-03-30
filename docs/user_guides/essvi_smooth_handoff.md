@@ -16,6 +16,17 @@
 [Next: local-vol and PDE validation](localvol_pde_validation.md){ .md-button }
 </div>
 
+<div class="proof-route-shell" markdown="1">
+<p class="proof-route-shell__label">Proof routing</p>
+<div class="proof-route" role="navigation" aria-label="Proof route">
+<a class="proof-route__item" href="../index.md"><span class="proof-route__step">Start</span><span class="proof-route__title">Homepage overview</span></a>
+<a class="proof-route__item" href="surface_workflow.md"><span class="proof-route__step">Step 1</span><span class="proof-route__title">Surface repair</span></a>
+<span class="proof-route__item proof-route__item--current" aria-current="page"><span class="proof-route__step">Step 2</span><span class="proof-route__title">eSSVI handoff</span></span>
+<a class="proof-route__item" href="localvol_pde_validation.md"><span class="proof-route__step">Step 3</span><span class="proof-route__title">Local-vol / PDE</span></a>
+<a class="proof-route__item proof-route__item--followup" href="../performance.md"><span class="proof-route__step">Follow-up</span><span class="proof-route__title">Performance evidence</span></a>
+</div>
+</div>
+
 ## Signature evidence
 
 <p class="doc-section-lead">This is the handoff review object: one continuous eSSVI surface for the Dupire bridge, the seam-jump evidence that justifies the projection, and the analytic <code>w_T</code> slices that show the page is targeting derivatives rather than cosmetic implied-vol smoothing.</p>

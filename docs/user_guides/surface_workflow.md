@@ -16,6 +16,17 @@
 [Next: eSSVI smooth handoff](essvi_smooth_handoff.md){ .md-button }
 </div>
 
+<div class="proof-route-shell" markdown="1">
+<p class="proof-route-shell__label">Proof routing</p>
+<div class="proof-route" role="navigation" aria-label="Proof route">
+<a class="proof-route__item" href="../index.md"><span class="proof-route__step">Start</span><span class="proof-route__title">Homepage overview</span></a>
+<span class="proof-route__item proof-route__item--current" aria-current="page"><span class="proof-route__step">Step 1</span><span class="proof-route__title">Surface repair</span></span>
+<a class="proof-route__item" href="essvi_smooth_handoff.md"><span class="proof-route__step">Step 2</span><span class="proof-route__title">eSSVI handoff</span></a>
+<a class="proof-route__item" href="localvol_pde_validation.md"><span class="proof-route__step">Step 3</span><span class="proof-route__title">Local-vol / PDE</span></a>
+<a class="proof-route__item proof-route__item--followup" href="../performance.md"><span class="proof-route__step">Follow-up</span><span class="proof-route__title">Performance evidence</span></a>
+</div>
+</div>
+
 ## Signature evidence
 
 <p class="doc-section-lead">This is the production review object: the repaired SVI surface stays clean in 3D, the flagged maturities remain marked, and the stressed slices still sit against observed quotes instead of being washed into one pretty surface.</p>

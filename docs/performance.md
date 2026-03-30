@@ -13,6 +13,21 @@
 </div>
 </div>
 
+<div class="proof-route-shell proof-route-shell--performance" markdown="1">
+<p class="proof-route-shell__label">Read after the proof path</p>
+<div class="proof-route" role="navigation" aria-label="Proof route">
+<a class="proof-route__item" href="index.md"><span class="proof-route__step">Start</span><span class="proof-route__title">Homepage overview</span></a>
+<a class="proof-route__item" href="user_guides/surface_workflow.md"><span class="proof-route__step">Step 1</span><span class="proof-route__title">Surface repair</span></a>
+<a class="proof-route__item" href="user_guides/essvi_smooth_handoff.md"><span class="proof-route__step">Step 2</span><span class="proof-route__title">eSSVI handoff</span></a>
+<a class="proof-route__item" href="user_guides/localvol_pde_validation.md"><span class="proof-route__step">Step 3</span><span class="proof-route__title">Local-vol / PDE</span></a>
+<span class="proof-route__item proof-route__item--current proof-route__item--followup" aria-current="page"><span class="proof-route__step">Follow-up</span><span class="proof-route__title">Performance evidence</span></span>
+</div>
+</div>
+
+## Benchmark overview
+
+<p class="doc-section-lead">This opening proof object does the same job the other flagship pages do: land one bounded review surface first, then let the page zoom into interpretation. It compresses the benchmark families that matter most in review before the narrative narrows to runtime priorities and supporting checks.</p>
+
 <figure markdown class="diagram diagram--hero performance-overview-panel" style="--diagram-max-width: 1180px">
   ![Benchmark overview: committed IV scaling, PDE runtime-versus-error, macro stage budget, and benchmark callouts derived from published artifacts.](assets/generated/benchmarks/benchmark_overview.light.svg){ .diagram-img .diagram-light }
   ![Benchmark overview: committed IV scaling, PDE runtime-versus-error, macro stage budget, and benchmark callouts derived from published artifacts.](assets/generated/benchmarks/benchmark_overview.dark.svg){ .diagram-img .diagram-dark }

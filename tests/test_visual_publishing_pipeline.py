@@ -24,7 +24,10 @@ from option_pricing.viz.publishing import (
     wrap_svg_text,
 )
 from scripts.build_benchmark_artifacts import ROOT as REPO_ROOT
-from scripts.build_benchmark_artifacts import build_benchmark_overview_asset
+from scripts.build_benchmark_artifacts import (
+    build_benchmark_overview_asset,
+    build_macro_pipeline_summary_asset,
+)
 
 SVG_NS = {"svg": "http://www.w3.org/2000/svg"}
 
@@ -326,6 +329,38 @@ def test_showcase_readme_proof_card_uses_wrapped_svg_text(
         _assert_svg_text_nodes_fit(root)
 
 
+def test_showcase_architecture_system_map_uses_wrapped_svg_text(
+    visual_bundle_ci,
+    tmp_path: Path,
+) -> None:
+    result = visual_bundle_ci
+    out_root = tmp_path / "assets"
+
+    render_plot_presets(
+        result.manifest,
+        presets=["showcase"],
+        out_root=out_root,
+    )
+
+    for theme in PUBLISHING_THEMES:
+        path = out_root / "showcase" / f"architecture_system_map.{theme}.svg"
+        root = ET.fromstring(path.read_text(encoding="utf-8"))
+
+        title = root.find(
+            ".//svg:text[@id='architecture-system-map-title']",
+            SVG_NS,
+        )
+        support = root.find(
+            ".//svg:text[@id='architecture-system-map-support-numerics']",
+            SVG_NS,
+        )
+
+        assert title is not None
+        assert len(title.findall("svg:tspan", SVG_NS)) >= 2
+        assert support is not None
+        _assert_svg_text_nodes_fit(root)
+
+
 def test_showcase_reviewer_proof_panel_uses_contained_raster_slots(
     visual_bundle_ci,
     tmp_path: Path,
@@ -393,6 +428,27 @@ def test_benchmark_overview_uses_wrapped_svg_text() -> None:
             assert "xMidYMid slice" not in raw_svg
             _assert_svg_text_nodes_fit(root)
             _assert_svg_raster_nodes_contained(root, expected_count=3)
+    finally:
+        if plot_dir.exists():
+            shutil.rmtree(plot_dir)
+
+
+def test_macro_pipeline_summary_asset_renders_from_snapshot() -> None:
+    plot_dir = REPO_ROOT / "out" / "pytest_macro_pipeline_summary" / "benchmarks"
+    if plot_dir.exists():
+        shutil.rmtree(plot_dir)
+    plot_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        build_macro_pipeline_summary_asset(
+            artifacts_dir=REPO_ROOT / "benchmarks" / "artifacts",
+            plot_dir=plot_dir,
+        )
+
+        for theme in PUBLISHING_THEMES:
+            path = plot_dir / f"macro_pipeline_summary.{theme}.png"
+            assert path.exists()
+            assert path.stat().st_size > 0
     finally:
         if plot_dir.exists():
             shutil.rmtree(plot_dir)
