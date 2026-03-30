@@ -44,7 +44,7 @@
   <rect x="664" y="484" width="552" height="232" rx="24" ry="24" fill="#F8FBFD" stroke="#D7E0EA" stroke-width="2" />
   <g id="readme-card-benchmarks-and-delivery" clip-path="url(#readmeCardClip-benchmarks-and-delivery)">
     <text x="696" y="532" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#0B1F33" id="readme-card-benchmarks-and-delivery-title" data-max-width="488" data-max-height="32" data-line-height="32"><tspan x="696" dy="0">Benchmarks and delivery</tspan></text>
-    <text x="696" y="574" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="34" font-weight="700" fill="#0B5CAB" id="readme-card-benchmarks-and-delivery-headline" data-max-width="488" data-max-height="38" data-line-height="38"><tspan x="696" dy="0">379x IV slice speedup</tspan></text>
+    <text x="696" y="574" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="34" font-weight="700" fill="#0B5CAB" id="readme-card-benchmarks-and-delivery-headline" data-max-width="488" data-max-height="38" data-line-height="38"><tspan x="696" dy="0">578x IV slice speedup</tspan></text>
     <text x="696" y="612" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" font-weight="400" fill="#4A6277" id="readme-card-benchmarks-and-delivery-body" data-max-width="488" data-max-height="92" data-line-height="22"><tspan x="696" dy="0">Published at 801 strikes from committed benchmark</tspan><tspan x="696" dy="22">artifacts.</tspan><tspan x="696" dy="22">README, docs visuals, and proof pages are regenerated</tspan><tspan x="696" dy="22">and checked in CI.</tspan></text>
   </g>
 </svg>
