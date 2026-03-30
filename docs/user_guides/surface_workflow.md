@@ -16,6 +16,17 @@
 [Next: eSSVI smooth handoff](essvi_smooth_handoff.md){ .md-button }
 </div>
 
+<div class="proof-route-shell" markdown="1">
+<p class="proof-route-shell__label">Proof routing</p>
+<div class="proof-route" role="navigation" aria-label="Proof route">
+<a class="proof-route__item" href="../../"><span class="proof-route__step">Start</span><span class="proof-route__title">Homepage overview</span></a>
+<span class="proof-route__item proof-route__item--current" aria-current="page"><span class="proof-route__step">Step 1</span><span class="proof-route__title">Surface repair</span></span>
+<a class="proof-route__item" href="../essvi_smooth_handoff/"><span class="proof-route__step">Step 2</span><span class="proof-route__title">eSSVI handoff</span></a>
+<a class="proof-route__item" href="../localvol_pde_validation/"><span class="proof-route__step">Step 3</span><span class="proof-route__title">Local-vol / PDE</span></a>
+<a class="proof-route__item proof-route__item--followup" href="../../performance/"><span class="proof-route__step">Follow-up</span><span class="proof-route__title">Performance evidence</span></a>
+</div>
+</div>
+
 ## Signature evidence
 
 <p class="doc-section-lead">This is the production review object: the repaired SVI surface stays clean in 3D, the flagged maturities remain marked, and the stressed slices still sit against observed quotes instead of being washed into one pretty surface.</p>
@@ -45,7 +56,7 @@ Each maturity is repaired with an inspectable analytic slice rather than with an
 <div class="doc-card doc-card--quiet" markdown="1">
 <p class="doc-card__eyebrow">Not hidden</p>
 <p class="doc-card__title">Static repair is not the Dupire handoff</p>
-The separate time-smooth maturity-direction decision stays on the <a href="essvi_smooth_handoff.md">eSSVI smooth handoff</a> page instead of being smuggled into this one.
+The separate time-smooth maturity-direction decision stays on the <a href="../essvi_smooth_handoff/">eSSVI smooth handoff</a> page instead of being smuggled into this one.
 </div>
 </div>
 
@@ -123,7 +134,7 @@ The page is stronger because the failures stay attached to the repair. A reviewe
 
 <div class="doc-panel doc-panel--strong" markdown="1">
 <p class="doc-panel__label">Main takeaway</p>
-The win is not that every expiry becomes easy. The win is that the noisy quoted surface is replaced with a defensible analytic repair while fit quality, flagged slices, and remaining stress stay visible enough to inspect. That is why the next proof step is the <a href="essvi_smooth_handoff.md">eSSVI smooth handoff</a> page rather than an immediate jump to local vol.
+The win is not that every expiry becomes easy. The win is that the noisy quoted surface is replaced with a defensible analytic repair while fit quality, flagged slices, and remaining stress stay visible enough to inspect. That is why the next proof step is the <a href="../essvi_smooth_handoff/">eSSVI smooth handoff</a> page rather than an immediate jump to local vol.
 </div>
 
 - Keep quoted-versus-repaired comparisons visible in review-facing work instead of showing only the fitted surface.

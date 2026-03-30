@@ -16,6 +16,17 @@
 [Review performance evidence](../performance.md){ .md-button }
 </div>
 
+<div class="proof-route-shell" markdown="1">
+<p class="proof-route-shell__label">Proof routing</p>
+<div class="proof-route" role="navigation" aria-label="Proof route">
+<a class="proof-route__item" href="../../"><span class="proof-route__step">Start</span><span class="proof-route__title">Homepage overview</span></a>
+<a class="proof-route__item" href="../surface_workflow/"><span class="proof-route__step">Step 1</span><span class="proof-route__title">Surface repair</span></a>
+<a class="proof-route__item" href="../essvi_smooth_handoff/"><span class="proof-route__step">Step 2</span><span class="proof-route__title">eSSVI handoff</span></a>
+<span class="proof-route__item proof-route__item--current" aria-current="page"><span class="proof-route__step">Step 3</span><span class="proof-route__title">Local-vol / PDE</span></span>
+<a class="proof-route__item proof-route__item--followup" href="../../performance/"><span class="proof-route__step">Follow-up</span><span class="proof-route__title">Performance evidence</span></a>
+</div>
+</div>
+
 ## Signature evidence
 
 <p class="doc-section-lead">This is the review object for the numerical leg: the scatter shows whether the bundle reprices cleanly, the heatmap shows where the stress clusters, and the convergence/runtime figure shows where extra mesh density stops being an automatic win.</p>

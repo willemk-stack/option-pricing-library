@@ -6,7 +6,7 @@
 <p class="doc-intro__support">Use it to find the shared public types before diving into the dedicated pricer, curves, or volatility reference pages.</p>
 </div>
 
-<p class="doc-meta">For pricing functions, use <a href="pricers.md">Pricers</a>. This page stays focused on shared types, contracts, configuration objects, and common volatility exports.</p>
+<p class="doc-meta">For pricing functions, use <a href="../pricers/">Pricers</a>. This page stays focused on shared types, contracts, configuration objects, and common volatility exports.</p>
 
 ## Core types
 

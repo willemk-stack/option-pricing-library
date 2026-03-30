@@ -16,6 +16,17 @@
 [Next: local-vol and PDE validation](localvol_pde_validation.md){ .md-button }
 </div>
 
+<div class="proof-route-shell" markdown="1">
+<p class="proof-route-shell__label">Proof routing</p>
+<div class="proof-route" role="navigation" aria-label="Proof route">
+<a class="proof-route__item" href="../../"><span class="proof-route__step">Start</span><span class="proof-route__title">Homepage overview</span></a>
+<a class="proof-route__item" href="../surface_workflow/"><span class="proof-route__step">Step 1</span><span class="proof-route__title">Surface repair</span></a>
+<span class="proof-route__item proof-route__item--current" aria-current="page"><span class="proof-route__step">Step 2</span><span class="proof-route__title">eSSVI handoff</span></span>
+<a class="proof-route__item" href="../localvol_pde_validation/"><span class="proof-route__step">Step 3</span><span class="proof-route__title">Local-vol / PDE</span></a>
+<a class="proof-route__item proof-route__item--followup" href="../../performance/"><span class="proof-route__step">Follow-up</span><span class="proof-route__title">Performance evidence</span></a>
+</div>
+</div>
+
 ## Signature evidence
 
 <p class="doc-section-lead">This is the handoff review object: one continuous eSSVI surface for the Dupire bridge, the seam-jump evidence that justifies the projection, and the analytic <code>w_T</code> slices that show the page is targeting derivatives rather than cosmetic implied-vol smoothing.</p>
@@ -97,7 +108,7 @@ The point is not that the surface looks smoother. The point is that the bridge p
 
 <figure class="diagram diagram--quiet proof-path-support-figure essvi-support-figure" style="--diagram-max-width: 760px" markdown="1">
 [![](../assets/generated/dupire/localvol_gatheral_heatmap.light.png){ .diagram-img .diagram-light } ![](../assets/generated/dupire/localvol_gatheral_heatmap.dark.png){ .diagram-img .diagram-dark } <span class="proof-path-lightbox-hint" aria-hidden="true">Open larger view</span>](../assets/generated/dupire/localvol_gatheral_heatmap.light.png){ .proof-path-lightbox-trigger data-proof-path-lightbox="" data-light-src="../../assets/generated/dupire/localvol_gatheral_heatmap.light.png" data-dark-src="../../assets/generated/dupire/localvol_gatheral_heatmap.dark.png" data-alt="Heatmap of Gatheral local volatility extracted from the smoothed eSSVI surface" data-lightbox-title="Gatheral local-vol heatmap" aria-label="Open a larger view of the Gatheral local-vol heatmap" aria-describedby="essvi-support-caption-localvol" aria-haspopup="dialog" }
-  <figcaption id="essvi-support-caption-localvol">This stays secondary on purpose. It shows that the handoff now produces a differentiable local-vol object worth inspecting, while the full numerical judgment remains on the <a href="localvol_pde_validation.md">local-vol and PDE validation</a> page.</figcaption>
+  <figcaption id="essvi-support-caption-localvol">This stays secondary on purpose. It shows that the handoff now produces a differentiable local-vol object worth inspecting, while the full numerical judgment remains on the <a href="../localvol_pde_validation/">local-vol and PDE validation</a> page.</figcaption>
 </figure>
 
 </div>

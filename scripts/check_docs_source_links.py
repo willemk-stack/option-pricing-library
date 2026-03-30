@@ -4,7 +4,7 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, urljoin, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS_DIR = ROOT / "docs"
@@ -61,6 +61,31 @@ def line_number(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
+def markdown_output_route(markdown_file: Path) -> str:
+    relative_path = markdown_file.relative_to(DOCS_DIR).with_suffix("").as_posix()
+    if relative_path == "index":
+        return "/"
+    if relative_path.endswith("/index"):
+        return f"/{relative_path[:-len('/index')]}/"
+    return f"/{relative_path}/"
+
+
+def built_route_exists(markdown_file: Path, target: str) -> bool:
+    current_route = markdown_output_route(markdown_file)
+    resolved_path = urlsplit(urljoin(current_route, target)).path
+    if not resolved_path:
+        return False
+
+    cleaned_path = resolved_path.lstrip("/")
+    if not cleaned_path:
+        return (DOCS_DIR / "index.md").exists()
+
+    candidate_stem = Path(cleaned_path.rstrip("/"))
+    stem_candidate = DOCS_DIR / candidate_stem.with_suffix(".md")
+    index_candidate = DOCS_DIR / candidate_stem / "index.md"
+    return stem_candidate.exists() or index_candidate.exists()
+
+
 def main() -> int:
     args = parse_args()
     issues: list[str] = []
@@ -76,8 +101,26 @@ def main() -> int:
             if not normalized_target:
                 continue
 
+            if (
+                match.group("tag").lower() == "a"
+                and match.group("attr").lower() == "href"
+                and normalized_target.endswith(".md")
+            ):
+                rel_path = markdown_file.relative_to(ROOT).as_posix()
+                issues.append(
+                    f"{rel_path}:{line_number(text, match.start())}: "
+                    f'{match.group("tag")} {match.group("attr")}="{target}" '
+                    "(raw HTML markdown href will not be rewritten by MkDocs)"
+                )
+                continue
+
             resolved_target = (markdown_file.parent / normalized_target).resolve()
             if resolved_target.exists():
+                continue
+
+            if match.group("attr").lower() == "href" and built_route_exists(
+                markdown_file, normalized_target
+            ):
                 continue
 
             rel_path = markdown_file.relative_to(ROOT).as_posix()
