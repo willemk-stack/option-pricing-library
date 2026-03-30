@@ -2,8 +2,8 @@
 
 <div class="doc-intro" markdown="1">
 <p class="doc-intro__kicker">Flagship benchmark page</p>
-<p class="doc-intro__lead">This page is the committed benchmark bundle for the workflows that matter most in review: implied-vol inversion, PDE runtime versus error, digital-payoff remedies, local-vol extraction, the integrated surface-to-PDE path, and CRR tree scaling.</p>
-<p class="doc-intro__support">Read it as a benchmark case study rather than a leaderboard. The point is to show which defaults are defensible, what extra accuracy really costs, and which stages actually deserve optimization effort.</p>
+<p class="doc-intro__lead">This page is the committed benchmark bundle for the runtime questions that matter most in review: workload-class scaling, PDE cost versus accuracy, digital-payoff remedies, and the end-to-end surface-to-PDE stage budget.</p>
+<p class="doc-intro__support">Read it as a benchmark case study rather than a leaderboard. The point is to show what actually matters, where extra runtime buys something real, and which stages deserve optimization effort before the quieter ones do.</p>
 <div class="doc-pill-row">
   <span class="doc-pill">Vectorized IV scaling</span>
   <span class="doc-pill">Runtime versus error</span>
@@ -11,32 +11,46 @@
 </div>
 </div>
 
-<figure markdown class="diagram diagram--hero" style="--diagram-max-width: 1180px">
+<figure markdown class="diagram diagram--hero performance-overview-panel" style="--diagram-max-width: 1180px">
   ![Benchmark overview: committed IV scaling, PDE runtime-versus-error, macro stage budget, and benchmark callouts derived from published artifacts.](assets/generated/benchmarks/benchmark_overview.light.svg){ .diagram-img .diagram-light }
   ![Benchmark overview: committed IV scaling, PDE runtime-versus-error, macro stage budget, and benchmark callouts derived from published artifacts.](assets/generated/benchmarks/benchmark_overview.dark.svg){ .diagram-img .diagram-dark }
   <figcaption>One view across the benchmark families that matter most in review: vectorized IV scaling, runtime/error tradeoffs, digital remedies, and integrated stage-budget attribution.</figcaption>
 </figure>
 
-<div class="doc-panel doc-panel--quiet" markdown="1">
-<p class="doc-panel__label">How to read this page</p>
-The strongest signal is not one absolute timing number. It is the combination of slope, reference target, and interpretation: where vectorization changes the workload class, where PDE refinement buys meaningful error reduction, where remedies matter, and which stage dominates the integrated workflow.
+<div class="doc-panel doc-panel--strong performance-reading-panel" markdown="1">
+<p class="doc-panel__label">What actually matters</p>
+{{ READING_LENS }}
 </div>
 
-## Fast signals
+## Runtime priorities
 
-<p class="doc-section-lead">If you only scan three benchmark facts, these are the ones that best explain the engineering choices surfaced elsewhere in the docs.</p>
+<p class="doc-section-lead">This is the flagship benchmark moment on the page because it answers the optimization question directly: where does the workflow actually spend time, and which stages are already cheap enough that polishing them first would be the wrong judgment?</p>
 
-{{ KEY_SIGNALS }}
+<div class="performance-flagship-shell" markdown="1">
+<p class="performance-flagship-shell__eyebrow">Editorial flagship figure</p>
+<figure markdown class="diagram performance-flagship-figure" style="--diagram-max-width: 1120px">
+  ![Macro pipeline benchmark: authored stage-budget view for the synthetic surface-to-local-vol-to-PDE workflow, with emphasis on optimization priority rather than raw totals.](assets/generated/benchmarks/macro_pipeline_summary.light.png){ .diagram-img .diagram-light }
+  ![Macro pipeline benchmark: authored stage-budget view for the synthetic surface-to-local-vol-to-PDE workflow, with emphasis on optimization priority rather than raw totals.](assets/generated/benchmarks/macro_pipeline_summary.dark.png){ .diagram-img .diagram-dark }
+  <figcaption>The integrated stage-budget family is the clearest optimization-priority proof object: surface fitting and PDE repricing dominate, while the handoff stages stay cheap.</figcaption>
+</figure>
+</div>
 
-## What The Committed Snapshot Establishes
+<div class="doc-panel doc-panel--strong performance-flagship-panel" markdown="1">
+<p class="doc-panel__label">Optimization judgment</p>
+{{ MACRO_SUMMARY }}
+</div>
 
-<p class="doc-section-lead">The table is the compact claim set for the benchmark bundle: each row pairs a workload, a reference, and the reason the published result matters.</p>
+## What the committed snapshot establishes
+
+<p class="doc-section-lead">The table is the compact claim set for the benchmark bundle: each row pairs a workload, a reference, and the reason the published result matters. It is strongest when read as a bounded justification set, not as a promise that every workload should be pushed to the finest or fastest-looking point.</p>
 
 {{ SNAPSHOT_TABLE }}
 
-## Implied-vol inversion
+## Core benchmark families
 
-<p class="doc-section-lead">This is the fastest way to show that the library is built for real surface workloads rather than just isolated single-option demos.</p>
+### Implied-vol inversion
+
+<p class="doc-section-lead">This is the workload-class proof: the library is built for real smiles and surfaces rather than just isolated single-option demos.</p>
 
 <figure markdown class="diagram" style="--diagram-max-width: 980px">
   ![IV scaling figure: vectorized slice inversion versus scalar-loop inversion, plus scalar single-option latency scenarios.](assets/generated/benchmarks/iv_scaling.light.png){ .diagram-img .diagram-light }
@@ -45,9 +59,9 @@ The strongest signal is not one absolute timing number. It is the combination of
 
 {{ IV_SUMMARY }}
 
-## PDE runtime versus error
+### PDE runtime versus error
 
-<p class="doc-section-lead">The numerical question here is not whether a finer grid is better in principle. It is how much extra runtime buys how much visible error reduction.</p>
+<p class="doc-section-lead">The numerical question here is not whether a finer grid is better in principle. It is how much extra runtime buys how much visible error reduction, and when the finest published point stops being the most sensible default.</p>
 
 <figure markdown class="diagram" style="--diagram-max-width: 980px">
   ![PDE runtime versus error tradeoff for Black-Scholes vanilla PDE and local-vol PDE refinement.](assets/generated/benchmarks/pde_runtime_error_tradeoff.light.png){ .diagram-img .diagram-light }
@@ -56,7 +70,7 @@ The strongest signal is not one absolute timing number. It is the combination of
 
 {{ PDE_SUMMARY }}
 
-## Digital-payoff remedies
+### Digital-payoff remedies
 
 <p class="doc-section-lead">This is the clearest benchmark family for engineering judgment rather than raw speed, because the remedy choice changes whether refinement is actually trustworthy.</p>
 
@@ -70,20 +84,9 @@ The strongest signal is not one absolute timing number. It is the combination of
 Leaving the discontinuity untreated keeps runtime modest, but it also leaves materially larger error and much wider grid-to-grid drift. The cell-average and L2-projection remedies both stabilize the refinement path without changing the runtime order of magnitude. This is the benchmark family that most clearly shows domain-aware numerical maturity.
 </div>
 
-## End-to-end pipeline
+## Supporting checks
 
-<p class="doc-section-lead">The integrated benchmark is useful because it answers the optimization-priority question directly: where does the workflow actually spend time?</p>
-
-<figure markdown class="diagram" style="--diagram-max-width: 980px">
-  ![Macro pipeline benchmark: stacked stage timing for the synthetic surface-to-local-vol-to-PDE workflow.](assets/generated/benchmarks/macro_pipeline_summary.light.png){ .diagram-img .diagram-light }
-  ![Macro pipeline benchmark: stacked stage timing for the synthetic surface-to-local-vol-to-PDE workflow.](assets/generated/benchmarks/macro_pipeline_summary.dark.png){ .diagram-img .diagram-dark }
-</figure>
-
-{{ MACRO_SUMMARY }}
-
-## Supporting families
-
-<p class="doc-section-lead">These are useful supporting checks, but they are not the main benchmark story. They help place the local-vol and tree paths in the broader method lineup.</p>
+<p class="doc-section-lead">These are useful supporting checks, but they are not the main benchmark story. They help place the local-vol and tree paths in the broader method lineup without asking every plot to carry hero weight.</p>
 
 ### Local-vol extraction
 
@@ -120,13 +123,17 @@ The `pytest-benchmark` JSON is kept as the raw timing record. The publishing scr
 
 <p class="doc-section-lead">The benchmark bundle is strongest when it supports a design decision rather than advertising a runtime in isolation.</p>
 
-<div class="doc-panel doc-panel--strong" markdown="1">
+<div class="doc-panel doc-panel--strong performance-justification-panel" markdown="1">
 <p class="doc-panel__label">Main takeaway</p>
-The published evidence supports concrete defaults: use the vectorized implied-vol slice path for surface workloads, treat medium PDE grids as the practical baseline unless the error budget says otherwise, discuss digital payoffs together with the remedy choice, and spend optimization effort on surface fitting or PDE repricing before touching the already-cheap handoff steps.
+The published evidence supports concrete defaults:
+
+- prefer the vectorized implied-vol slice path for smile and surface workloads
+- treat medium PDE grids as the practical starting point and escalate when the error budget says otherwise
+- discuss digital payoffs together with the remedy choice, not just the runtime line
+- spend optimization effort on surface fitting or PDE repricing before touching the already-cheap handoff stages
 </div>
 
-- Prefer the vectorized implied-vol slice API for smiles and surfaces; the scalar API is fine for isolated options but not for surface-scale work.
-- For vanilla PDE work, refinement behaves as expected: finer grids buy error reduction, but they do so at materially higher runtime than the medium grids that are often the more practical default.
-- For digital payoffs, do not discuss the PDE path without the remedy choice. `cell_avg` and `L2 projection` materially improve refinement behavior.
-- In the integrated workflow, surface fitting dominates the stage budget. Local-vol construction is cheap relative to fitting and PDE repricing.
-- CRR remains useful as a convergence reference, but the benchmark data makes the intended method placement clear: analytic or PDE methods are the more practical choice for repeated European-vanilla valuation.
+<div class="doc-panel doc-panel--quiet performance-scope-panel" markdown="1">
+<p class="doc-panel__label">What this bundle does not prove</p>
+It does not establish machine-independent latencies, universal optimal grids, or blanket claims about every payoff family. It justifies relative workload choice, bounded numerical escalation, remedy necessity for digital payoffs, and optimization order inside the committed publication scenarios.
+</div>

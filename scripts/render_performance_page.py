@@ -54,6 +54,10 @@ def _fmt_speedup(value: float) -> str:
     return f"{value:.1f}x"
 
 
+def _fmt_pct(value: float) -> str:
+    return f"{100.0 * float(value):.1f}%"
+
+
 def _find_row(rows: list[dict[str, str]], **criteria: str) -> dict[str, str]:
     for row in rows:
         if all(row.get(key) == value for key, value in criteria.items()):
@@ -211,10 +215,57 @@ def _build_key_signals() -> str:
     )
 
 
+def _group_macro_rows(
+    rows: list[dict[str, str]],
+) -> dict[str, dict[str, dict[str, str]]]:
+    grouped: dict[str, dict[str, dict[str, str]]] = {}
+    for row in rows:
+        grouped.setdefault(row["scenario"], {})[row["stage"]] = row
+    return grouped
+
+
+def _build_reading_lens() -> str:
+    macro_rows = _read_csv_rows(
+        ROOT / "benchmarks" / "artifacts" / "macro_pipeline_summary.csv"
+    )
+    grouped = _group_macro_rows(macro_rows)
+    scenario_order = ("small", "medium", "large")
+
+    fit_pde_shares: list[float] = []
+    minor_stage_totals: list[float] = []
+    for scenario in scenario_order:
+        stages = grouped[scenario]
+        total = sum(_to_float(row["runtime_ms"]) for row in stages.values())
+        fit_pde = _to_float(stages["surface_fit_ms"]["runtime_ms"]) + _to_float(
+            stages["pde_reprice_ms"]["runtime_ms"]
+        )
+        minor = (
+            _to_float(stages["quote_mesh_ms"]["runtime_ms"])
+            + _to_float(stages["surface_handoff_ms"]["runtime_ms"])
+            + _to_float(stages["local_vol_ms"]["runtime_ms"])
+        )
+        fit_pde_shares.append(fit_pde / total)
+        minor_stage_totals.append(minor)
+
+    return "\n".join(
+        [
+            "- The strongest review signal here is not one absolute timing number. It is whether the bundle separates workload-class wins, cost-versus-accuracy tradeoffs, and genuine end-to-end bottlenecks.",
+            (
+                f"- In the committed macro run, surface fitting plus PDE repricing already consume "
+                f"{_fmt_pct(min(fit_pde_shares))} to {_fmt_pct(max(fit_pde_shares))} of total runtime, "
+                f"while quote mesh + handoff + local-vol stay between {_fmt_runtime(min(minor_stage_totals))} "
+                f"and {_fmt_runtime(max(minor_stage_totals))} combined."
+            ),
+            "- That is why this page is best read as a default-setting case study: it justifies method choice, escalation guidance, remedy selection, and optimization order, not machine-independent latency promises.",
+        ]
+    )
+
+
 def _build_iv_summary() -> str:
     iv_rows = _read_csv_rows(ROOT / "benchmarks" / "artifacts" / "iv_speedup.csv")
     iv_last = max(iv_rows, key=lambda row: int(row["n_strikes"]))
     return (
+        "Treat this figure as a workload-class result rather than a single-option latency contest. "
         "Use the vectorized slice inverter whenever the workload is a smile or surface rather than an isolated option. "
         f"At {iv_last['n_strikes']} strikes the committed snapshot records about {_fmt_runtime(_to_float(iv_last['vectorized_slice']))} "
         f"for the vectorized slice path versus about {_fmt_runtime(_to_float(iv_last['scalar_loop']))} for the scalar-loop baseline."
@@ -222,16 +273,28 @@ def _build_iv_summary() -> str:
 
 
 def _build_pde_summary() -> str:
+    summary = _load_summary()
     pde_rows = _read_csv_rows(
         ROOT / "benchmarks" / "artifacts" / "pde_runtime_error_tradeoff.csv"
     )
+    vanilla_rows = [
+        row
+        for row in pde_rows
+        if row["family"] == "black_scholes_vanilla" and row["method"] == "rannacher"
+    ]
     localvol_rows = [row for row in pde_rows if row["family"] == "local_vol_digital"]
-    localvol_ref = max(localvol_rows, key=lambda row: int(row["Nx"]))
+    vanilla_medium = _find_row(vanilla_rows, Nx="201")
+    vanilla_finest = max(vanilla_rows, key=lambda row: int(row["Nx"]))
+    localvol_published = max(localvol_rows, key=lambda row: int(row["Nx"]))
+    localvol_reference_grid = summary["families"]["pde"]["localvol_reference_grid"]
     return (
         "The vanilla PDE curve shows the expected refinement tradeoff against an analytic benchmark. "
+        f"From {vanilla_medium['Nx']}x{vanilla_medium['Nt']} to {vanilla_finest['Nx']}x{vanilla_finest['Nt']}, "
+        f"runtime rises from about {_fmt_runtime(_to_float(vanilla_medium['runtime_ms']))} to {_fmt_runtime(_to_float(vanilla_finest['runtime_ms']))} "
+        f"while absolute error only falls from {_fmt_sci(_to_float(vanilla_medium['abs_error']))} to {_fmt_sci(_to_float(vanilla_finest['abs_error']))}. "
+        "That supports medium grids as the practical default starting point unless the error budget says otherwise. "
         "The local-vol curve uses a finer-grid local-vol PDE solve as its reference because there is no closed-form target for that path. "
-        "That is the right comparison for review: the figure shows what extra grid density buys rather than just how long one solve took. "
-        f"In the current snapshot, the finest local-vol reference grid is {localvol_ref['Nx']}x{localvol_ref['Nt']}."
+        f"In the committed snapshot, the published local-vol tradeoff runs through {localvol_published['Nx']}x{localvol_published['Nt']} against a {localvol_reference_grid['Nx']}x{localvol_reference_grid['Nt']} reference solve."
     )
 
 
@@ -239,15 +302,41 @@ def _build_macro_summary() -> str:
     rows = _read_csv_rows(
         ROOT / "benchmarks" / "artifacts" / "macro_pipeline_summary.csv"
     )
-    grouped: dict[str, dict[str, dict[str, str]]] = {}
-    for row in rows:
-        grouped.setdefault(row["scenario"], {})[row["stage"]] = row
+    grouped = _group_macro_rows(rows)
 
-    return (
-        "For the integrated benchmark, the key observation is where time actually goes. "
-        f"In this snapshot the handoff itself stays cheap at {_fmt_runtime(_to_float(grouped['small']['surface_handoff_ms']['runtime_ms']))} to {_fmt_runtime(_to_float(grouped['large']['surface_handoff_ms']['runtime_ms']))}, "
-        f"the local-vol extraction step stays around {_fmt_runtime(_to_float(grouped['small']['local_vol_ms']['runtime_ms']))} to {_fmt_runtime(_to_float(grouped['large']['local_vol_ms']['runtime_ms']))}, "
-        "and the expensive parts are fitting the surface and running the PDE. That is useful when discussing optimization priorities because it argues against spending engineering effort on the wrong stage."
+    small_surface_fit = _to_float(grouped["small"]["surface_fit_ms"]["runtime_ms"])
+    large_surface_fit = _to_float(grouped["large"]["surface_fit_ms"]["runtime_ms"])
+    small_pde = _to_float(grouped["small"]["pde_reprice_ms"]["runtime_ms"])
+    large_pde = _to_float(grouped["large"]["pde_reprice_ms"]["runtime_ms"])
+    minor_small = (
+        _to_float(grouped["small"]["quote_mesh_ms"]["runtime_ms"])
+        + _to_float(grouped["small"]["surface_handoff_ms"]["runtime_ms"])
+        + _to_float(grouped["small"]["local_vol_ms"]["runtime_ms"])
+    )
+    minor_large = (
+        _to_float(grouped["large"]["quote_mesh_ms"]["runtime_ms"])
+        + _to_float(grouped["large"]["surface_handoff_ms"]["runtime_ms"])
+        + _to_float(grouped["large"]["local_vol_ms"]["runtime_ms"])
+    )
+
+    return "\n".join(
+        [
+            "- Surface fitting is the main scaling driver in every published scenario.",
+            (
+                f"  It rises from {_fmt_runtime(small_surface_fit)} to {_fmt_runtime(large_surface_fit)}, "
+                "which is why optimization effort belongs there before smaller orchestration stages."
+            ),
+            "- PDE repricing is the second budget line, not a rounding error.",
+            (
+                f"  It grows from {_fmt_runtime(small_pde)} to {_fmt_runtime(large_pde)} and stays materially larger "
+                "than the handoff or local-vol construction steps."
+            ),
+            "- Quote mesh generation, smooth handoff, and local-vol extraction remain the low-leverage stages.",
+            (
+                f"  Combined, they stay at {_fmt_runtime(minor_small)} to {_fmt_runtime(minor_large)}, "
+                "so the benchmark bundle argues against optimizing them first."
+            ),
+        ]
     )
 
 
@@ -313,7 +402,7 @@ def render(*, check: bool) -> int:
     rendered = template
     replacements = {
         "{{ SNAPSHOT_TABLE }}": _build_snapshot_table(),
-        "{{ KEY_SIGNALS }}": _build_key_signals(),
+        "{{ READING_LENS }}": _build_reading_lens(),
         "{{ IV_SUMMARY }}": _build_iv_summary(),
         "{{ PDE_SUMMARY }}": _build_pde_summary(),
         "{{ MACRO_SUMMARY }}": _build_macro_summary(),

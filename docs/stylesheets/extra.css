@@ -1647,6 +1647,54 @@ figure.diagram--hero {
     box-shadow: var(--docs-shadow-soft);
 }
 
+.performance-reading-panel,
+.performance-flagship-panel,
+.performance-justification-panel,
+.performance-scope-panel {
+    max-width: 58rem;
+}
+
+.performance-reading-panel ul,
+.performance-flagship-panel ul,
+.performance-justification-panel ul {
+    margin: 0.45rem 0 0;
+    padding-left: 1.2rem;
+}
+
+.performance-flagship-shell {
+    margin: 1.2rem 0 0.45rem;
+}
+
+.performance-flagship-shell__eyebrow {
+    display: block;
+    margin: 0 0 0.55rem;
+    color: var(--docs-muted);
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+figure.performance-overview-panel figcaption {
+    max-width: 58rem;
+}
+
+figure.performance-flagship-figure {
+    margin: 0 auto;
+    padding: 0.74rem 0.82rem 0.68rem;
+    border-color: var(--docs-accent-border);
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--docs-card-bg-strong) 88%, transparent), var(--docs-card-bg)),
+        var(--docs-card-bg);
+    box-shadow: var(--docs-shadow-soft);
+}
+
+figure.performance-flagship-figure figcaption {
+    max-width: 52rem;
+    color: #4c5a6c;
+    opacity: 1;
+}
+
 figure.diagram--quiet {
     padding: 0.5rem 0.58rem 0.5rem;
     border-radius: var(--docs-radius-sm);
@@ -1695,6 +1743,16 @@ figure.diagram img.diagram-dark {
 
 [data-md-color-scheme="slate"] figure.diagram {
     box-shadow: none;
+}
+
+[data-md-color-scheme="slate"] figure.performance-flagship-figure {
+    background:
+        linear-gradient(180deg, rgba(140, 201, 255, 0.10), rgba(15, 23, 42, 0.94)),
+        var(--docs-card-bg);
+}
+
+[data-md-color-scheme="slate"] figure.performance-flagship-figure figcaption {
+    color: #c1cade;
 }
 
 [data-md-color-scheme="slate"] .portfolio-hero,
