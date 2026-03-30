@@ -3,53 +3,122 @@
 direction: right
 
 classes: {
-  step: {
+  input: {
     style: {
-      fill: transparent
-      stroke-width: 1
+      fill: "#14324C"
+      stroke: "#5EA8E5"
+      font-color: "#F5FAFF"
+      stroke-width: 2
       border-radius: 32
+      shadow: true
     }
   }
 
-  accent: {
+  repair: {
     style: {
-      fill: transparent
-      stroke: "#0F66B7"
+      fill: "#4A3711"
+      stroke: "#E2AF46"
+      font-color: "#FFF7E8"
       stroke-width: 2
       border-radius: 32
+      shadow: true
     }
   }
 
-  result: {
+  handoff: {
     style: {
-      fill: transparent
-      stroke: "#3F7A4C"
+      fill: "#0F446D"
+      stroke: "#8CC9FF"
+      font-color: "#F5FAFF"
+      stroke-width: 3
+      border-radius: 32
+      shadow: true
+    }
+  }
+
+  localvol: {
+    style: {
+      fill: "#0D5953"
+      stroke: "#7AD7CA"
+      font-color: "#F1FFFC"
       stroke-width: 2
       border-radius: 32
+      shadow: true
+    }
+  }
+
+  pde: {
+    style: {
+      fill: "#213965"
+      stroke: "#8FB3FF"
+      font-color: "#F5F8FF"
+      stroke-width: 2
+      border-radius: 32
+      shadow: true
+    }
+  }
+
+  proof: {
+    style: {
+      fill: "#1B513B"
+      stroke: "#82CFA0"
+      font-color: "#F4FFF8"
+      stroke-width: 3
+      border-radius: 32
+      shadow: true
     }
   }
 }
 
-surface: "Surface inputs\nquotes or repaired SVI"
-surface.class: step
+surface: "Surface inputs\nquotes and repaired SVI"
+surface.class: input
 
 repair: "Repair"
-repair.class: step
+repair.class: repair
 
 handoff: "Smooth handoff"
-handoff.class: accent
+handoff.class: handoff
 
-localvol: "Local-vol extract"
-localvol.class: step
+localvol: "Local-vol extraction"
+localvol.class: localvol
 
-pde: "PDE validate"
-pde.class: step
+pde: "PDE validation"
+pde.class: pde
 
 proof: "Proof outputs"
-proof.class: result
+proof.class: proof
 
-surface -> repair
-repair -> handoff
-handoff -> localvol
-localvol -> pde
-pde -> proof
+surface -> repair: {
+  style: {
+    stroke: "#5EA8E5"
+    stroke-width: 2
+  }
+}
+
+repair -> handoff: {
+  style: {
+    stroke: "#5EA8E5"
+    stroke-width: 2
+  }
+}
+
+handoff -> localvol: {
+  style: {
+    stroke: "#5EA8E5"
+    stroke-width: 2
+  }
+}
+
+localvol -> pde: {
+  style: {
+    stroke: "#5EA8E5"
+    stroke-width: 2
+  }
+}
+
+pde -> proof: {
+  style: {
+    stroke: "#5EA8E5"
+    stroke-width: 2
+  }
+}

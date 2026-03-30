@@ -168,7 +168,7 @@ PRESET_SPECS: dict[str, tuple[PlotSpec, ...]] = {
             filename="pde_convergence.png",
             renderer="convergence",
             datasets=("repricing/convergence_grid",),
-            title="PDE Convergence",
+            title="PDE Convergence and Runtime Tradeoff",
             kwargs={},
         ),
         PlotSpec(
@@ -202,6 +202,14 @@ PRESET_SPECS: dict[str, tuple[PlotSpec, ...]] = {
                 "elev": 29.0,
                 "azim": -58.0,
             },
+        ),
+        PlotSpec(
+            preset="showcase",
+            filename="architecture_system_map.svg",
+            renderer="architecture_system_map",
+            datasets=(),
+            title="Architecture system map",
+            kwargs={},
         ),
         PlotSpec(
             preset="showcase",
@@ -975,25 +983,60 @@ def _convergence(
 ) -> Path:
     data = df.sort_values("grid_points").copy()
     gp = data["grid_points"].to_numpy(dtype=float)
-    pde = data["pde_price"].to_numpy(dtype=float)
-    ref = float(pde[-1])
-    err_self = np.abs(pde[:-1] - ref)
-    gp_self = gp[:-1]
+    err_ref = data["abs_error"].to_numpy(dtype=float)
+    runtime_ms = data["runtime_ms"].to_numpy(dtype=float)
+    nx_values = data["Nx"].to_numpy(dtype=int)
+    nt_values = data["Nt"].to_numpy(dtype=int)
+    labels = [f"{nx}x{nt}" for nx, nt in zip(nx_values, nt_values, strict=True)]
+    palette = publishing_palette(theme)
+
     with publishing_style(theme=theme) as plt:
-        fig, ax = plt.subplots(figsize=(7.0, 4.8))
-        ok = err_self > 0.0
+        fig, (ax_err, ax_tradeoff) = plt.subplots(
+            1,
+            2,
+            figsize=(11.2, 4.8),
+            constrained_layout=True,
+        )
+
+        ok = err_ref > 0.0
         if ok.any():
-            ax.loglog(gp_self[ok], err_self[ok], marker="o", label="|p - p(finest)|")
-        if "target_price" in data.columns:
-            tgt = data["target_price"].astype(float).to_numpy()
-            err_tgt = np.abs(pde - tgt)
-            ok_tgt = err_tgt > 0.0
-            if ok_tgt.any():
-                ax.loglog(gp[ok_tgt], err_tgt[ok_tgt], marker="o", label="|p - target|")
-        ax.set_title(spec.title)
-        ax.set_xlabel("Grid points")
-        ax.set_ylabel("Absolute error")
-        ax.legend(loc="best", fontsize=8)
+            ax_err.loglog(
+                gp[ok],
+                err_ref[ok],
+                marker="o",
+                linewidth=1.6,
+                color=palette["reference"],
+            )
+            ax_tradeoff.semilogy(
+                runtime_ms[ok],
+                err_ref[ok],
+                marker="o",
+                linewidth=1.6,
+                color=palette["reference"],
+            )
+
+        for x, y, label in zip(gp, err_ref, labels, strict=True):
+            ax_err.annotate(label, (x, y), textcoords="offset points", xytext=(6, 6))
+
+        for x, y, label in zip(runtime_ms, err_ref, labels, strict=True):
+            ax_tradeoff.annotate(
+                label,
+                (x, y),
+                textcoords="offset points",
+                xytext=(6, 6),
+            )
+
+        ax_err.set_title("Reference error vs grid")
+        ax_err.set_xlabel("Grid points")
+        ax_err.set_ylabel("|p - p(finer ref)|")
+        ax_err.grid(True, which="both", alpha=0.18)
+
+        ax_tradeoff.set_title("Runtime vs reference error")
+        ax_tradeoff.set_xlabel("Runtime (ms)")
+        ax_tradeoff.set_ylabel("|p - p(finer ref)|")
+        ax_tradeoff.grid(True, which="both", alpha=0.18)
+
+        fig.suptitle(spec.title)
         return save_figure(fig, out_path, dpi=dpi)
 
 
@@ -1653,6 +1696,386 @@ def _render_reviewer_proof_thumbnail(
     return raster_block.clip_path, svg
 
 
+@dataclass(frozen=True)
+class _ArchitectureSystemStage:
+    key: str
+    label: str
+    x: float
+    connector_y1: float
+    connector_y2: float
+    label_y: float
+    label_width: float
+    marker_fill: str
+
+
+@dataclass(frozen=True)
+class _ArchitectureSystemSupportChip:
+    key: str
+    label: str
+    x: float
+    width: float
+
+
+def _architecture_system_map(
+    datasets: dict[str, pd.DataFrame],
+    *,
+    spec: PlotSpec,
+    out_path: Path,
+    dpi: int,
+    theme: str,
+) -> Path:
+    del datasets, spec, dpi
+
+    font_stack = SVG_TEXT_FONT_STACK
+    if theme == "dark":
+        colors = {
+            "page_bg": "#08101F",
+            "card_bg": "#0F172A",
+            "card_stroke": "#314056",
+            "bubble_large": "#17324A",
+            "bubble_small": "#11243A",
+            "pill_bg": "#17324A",
+            "accent": "#8CC9FF",
+            "accent_start": "#8CC9FF",
+            "accent_end": "#8CC9FF",
+            "text": "#E5EDF7",
+            "muted": "#A8B5C7",
+            "flow_base": "#203246",
+            "marker_repair": "#F2C879",
+            "marker_handoff": "#8CC9FF",
+            "marker_localvol": "#91E0D7",
+            "marker_pde": "#8CC9FF",
+            "node_fill": "#0F172A",
+            "support_fill": "#23344A",
+            "support_text": "#DCE6F4",
+        }
+    else:
+        colors = {
+            "page_bg": "#EEF3F8",
+            "card_bg": "#FFFFFF",
+            "card_stroke": "#D7E0EA",
+            "bubble_large": "#D8E8F7",
+            "bubble_small": "#EEF5FB",
+            "pill_bg": "#D8E8F7",
+            "accent": "#0B5CAB",
+            "accent_start": "#5EA8E5",
+            "accent_end": "#0B5CAB",
+            "text": "#0B1F33",
+            "muted": "#4A6277",
+            "flow_base": "#C9D8E5",
+            "marker_repair": "#A16600",
+            "marker_handoff": "#0B5CAB",
+            "marker_localvol": "#0F766E",
+            "marker_pde": "#0B5CAB",
+            "node_fill": "#FFFFFF",
+            "support_fill": "#E8F0F8",
+            "support_text": "#16324C",
+        }
+
+    title_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=54,
+        font_weight="700",
+        fill=colors["text"],
+        line_height=56,
+    )
+    subtitle_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=24,
+        font_weight="400",
+        fill=colors["muted"],
+        line_height=28,
+    )
+    label_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=34,
+        font_weight="700",
+        fill=colors["text"],
+        line_height=34,
+    )
+    caption_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=17,
+        font_weight="400",
+        fill=colors["muted"],
+        line_height=21,
+    )
+    stage_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=22,
+        font_weight="700",
+        fill=colors["text"],
+        line_height=24,
+    )
+    support_kicker_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=16,
+        font_weight="700",
+        fill=colors["accent"],
+        letter_spacing=1.2,
+        line_height=20,
+    )
+    support_style = SvgTextStyle(
+        font_family=font_stack,
+        font_size=18,
+        font_weight="700",
+        fill=colors["support_text"],
+        line_height=22,
+    )
+
+    title_svg = render_svg_text_block(
+        block_id="architecture-system-map-title",
+        text="One reviewable workflow from public routes to proof outputs",
+        x=640,
+        y=160,
+        max_width=860,
+        max_height=112,
+        style=title_style,
+        overflow_label="Architecture system map title",
+        extra_attrs={"text-anchor": "middle"},
+    )
+    subtitle_svg = render_svg_text_block(
+        block_id="architecture-system-map-subtitle",
+        text=(
+            "Authority comes from visible checkpoints, not boxed subsystems or "
+            "hidden handoffs."
+        ),
+        x=640,
+        y=242,
+        max_width=760,
+        max_height=56,
+        style=subtitle_style,
+        overflow_label="Architecture system map subtitle",
+        extra_attrs={"text-anchor": "middle"},
+    )
+    left_label_svg = render_svg_text_block(
+        block_id="architecture-system-map-left-label",
+        text="Typed routes",
+        x=120,
+        y=382,
+        max_width=172,
+        max_height=72,
+        style=label_style,
+        overflow_label="Architecture system map left label",
+    )
+    left_caption_svg = render_svg_text_block(
+        block_id="architecture-system-map-left-caption",
+        text="specs, instruments, curves-first",
+        x=120,
+        y=452,
+        max_width=180,
+        max_height=44,
+        style=caption_style,
+        overflow_label="Architecture system map left caption",
+    )
+    right_label_svg = render_svg_text_block(
+        block_id="architecture-system-map-right-label",
+        text="Proof outputs",
+        x=1080,
+        y=382,
+        max_width=180,
+        max_height=72,
+        style=label_style,
+        overflow_label="Architecture system map right label",
+    )
+    right_caption_svg = render_svg_text_block(
+        block_id="architecture-system-map-right-caption",
+        text="diagnostics and review",
+        x=1080,
+        y=452,
+        max_width=188,
+        max_height=44,
+        style=caption_style,
+        overflow_label="Architecture system map right caption",
+    )
+    support_kicker_svg = render_svg_text_block(
+        block_id="architecture-system-map-support-kicker",
+        text="Supporting layers",
+        x=640,
+        y=610,
+        max_width=220,
+        max_height=22,
+        style=support_kicker_style,
+        overflow_label="Architecture system map support kicker",
+        extra_attrs={"text-anchor": "middle"},
+    )
+
+    stages = (
+        _ArchitectureSystemStage(
+            key="repair",
+            label="Repair",
+            x=430,
+            connector_y1=426,
+            connector_y2=474,
+            label_y=494,
+            label_width=120,
+            marker_fill=colors["marker_repair"],
+        ),
+        _ArchitectureSystemStage(
+            key="smooth-handoff",
+            label="Smooth handoff",
+            x=580,
+            connector_y1=426,
+            connector_y2=474,
+            label_y=494,
+            label_width=168,
+            marker_fill=colors["marker_handoff"],
+        ),
+        _ArchitectureSystemStage(
+            key="local-vol-extraction",
+            label="Local-vol extraction",
+            x=730,
+            connector_y1=426,
+            connector_y2=474,
+            label_y=494,
+            label_width=178,
+            marker_fill=colors["marker_localvol"],
+        ),
+        _ArchitectureSystemStage(
+            key="pde-validation",
+            label="PDE validation",
+            x=884,
+            connector_y1=426,
+            connector_y2=474,
+            label_y=494,
+            label_width=150,
+            marker_fill=colors["marker_pde"],
+        ),
+    )
+    stage_lines: list[str] = []
+    stage_labels: list[str] = []
+    stage_nodes: list[str] = []
+    for stage in stages:
+        stage_lines.append(
+            f'  <line x1="{stage.x:g}" y1="{stage.connector_y1:g}" '
+            f'x2="{stage.x:g}" y2="{stage.connector_y2:g}" '
+            f'stroke="{colors["accent"]}" stroke-width="3" '
+            'stroke-linecap="round" opacity="0.82" />'
+        )
+        stage_labels.append(
+            render_svg_text_block(
+                block_id=f"architecture-system-map-{stage.key}",
+                text=stage.label,
+                x=stage.x,
+                y=stage.label_y,
+                max_width=stage.label_width,
+                max_height=56,
+                style=stage_style,
+                overflow_label=f"Architecture system map stage {stage.key}",
+                extra_attrs={"text-anchor": "middle"},
+            )
+        )
+        stage_nodes.extend(
+            [
+                (
+                    f'  <circle cx="{stage.x:g}" cy="404" r="19" '
+                    f'fill="{colors["node_fill"]}" stroke="{colors["accent_start"]}" '
+                    'stroke-width="4" />'
+                ),
+                (
+                    f'  <circle cx="{stage.x:g}" cy="404" r="8" '
+                    f'fill="{stage.marker_fill}" />'
+                ),
+            ]
+        )
+
+    support_chips = (
+        _ArchitectureSystemSupportChip(
+            key="support-volatility",
+            label="Volatility",
+            x=359,
+            width=146,
+        ),
+        _ArchitectureSystemSupportChip(
+            key="support-local-vol",
+            label="Local-vol",
+            x=534,
+            width=144,
+        ),
+        _ArchitectureSystemSupportChip(
+            key="support-numerics",
+            label="Numerics",
+            x=709,
+            width=138,
+        ),
+    )
+    support_blocks: list[str] = []
+    for chip in support_chips:
+        center_x = chip.x + chip.width / 2.0
+        support_blocks.append(
+            f'  <rect x="{chip.x:g}" y="644" width="{chip.width:g}" '
+            f'height="40" rx="20" ry="20" fill="{colors["support_fill"]}" />'
+        )
+        support_blocks.append(
+            render_svg_text_block(
+                block_id=f"architecture-system-map-{chip.key}",
+                text=chip.label,
+                x=center_x,
+                y=669,
+                max_width=max(chip.width - 24.0, 1.0),
+                max_height=24,
+                style=support_style,
+                overflow_label=f"Architecture system map support {chip.key}",
+                extra_attrs={"text-anchor": "middle"},
+            )
+        )
+        support_blocks.append(
+            f'  <line x1="{chip.x + 21:g}" y1="696" '
+            f'x2="{chip.x + chip.width - 21:g}" y2="696" '
+            f'stroke="{colors["accent_start"]}" stroke-width="4" '
+            'stroke-linecap="round" opacity="0.88" />'
+        )
+
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="780" viewBox="0 0 1280 780" role="img" aria-labelledby="title desc">
+  <title id="title">Reviewable architecture system map</title>
+  <desc id="desc">Recruiter-facing architecture view showing typed routes feeding repair, smooth handoff, local-vol extraction, PDE validation, and proof outputs, with volatility, local-vol, and numerics as supporting layers.</desc>
+  <defs>
+    <linearGradient id="architectureFlowTrack" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="{colors["accent_start"]}" stop-opacity="0.88" />
+      <stop offset="100%" stop-color="{colors["accent_end"]}" stop-opacity="0.96" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="780" fill="{colors["page_bg"]}" />
+  <rect x="24" y="24" width="1232" height="732" rx="32" ry="32" fill="{colors["card_bg"]}" stroke="{colors["card_stroke"]}" stroke-width="2" />
+
+  <circle cx="1080" cy="126" r="176" fill="{colors["bubble_large"]}" opacity="0.42" />
+  <circle cx="194" cy="650" r="132" fill="{colors["bubble_small"]}" opacity="0.68" />
+
+  <rect x="84" y="64" width="248" height="34" rx="17" ry="17" fill="{colors["pill_bg"]}" />
+  <text x="106" y="86" font-family="{font_stack}" font-size="16" font-weight="700" letter-spacing="1.2" fill="{colors["accent"]}">REVIEWABLE QUANT CORE</text>
+  {title_svg}
+  {subtitle_svg}
+
+  <text x="120" y="338" font-family="{font_stack}" font-size="16" font-weight="700" letter-spacing="1.2" fill="{colors["accent"]}">PUBLIC SURFACE</text>
+  {left_label_svg}
+  {left_caption_svg}
+  <line x1="120" y1="492" x2="214" y2="492" stroke="{colors["accent_start"]}" stroke-width="4" stroke-linecap="round" opacity="0.86" />
+
+  <text x="1080" y="338" font-family="{font_stack}" font-size="16" font-weight="700" letter-spacing="1.2" fill="{colors["accent"]}">PROOF EDGE</text>
+  {right_label_svg}
+  {right_caption_svg}
+  <line x1="1080" y1="492" x2="1186" y2="492" stroke="{colors["accent_start"]}" stroke-width="4" stroke-linecap="round" opacity="0.86" />
+
+  <line x1="368" y1="404" x2="984" y2="404" stroke="{colors["flow_base"]}" stroke-width="12" stroke-linecap="round" />
+  <line x1="368" y1="404" x2="984" y2="404" stroke="url(#architectureFlowTrack)" stroke-width="6" stroke-linecap="round" />
+  <polygon points="312,404 368,376 368,432" fill="{colors["accent_start"]}" />
+  <polygon points="984,376 1040,404 984,432" fill="{colors["accent_end"]}" />
+
+{chr(10).join(stage_lines)}
+{chr(10).join(stage_labels)}
+
+{chr(10).join(stage_nodes)}
+
+  {support_kicker_svg}
+{chr(10).join(support_blocks)}
+</svg>
+"""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(svg, encoding="utf-8")
+    return out_path
+
+
 def _reviewer_proof_panel(
     datasets: dict[str, pd.DataFrame],
     *,
@@ -1942,6 +2365,7 @@ RENDERERS = {
         theme=theme,
     ),
     "readme_proof_card": _readme_proof_card,
+    "architecture_system_map": _architecture_system_map,
     "reviewer_proof_panel": _reviewer_proof_panel,
 }
 

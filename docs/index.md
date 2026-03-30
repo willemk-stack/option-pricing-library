@@ -41,7 +41,7 @@ hide:
 <figure class="diagram diagram--quiet homepage-support-card" style="--diagram-max-width: 100%" markdown="1">
 ![Scatter plot comparing local-vol PDE repriced values with target prices](assets/generated/numerics/pde_roundtrip_scatter.light.png){ .diagram-img .diagram-light }
 ![Scatter plot comparing local-vol PDE repriced values with target prices](assets/generated/numerics/pde_roundtrip_scatter.dark.png){ .diagram-img .diagram-dark }
-<figcaption><a href="user_guides/localvol_pde_validation.md">Local-vol / PDE validation</a> closes the loop with <code>154</code> repriced options and a published mean abs price error of <code>8.1e-4</code>.</figcaption>
+<figcaption><a href="user_guides/localvol_pde_validation.md">Local-vol / PDE validation</a> closes the loop with a published repricing bundle, visible error localization, and an explicit mesh/runtime judgment for the final numerical leg.</figcaption>
 </figure>
 </div>
 </div>

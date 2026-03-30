@@ -90,16 +90,14 @@ Static repair is necessary, but it is not the same thing as a time-smooth Dupire
 
 <div class="snapshot-grid surface-repair-support-grid" markdown="1">
 
-<figure class="diagram diagram--quiet" style="--diagram-max-width: 720px" markdown="1">
-![Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity](../assets/generated/static/svi_repaired_surface_heatmap.light.png){ .diagram-img .diagram-light }
-![Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity](../assets/generated/static/svi_repaired_surface_heatmap.dark.png){ .diagram-img .diagram-dark }
-<figcaption>The repaired heatmap broadens the hero into a full-surface view, but it stays secondary so the page does not replace the quote-aware review object with one cleaner-looking surface image.</figcaption>
+<figure class="diagram diagram--quiet proof-path-support-figure surface-repair-support-figure" style="--diagram-max-width: 720px" markdown="1">
+[![](../assets/generated/static/svi_repaired_surface_heatmap.light.png){ .diagram-img .diagram-light } ![](../assets/generated/static/svi_repaired_surface_heatmap.dark.png){ .diagram-img .diagram-dark } <span class="proof-path-lightbox-hint" aria-hidden="true">Open larger view</span>](../assets/generated/static/svi_repaired_surface_heatmap.light.png){ .proof-path-lightbox-trigger data-proof-path-lightbox="" data-light-src="../../assets/generated/static/svi_repaired_surface_heatmap.light.png" data-dark-src="../../assets/generated/static/svi_repaired_surface_heatmap.dark.png" data-alt="Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity" data-lightbox-title="Repaired SVI surface heatmap" aria-label="Open a larger view of the repaired SVI surface heatmap" aria-describedby="surface-repair-support-caption-heatmap" aria-haspopup="dialog" }
+  <figcaption id="surface-repair-support-caption-heatmap">The repaired heatmap broadens the hero into a full-surface view, but it stays secondary so the page does not replace the quote-aware review object with one cleaner-looking surface image.</figcaption>
 </figure>
 
-<figure class="diagram diagram--quiet" style="--diagram-max-width: 720px" markdown="1">
-![Repaired SVI smile slices for multiple expiries plotted against log-moneyness](../assets/generated/static/svi_smile_slices.light.png){ .diagram-img .diagram-light }
-![Repaired SVI smile slices for multiple expiries plotted against log-moneyness](../assets/generated/static/svi_smile_slices.dark.png){ .diagram-img .diagram-dark }
-<figcaption>The full slice stack keeps the repair inspectable maturity by maturity instead of collapsing the page into one global surface view.</figcaption>
+<figure class="diagram diagram--quiet proof-path-support-figure surface-repair-support-figure" style="--diagram-max-width: 720px" markdown="1">
+[![](../assets/generated/static/svi_smile_slices.light.png){ .diagram-img .diagram-light } ![](../assets/generated/static/svi_smile_slices.dark.png){ .diagram-img .diagram-dark } <span class="proof-path-lightbox-hint" aria-hidden="true">Open larger view</span>](../assets/generated/static/svi_smile_slices.light.png){ .proof-path-lightbox-trigger data-proof-path-lightbox="" data-light-src="../../assets/generated/static/svi_smile_slices.light.png" data-dark-src="../../assets/generated/static/svi_smile_slices.dark.png" data-alt="Repaired SVI smile slices for multiple expiries plotted against log-moneyness" data-lightbox-title="Repaired SVI smile slices" aria-label="Open a larger view of the repaired SVI smile slices" aria-describedby="surface-repair-support-caption-slices" aria-haspopup="dialog" }
+  <figcaption id="surface-repair-support-caption-slices">The full slice stack keeps the repair inspectable maturity by maturity instead of collapsing the page into one global surface view.</figcaption>
 </figure>
 
 </div>

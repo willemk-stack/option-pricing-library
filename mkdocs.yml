@@ -100,6 +100,7 @@ markdown_extensions:
       toc_depth: 3
 extra_javascript:
   - javascripts/mathjax.js
+  - javascripts/proof-path-lightbox.js
   - javascripts/vendor/tex-mml-svg.js
 
 # add custom tweaks from (docs/stylesheets/extra.css)

@@ -38,8 +38,8 @@
   <rect x="64" y="484" width="552" height="232" rx="24" ry="24" fill="#111C2F" stroke="#334155" stroke-width="2" />
   <g id="readme-card-local-vol-and-pde-validation" clip-path="url(#readmeCardClip-local-vol-and-pde-validation)">
     <text x="96" y="532" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="28" font-weight="700" fill="#E5EDF7" id="readme-card-local-vol-and-pde-validation-title" data-max-width="488" data-max-height="32" data-line-height="32"><tspan x="96" dy="0">Local-vol and PDE validation</tspan></text>
-    <text x="96" y="574" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="34" font-weight="700" fill="#8CC9FF" id="readme-card-local-vol-and-pde-validation-headline" data-max-width="488" data-max-height="38" data-line-height="38"><tspan x="96" dy="0">154 repricings</tspan></text>
-    <text x="96" y="612" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" font-weight="400" fill="#A8B5C7" id="readme-card-local-vol-and-pde-validation-body" data-max-width="488" data-max-height="92" data-line-height="22"><tspan x="96" dy="0">Mean abs price error 8.1e-4.</tspan><tspan x="96" dy="22">Max abs IV error 18.7 bp on the published sweep.</tspan></text>
+    <text x="96" y="574" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="34" font-weight="700" fill="#8CC9FF" id="readme-card-local-vol-and-pde-validation-headline" data-max-width="488" data-max-height="38" data-line-height="38"><tspan x="96" dy="0">30 repricings</tspan></text>
+    <text x="96" y="612" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" font-weight="400" fill="#A8B5C7" id="readme-card-local-vol-and-pde-validation-body" data-max-width="488" data-max-height="92" data-line-height="22"><tspan x="96" dy="0">Mean abs price error 2.7e-3.</tspan><tspan x="96" dy="22">Max abs IV error 8.2 bp on the published sweep.</tspan></text>
   </g>
   <rect x="664" y="484" width="552" height="232" rx="24" ry="24" fill="#111C2F" stroke="#334155" stroke-width="2" />
   <g id="readme-card-benchmarks-and-delivery" clip-path="url(#readmeCardClip-benchmarks-and-delivery)">

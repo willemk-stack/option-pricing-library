@@ -95,10 +95,9 @@ The point is not that the surface looks smoother. The point is that the bridge p
 
 <div class="snapshot-grid essvi-support-grid" markdown="1">
 
-<figure class="diagram diagram--quiet" style="--diagram-max-width: 760px" markdown="1">
-![Heatmap of Gatheral local volatility extracted from the smoothed eSSVI surface](../assets/generated/dupire/localvol_gatheral_heatmap.light.png){ .diagram-img .diagram-light }
-![Heatmap of Gatheral local volatility extracted from the smoothed eSSVI surface](../assets/generated/dupire/localvol_gatheral_heatmap.dark.png){ .diagram-img .diagram-dark }
-<figcaption>This stays secondary on purpose. It shows that the handoff now produces a differentiable local-vol object worth inspecting, while the full numerical judgment remains on the <a href="localvol_pde_validation.md">local-vol and PDE validation</a> page.</figcaption>
+<figure class="diagram diagram--quiet proof-path-support-figure essvi-support-figure" style="--diagram-max-width: 760px" markdown="1">
+[![](../assets/generated/dupire/localvol_gatheral_heatmap.light.png){ .diagram-img .diagram-light } ![](../assets/generated/dupire/localvol_gatheral_heatmap.dark.png){ .diagram-img .diagram-dark } <span class="proof-path-lightbox-hint" aria-hidden="true">Open larger view</span>](../assets/generated/dupire/localvol_gatheral_heatmap.light.png){ .proof-path-lightbox-trigger data-proof-path-lightbox="" data-light-src="../../assets/generated/dupire/localvol_gatheral_heatmap.light.png" data-dark-src="../../assets/generated/dupire/localvol_gatheral_heatmap.dark.png" data-alt="Heatmap of Gatheral local volatility extracted from the smoothed eSSVI surface" data-lightbox-title="Gatheral local-vol heatmap" aria-label="Open a larger view of the Gatheral local-vol heatmap" aria-describedby="essvi-support-caption-localvol" aria-haspopup="dialog" }
+  <figcaption id="essvi-support-caption-localvol">This stays secondary on purpose. It shows that the handoff now produces a differentiable local-vol object worth inspecting, while the full numerical judgment remains on the <a href="localvol_pde_validation.md">local-vol and PDE validation</a> page.</figcaption>
 </figure>
 
 </div>
