@@ -37,7 +37,7 @@
 <div class="doc-panel doc-panel--strong performance-reading-panel" markdown="1">
 <p class="doc-panel__label">What actually matters</p>
 - The strongest review signal here is not one absolute timing number. It is whether the bundle separates workload-class wins, cost-versus-accuracy tradeoffs, and genuine end-to-end bottlenecks.
-- In the committed macro run, surface fitting plus PDE repricing already consume 97.6% to 98.8% of total runtime, while quote mesh + handoff + local-vol stay between 7.71 ms and 14.13 ms combined.
+- In the committed macro run, surface fitting plus PDE repricing already consume 97.5% to 99.1% of total runtime, while quote mesh + handoff + local-vol stay between 17.78 ms and 26.16 ms combined.
 - That is why this page is best read as a default-setting case study: it justifies method choice, escalation guidance, remedy selection, and optimization order, not machine-independent latency promises.
 </div>
 
@@ -57,11 +57,11 @@
 <div class="doc-panel doc-panel--strong performance-flagship-panel" markdown="1">
 <p class="doc-panel__label">Optimization judgment</p>
 - Surface fitting is the main scaling driver in every published scenario.
-  It rises from 250.25 ms to 794.53 ms, which is why optimization effort belongs there before smaller orchestration stages.
+  It rises from 534.09 ms to 1.68 s, which is why optimization effort belongs there before smaller orchestration stages.
 - PDE repricing is the second budget line, not a rounding error.
-  It grows from 78.65 ms to 328.23 ms and stays materially larger than the handoff or local-vol construction steps.
+  It grows from 163.70 ms to 715.95 ms and stays materially larger than the handoff or local-vol construction steps.
 - Quote mesh generation, smooth handoff, and local-vol extraction remain the low-leverage stages.
-  Combined, they stay at 7.71 ms to 14.13 ms, so the benchmark bundle argues against optimizing them first.
+  Combined, they stay at 17.78 ms to 22.65 ms, so the benchmark bundle argues against optimizing them first.
 </div>
 
 ## What the committed snapshot establishes
@@ -70,10 +70,10 @@
 
 | Family | Conditions | Reference | What the committed snapshot shows |
 | --- | --- | --- | --- |
-| Implied-vol inversion | Scalar BS inversion and Black-76 slice inversion on 21-801 strikes | Scalar loop baseline | The vectorized slice path reaches 379x speedup at 801 strikes while preserving zero measured vol difference versus the scalar loop. Scalar single-option inversions stay around 0.49 ms to 0.54 ms. |
-| Vanilla PDE | Black-Scholes European call, Nx=Nt from 101 to 801 | Analytic Black-Scholes price | Absolute error falls from about 1.74e-02 at 101x101 to about 2.28e-04 at 801x801. Runtime rises from about 40.7 ms to about 1.1 s. |
+| Implied-vol inversion | Scalar BS inversion and Black-76 slice inversion on 21-801 strikes | Scalar loop baseline | The vectorized slice path reaches 578x speedup at 801 strikes while preserving zero measured vol difference versus the scalar loop. Scalar single-option inversions stay around 1.50 ms to 2.18 ms. |
+| Vanilla PDE | Black-Scholes European call, Nx=Nt from 101 to 801 | Analytic Black-Scholes price | Absolute error falls from about 1.74e-02 at 101x101 to about 2.28e-04 at 801x801. Runtime rises from about 91.0 ms to about 2.7 s. |
 | Digital PDE remedies | Digital call, Nx=Nt in {101, 201, 401} | Analytic digital price | The untreated path keeps an ~1.18e-02 refinement spread, while Rannacher + cell average cuts it to 3.00e-05 and Rannacher + L2 projection cuts it to 1.43e-05. |
-| End-to-end macro pipeline | Synthetic SVI quote mesh -> fitted surface -> handoff probe -> local-vol surface -> representative local-vol PDE | Stage-level timing only | Surface fitting dominates the measured stage budget (250.2 ms, 359.7 ms, 794.5 ms for small, medium, large), with PDE repricing second (78.6 ms, 188.7 ms, 328.2 ms). |
+| End-to-end macro pipeline | Synthetic SVI quote mesh -> fitted surface -> handoff probe -> local-vol surface -> representative local-vol PDE | Stage-level timing only | Surface fitting dominates the measured stage budget (534.1 ms, 850.0 ms, 1.7 s for small, medium, large), with PDE repricing second (163.7 ms, 460.0 ms, 716.0 ms). |
 
 ## Core benchmark families
 
@@ -86,7 +86,7 @@
   ![IV scaling figure: vectorized slice inversion versus scalar-loop inversion, plus scalar single-option latency scenarios.](assets/generated/benchmarks/iv_scaling.dark.png){ .diagram-img .diagram-dark }
 </figure>
 
-Treat this figure as a workload-class result rather than a single-option latency contest. Use the vectorized slice inverter whenever the workload is a smile or surface rather than an isolated option. At 801 strikes the committed snapshot records about 1.17 ms for the vectorized slice path versus about 444.29 ms for the scalar-loop baseline.
+Treat this figure as a workload-class result rather than a single-option latency contest. Use the vectorized slice inverter whenever the workload is a smile or surface rather than an isolated option. At 801 strikes the committed snapshot records about 2.43 ms for the vectorized slice path versus about 1.41 s for the scalar-loop baseline.
 
 ### PDE runtime versus error
 
@@ -97,7 +97,7 @@ Treat this figure as a workload-class result rather than a single-option latency
   ![PDE runtime versus error tradeoff for Black-Scholes vanilla PDE and local-vol PDE refinement.](assets/generated/benchmarks/pde_runtime_error_tradeoff.dark.png){ .diagram-img .diagram-dark }
 </figure>
 
-The vanilla PDE curve shows the expected refinement tradeoff against an analytic benchmark. From 201x201 to 801x801, runtime rises from about 103.76 ms to 1.11 s while absolute error only falls from 9.41e-04 to 2.28e-04. That supports medium grids as the practical default starting point unless the error budget says otherwise. The local-vol curve uses a finer-grid local-vol PDE solve as its reference because there is no closed-form target for that path. In the committed snapshot, the published local-vol tradeoff runs through 401x401 against a 601x601 reference solve.
+The vanilla PDE curve shows the expected refinement tradeoff against an analytic benchmark. From 201x201 to 801x801, runtime rises from about 260.57 ms to 2.66 s while absolute error only falls from 9.41e-04 to 2.28e-04. That supports medium grids as the practical default starting point unless the error budget says otherwise. The local-vol curve uses a finer-grid local-vol PDE solve as its reference because there is no closed-form target for that path. In the committed snapshot, the published local-vol tradeoff runs through 401x401 against a 601x601 reference solve.
 
 ### Digital-payoff remedies
 
@@ -123,8 +123,8 @@ The published local-vol extraction run compares `strike_coordinate="K"` and `str
 
 | Coordinate | Largest tested grid | Median runtime | Interior invalid share |
 | --- | --- | --- | --- |
-| `K` | `121 x 241` | 1.19 ms | 0.0% |
-| `logK` | `121 x 241` | 1.69 ms | 0.0% |
+| `K` | `121 x 241` | 3.51 ms | 0.0% |
+| `logK` | `121 x 241` | 4.15 ms | 0.0% |
 
 The full figure is available at [localvol_scaling.png](assets/generated/benchmarks/localvol_scaling.png).
 
@@ -134,9 +134,9 @@ The CRR benchmark remains useful for convergence discussion, but the published n
 
 | `n_steps` | Median runtime | Absolute error vs Black-Scholes |
 | --- | --- | --- |
-| `200` | 20.5 ms | 9.90e-03 |
-| `1000` | 922.4 ms | 1.98e-03 |
-| `5000` | 21.1 s | 3.96e-04 |
+| `200` | 47.2 ms | 9.90e-03 |
+| `1000` | 1.7 s | 1.98e-03 |
+| `5000` | 40.4 s | 3.96e-04 |
 
 The full figure is available at [tree_scaling.png](assets/generated/benchmarks/tree_scaling.png).
 
