@@ -1,45 +1,12 @@
 # Public API
 
-<div class="doc-intro" markdown="1">
+<div class="doc-intro doc-intro--quiet" markdown="1">
 <p class="doc-intro__kicker">Root-level exports</p>
 <p class="doc-intro__lead">This page covers the main objects re-exported from <code>option_pricing</code>.</p>
-<p class="doc-intro__support">Use it to understand what lives at the package root before you dive into the dedicated pricer, curves, or volatility reference pages.</p>
+<p class="doc-intro__support">Use it to find the shared public types before diving into the dedicated pricer, curves, or volatility reference pages.</p>
 </div>
 
-<div class="doc-card-grid" markdown="1">
-<div class="doc-card" markdown="1">
-<p class="doc-card__eyebrow">Typed inputs</p>
-<p class="doc-card__title">Core types</p>
-- `OptionType`
-- `MarketData`
-- `OptionSpec`
-- `PricingInputs`
-</div>
-<div class="doc-card doc-card--accent" markdown="1">
-<p class="doc-card__eyebrow">Recommended path</p>
-<p class="doc-card__title">Instrument layer</p>
-- `ExerciseStyle`
-- `VanillaPayoff`
-- `VanillaOption`
-</div>
-<div class="doc-card" markdown="1">
-<p class="doc-card__eyebrow">Config and numerics</p>
-<p class="doc-card__title">Runtime controls</p>
-- `RandomConfig`
-- `MCConfig`
-- `ImpliedVolConfig`
-- `RootMethod`
-</div>
-<div class="doc-card" markdown="1">
-<p class="doc-card__eyebrow">Volatility objects</p>
-<p class="doc-card__title">Public surface types</p>
-- `VolSurface`
-- `Smile`
-- eSSVI objects are additionally exposed from `option_pricing.vol`
-</div>
-</div>
-
-For pricing functions, see [Pricers](pricers.md).
+<p class="doc-meta">For pricing functions, use <a href="../pricers/">Pricers</a>. This page stays focused on shared types, contracts, configuration objects, and common volatility exports.</p>
 
 ## Core types
 

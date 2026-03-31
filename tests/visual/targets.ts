@@ -147,7 +147,8 @@ const pageReviewConfigOverrides: Record<string, Omit<PageReviewConfig, "path">> 
         essentialMediaSelectors: ["figure.diagram img", "table"],
         emptyContainerSelectors: ["figure.diagram", "table"],
         componentShots: [
-            { path: "/performance/", name: "performance-overview-panel", selector: "figure.diagram" },
+            { path: "/performance/", name: "performance-overview-panel", selector: "figure.performance-overview-panel" },
+            { path: "/performance/", name: "performance-flagship-figure", selector: "figure.performance-flagship-figure" },
             { path: "/performance/", name: "performance-snapshot-table", selector: "table" },
         ],
     },
@@ -176,7 +177,10 @@ const pageReviewConfigOverrides: Record<string, Omit<PageReviewConfig, "path">> 
         requiresVisualEvidence: true,
         essentialMediaSelectors: ["figure.diagram img", ".snapshot-grid"],
         emptyContainerSelectors: ["figure.diagram", ".snapshot-grid"],
-        componentShots: [],
+        componentShots: [
+            { path: "/user_guides/essvi_smooth_handoff/", name: "essvi-handoff-primary-figure", selector: "figure.diagram" },
+            { path: "/user_guides/essvi_smooth_handoff/", name: "essvi-handoff-support-grid", selector: ".snapshot-grid" },
+        ],
     },
     "/user_guides/localvol_pde_validation/": {
         pageKey: "localvol_pde_validation",
@@ -184,7 +188,10 @@ const pageReviewConfigOverrides: Record<string, Omit<PageReviewConfig, "path">> 
         requiresVisualEvidence: true,
         essentialMediaSelectors: ["figure.diagram img", ".snapshot-grid"],
         emptyContainerSelectors: ["figure.diagram", ".snapshot-grid"],
-        componentShots: [],
+        componentShots: [
+            { path: "/user_guides/localvol_pde_validation/", name: "localvol-validation-primary-figure", selector: "figure.localvol-validation-primary-figure" },
+            { path: "/user_guides/localvol_pde_validation/", name: "localvol-validation-support-grid", selector: ".localvol-validation-support-grid" },
+        ],
     },
 };
 

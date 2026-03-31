@@ -2,12 +2,12 @@
 
 <div class="doc-intro" markdown="1">
 <p class="doc-intro__kicker">Proof path step 2</p>
-<p class="doc-intro__lead">The repaired surface is still a stack of slices. This step focuses on what changes once those nodes are projected into a smooth eSSVI surface, because Dupire depends on that change more than on the static repair alone.</p>
-<p class="doc-intro__support">The point of this page is not to celebrate smoothing in the abstract. It is to show that the time-continuity problem is understood, measured, and improved before local-vol extraction begins.</p>
+<p class="doc-intro__lead">This is the quant handoff decision in the workflow. Static SVI repair can clean up each expiry and still fail Dupire if the maturity direction leaves seam stress in total-variance derivatives.</p>
+<p class="doc-intro__support">The page therefore defends one explicit bridge: preserve the exact calibrated nodes for inspection, then project into a continuous eSSVI surface only because Dupire needs analytic <code>w</code>, <code>w_y</code>, <code>w_yy</code>, and especially <code>w_T</code>. The win is a usable derivative object; the tradeoff is accepting a bounded projection error instead of pretending piecewise time interpolation is good enough.</p>
 <div class="doc-pill-row">
-  <span class="doc-pill">`w_T` seam control</span>
-  <span class="doc-pill">Smooth projection</span>
-  <span class="doc-pill">Dupire-ready surface</span>
+  <span class="doc-pill">Parameterization defended</span>
+  <span class="doc-pill">`w_T` continuity matters</span>
+  <span class="doc-pill">Explicit Dupire bridge</span>
 </div>
 </div>
 
@@ -16,74 +16,122 @@
 [Next: local-vol and PDE validation](localvol_pde_validation.md){ .md-button }
 </div>
 
-<div class="doc-card-grid" markdown="1">
-<div class="doc-card" markdown="1">
-<p class="doc-card__eyebrow">Problem</p>
-<p class="doc-card__title">Slice-wise repair is not enough</p>
-- Slice-level SVI repair can still leave time-direction seams.
-- Dupire depends on a surface whose term structure is smooth enough to differentiate.
-</div>
-<div class="doc-card" markdown="1">
-<p class="doc-card__eyebrow">What changes</p>
-<p class="doc-card__title">eSSVI projection</p>
-- Fit exact nodes, then project them into a smooth surface with explicit validation.
-- Keep the nodal and smoothed objects visible instead of hiding the transition.
-</div>
-<div class="doc-card" markdown="1">
-<p class="doc-card__eyebrow">Success signal</p>
-<p class="doc-card__title">Reviewer-facing outcome</p>
-- Seam stress drops materially across maturities.
-- The final projection keeps `projection_dupire_invalid_count = 0`.
+<div class="proof-route-shell" markdown="1">
+<p class="proof-route-shell__label">Proof routing</p>
+<div class="proof-route" role="navigation" aria-label="Proof route">
+<a class="proof-route__item" href="../../"><span class="proof-route__step">Start</span><span class="proof-route__title">Homepage overview</span></a>
+<a class="proof-route__item" href="../surface_workflow/"><span class="proof-route__step">Step 1</span><span class="proof-route__title">Surface repair</span></a>
+<span class="proof-route__item proof-route__item--current" aria-current="page"><span class="proof-route__step">Step 2</span><span class="proof-route__title">eSSVI handoff</span></span>
+<a class="proof-route__item" href="../localvol_pde_validation/"><span class="proof-route__step">Step 3</span><span class="proof-route__title">Local-vol / PDE</span></a>
+<a class="proof-route__item proof-route__item--followup" href="../../performance/"><span class="proof-route__step">Follow-up</span><span class="proof-route__title">Performance evidence</span></a>
 </div>
 </div>
 
-<figure markdown class="diagram">
-  ![Heatmap of the smoothed eSSVI implied-vol surface across log-moneyness and maturity](../assets/generated/dupire/essvi_smoothed_surface_heatmap.light.png){ .diagram-img .diagram-light }
-  ![Heatmap of the smoothed eSSVI implied-vol surface across log-moneyness and maturity](../assets/generated/dupire/essvi_smoothed_surface_heatmap.dark.png){ .diagram-img .diagram-dark }
-  <figcaption>The smoothed eSSVI surface is the preferred Dupire handoff because it gives the local-vol step a time-continuous surface instead of a stack of repaired slices.</figcaption>
+## Signature evidence
+
+<p class="doc-section-lead">This is the handoff review object: one continuous eSSVI surface for the Dupire bridge, the seam-jump evidence that justifies the projection, and the analytic <code>w_T</code> slices that show the page is targeting derivatives rather than cosmetic implied-vol smoothing.</p>
+
+<figure class="diagram diagram--hero essvi-signature-figure" style="--diagram-max-width: 1180px" markdown="1">
+![Composite view of the eSSVI smooth handoff showing the smoothed surface, seam-jump reduction, and analytic w_T slices](../assets/generated/dupire/essvi_handoff_signature_composite.light.png){ .diagram-img .diagram-light }
+![Composite view of the eSSVI smooth handoff showing the smoothed surface, seam-jump reduction, and analytic w_T slices](../assets/generated/dupire/essvi_handoff_signature_composite.dark.png){ .diagram-img .diagram-dark }
+<figcaption>The 3D surface is only the left panel of the proof. The actual handoff argument is that the worst published seam jump collapses from <code>0.080696</code> to <code>0.000082</code>, analytic <code>w_T</code> becomes inspectable across moneyness, and the projection still keeps <code>projection_dupire_invalid_count = 0</code>.</figcaption>
 </figure>
 
-<div class="snapshot-grid" markdown="1">
+## Design choices defended
 
-<figure class="diagram" style="--diagram-max-width: 720px" markdown="1">
-![Heatmap of Gatheral local volatility extracted from the smoothed eSSVI surface](../assets/generated/dupire/localvol_gatheral_heatmap.light.png){ .diagram-img .diagram-light }
-![Heatmap of Gatheral local volatility extracted from the smoothed eSSVI surface](../assets/generated/dupire/localvol_gatheral_heatmap.dark.png){ .diagram-img .diagram-dark }
-<figcaption>Once the handoff is smoothed, the local-vol field becomes an inspectable object rather than a hidden intermediate.</figcaption>
-</figure>
+<p class="doc-section-lead">The handoff is strongest when the mathematical choices are stated explicitly rather than hidden behind one smooth-looking surface.</p>
 
-<figure class="diagram" style="--diagram-max-width: 720px" markdown="1">
-![Heatmap of differences between Gatheral and call-grid Dupire local-vol estimates](../assets/generated/dupire/gatheral_vs_dupire_diff_heatmap.light.png){ .diagram-img .diagram-light }
-![Heatmap of differences between Gatheral and call-grid Dupire local-vol estimates](../assets/generated/dupire/gatheral_vs_dupire_diff_heatmap.dark.png){ .diagram-img .diagram-dark }
-<figcaption>The difference view shows where the two extraction routes agree and where the handoff still deserves scrutiny.</figcaption>
+<div class="doc-card-grid doc-card-grid--quiet essvi-proof-strip" markdown="1">
+<div class="doc-card doc-card--quiet" markdown="1">
+<p class="doc-card__eyebrow">Why this parameterization</p>
+<p class="doc-card__title">Continuous eSSVI terms keep the bridge analytic</p>
+eSSVI is used here because the Dupire bridge needs analytic <code>w</code>, <code>w_y</code>, <code>w_yy</code>, and <code>w_T</code> together with explicit admissibility checks. A generic slice stack can match nodes without giving a clean derivative object in <code>T</code>.
+</div>
+<div class="doc-card doc-card--quiet" markdown="1">
+<p class="doc-card__eyebrow">Why this smoothing target</p>
+<p class="doc-card__title">Smooth total variance, not prettier IV</p>
+Dupire consumes derivatives of total variance. The target is therefore continuity in <code>w(T, y)</code> and especially stable <code>w_T</code>, not cosmetic smoothing of an implied-vol heatmap.
+</div>
+<div class="doc-card doc-card--quiet" markdown="1">
+<p class="doc-card__eyebrow">What continuity matters</p>
+<p class="doc-card__title">Seam jumps are the failure mode</p>
+The worst knot on the published surface drops from <code>0.080696</code> to <code>0.000082</code> at <code>T = 0.15</code>. The same order-of-magnitude seam reduction persists through the mid-curve and long end.
+</div>
+<div class="doc-card doc-card--quiet" markdown="1">
+<p class="doc-card__eyebrow">Tradeoff accepted</p>
+<p class="doc-card__title">Bounded projection error for usable derivatives</p>
+The bridge accepts <code>price_rmse = 0.02494</code> and <code>max_abs_price_error = 0.11453</code> so Dupire receives a zero-invalid-count smooth surface instead of exact but kinked time interpolation.
+</div>
+</div>
+
+## Problem
+
+<p class="doc-section-lead">Naive handoff fails when exact nodal agreement is treated as sufficient. Dupire is sensitive to the maturity direction, so a surface can look calm expiry by expiry while still carrying mathematically important kinks in <code>w_T</code>.</p>
+
+- The repaired SVI result is still a stack of slices, not automatically a smooth derivative object in maturity.
+- Piecewise interpolation across expiry can hide seam stress until the workflow asks for local-vol derivatives.
+- If the bridge stays implicit, the later local-vol and PDE pages inherit the consequences without showing where the time-direction risk entered.
+
+<div class="doc-panel doc-panel--quiet" markdown="1">
+<p class="doc-panel__label">Assumptions carried into this bridge</p>
+This page starts after static repair, not before it. The repaired slices are already the inspectable reference object, the market context is fixed, and the remaining question is whether the maturity direction is smooth enough for a Dupire-oriented handoff.
+</div>
+
+<div class="doc-panel doc-panel--quiet" markdown="1">
+<p class="doc-panel__label">Why naive handoff fails</p>
+A generic expiry stack can still rely on piecewise-linear total-variance interpolation in <code>T</code>. That keeps <code>w_T</code> only piecewise constant, which is exactly the failure mode the handoff has to remove.
+</div>
+
+<div class="doc-panel doc-panel--quiet" markdown="1">
+<p class="doc-panel__label">Why this is not cosmetic smoothing</p>
+The point is not that the surface looks smoother. The point is that the bridge produces one explicit continuous object with analytic derivatives and separate validation, while the exact nodal surface remains available for inspection instead of being overwritten.
+</div>
+
+## Chosen Method
+
+<p class="doc-section-lead">The bridge keeps the exact calibrated nodes visible, then accepts smoothing only through an explicit eSSVI projection whose continuity target and tradeoff are both reviewable.</p>
+
+| Layer | Object or check | Design choice and reason |
+| --- | --- | --- |
+| Preserved object | `ESSVINodalSurface(fit.nodes)` | Keep the exact calibrated nodes reviewable before any Dupire-oriented tradeoff is accepted |
+| Parameterization | projected eSSVI term structures | Use a continuous parameter surface because the bridge needs analytic <code>w</code>, <code>w_y</code>, <code>w_yy</code>, and <code>w_T</code> together |
+| Quantity smoothed | total variance in maturity | Target the object Dupire differentiates rather than smoothing implied vol for display polish |
+| Continuity target | seam stress in `w_T` across knots | Treat maturity-direction derivative jumps as the real handoff failure mode |
+| Validation split | `validate_essvi_nodes(...)`, `validate_essvi_continuous(...)`, `evaluate_essvi_constraints(...)` | Keep nodal admissibility, continuous-surface constraints, and sampled checks separate instead of collapsing them into one vague pass/fail |
+| Downstream use | `LocalVolSurface.from_implied(...)` | Hand the next page one explicit smooth bridge object rather than an interpolation accident |
+
+## Supporting evidence
+
+<p class="doc-section-lead">The hero carries the quant argument. One quieter downstream diagnostic remains only to show that, once the handoff is accepted, the resulting local-vol field becomes inspectable instead of breaking immediately at maturity seams.</p>
+
+<div class="snapshot-grid essvi-support-grid" markdown="1">
+
+<figure class="diagram diagram--quiet proof-path-support-figure essvi-support-figure" style="--diagram-max-width: 760px" markdown="1">
+[![](../assets/generated/dupire/localvol_gatheral_heatmap.light.png){ .diagram-img .diagram-light } ![](../assets/generated/dupire/localvol_gatheral_heatmap.dark.png){ .diagram-img .diagram-dark } <span class="proof-path-lightbox-hint" aria-hidden="true">Open larger view</span>](../assets/generated/dupire/localvol_gatheral_heatmap.light.png){ .proof-path-lightbox-trigger data-proof-path-lightbox="" data-light-src="../../assets/generated/dupire/localvol_gatheral_heatmap.light.png" data-dark-src="../../assets/generated/dupire/localvol_gatheral_heatmap.dark.png" data-alt="Heatmap of Gatheral local volatility extracted from the smoothed eSSVI surface" data-lightbox-title="Gatheral local-vol heatmap" aria-label="Open a larger view of the Gatheral local-vol heatmap" aria-describedby="essvi-support-caption-localvol" aria-haspopup="dialog" }
+  <figcaption id="essvi-support-caption-localvol">This stays secondary on purpose. It shows that the handoff now produces a differentiable local-vol object worth inspecting, while the full numerical judgment remains on the <a href="../localvol_pde_validation/">local-vol and PDE validation</a> page.</figcaption>
 </figure>
 
 </div>
 
-## What changes after smoothing
+### Handoff checks
 
-<p class="doc-section-lead">Slice-wise SVI is useful for static repair, but Dupire depends on time continuity more than on slice polish alone.</p>
+| Check | Published evidence | What it defends |
+| --- | --- | --- |
+| Worst seam jump | `T = 0.15`: `0.080696 -> 0.000082` | the projection targets the real handoff failure mode rather than just surface cosmetics |
+| Mid-curve seam jump | `T = 0.50`: `0.043331 -> 0.000012` | continuity improvement persists away from the shortest maturities |
+| Long-end seam jump | `T = 1.50`: `0.013674 -> 0.000010` | the seam reduction remains visible beyond the front end |
+| Projection tradeoff | `price_rmse = 0.02494`; `max_abs_price_error = 0.11453` | the bridge accepts bounded projection error instead of pretending exact node interpolation is enough for Dupire |
+| Dupire readiness | `projection_dupire_invalid_count = 0` | the projected surface stays admissible for the next local-vol step |
 
-The key issue is `w_T` behavior. Downstream local-vol extraction needs a surface whose term structure is smooth enough to trust, not just one whose individual slices look reasonable in isolation.
+## Tradeoffs
 
-## Why that matters for the handoff
+<p class="doc-section-lead">The smoothed handoff is a deliberate bridge into Dupire, not an attempt to maximize every metric at once.</p>
 
-<p class="doc-section-lead">The eSSVI workflow addresses the time-direction problem explicitly instead of treating smoothing as a cosmetic post-process.</p>
-
-- Calibrate an exact nodal eSSVI surface.
-- Project those nodes into a smooth surface with explicit validation.
-- Compare the nodal and smoothed surfaces instead of hiding the smoothing step.
-- Hand the smoothed surface into `LocalVolSurface.from_implied(...)`.
-
-## Seam and projection evidence
-
-| Knot / metric | Repaired SVI seam jump | Smoothed eSSVI seam jump | Note |
-| --- | --- | --- | --- |
-| `T = 0.15` | `0.080696` | `0.000082` | largest early-maturity seam improvement |
-| `T = 0.50` | `0.043331` | `0.000012` | smooth projection stays stable mid-curve |
-| `T = 1.50` | `0.013674` | `0.000010` | improvement persists at longer maturities |
-| Projection summary | `price_rmse = 0.02494` | `max_abs_price_error = 0.11453` | `projection_dupire_invalid_count = 0` |
-
-<div class="doc-panel" markdown="1">
+<div class="doc-panel doc-panel--strong" markdown="1">
 <p class="doc-panel__label">Main takeaway</p>
-The result is not perfect nodal fidelity. The result is that seam stress drops by orders of magnitude while the projected surface remains valid for the Dupire handoff. That sets up the final proof page: <a href="localvol_pde_validation.md">Local-vol and PDE validation</a>.
+The workflow keeps two objects on purpose: the exact nodal eSSVI surface for inspection and the smoothed eSSVI surface for Dupire-oriented use. That separation is the mathematical judgment on display. Exact nodes are not discarded, but the next stage receives the continuous surface because analytic <code>w_T</code> matters more here than preserving every seam of the slice stack.
 </div>
+
+- Keep `ESSVINodalSurface` visible when exact calibrated-node fidelity is the point of the analysis.
+- Prefer `ESSVISmoothedSurface` when the handoff into local vol depends on analytic <code>w</code>, <code>w_y</code>, <code>w_yy</code>, and <code>w_T</code>.
+- Use [Local-vol and PDE validation](localvol_pde_validation.md) to judge whether this handoff tradeoff pays off numerically.

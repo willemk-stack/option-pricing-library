@@ -18,15 +18,6 @@ type RiskAsset = {
 
 const HIGH_RISK_ASSETS: RiskAsset[] = [
   {
-    pagePath: "/",
-    srcIncludes: "reviewer_proof_panel",
-    regions: [
-      { label: "thumb-a", x: 760 / 1600, y: 450 / 900, width: 250 / 1600, height: 155 / 900 },
-      { label: "thumb-b", x: 760 / 1600, y: 622 / 900, width: 250 / 1600, height: 155 / 900 },
-      { label: "thumb-c", x: 1030 / 1600, y: 450 / 900, width: 464 / 1600, height: 327 / 900 },
-    ],
-  },
-  {
     pagePath: "/performance/",
     srcIncludes: "benchmark_overview",
     regions: [

@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="780" viewBox="0 0 1280 780" role="img" aria-labelledby="title desc">
+  <title id="title">Reviewable architecture system map</title>
+  <desc id="desc">Recruiter-facing architecture view showing typed routes feeding repair, smooth handoff, local-vol extraction, PDE validation, and proof outputs, with volatility, local-vol, and numerics as supporting layers.</desc>
+  <defs>
+    <linearGradient id="architectureFlowTrack" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#5EA8E5" stop-opacity="0.88" />
+      <stop offset="100%" stop-color="#0B5CAB" stop-opacity="0.96" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="780" fill="#EEF3F8" />
+  <rect x="24" y="24" width="1232" height="732" rx="32" ry="32" fill="#FFFFFF" stroke="#D7E0EA" stroke-width="2" />
+
+  <circle cx="1080" cy="126" r="176" fill="#D8E8F7" opacity="0.42" />
+  <circle cx="194" cy="650" r="132" fill="#EEF5FB" opacity="0.68" />
+
+  <rect x="84" y="64" width="248" height="34" rx="17" ry="17" fill="#D8E8F7" />
+  <text x="106" y="86" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1.2" fill="#0B5CAB">REVIEWABLE QUANT CORE</text>
+  <text x="640" y="160" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="54" font-weight="700" fill="#0B1F33" id="architecture-system-map-title" data-max-width="860" data-max-height="112" data-line-height="56" text-anchor="middle"><tspan x="640" dy="0">One reviewable workflow from</tspan><tspan x="640" dy="56">public routes to proof outputs</tspan></text>
+  <text x="640" y="242" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="24" font-weight="400" fill="#4A6277" id="architecture-system-map-subtitle" data-max-width="760" data-max-height="56" data-line-height="28" text-anchor="middle"><tspan x="640" dy="0">Authority comes from visible checkpoints, not boxed subsystems</tspan><tspan x="640" dy="28">or hidden handoffs.</tspan></text>
+
+  <text x="120" y="338" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1.2" fill="#0B5CAB">PUBLIC SURFACE</text>
+  <text x="120" y="382" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="34" font-weight="700" fill="#0B1F33" id="architecture-system-map-left-label" data-max-width="172" data-max-height="72" data-line-height="34"><tspan x="120" dy="0">Typed</tspan><tspan x="120" dy="34">routes</tspan></text>
+  <text x="120" y="452" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" font-weight="400" fill="#4A6277" id="architecture-system-map-left-caption" data-max-width="180" data-max-height="44" data-line-height="21"><tspan x="120" dy="0">specs, instruments,</tspan><tspan x="120" dy="21">curves-first</tspan></text>
+  <line x1="120" y1="492" x2="214" y2="492" stroke="#5EA8E5" stroke-width="4" stroke-linecap="round" opacity="0.86" />
+
+  <text x="1080" y="338" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="1.2" fill="#0B5CAB">PROOF EDGE</text>
+  <text x="1080" y="382" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="34" font-weight="700" fill="#0B1F33" id="architecture-system-map-right-label" data-max-width="180" data-max-height="72" data-line-height="34"><tspan x="1080" dy="0">Proof</tspan><tspan x="1080" dy="34">outputs</tspan></text>
+  <text x="1080" y="452" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="17" font-weight="400" fill="#4A6277" id="architecture-system-map-right-caption" data-max-width="188" data-max-height="44" data-line-height="21"><tspan x="1080" dy="0">diagnostics and review</tspan></text>
+  <line x1="1080" y1="492" x2="1186" y2="492" stroke="#5EA8E5" stroke-width="4" stroke-linecap="round" opacity="0.86" />
+
+  <line x1="368" y1="404" x2="984" y2="404" stroke="#C9D8E5" stroke-width="12" stroke-linecap="round" />
+  <line x1="368" y1="404" x2="984" y2="404" stroke="url(#architectureFlowTrack)" stroke-width="6" stroke-linecap="round" />
+  <polygon points="312,404 368,376 368,432" fill="#5EA8E5" />
+  <polygon points="984,376 1040,404 984,432" fill="#0B5CAB" />
+
+  <line x1="430" y1="426" x2="430" y2="474" stroke="#0B5CAB" stroke-width="3" stroke-linecap="round" opacity="0.82" />
+  <line x1="580" y1="426" x2="580" y2="474" stroke="#0B5CAB" stroke-width="3" stroke-linecap="round" opacity="0.82" />
+  <line x1="730" y1="426" x2="730" y2="474" stroke="#0B5CAB" stroke-width="3" stroke-linecap="round" opacity="0.82" />
+  <line x1="884" y1="426" x2="884" y2="474" stroke="#0B5CAB" stroke-width="3" stroke-linecap="round" opacity="0.82" />
+<text x="430" y="494" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="22" font-weight="700" fill="#0B1F33" id="architecture-system-map-repair" data-max-width="120" data-max-height="56" data-line-height="24" text-anchor="middle"><tspan x="430" dy="0">Repair</tspan></text>
+<text x="580" y="494" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="22" font-weight="700" fill="#0B1F33" id="architecture-system-map-smooth-handoff" data-max-width="168" data-max-height="56" data-line-height="24" text-anchor="middle"><tspan x="580" dy="0">Smooth handoff</tspan></text>
+<text x="730" y="494" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="22" font-weight="700" fill="#0B1F33" id="architecture-system-map-local-vol-extraction" data-max-width="178" data-max-height="56" data-line-height="24" text-anchor="middle"><tspan x="730" dy="0">Local-vol</tspan><tspan x="730" dy="24">extraction</tspan></text>
+<text x="884" y="494" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="22" font-weight="700" fill="#0B1F33" id="architecture-system-map-pde-validation" data-max-width="150" data-max-height="56" data-line-height="24" text-anchor="middle"><tspan x="884" dy="0">PDE</tspan><tspan x="884" dy="24">validation</tspan></text>
+
+  <circle cx="430" cy="404" r="19" fill="#FFFFFF" stroke="#5EA8E5" stroke-width="4" />
+  <circle cx="430" cy="404" r="8" fill="#A16600" />
+  <circle cx="580" cy="404" r="19" fill="#FFFFFF" stroke="#5EA8E5" stroke-width="4" />
+  <circle cx="580" cy="404" r="8" fill="#0B5CAB" />
+  <circle cx="730" cy="404" r="19" fill="#FFFFFF" stroke="#5EA8E5" stroke-width="4" />
+  <circle cx="730" cy="404" r="8" fill="#0F766E" />
+  <circle cx="884" cy="404" r="19" fill="#FFFFFF" stroke="#5EA8E5" stroke-width="4" />
+  <circle cx="884" cy="404" r="8" fill="#0B5CAB" />
+
+  <text x="640" y="610" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="16" font-weight="700" fill="#0B5CAB" letter-spacing="1.2" id="architecture-system-map-support-kicker" data-max-width="220" data-max-height="22" data-line-height="20" text-anchor="middle"><tspan x="640" dy="0">Supporting layers</tspan></text>
+  <rect x="359" y="644" width="146" height="40" rx="20" ry="20" fill="#E8F0F8" />
+<text x="432" y="669" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" font-weight="700" fill="#16324C" id="architecture-system-map-support-volatility" data-max-width="122" data-max-height="24" data-line-height="22" text-anchor="middle"><tspan x="432" dy="0">Volatility</tspan></text>
+  <line x1="380" y1="696" x2="484" y2="696" stroke="#5EA8E5" stroke-width="4" stroke-linecap="round" opacity="0.88" />
+  <rect x="534" y="644" width="144" height="40" rx="20" ry="20" fill="#E8F0F8" />
+<text x="606" y="669" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" font-weight="700" fill="#16324C" id="architecture-system-map-support-local-vol" data-max-width="120" data-max-height="24" data-line-height="22" text-anchor="middle"><tspan x="606" dy="0">Local-vol</tspan></text>
+  <line x1="555" y1="696" x2="657" y2="696" stroke="#5EA8E5" stroke-width="4" stroke-linecap="round" opacity="0.88" />
+  <rect x="709" y="644" width="138" height="40" rx="20" ry="20" fill="#E8F0F8" />
+<text x="778" y="669" font-family="DejaVu Sans, Liberation Sans, Arial, sans-serif" font-size="18" font-weight="700" fill="#16324C" id="architecture-system-map-support-numerics" data-max-width="114" data-max-height="24" data-line-height="22" text-anchor="middle"><tspan x="778" dy="0">Numerics</tspan></text>
+  <line x1="730" y1="696" x2="826" y2="696" stroke="#5EA8E5" stroke-width="4" stroke-linecap="round" opacity="0.88" />
+</svg>

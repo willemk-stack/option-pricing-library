@@ -1,93 +1,124 @@
-"""Surface → local-vol → PDE pipeline diagram."""
+"""Surface to local-vol to PDE workflow."""
 
 direction: right
 
 classes: {
-  card: {
+  input: {
     style: {
+      fill: "#14324C"
+      stroke: "#5EA8E5"
+      font-color: "#F5FAFF"
       stroke-width: 2
-      border-radius: 10
+      border-radius: 32
       shadow: true
     }
   }
 
-  accent: {
+  repair: {
     style: {
+      fill: "#4A3711"
+      stroke: "#E2AF46"
+      font-color: "#FFF7E8"
       stroke-width: 2
-      border-radius: 10
+      border-radius: 32
       shadow: true
     }
   }
 
-  success: {
+  handoff: {
     style: {
-      stroke: "#3f7a4c"
-      stroke-width: 2
-      border-radius: 10
+      fill: "#0F446D"
+      stroke: "#8CC9FF"
+      font-color: "#F5FAFF"
+      stroke-width: 3
+      border-radius: 32
       shadow: true
     }
   }
 
-  row: {
+  localvol: {
     style: {
-      fill: transparent
-      stroke: transparent
+      fill: "#0D5953"
+      stroke: "#7AD7CA"
+      font-color: "#F1FFFC"
+      stroke-width: 2
+      border-radius: 32
+      shadow: true
+    }
+  }
+
+  pde: {
+    style: {
+      fill: "#213965"
+      stroke: "#8FB3FF"
+      font-color: "#F5F8FF"
+      stroke-width: 2
+      border-radius: 32
+      shadow: true
+    }
+  }
+
+  proof: {
+    style: {
+      fill: "#1B513B"
+      stroke: "#82CFA0"
+      font-color: "#F4FFF8"
+      stroke-width: 3
+      border-radius: 32
+      shadow: true
     }
   }
 }
 
-quotes: "Quotes\nT, K, implied vol"
-quotes.class: card
+surface: "Surface inputs\nquotes and repaired SVI"
+surface.class: input
 
-paths: "" {
-  class: row
-  direction: down
+repair: "Repair"
+repair.class: repair
 
-  from_grid_path: "" {
-    class: row
-    direction: right
+handoff: "Smooth handoff"
+handoff.class: handoff
 
-    from_grid: "VolSurface.from_grid"
-    from_grid.class: card
+localvol: "Local-vol extraction"
+localvol.class: localvol
 
-    check_surface: "check_surface_noarb"
-    check_surface.class: card
+pde: "PDE validation"
+pde.class: pde
 
-    from_grid -> check_surface
-  }
+proof: "Proof outputs"
+proof.class: proof
 
-  from_svi_path: "" {
-    class: row
-    direction: right
-
-    from_svi: "VolSurface.from_svi"
-    from_svi.class: card
-
-    calibrate_svi: "calibrate_svi"
-    calibrate_svi.class: accent
-
-    from_svi -> calibrate_svi
+surface -> repair: {
+  style: {
+    stroke: "#5EA8E5"
+    stroke-width: 2
   }
 }
 
-localvol: "LocalVolSurface.from_implied"
-localvol.class: card
+repair -> handoff: {
+  style: {
+    stroke: "#5EA8E5"
+    stroke-width: 2
+  }
+}
 
-solve: "solve_pde_1d"
-solve.class: card
+handoff -> localvol: {
+  style: {
+    stroke: "#5EA8E5"
+    stroke-width: 2
+  }
+}
 
-repricing: "repricing"
-repricing.class: success
+localvol -> pde: {
+  style: {
+    stroke: "#5EA8E5"
+    stroke-width: 2
+  }
+}
 
-implied_vol: "implied_vol"
-implied_vol.class: card
-
-quotes -> paths.from_grid_path.from_grid
-quotes -> paths.from_svi_path.from_svi
-
-paths.from_grid_path.check_surface -> localvol
-paths.from_svi_path.calibrate_svi -> localvol
-
-localvol -> solve: local_vol_price_pde
-localvol -> repricing
-repricing -> implied_vol
+pde -> proof: {
+  style: {
+    stroke: "#5EA8E5"
+    stroke-width: 2
+  }
+}

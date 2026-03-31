@@ -128,6 +128,7 @@ npm run test:capture
 - configured proof-path and generated-asset pages render in light and dark themes
 - smoke, DOM, accessibility, and review-capture coverage use the broad page and width matrix defined in `scripts/visual_audit/review_targets.json`
 - blocking full-page baselines use the smaller `page_snapshot_pages` and `page_snapshot_widths` subset from `scripts/visual_audit/review_targets.json`
+- quiet reference and utility pages are reviewed on that same matrix so regressions like pill rows, repeated card walls, or double-boxed mkdocstrings wrappers stay visible
 - no obvious DOM overflow in main content
 - structured DOM/CSS findings with `critical`, `major`, and `minor` severity
 - console errors and uncaught page errors during navigation

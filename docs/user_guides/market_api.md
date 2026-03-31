@@ -1,5 +1,11 @@
 # Market APIs
 
+<div class="doc-intro doc-intro--quiet" markdown="1">
+<p class="doc-intro__kicker">Market inputs</p>
+<p class="doc-intro__lead">The library supports two related ways to describe markets: a flat convenience layer and a curves-first layer.</p>
+<p class="doc-intro__support">Use the flat path for compact examples and the curves-first path when discounting and forwards should stay explicit.</p>
+</div>
+
 The library supports two related ways to describe markets:
 
 1. **Flat convenience API** using `MarketData` and `PricingInputs`

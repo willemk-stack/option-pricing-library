@@ -12,7 +12,10 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from build_benchmark_artifacts import build_benchmark_overview_asset  # noqa: E402
+from build_benchmark_artifacts import (  # noqa: E402
+    build_benchmark_overview_asset,
+    build_macro_pipeline_summary_asset,
+)
 
 from option_pricing.demos.publishing import (  # noqa: E402
     build_visual_bundle,
@@ -207,6 +210,10 @@ def main(argv: list[str] | None = None) -> int:
                     presets=args.presets or None,
                     out_root=rendered_root,
                 )
+                build_macro_pipeline_summary_asset(
+                    artifacts_dir=ROOT / "benchmarks" / "artifacts",
+                    plot_dir=rendered_root / "benchmarks",
+                )
                 build_benchmark_overview_asset(
                     artifacts_dir=ROOT / "benchmarks" / "artifacts",
                     plot_dir=rendered_root / "benchmarks",
@@ -218,10 +225,15 @@ def main(argv: list[str] | None = None) -> int:
             presets=args.presets or None,
             out_root=args.out_root,
         )
+        macro_path = build_macro_pipeline_summary_asset(
+            artifacts_dir=ROOT / "benchmarks" / "artifacts",
+            plot_dir=Path(args.out_root) / "benchmarks",
+        )
         overview_path = build_benchmark_overview_asset(
             artifacts_dir=ROOT / "benchmarks" / "artifacts",
             plot_dir=Path(args.out_root) / "benchmarks",
         )
+        written.append(ROOT / macro_path)
         written.append(ROOT / overview_path)
         for path in written:
             print(path)
@@ -259,6 +271,10 @@ def main(argv: list[str] | None = None) -> int:
                     presets=args.presets or None,
                     out_root=rendered_root,
                 )
+                build_macro_pipeline_summary_asset(
+                    artifacts_dir=ROOT / "benchmarks" / "artifacts",
+                    plot_dir=rendered_root / "benchmarks",
+                )
                 build_benchmark_overview_asset(
                     artifacts_dir=ROOT / "benchmarks" / "artifacts",
                     plot_dir=rendered_root / "benchmarks",
@@ -275,10 +291,15 @@ def main(argv: list[str] | None = None) -> int:
             presets=args.presets or None,
             out_root=args.out_root,
         )
+        macro_path = build_macro_pipeline_summary_asset(
+            artifacts_dir=ROOT / "benchmarks" / "artifacts",
+            plot_dir=Path(args.out_root) / "benchmarks",
+        )
         overview_path = build_benchmark_overview_asset(
             artifacts_dir=ROOT / "benchmarks" / "artifacts",
             plot_dir=Path(args.out_root) / "benchmarks",
         )
+        written.append(ROOT / macro_path)
         written.append(ROOT / overview_path)
         print(result.manifest.manifest_path())
         for path in written:

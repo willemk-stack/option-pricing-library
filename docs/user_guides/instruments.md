@@ -1,7 +1,10 @@
 # Instruments
 
-The library supports a newer instrument-based workflow in addition to the older `PricingInputs` API.
-This is the recommended public entry point for most users.
+<div class="doc-intro doc-intro--quiet" markdown="1">
+<p class="doc-intro__kicker">Recommended public path</p>
+<p class="doc-intro__lead">The library supports a newer instrument-based workflow in addition to the older <code>PricingInputs</code> API. This is the recommended public entry point for most users.</p>
+<p class="doc-intro__support">The contract stays explicit, and the same instrument can be priced with several methods.</p>
+</div>
 
 The idea is simple:
 

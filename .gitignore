@@ -22,9 +22,12 @@ MANIFEST
 /out/
 /site/
 /test-results/
+/tests/artifacts/
+/tests/visual/artifacts/
 tests/visual/node_modules/
 tests/visual/test-results/
 artifacts/visual-state/
+/phase-6-signature-proof-moments-package/
 /agent/
 /agent_bundle*/
 /vr-ci-agent-bundle/

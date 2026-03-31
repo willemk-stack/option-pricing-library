@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 620" width="420" height="620" role="img" aria-labelledby="architecture-mobile-title architecture-mobile-desc">
+  <title id="architecture-mobile-title">Architecture systems view mobile</title>
+  <desc id="architecture-mobile-desc">Public routes feed explicit repair, smooth handoff, local-vol extraction, and PDE validation checkpoints before proof outputs and diagnostics remain downstream.</desc>
+  <defs>
+    <marker id="arrow-mobile-dark" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#88C7FF"/>
+    </marker>
+    <style>
+      text {
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        fill: #EEF5FF;
+      }
+      .eyebrow {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        fill: #9EB6CE;
+      }
+      .hero-title {
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .hero-copy {
+        font-size: 13px;
+        fill: #B0C3D9;
+      }
+      .side-title {
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .side-copy {
+        font-size: 12px;
+        fill: #B0C3D9;
+      }
+      .stage-title {
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .support-title {
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .spine {
+        stroke: #88C7FF;
+        stroke-width: 5;
+        stroke-linecap: round;
+      }
+      .arrow {
+        stroke: #88C7FF;
+        stroke-width: 3;
+        stroke-linecap: round;
+      }
+      .connector {
+        stroke: #567695;
+        stroke-width: 2;
+        stroke-linecap: round;
+      }
+      .node {
+        fill: #88C7FF;
+        stroke: #132338;
+        stroke-width: 3;
+      }
+      .accent-line {
+        stroke: #5C83AA;
+        stroke-width: 3;
+        stroke-linecap: round;
+      }
+    </style>
+  </defs>
+
+  <text class="eyebrow" x="210" y="28" text-anchor="middle">Reviewable quant core</text>
+  <text class="hero-title" x="210" y="60" text-anchor="middle">One reviewable workflow</text>
+  <text class="hero-title" x="210" y="88" text-anchor="middle">from public routes to proof outputs</text>
+  <text class="hero-copy" x="210" y="114" text-anchor="middle">The checkpoints stay visible so the proof remains downstream.</text>
+
+  <text class="eyebrow" x="150" y="156" text-anchor="middle">Public surface</text>
+  <text class="side-title" x="150" y="184" text-anchor="middle">Typed</text>
+  <text class="side-title" x="150" y="206" text-anchor="middle">routes</text>
+  <line class="accent-line" x1="112" y1="220" x2="188" y2="220"/>
+
+  <path class="arrow" d="M 150 236 V 258" fill="none" marker-end="url(#arrow-mobile-dark)"/>
+  <path class="spine" d="M 150 274 V 454"/>
+
+  <circle class="node" cx="150" cy="290" r="11"/>
+  <circle class="node" cx="150" cy="346" r="11"/>
+  <circle class="node" cx="150" cy="402" r="11"/>
+  <circle class="node" cx="150" cy="458" r="11"/>
+
+  <line class="connector" x1="162" y1="290" x2="186" y2="290"/>
+  <text class="stage-title" x="198" y="296">Repair</text>
+
+  <line class="connector" x1="162" y1="346" x2="186" y2="346"/>
+  <text class="stage-title" x="198" y="340">Smooth</text>
+  <text class="stage-title" x="198" y="362">handoff</text>
+
+  <line class="connector" x1="162" y1="402" x2="186" y2="402"/>
+  <text class="stage-title" x="198" y="396">Local-vol</text>
+  <text class="stage-title" x="198" y="418">extraction</text>
+
+  <line class="connector" x1="162" y1="458" x2="186" y2="458"/>
+  <text class="stage-title" x="198" y="452">PDE</text>
+  <text class="stage-title" x="198" y="474">validation</text>
+
+  <path class="arrow" d="M 150 474 V 500" fill="none" marker-end="url(#arrow-mobile-dark)"/>
+
+  <text class="eyebrow" x="150" y="532" text-anchor="middle">Proof edge</text>
+  <text class="side-title" x="150" y="560" text-anchor="middle">Proof outputs</text>
+  <text class="side-copy" x="150" y="580" text-anchor="middle">diagnostics</text>
+
+  <text class="eyebrow" x="320" y="532" text-anchor="middle">Supporting layers</text>
+  <text class="support-title" x="320" y="556" text-anchor="middle">Volatility</text>
+  <text class="support-title" x="320" y="576" text-anchor="middle">Local-vol</text>
+  <text class="support-title" x="320" y="596" text-anchor="middle">Numerics</text>
+</svg>

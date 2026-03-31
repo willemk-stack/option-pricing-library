@@ -2,12 +2,12 @@
 
 <div class="doc-intro" markdown="1">
 <p class="doc-intro__kicker">Proof path step 1</p>
-<p class="doc-intro__lead">Start the proof sequence with the failure mode itself: noisy option quotes rarely arrive in a form that is smooth, interpretable, or ready for downstream numerics.</p>
-<p class="doc-intro__support">This page keeps the quoted structure, the repaired SVI fit, and the slice-level stress visible at the same time so the repair step can be defended rather than implied.</p>
+<p class="doc-intro__lead">Production surface repair is not proven by a pretty fitted surface. It is proven by keeping the quote geometry, the analytic repair, and the slices that still deserve scrutiny visible at the same time.</p>
+<p class="doc-intro__support">This page treats static repair as an engineering judgment problem. The quoted lattice stays the reference object, the SVI repair stays inspectable, and the flagged maturities stay attached to the evidence instead of disappearing into a polished summary view.</p>
 <div class="doc-pill-row">
-  <span class="doc-pill">Quoted vs repaired</span>
-  <span class="doc-pill">Static no-arb checks</span>
-  <span class="doc-pill">Slice-level evidence</span>
+  <span class="doc-pill">Quote geometry preserved</span>
+  <span class="doc-pill">Flagged slices stay visible</span>
+  <span class="doc-pill">Static repair only</span>
 </div>
 </div>
 
@@ -16,75 +16,127 @@
 [Next: eSSVI smooth handoff](essvi_smooth_handoff.md){ .md-button }
 </div>
 
-<div class="doc-card-grid" markdown="1">
-<div class="doc-card" markdown="1">
-<p class="doc-card__eyebrow">Failure mode</p>
-<p class="doc-card__title">What can go wrong</p>
-- Quotes can be noisy across strikes and maturities.
-- A fitted surface can look smooth while still hiding slice-level residual stress.
-</div>
-<div class="doc-card" markdown="1">
-<p class="doc-card__eyebrow">What to inspect</p>
-<p class="doc-card__title">Reviewer checklist</p>
-- Compare the repaired fit with the quoted surface, not just one polished summary view.
-- Check whether flagged slices remain visible after repair instead of being averaged away.
-</div>
-<div class="doc-card" markdown="1">
-<p class="doc-card__eyebrow">Next transition</p>
-<p class="doc-card__title">Why this page is not enough</p>
-- Static repair is necessary but not sufficient.
-- The next question is whether the surface is smooth enough in time for the Dupire handoff.
+<div class="proof-route-shell" markdown="1">
+<p class="proof-route-shell__label">Proof routing</p>
+<div class="proof-route" role="navigation" aria-label="Proof route">
+<a class="proof-route__item" href="../../"><span class="proof-route__step">Start</span><span class="proof-route__title">Homepage overview</span></a>
+<span class="proof-route__item proof-route__item--current" aria-current="page"><span class="proof-route__step">Step 1</span><span class="proof-route__title">Surface repair</span></span>
+<a class="proof-route__item" href="../essvi_smooth_handoff/"><span class="proof-route__step">Step 2</span><span class="proof-route__title">eSSVI handoff</span></a>
+<a class="proof-route__item" href="../localvol_pde_validation/"><span class="proof-route__step">Step 3</span><span class="proof-route__title">Local-vol / PDE</span></a>
+<a class="proof-route__item proof-route__item--followup" href="../../performance/"><span class="proof-route__step">Follow-up</span><span class="proof-route__title">Performance evidence</span></a>
 </div>
 </div>
 
-<figure markdown class="diagram">
-  ![Comparison of quoted implied-vol data and repaired SVI surface values across strikes and expiries](../assets/generated/static/quote_surface_compare.light.png){ .diagram-img .diagram-light }
-  ![Comparison of quoted implied-vol data and repaired SVI surface values across strikes and expiries](../assets/generated/static/quote_surface_compare.dark.png){ .diagram-img .diagram-dark }
-  <figcaption>Quoted structure remains visible next to the repaired SVI fit, so the surface regularization is inspectable rather than hidden behind one summary plot.</figcaption>
+## Signature evidence
+
+<p class="doc-section-lead">This is the production review object: the repaired SVI surface stays clean in 3D, the flagged maturities remain marked, and the stressed slices still sit against observed quotes instead of being washed into one pretty surface.</p>
+
+<figure class="diagram diagram--hero surface-repair-signature-figure" style="--diagram-max-width: 1160px" markdown="1">
+![Composite view of the surface repair workflow showing the repaired SVI surface, per-expiry residual flags, and stressed smile slices against observed quotes](../assets/generated/static/surface_repair_signature_composite.light.png){ .diagram-img .diagram-light }
+![Composite view of the surface repair workflow showing the repaired SVI surface, per-expiry residual flags, and stressed smile slices against observed quotes](../assets/generated/static/surface_repair_signature_composite.dark.png){ .diagram-img .diagram-dark }
+<figcaption>The 3D panel stays clean so the repaired geometry reads immediately. Reviewability comes from the right-hand diagnostics: three expiries remain flagged by the static g-floor check, and the stressed slices still sit against observed quotes instead of disappearing into a polished surface image.</figcaption>
 </figure>
 
-<div class="snapshot-grid" markdown="1">
+<div class="doc-card-grid doc-card-grid--quiet surface-repair-proof-strip" markdown="1">
+<div class="doc-card doc-card--quiet" markdown="1">
+<p class="doc-card__eyebrow">Preserved</p>
+<p class="doc-card__title">Quoted strike / maturity geometry</p>
+The raw quote lattice remains the reference object, so the repair is judged against the observed structure instead of replacing it.
+</div>
+<div class="doc-card doc-card--quiet" markdown="1">
+<p class="doc-card__eyebrow">Regularized</p>
+<p class="doc-card__title">Per-expiry analytic SVI slices</p>
+Each maturity is repaired with an inspectable analytic slice rather than with an opaque smoothing pass.
+</div>
+<div class="doc-card doc-card--quiet" markdown="1">
+<p class="doc-card__eyebrow">Still visible</p>
+<p class="doc-card__title">`3` flagged expiries stay marked</p>
+`T = 0.25`, `0.75`, and `1.00` remain attached to the evidence because failing slices are part of the review story, not clutter.
+</div>
+<div class="doc-card doc-card--quiet" markdown="1">
+<p class="doc-card__eyebrow">Not hidden</p>
+<p class="doc-card__title">Static repair is not the Dupire handoff</p>
+The separate time-smooth maturity-direction decision stays on the <a href="../essvi_smooth_handoff/">eSSVI smooth handoff</a> page instead of being smuggled into this one.
+</div>
+</div>
 
-<figure class="diagram" style="--diagram-max-width: 720px" markdown="1">
-![Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity](../assets/generated/static/svi_repaired_surface_heatmap.light.png){ .diagram-img .diagram-light }
-![Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity](../assets/generated/static/svi_repaired_surface_heatmap.dark.png){ .diagram-img .diagram-dark }
-<figcaption>The repaired heatmap shows continuity and remaining stress regions before any local-vol step is considered.</figcaption>
+## Problem
+
+<p class="doc-section-lead">Naive repair presentation is misleading because a clean surface image can hide what was regularized, which slices remain delicate, and what still has not been solved for the next stage.</p>
+
+- Quoted surfaces are often noisy across strike and maturity before any model choice is made.
+- A single repaired surface view can suggest the workflow is already safe for downstream numerics even when delicate expiries remain.
+- If flagged slices disappear here, the later proof pages inherit cleaner-looking inputs without showing what was actually regularized.
+
+<div class="doc-panel doc-panel--quiet" markdown="1">
+<p class="doc-panel__label">Why naive repair presentation is misleading</p>
+Showing only one polished repaired surface or one pass/fail summary can make the workflow look finished too early. That hides whether the quoted structure was respected and whether the difficult maturities remained visible after repair.
+</div>
+
+<div class="doc-panel doc-panel--quiet" markdown="1">
+<p class="doc-panel__label">Why flagged slices are evidence, not clutter</p>
+The flagged expiries are the point of the review. They show where the static repair remains delicate, they keep the later eSSVI handoff honest, and they let a reviewer see what the workflow still refuses to hide.
+</div>
+
+<div class="doc-panel doc-panel--quiet" markdown="1">
+<p class="doc-panel__label">Boundary of this page</p>
+Static repair is necessary, but it is not the same thing as a time-smooth Dupire-ready handoff. The next page handles continuity in <code>T</code> and <code>w_T</code> explicitly rather than implying that the repair page already solved it.
+</div>
+
+## Chosen Method
+
+<p class="doc-section-lead">The repair policy is explicit: preserve the quoted lattice as the reference, regularize each expiry with analytic SVI, keep the static checks attached, and do not smuggle the time-smoothing decision into the same page.</p>
+
+| Layer | Object or check | Design choice and reason |
+| --- | --- | --- |
+| Quoted input | `VolSurface.from_grid(...)` | Preserve the observed strike/maturity structure as the reference rather than overwriting it with a polished fitted view |
+| Repair step | `calibrate_svi(...)` and `VolSurface.from_svi(...)` | Repair each expiry with an inspectable analytic surface instead of an opaque smoothing pass |
+| Static diagnostics | no-arbitrage and slice-fit summaries | Let repaired slices be judged instead of treating the repair as automatically trustworthy |
+| Evidence pairing | quoted-versus-repaired view plus per-expiry slices | Keep both global structure and expiry-level behavior visible at the same time |
+| Next handoff | smooth eSSVI projection is handled separately | Avoid implying that static repair alone is sufficient for Dupire-oriented work |
+
+## Supporting evidence
+
+<p class="doc-section-lead">The signature figure establishes the review object first. The secondary figures widen the field of view so the full repaired surface and the full slice stack stay legible without replacing the quote-aware proof above.</p>
+
+<div class="snapshot-grid surface-repair-support-grid" markdown="1">
+
+<figure class="diagram diagram--quiet proof-path-support-figure surface-repair-support-figure" style="--diagram-max-width: 720px" markdown="1">
+[![](../assets/generated/static/svi_repaired_surface_heatmap.light.png){ .diagram-img .diagram-light } ![](../assets/generated/static/svi_repaired_surface_heatmap.dark.png){ .diagram-img .diagram-dark } <span class="proof-path-lightbox-hint" aria-hidden="true">Open larger view</span>](../assets/generated/static/svi_repaired_surface_heatmap.light.png){ .proof-path-lightbox-trigger data-proof-path-lightbox="" data-light-src="../../assets/generated/static/svi_repaired_surface_heatmap.light.png" data-dark-src="../../assets/generated/static/svi_repaired_surface_heatmap.dark.png" data-alt="Heatmap of the repaired SVI implied-vol surface over log-moneyness and maturity" data-lightbox-title="Repaired SVI surface heatmap" aria-label="Open a larger view of the repaired SVI surface heatmap" aria-describedby="surface-repair-support-caption-heatmap" aria-haspopup="dialog" }
+  <figcaption id="surface-repair-support-caption-heatmap">The repaired heatmap broadens the hero into a full-surface view, but it stays secondary so the page does not replace the quote-aware review object with one cleaner-looking surface image.</figcaption>
 </figure>
 
-<figure class="diagram" style="--diagram-max-width: 720px" markdown="1">
-![Repaired SVI smile slices for multiple expiries plotted against log-moneyness](../assets/generated/static/svi_smile_slices.light.png){ .diagram-img .diagram-light }
-![Repaired SVI smile slices for multiple expiries plotted against log-moneyness](../assets/generated/static/svi_smile_slices.dark.png){ .diagram-img .diagram-dark }
-<figcaption>Per-expiry slices keep fit quality and repair behavior visible one maturity at a time, which is what a reviewer needs to inspect.</figcaption>
+<figure class="diagram diagram--quiet proof-path-support-figure surface-repair-support-figure" style="--diagram-max-width: 720px" markdown="1">
+[![](../assets/generated/static/svi_smile_slices.light.png){ .diagram-img .diagram-light } ![](../assets/generated/static/svi_smile_slices.dark.png){ .diagram-img .diagram-dark } <span class="proof-path-lightbox-hint" aria-hidden="true">Open larger view</span>](../assets/generated/static/svi_smile_slices.light.png){ .proof-path-lightbox-trigger data-proof-path-lightbox="" data-light-src="../../assets/generated/static/svi_smile_slices.light.png" data-dark-src="../../assets/generated/static/svi_smile_slices.dark.png" data-alt="Repaired SVI smile slices for multiple expiries plotted against log-moneyness" data-lightbox-title="Repaired SVI smile slices" aria-label="Open a larger view of the repaired SVI smile slices" aria-describedby="surface-repair-support-caption-slices" aria-haspopup="dialog" }
+  <figcaption id="surface-repair-support-caption-slices">The full slice stack keeps the repair inspectable maturity by maturity instead of collapsing the page into one global surface view.</figcaption>
 </figure>
 
 </div>
 
-## Raw failure modes
+### Slice-level evidence
 
-<p class="doc-section-lead">Noise and hidden slice stress are the two reasons this page exists.</p>
+| Expiry `T` | Mean abs SVI IV residual (bp) | Max abs SVI IV residual (bp) | Static check | What it proves |
+| --- | --- | --- | --- | --- |
+| `0.25` | `9.13` | `34.09` | `flagged` / `g_below_floor` | short-dated delicacy remains visible after repair |
+| `0.75` | `7.69` | `19.38` | `flagged` / `g_below_floor` | mid-curve stress stays attached to the repaired result |
+| `1.00` | `6.98` | `21.96` | `flagged` / `g_below_floor` | low residual alone is not enough; the curvature-floor check still matters |
+| `0.10` | `15.55` | `56.81` | `pass` | high residual does not automatically imply a failed static repair slice |
+| `2.00` | `6.80` | `20.45` | `pass` | a calmer long-dated slice still reads cleanly after repair |
 
-- Static implied-vol surfaces often arrive with inconsistent strike and maturity structure.
-- Even when a repaired surface looks smooth globally, it can still hide slice-level fit stress or static-arbitrage problems.
+<div class="doc-panel doc-panel--quiet" markdown="1">
+<p class="doc-panel__label">What to notice</p>
+The page is stronger because the failures stay attached to the repair. A reviewer can see which maturities are delicate, which pass, and why the workflow still needs a separate time-smooth handoff instead of inheriting false confidence from a prettier surface view.
+</div>
 
-## What to inspect in the repair
+## Tradeoffs
 
-<p class="doc-section-lead">The workflow keeps the surface engineering explicit so the repair step can be reviewed rather than trusted on presentation alone.</p>
+<p class="doc-section-lead">The repair step is deliberately conservative about what it claims. It regularizes the surface enough to make the workflow usable, but it does not erase the evidence of delicacy or borrow confidence from the next proof step.</p>
 
-- Ingest quoted implied vols into `VolSurface.from_grid(...)`.
-- Fit analytic SVI slices with `VolSurface.from_svi(...)`.
-- Run static no-arbitrage diagnostics before and after repair.
-- Compare the repaired fit with the original quote structure instead of replacing the quote view with one summary surface.
-
-## Slice-level evidence
-
-| Expiry `T` | Mean abs SVI IV residual (bp) | Max abs SVI IV residual (bp) | Slice diagnostics after repair |
-| --- | --- | --- | --- |
-| `0.10` | `15.55` | `56.81` | `pass` |
-| `0.25` | `9.13` | `34.09` | `flagged` |
-| `1.00` | `6.98` | `21.96` | `flagged` |
-| `2.00` | `6.80` | `20.45` | `pass` |
-
-<div class="doc-panel" markdown="1">
+<div class="doc-panel doc-panel--strong" markdown="1">
 <p class="doc-panel__label">Main takeaway</p>
-The result is not that every slice becomes trivial. The result is that fit quality, flagged slices, and repair tradeoffs remain visible enough to defend. The next proof step is the smooth Dupire handoff on the <a href="essvi_smooth_handoff.md">eSSVI smooth handoff</a> page.
+The win is not that every expiry becomes easy. The win is that the noisy quoted surface is replaced with a defensible analytic repair while fit quality, flagged slices, and remaining stress stay visible enough to inspect. That is why the next proof step is the <a href="../essvi_smooth_handoff/">eSSVI smooth handoff</a> page rather than an immediate jump to local vol.
 </div>
+
+- Keep quoted-versus-repaired comparisons visible in review-facing work instead of showing only the fitted surface.
+- Treat flagged slices as useful information about surface delicacy, not as clutter to suppress.
+- Use [eSSVI smooth handoff](essvi_smooth_handoff.md) to answer the separate time-continuity question before the local-vol step begins.

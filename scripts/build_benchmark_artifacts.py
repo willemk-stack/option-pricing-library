@@ -70,7 +70,7 @@ BENCHMARK_SOURCE_INPUTS = (
     "src/option_pricing/types.py",
     "src/option_pricing/vol/",
 )
-BENCHMARK_SOURCE_MANIFEST_VERSION = 1
+BENCHMARK_SOURCE_MANIFEST_VERSION = 2
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -129,12 +129,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+def _normalize_source_newlines(data: bytes) -> bytes:
+    # Keep benchmark source hashes stable across LF and CRLF checkouts.
+    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
+def _source_sha256(path: Path) -> str:
+    return hashlib.sha256(_normalize_source_newlines(path.read_bytes())).hexdigest()
 
 
 def _iter_benchmark_source_files() -> list[Path]:
@@ -156,7 +157,7 @@ def _benchmark_source_manifest_payload() -> dict[str, Any]:
     return {
         "version": BENCHMARK_SOURCE_MANIFEST_VERSION,
         "inputs": {
-            str(path.relative_to(ROOT)).replace("\\", "/"): _sha256(path)
+            str(path.relative_to(ROOT)).replace("\\", "/"): _source_sha256(path)
             for path in files
         },
     }
@@ -185,6 +186,19 @@ def _check_benchmark_source_manifest(artifacts_dir: Path) -> int:
         return 1
 
     recorded_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    recorded_version = recorded_payload.get("version")
+    if recorded_version != BENCHMARK_SOURCE_MANIFEST_VERSION:
+        print("Benchmark source manifest format is out of date.")
+        print(
+            "Refresh the authoritative benchmark artifacts and commit the updated outputs."
+        )
+        print(
+            " - manifest version: "
+            f"recorded={recorded_version!r}, "
+            f"expected={BENCHMARK_SOURCE_MANIFEST_VERSION}"
+        )
+        return 1
+
     recorded_inputs = dict(recorded_payload.get("inputs", {}))
     current_inputs = dict(current_payload.get("inputs", {}))
 
@@ -1244,34 +1258,9 @@ def _run_macro_pipeline_family(
             )
 
     frame = pd.DataFrame(rows)
-    pivot = frame.pivot(index="scenario", columns="stage", values="runtime_ms").loc[
-        ["small", "medium", "large"]
-    ]
-
-    def render(theme: str):
-        with publishing_style(theme=theme) as plt:
-            fig, ax = plt.subplots(1, 1, figsize=(9.2, 4.5), constrained_layout=True)
-            bottom = np.zeros(len(pivot), dtype=float)
-            colors = ["#4c72b0", "#55a868", "#c44e52", "#8172b3", "#ccb974"]
-            for color, stage in zip(colors, pivot.columns, strict=False):
-                vals = pivot[stage].to_numpy(dtype=float)
-                ax.bar(
-                    pivot.index.to_list(),
-                    vals,
-                    bottom=bottom,
-                    label=stage,
-                    color=color,
-                )
-                bottom += vals
-            ax.set_ylabel("Median runtime (ms)")
-            ax.set_title("End-to-end macro pipeline stage budget")
-            ax.legend(ncol=2)
-            return fig
-
-    figure_path = _save_themed_plot(
-        plot_dir / "macro_pipeline_summary.png",
-        dpi=180,
-        render=render,
+    figure_path = build_macro_pipeline_summary_asset_from_frame(
+        frame=frame,
+        plot_dir=plot_dir,
     )
     files = _write_frame(
         frame.sort_values(["scenario", "stage"]),
@@ -1282,6 +1271,254 @@ def _run_macro_pipeline_family(
         "snapshot": files,
         "figure": str(figure_path.relative_to(ROOT)).replace("\\", "/"),
     }
+
+
+_MACRO_SCENARIO_ORDER = ("small", "medium", "large")
+_MACRO_STAGE_SPECS = (
+    ("surface_fit_ms", "Surface fit"),
+    ("pde_reprice_ms", "PDE repricing"),
+    ("surface_handoff_ms", "Smooth handoff"),
+    ("local_vol_ms", "Local-vol build"),
+    ("quote_mesh_ms", "Quote mesh"),
+)
+
+
+def _macro_stage_budget_pivot(frame: pd.DataFrame) -> pd.DataFrame:
+    pivot = frame.pivot(index="scenario", columns="stage", values="runtime_ms")
+    pivot = pivot.reindex(
+        index=list(_MACRO_SCENARIO_ORDER),
+        columns=[stage for stage, _ in _MACRO_STAGE_SPECS],
+    )
+    return pivot.fillna(0.0)
+
+
+def build_macro_pipeline_summary_asset_from_frame(
+    *,
+    frame: pd.DataFrame,
+    plot_dir: Path,
+) -> Path:
+    pivot = _macro_stage_budget_pivot(frame)
+    totals = pivot.sum(axis=1).to_numpy(dtype=float)
+    fit = pivot["surface_fit_ms"].to_numpy(dtype=float)
+    pde = pivot["pde_reprice_ms"].to_numpy(dtype=float)
+    minor = totals - fit - pde
+    fit_pde_share = (fit + pde) / totals
+
+    def render(theme: str):
+        from matplotlib.patches import FancyBboxPatch
+
+        base_palette = publishing_palette(theme)
+        if theme == "dark":
+            colors = {
+                "surface_fit_ms": "#89B8FF",
+                "pde_reprice_ms": "#7AD6A5",
+                "surface_handoff_ms": "#F0C86A",
+                "local_vol_ms": "#9FB2FF",
+                "quote_mesh_ms": "#E48A92",
+                "bar_edge": "#08101F",
+                "panel_fill": "#0F172A",
+                "panel_stroke": "#314056",
+                "panel_emphasis": "#13243B",
+                "text": base_palette["text"],
+                "muted": base_palette["muted_text"],
+                "accent": "#8CC9FF",
+                "segment_text": "#08101F",
+            }
+        else:
+            colors = {
+                "surface_fit_ms": "#355C8B",
+                "pde_reprice_ms": "#2E8D68",
+                "surface_handoff_ms": "#C7942C",
+                "local_vol_ms": "#5D7DB5",
+                "quote_mesh_ms": "#C55B63",
+                "bar_edge": "#F7FAFC",
+                "panel_fill": "#F7FAFC",
+                "panel_stroke": "#D8E4EE",
+                "panel_emphasis": "#EAF2F9",
+                "text": base_palette["text"],
+                "muted": base_palette["muted_text"],
+                "accent": "#0B5CAB",
+                "segment_text": "#FFFFFF",
+            }
+
+        with publishing_style(theme=theme) as plt:
+            fig = plt.figure(figsize=(11.8, 5.25))
+            gs = fig.add_gridspec(1, 2, width_ratios=[3.55, 1.55], wspace=0.08)
+            ax = fig.add_subplot(gs[0, 0])
+            ax_notes = fig.add_subplot(gs[0, 1])
+            fig.subplots_adjust(left=0.08, right=0.985, top=0.88, bottom=0.14)
+
+            x = np.arange(len(pivot), dtype=float)
+            bottom = np.zeros(len(pivot), dtype=float)
+            for stage, label in _MACRO_STAGE_SPECS:
+                values = pivot[stage].to_numpy(dtype=float)
+                ax.bar(
+                    x,
+                    values,
+                    width=0.64,
+                    bottom=bottom,
+                    label=label,
+                    color=colors[stage],
+                    edgecolor=colors["bar_edge"],
+                    linewidth=0.9,
+                )
+                bottom += values
+
+            y_max = float(np.max(totals)) * 1.17
+            ax.set_ylim(0.0, y_max)
+            ax.set_xlim(-0.55, len(x) - 0.45)
+            ax.set_xticks(x, list(_MACRO_SCENARIO_ORDER))
+            ax.set_xlabel("Published scenario")
+            ax.set_ylabel("Median runtime (ms)")
+            ax.set_title("Where the runtime budget actually goes")
+            ax.set_axisbelow(True)
+            ax.legend(loc="upper left", ncol=2, frameon=False)
+
+            for idx, total in enumerate(totals):
+                ax.text(
+                    x[idx],
+                    total + y_max * 0.018,
+                    _fmt_runtime_ms(total),
+                    ha="center",
+                    va="bottom",
+                    fontsize=11,
+                    fontweight="700",
+                    color=colors["text"],
+                )
+
+            large_idx = len(x) - 1
+            ax.text(
+                x[large_idx],
+                fit[large_idx] * 0.5,
+                "Fit",
+                ha="center",
+                va="center",
+                fontsize=10,
+                fontweight="700",
+                color=colors["segment_text"],
+            )
+            ax.text(
+                x[large_idx],
+                fit[large_idx] + pde[large_idx] * 0.5,
+                "PDE",
+                ha="center",
+                va="center",
+                fontsize=10,
+                fontweight="700",
+                color=colors["segment_text"],
+            )
+
+            ax_notes.set_axis_off()
+            ax_notes.set_xlim(0.0, 1.0)
+            ax_notes.set_ylim(0.0, 1.0)
+
+            def add_note(
+                *,
+                y: float,
+                height: float,
+                title: str,
+                metric: str | None,
+                body: str | None,
+                emphasized: bool = False,
+            ) -> None:
+                fill = colors["panel_emphasis"] if emphasized else colors["panel_fill"]
+                patch = FancyBboxPatch(
+                    (0.02, y),
+                    0.96,
+                    height,
+                    boxstyle="round,pad=0.02,rounding_size=0.05",
+                    linewidth=1.2,
+                    edgecolor=colors["panel_stroke"],
+                    facecolor=fill,
+                )
+                ax_notes.add_patch(patch)
+                ax_notes.text(
+                    0.08,
+                    y + height - 0.07,
+                    title,
+                    ha="left",
+                    va="top",
+                    fontsize=11,
+                    fontweight="700",
+                    color=colors["text"],
+                )
+                if metric is not None:
+                    ax_notes.text(
+                        0.08,
+                        y + height - 0.16,
+                        metric,
+                        ha="left",
+                        va="top",
+                        fontsize=16,
+                        fontweight="800",
+                        color=colors["accent"],
+                    )
+                    body_y = y + height - 0.24
+                else:
+                    body_y = y + height - 0.15
+                if body is not None:
+                    ax_notes.text(
+                        0.08,
+                        body_y,
+                        body,
+                        ha="left",
+                        va="top",
+                        fontsize=9.4,
+                        linespacing=1.25,
+                        color=colors["muted"],
+                    )
+
+            add_note(
+                y=0.69,
+                height=0.27,
+                title="Fit + PDE share",
+                metric=(
+                    f"{_fmt_pct(float(np.min(fit_pde_share)))} to "
+                    f"{_fmt_pct(float(np.max(fit_pde_share)))}"
+                ),
+                body=None,
+                emphasized=True,
+            )
+            add_note(
+                y=0.38,
+                height=0.25,
+                title="Everything else",
+                metric=(
+                    f"{_fmt_runtime_ms(float(np.min(minor)))} to "
+                    f"{_fmt_runtime_ms(float(np.max(minor)))}"
+                ),
+                body="Combined low-leverage stages.",
+            )
+            add_note(
+                y=0.08,
+                height=0.22,
+                title="Why this matters",
+                metric=None,
+                body=(
+                    "Justify optimization order:\n"
+                    "optimize fit or PDE before orchestration."
+                ),
+            )
+            return fig
+
+    return _save_themed_plot(
+        plot_dir / "macro_pipeline_summary.png",
+        dpi=180,
+        render=render,
+    )
+
+
+def build_macro_pipeline_summary_asset(
+    *,
+    artifacts_dir: Path,
+    plot_dir: Path,
+) -> str:
+    frame = pd.read_csv(artifacts_dir / "macro_pipeline_summary.csv")
+    figure_path = build_macro_pipeline_summary_asset_from_frame(
+        frame=frame,
+        plot_dir=plot_dir,
+    )
+    return str(figure_path.relative_to(ROOT)).replace("\\", "/")
 
 
 def _run_tree_family(
@@ -1436,6 +1673,10 @@ def _fmt_runtime_ms(value: float) -> str:
     return f"{value:.2f} ms"
 
 
+def _fmt_pct(value: float) -> str:
+    return f"{100.0 * float(value):.1f}%"
+
+
 def _fmt_sci(value: float) -> str:
     return f"{float(value):.2e}"
 
@@ -1491,6 +1732,10 @@ def _render_benchmark_overview_primary_panel(
     font_stack: str,
 ) -> tuple[tuple[str, ...], str]:
     text_clip_id = f"benchmarkOverviewPrimaryText-{panel.key}"
+    text_padding_x = 20.0
+    text_clip_inset_x = 10.0
+    text_clip_y = panel.y + 320.0
+    text_clip_height = 124.0
     headline_style = SvgTextStyle(
         font_family=font_stack,
         font_size=18,
@@ -1505,8 +1750,8 @@ def _render_benchmark_overview_primary_panel(
         fill=colors["muted"],
         line_height=20,
     )
-    text_x = panel.x
-    text_width = panel.width
+    text_x = panel.x + text_padding_x
+    text_width = panel.width - 2.0 * text_padding_x
     headline_y = panel.y + 342
     body_y = panel.y + 388
     raster_block = render_svg_contained_raster(
@@ -1524,8 +1769,9 @@ def _render_benchmark_overview_primary_panel(
         raster_block.clip_path,
         (
             f'    <clipPath id="{text_clip_id}">\n'
-            f'      <rect x="{panel.x:g}" y="{panel.y + 328:g}" '
-            f'width="{panel.width:g}" height="116" rx="12" ry="12" />\n'
+            f'      <rect x="{panel.x + text_clip_inset_x:g}" y="{text_clip_y:g}" '
+            f'width="{panel.width - 2.0 * text_clip_inset_x:g}" '
+            f'height="{text_clip_height:g}" rx="12" ry="12" />\n'
             "    </clipPath>"
         ),
     )
@@ -1697,9 +1943,28 @@ def build_benchmark_overview_asset(
     localvol_logk = localvol_large.loc["logK"]
 
     macro_pivot = macro.pivot(index="scenario", columns="stage", values="runtime_ms")
-    fit_small = float(macro_pivot.loc["small", "surface_fit_ms"])
-    fit_medium = float(macro_pivot.loc["medium", "surface_fit_ms"])
-    fit_large = float(macro_pivot.loc["large", "surface_fit_ms"])
+    minor_small = float(
+        macro_pivot.loc[
+            "small", ["quote_mesh_ms", "surface_handoff_ms", "local_vol_ms"]
+        ].sum()
+    )
+    minor_large = float(
+        macro_pivot.loc[
+            "large", ["quote_mesh_ms", "surface_handoff_ms", "local_vol_ms"]
+        ].sum()
+    )
+    fit_pde_share = []
+    for scenario in ("small", "medium", "large"):
+        total = float(macro_pivot.loc[scenario].sum())
+        fit_pde_share.append(
+            float(
+                (
+                    macro_pivot.loc[scenario, "surface_fit_ms"]
+                    + macro_pivot.loc[scenario, "pde_reprice_ms"]
+                )
+                / total
+            )
+        )
 
     tree_last = tree.loc[tree["n_steps"] == int(tree["n_steps"].max())].iloc[0]
     variants = themed_asset_paths(plot_dir / "benchmark_overview.svg")
@@ -1789,12 +2054,11 @@ def build_benchmark_overview_asset(
                 chip_width=196,
                 image_path=macro_panel_path,
                 headline=(
-                    "Surface fit dominates the integrated path budget across tested sizes."
+                    f"Fit + PDE consume {_fmt_pct(min(fit_pde_share))} to {_fmt_pct(max(fit_pde_share))} of the integrated budget."
                 ),
                 body=(
-                    "Surface-fit medians: "
-                    f"{_fmt_runtime_ms(fit_small)} / {_fmt_runtime_ms(fit_medium)} / "
-                    f"{_fmt_runtime_ms(fit_large)} for small / medium / large scenarios."
+                    "Optimize surface fit or PDE first. "
+                    f"The remaining stages stay around {_fmt_runtime_ms(minor_small)} -> {_fmt_runtime_ms(minor_large)} combined."
                 ),
             ),
         )

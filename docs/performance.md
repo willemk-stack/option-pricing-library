@@ -2,59 +2,120 @@
 
 # Performance evidence
 
-This page is the committed benchmark snapshot for the workflows that matter most in review: implied-vol inversion, PDE runtime versus error, digital-payoff remedies, local-vol extraction, the end-to-end surface-to-PDE path, and CRR tree scaling. The goal is not to claim universal absolute speed on one machine; it is to show which workflows scale cleanly, what extra accuracy costs, and which implementation choices are the defensible defaults.
+<div class="doc-intro" markdown="1">
+<p class="doc-intro__kicker">Flagship benchmark page</p>
+<p class="doc-intro__lead">This page is the committed benchmark bundle for the runtime questions that matter most in review: workload-class scaling, PDE cost versus accuracy, digital-payoff remedies, and the end-to-end surface-to-PDE stage budget.</p>
+<p class="doc-intro__support">Read it as a benchmark case study rather than a leaderboard. The point is to show what actually matters, where extra runtime buys something real, and which stages deserve optimization effort before the quieter ones do.</p>
+<div class="doc-pill-row">
+  <span class="doc-pill">Vectorized IV scaling</span>
+  <span class="doc-pill">Runtime versus error</span>
+  <span class="doc-pill">Stage-budget attribution</span>
+</div>
+</div>
 
-<figure markdown class="diagram" style="--diagram-max-width: 1180px">
+<div class="proof-route-shell proof-route-shell--performance" markdown="1">
+<p class="proof-route-shell__label">Read after the proof path</p>
+<div class="proof-route" role="navigation" aria-label="Proof route">
+<a class="proof-route__item" href="../"><span class="proof-route__step">Start</span><span class="proof-route__title">Homepage overview</span></a>
+<a class="proof-route__item" href="../user_guides/surface_workflow/"><span class="proof-route__step">Step 1</span><span class="proof-route__title">Surface repair</span></a>
+<a class="proof-route__item" href="../user_guides/essvi_smooth_handoff/"><span class="proof-route__step">Step 2</span><span class="proof-route__title">eSSVI handoff</span></a>
+<a class="proof-route__item" href="../user_guides/localvol_pde_validation/"><span class="proof-route__step">Step 3</span><span class="proof-route__title">Local-vol / PDE</span></a>
+<span class="proof-route__item proof-route__item--current proof-route__item--followup" aria-current="page"><span class="proof-route__step">Follow-up</span><span class="proof-route__title">Performance evidence</span></span>
+</div>
+</div>
+
+## Benchmark overview
+
+<p class="doc-section-lead">This opening proof object does the same job the other flagship pages do: land one bounded review surface first, then let the page zoom into interpretation. It compresses the benchmark families that matter most in review before the narrative narrows to runtime priorities and supporting checks.</p>
+
+<figure markdown class="diagram diagram--hero performance-overview-panel" style="--diagram-max-width: 1180px">
   ![Benchmark overview: committed IV scaling, PDE runtime-versus-error, macro stage budget, and benchmark callouts derived from published artifacts.](assets/generated/benchmarks/benchmark_overview.light.svg){ .diagram-img .diagram-light }
   ![Benchmark overview: committed IV scaling, PDE runtime-versus-error, macro stage budget, and benchmark callouts derived from published artifacts.](assets/generated/benchmarks/benchmark_overview.dark.svg){ .diagram-img .diagram-dark }
+  <figcaption>One view across the benchmark families that matter most in review: vectorized IV scaling, runtime/error tradeoffs, digital remedies, and integrated stage-budget attribution.</figcaption>
 </figure>
 
-## Snapshot
+<div class="doc-panel doc-panel--strong performance-reading-panel" markdown="1">
+<p class="doc-panel__label">What actually matters</p>
+- The strongest review signal here is not one absolute timing number. It is whether the bundle separates workload-class wins, cost-versus-accuracy tradeoffs, and genuine end-to-end bottlenecks.
+- In the committed macro run, surface fitting plus PDE repricing already consume 97.5% to 99.1% of total runtime, while quote mesh + handoff + local-vol stay between 17.78 ms and 26.16 ms combined.
+- That is why this page is best read as a default-setting case study: it justifies method choice, escalation guidance, remedy selection, and optimization order, not machine-independent latency promises.
+</div>
+
+## Runtime priorities
+
+<p class="doc-section-lead">This is the flagship benchmark moment on the page because it answers the optimization question directly: where does the workflow actually spend time, and which stages are already cheap enough that polishing them first would be the wrong judgment?</p>
+
+<div class="performance-flagship-shell" markdown="1">
+<p class="performance-flagship-shell__eyebrow">Editorial flagship figure</p>
+<figure markdown class="diagram performance-flagship-figure" style="--diagram-max-width: 1120px">
+  ![Macro pipeline benchmark: authored stage-budget view for the synthetic surface-to-local-vol-to-PDE workflow, with emphasis on optimization priority rather than raw totals.](assets/generated/benchmarks/macro_pipeline_summary.light.png){ .diagram-img .diagram-light }
+  ![Macro pipeline benchmark: authored stage-budget view for the synthetic surface-to-local-vol-to-PDE workflow, with emphasis on optimization priority rather than raw totals.](assets/generated/benchmarks/macro_pipeline_summary.dark.png){ .diagram-img .diagram-dark }
+  <figcaption>The integrated stage-budget family is the clearest optimization-priority proof object: surface fitting and PDE repricing dominate, while the handoff stages stay cheap.</figcaption>
+</figure>
+</div>
+
+<div class="doc-panel doc-panel--strong performance-flagship-panel" markdown="1">
+<p class="doc-panel__label">Optimization judgment</p>
+- Surface fitting is the main scaling driver in every published scenario.
+  It rises from 534.09 ms to 1.68 s, which is why optimization effort belongs there before smaller orchestration stages.
+- PDE repricing is the second budget line, not a rounding error.
+  It grows from 163.70 ms to 715.95 ms and stays materially larger than the handoff or local-vol construction steps.
+- Quote mesh generation, smooth handoff, and local-vol extraction remain the low-leverage stages.
+  Combined, they stay at 17.78 ms to 22.65 ms, so the benchmark bundle argues against optimizing them first.
+</div>
+
+## What the committed snapshot establishes
+
+<p class="doc-section-lead">The table is the compact claim set for the benchmark bundle: each row pairs a workload, a reference, and the reason the published result matters. It is strongest when read as a bounded justification set, not as a promise that every workload should be pushed to the finest or fastest-looking point.</p>
 
 | Family | Conditions | Reference | What the committed snapshot shows |
 | --- | --- | --- | --- |
-| Implied-vol inversion | Scalar BS inversion and Black-76 slice inversion on 21-801 strikes | Scalar loop baseline | The vectorized slice path reaches 379x speedup at 801 strikes while preserving zero measured vol difference versus the scalar loop. Scalar single-option inversions stay around 0.49 ms to 0.54 ms. |
-| Vanilla PDE | Black-Scholes European call, Nx=Nt from 101 to 801 | Analytic Black-Scholes price | Absolute error falls from about 1.74e-02 at 101x101 to about 2.28e-04 at 801x801. Runtime rises from about 40.7 ms to about 1.1 s. |
+| Implied-vol inversion | Scalar BS inversion and Black-76 slice inversion on 21-801 strikes | Scalar loop baseline | The vectorized slice path reaches 578x speedup at 801 strikes while preserving zero measured vol difference versus the scalar loop. Scalar single-option inversions stay around 1.50 ms to 2.18 ms. |
+| Vanilla PDE | Black-Scholes European call, Nx=Nt from 101 to 801 | Analytic Black-Scholes price | Absolute error falls from about 1.74e-02 at 101x101 to about 2.28e-04 at 801x801. Runtime rises from about 91.0 ms to about 2.7 s. |
 | Digital PDE remedies | Digital call, Nx=Nt in {101, 201, 401} | Analytic digital price | The untreated path keeps an ~1.18e-02 refinement spread, while Rannacher + cell average cuts it to 3.00e-05 and Rannacher + L2 projection cuts it to 1.43e-05. |
-| End-to-end macro pipeline | Synthetic SVI quote mesh -> fitted surface -> handoff probe -> local-vol surface -> representative local-vol PDE | Stage-level timing only | Surface fitting dominates the measured stage budget (250.2 ms, 359.7 ms, 794.5 ms for small, medium, large), with PDE repricing second (78.6 ms, 188.7 ms, 328.2 ms). |
+| End-to-end macro pipeline | Synthetic SVI quote mesh -> fitted surface -> handoff probe -> local-vol surface -> representative local-vol PDE | Stage-level timing only | Surface fitting dominates the measured stage budget (534.1 ms, 850.0 ms, 1.7 s for small, medium, large), with PDE repricing second (163.7 ms, 460.0 ms, 716.0 ms). |
 
-## Implied-vol inversion
+## Core benchmark families
+
+### Implied-vol inversion
+
+<p class="doc-section-lead">This is the workload-class proof: the library is built for real smiles and surfaces rather than just isolated single-option demos.</p>
 
 <figure markdown class="diagram" style="--diagram-max-width: 980px">
   ![IV scaling figure: vectorized slice inversion versus scalar-loop inversion, plus scalar single-option latency scenarios.](assets/generated/benchmarks/iv_scaling.light.png){ .diagram-img .diagram-light }
   ![IV scaling figure: vectorized slice inversion versus scalar-loop inversion, plus scalar single-option latency scenarios.](assets/generated/benchmarks/iv_scaling.dark.png){ .diagram-img .diagram-dark }
 </figure>
 
-Use the vectorized slice inverter whenever the workload is a smile or surface rather than an isolated option. At 801 strikes the committed snapshot records about 1.17 ms for the vectorized slice path versus about 444.29 ms for the scalar-loop baseline.
+Treat this figure as a workload-class result rather than a single-option latency contest. Use the vectorized slice inverter whenever the workload is a smile or surface rather than an isolated option. At 801 strikes the committed snapshot records about 2.43 ms for the vectorized slice path versus about 1.41 s for the scalar-loop baseline.
 
-## PDE runtime versus error
+### PDE runtime versus error
+
+<p class="doc-section-lead">The numerical question here is not whether a finer grid is better in principle. It is how much extra runtime buys how much visible error reduction, and when the finest published point stops being the most sensible default.</p>
 
 <figure markdown class="diagram" style="--diagram-max-width: 980px">
   ![PDE runtime versus error tradeoff for Black-Scholes vanilla PDE and local-vol PDE refinement.](assets/generated/benchmarks/pde_runtime_error_tradeoff.light.png){ .diagram-img .diagram-light }
   ![PDE runtime versus error tradeoff for Black-Scholes vanilla PDE and local-vol PDE refinement.](assets/generated/benchmarks/pde_runtime_error_tradeoff.dark.png){ .diagram-img .diagram-dark }
 </figure>
 
-The vanilla PDE curve shows the expected refinement tradeoff against an analytic benchmark. The local-vol curve uses a finer-grid local-vol PDE solve as its reference because there is no closed-form target for that path. That is the right comparison for review: the figure shows what extra grid density buys rather than just how long one solve took. In the current snapshot, the finest local-vol reference grid is 401x401.
+The vanilla PDE curve shows the expected refinement tradeoff against an analytic benchmark. From 201x201 to 801x801, runtime rises from about 260.57 ms to 2.66 s while absolute error only falls from 9.41e-04 to 2.28e-04. That supports medium grids as the practical default starting point unless the error budget says otherwise. The local-vol curve uses a finer-grid local-vol PDE solve as its reference because there is no closed-form target for that path. In the committed snapshot, the published local-vol tradeoff runs through 401x401 against a 601x601 reference solve.
 
-## Digital-payoff remedies
+### Digital-payoff remedies
+
+<p class="doc-section-lead">This is the clearest benchmark family for engineering judgment rather than raw speed, because the remedy choice changes whether refinement is actually trustworthy.</p>
 
 <figure markdown class="diagram" style="--diagram-max-width: 980px">
   ![Digital payoff remedy tradeoff: runtime versus error, plus grid-refinement price spread across remedy choices.](assets/generated/benchmarks/digital_remedies_tradeoff.light.png){ .diagram-img .diagram-light }
   ![Digital payoff remedy tradeoff: runtime versus error, plus grid-refinement price spread across remedy choices.](assets/generated/benchmarks/digital_remedies_tradeoff.dark.png){ .diagram-img .diagram-dark }
 </figure>
 
-This is the clearest benchmark family for domain-aware numerical engineering. Leaving the discontinuity untreated keeps runtime modest, but it also leaves materially larger error and much wider grid-to-grid drift. The cell-average and L2-projection remedies both stabilize the refinement path without changing the runtime order of magnitude.
+<div class="doc-panel doc-panel--quiet" markdown="1">
+<p class="doc-panel__label">Why this matters</p>
+Leaving the discontinuity untreated keeps runtime modest, but it also leaves materially larger error and much wider grid-to-grid drift. The cell-average and L2-projection remedies both stabilize the refinement path without changing the runtime order of magnitude. This is the benchmark family that most clearly shows domain-aware numerical maturity.
+</div>
 
-## End-to-end pipeline
+## Supporting checks
 
-<figure markdown class="diagram" style="--diagram-max-width: 980px">
-  ![Macro pipeline benchmark: stacked stage timing for the synthetic surface-to-local-vol-to-PDE workflow.](assets/generated/benchmarks/macro_pipeline_summary.light.png){ .diagram-img .diagram-light }
-  ![Macro pipeline benchmark: stacked stage timing for the synthetic surface-to-local-vol-to-PDE workflow.](assets/generated/benchmarks/macro_pipeline_summary.dark.png){ .diagram-img .diagram-dark }
-</figure>
-
-For the integrated benchmark, the key observation is where time actually goes. In this snapshot the handoff itself stays cheap at 6.63 ms to 8.62 ms, the local-vol extraction step stays around 0.40 ms to 0.88 ms, and the expensive parts are fitting the surface and running the PDE. That is useful when discussing optimization priorities because it argues against spending engineering effort on the wrong stage.
-
-## Additional families
+<p class="doc-section-lead">These are useful supporting checks, but they are not the main benchmark story. They help place the local-vol and tree paths in the broader method lineup without asking every plot to carry hero weight.</p>
 
 ### Local-vol extraction
 
@@ -62,8 +123,8 @@ The published local-vol extraction run compares `strike_coordinate="K"` and `str
 
 | Coordinate | Largest tested grid | Median runtime | Interior invalid share |
 | --- | --- | --- | --- |
-| `K` | `121 x 241` | 1.19 ms | 0.0% |
-| `logK` | `121 x 241` | 1.69 ms | 0.0% |
+| `K` | `121 x 241` | 3.51 ms | 0.0% |
+| `logK` | `121 x 241` | 4.15 ms | 0.0% |
 
 The full figure is available at [localvol_scaling.png](assets/generated/benchmarks/localvol_scaling.png).
 
@@ -73,9 +134,9 @@ The CRR benchmark remains useful for convergence discussion, but the published n
 
 | `n_steps` | Median runtime | Absolute error vs Black-Scholes |
 | --- | --- | --- |
-| `200` | 20.5 ms | 9.90e-03 |
-| `1000` | 922.4 ms | 1.98e-03 |
-| `5000` | 21.1 s | 3.96e-04 |
+| `200` | 47.2 ms | 9.90e-03 |
+| `1000` | 1.7 s | 1.98e-03 |
+| `5000` | 40.4 s | 3.96e-04 |
 
 The full figure is available at [tree_scaling.png](assets/generated/benchmarks/tree_scaling.png).
 
@@ -96,10 +157,21 @@ python scripts/render_performance_page.py
 
 The `pytest-benchmark` JSON is kept as the raw timing record. The publishing script turns that raw run plus direct error and reference computations into committed CSV, JSON, and figure artifacts for docs use.
 
-## What to conclude
+## What These Benchmarks Justify
 
-- Prefer the vectorized implied-vol slice API for smiles and surfaces; the scalar API is fine for isolated options but not for surface-scale work.
-- For vanilla PDE work, refinement behaves as expected: finer grids buy error reduction, but they do so at materially higher runtime than the medium grids that are often the more practical default.
-- For digital payoffs, do not discuss the PDE path without the remedy choice. `cell_avg` and `L2 projection` materially improve refinement behavior.
-- In the integrated workflow, surface fitting dominates the stage budget. Local-vol construction is cheap relative to fitting and PDE repricing.
-- CRR remains useful as a convergence reference, but the benchmark data makes the intended method placement clear: analytic or PDE methods are the more practical choice for repeated European-vanilla valuation.
+<p class="doc-section-lead">The benchmark bundle is strongest when it supports a design decision rather than advertising a runtime in isolation.</p>
+
+<div class="doc-panel doc-panel--strong performance-justification-panel" markdown="1">
+<p class="doc-panel__label">Main takeaway</p>
+The published evidence supports concrete defaults:
+
+- prefer the vectorized implied-vol slice path for smile and surface workloads
+- treat medium PDE grids as the practical starting point and escalate when the error budget says otherwise
+- discuss digital payoffs together with the remedy choice, not just the runtime line
+- spend optimization effort on surface fitting or PDE repricing before touching the already-cheap handoff stages
+</div>
+
+<div class="doc-panel doc-panel--quiet performance-scope-panel" markdown="1">
+<p class="doc-panel__label">What this bundle does not prove</p>
+It does not establish machine-independent latencies, universal optimal grids, or blanket claims about every payoff family. It justifies relative workload choice, bounded numerical escalation, remedy necessity for digital payoffs, and optimization order inside the committed publication scenarios.
+</div>
