@@ -326,6 +326,10 @@ pre,
     line-height: 1.55;
 }
 
+.md-typeset .doc-link-card__copy > code {
+    color: inherit;
+}
+
 .doc-step-list {
     counter-reset: doc-step;
     list-style: none;
