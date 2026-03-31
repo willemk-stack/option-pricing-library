@@ -70,7 +70,7 @@ BENCHMARK_SOURCE_INPUTS = (
     "src/option_pricing/types.py",
     "src/option_pricing/vol/",
 )
-BENCHMARK_SOURCE_MANIFEST_VERSION = 1
+BENCHMARK_SOURCE_MANIFEST_VERSION = 2
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -129,12 +129,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+def _normalize_source_newlines(data: bytes) -> bytes:
+    # Keep benchmark source hashes stable across LF and CRLF checkouts.
+    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
+def _source_sha256(path: Path) -> str:
+    return hashlib.sha256(_normalize_source_newlines(path.read_bytes())).hexdigest()
 
 
 def _iter_benchmark_source_files() -> list[Path]:
@@ -156,7 +157,7 @@ def _benchmark_source_manifest_payload() -> dict[str, Any]:
     return {
         "version": BENCHMARK_SOURCE_MANIFEST_VERSION,
         "inputs": {
-            str(path.relative_to(ROOT)).replace("\\", "/"): _sha256(path)
+            str(path.relative_to(ROOT)).replace("\\", "/"): _source_sha256(path)
             for path in files
         },
     }
@@ -185,6 +186,19 @@ def _check_benchmark_source_manifest(artifacts_dir: Path) -> int:
         return 1
 
     recorded_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    recorded_version = recorded_payload.get("version")
+    if recorded_version != BENCHMARK_SOURCE_MANIFEST_VERSION:
+        print("Benchmark source manifest format is out of date.")
+        print(
+            "Refresh the authoritative benchmark artifacts and commit the updated outputs."
+        )
+        print(
+            " - manifest version: "
+            f"recorded={recorded_version!r}, "
+            f"expected={BENCHMARK_SOURCE_MANIFEST_VERSION}"
+        )
+        return 1
+
     recorded_inputs = dict(recorded_payload.get("inputs", {}))
     current_inputs = dict(current_payload.get("inputs", {}))
 
