@@ -33,6 +33,7 @@ def heston_price_call_from_ctx(
     _validate_inputs_Heston(spot=ctx.spot, strike=strike, tau=tau)
 
     forward = ctx.fwd(tau=tau)
+    df = ctx.df(tau=tau)
 
     x = np.log(forward / strike)
 
@@ -42,7 +43,7 @@ def heston_price_call_from_ctx(
         P_1 = P_j(x=x, tau=tau, params=params, j=1)
 
     # Return var
-    Call = forward * P_1 - strike * P_0
+    Call = df * (forward * P_1 - strike * P_0)
 
     return Call
 
@@ -56,7 +57,9 @@ def heston_price_put_from_ctx(
     P_0: float | None = None,
     P_1: float | None = None,
 ) -> float:
+
     forward = ctx.fwd(tau=tau)
+    df = ctx.df(tau=tau)
     x = np.log(forward / strike)
 
     if P_0 is None:
@@ -64,7 +67,7 @@ def heston_price_put_from_ctx(
     if P_1 is None:
         P_1 = P_j(x=x, tau=tau, params=params, j=1)
 
-    Put = strike * (1 - P_0) - forward * (1 - P_1)
+    Put = df * (strike * (1 - P_0) - forward * (1 - P_1))
 
     return Put
 
