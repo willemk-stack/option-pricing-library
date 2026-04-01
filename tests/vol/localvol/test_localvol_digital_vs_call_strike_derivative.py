@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from tests._localvol_test_utils import build_skewed_svi_localvol_surface
+from tests.helpers._localvol_test_utils import build_skewed_svi_localvol_surface
 
 
 def _solve_pde_from_wiring(

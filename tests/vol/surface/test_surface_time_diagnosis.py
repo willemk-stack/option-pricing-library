@@ -375,7 +375,7 @@ def test_from_svi_diagnosis_report_prints_metrics(_fwd) -> None:
       * potential implied-vol inversion clipping: how often IV is ~ sigma_hi (5.0)
 
     Run with `-s` to see output:
-        pytest -q -s tests/test_surface_time_diagnosis.py -k diagnosis_report
+        pytest -q -s tests/vol/surface/test_surface_time_diagnosis.py -k diagnosis_report
     """
 
     pytest.importorskip("scipy")
@@ -521,7 +521,7 @@ def test_from_svi_diagnosis_report_on_capstone2_synthetic_dataset() -> None:
     only basic sanity assertions (finite outputs).
 
     Run with:
-        pytest -q -s tests/test_surface_time_diagnosis.py -k capstone2
+        pytest -q -s tests/vol/surface/test_surface_time_diagnosis.py -k capstone2
     """
 
     pytest.importorskip("scipy")

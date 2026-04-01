@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from tests._localvol_test_utils import build_skewed_svi_localvol_surface
+from tests.helpers._localvol_test_utils import build_skewed_svi_localvol_surface
 
 pytestmark = pytest.mark.slow
 

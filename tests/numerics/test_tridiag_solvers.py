@@ -1,4 +1,4 @@
-# tests/test_tridiag_solvers.py
+# tests/numerics/test_tridiag_solvers.py
 import numpy as np
 import pytest
 

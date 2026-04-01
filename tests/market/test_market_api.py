@@ -1,4 +1,4 @@
-# tests/test_public_api_consistency.py
+# tests/market/test_market_api.py
 from __future__ import annotations
 
 import math

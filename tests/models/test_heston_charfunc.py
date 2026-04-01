@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from option_pricing.models.heston.charfunc import HestonCharFn, _heston_affine_coeffs
-from option_pricing.models.heston.fourier import _integrand, _pj_kernel
+from option_pricing.models.heston.fourier import _integrand, _pj_affine_factor
 from option_pricing.models.heston.params import HestonParams
 
 
@@ -101,17 +101,19 @@ def test_heston_charfunc_matches_deterministic_variance_case_when_eta_is_zero() 
     assert np.allclose(values, expected, atol=1e-12, rtol=0.0)
 
 
-def test_p0_kernel_matches_characteristic_function_without_phase() -> None:
+def test_p0_affine_factor_matches_characteristic_function_without_phase() -> None:
     params = _sample_params()
     u = np.array([0.25, 1.0, 2.0], dtype=np.float64)
 
-    kernel = _pj_kernel(u, 0.9, params, j=0)
+    kernel = _pj_affine_factor(u, 0.9, params, j=0)
     values = HestonCharFn(u, 0.9, params)
 
     assert np.allclose(kernel, values, atol=1e-12, rtol=0.0)
 
 
-def test_p1_kernel_matches_deterministic_variance_limit_when_eta_is_zero() -> None:
+def test_p1_affine_factor_matches_deterministic_variance_limit_when_eta_is_zero() -> (
+    None
+):
     params = HestonParams(kappa=2.0, vbar=0.04, eta=0.0, rho=-0.3, v=0.09)
     tau = 1.4
     u = np.array([0.2, 0.8, 1.6], dtype=np.float64)
@@ -121,15 +123,15 @@ def test_p1_kernel_matches_deterministic_variance_limit_when_eta_is_zero() -> No
     )
     expected = np.exp(-0.5 * (u * u - 1j * u) * integrated_var)
 
-    values = _pj_kernel(u, tau, params, j=1)
+    values = _pj_affine_factor(u, tau, params, j=1)
 
     assert np.allclose(values, expected, atol=1e-12, rtol=0.0)
 
 
-def test_p1_kernel_is_one_at_zero_frequency_even_when_b1_is_negative() -> None:
+def test_p1_affine_factor_is_one_at_zero_frequency_even_when_b1_is_negative() -> None:
     params = HestonParams(kappa=1.0, vbar=0.04, eta=3.0, rho=0.9, v=0.05)
 
-    value = _pj_kernel(0.0, 1.0, params, j=1)
+    value = _pj_affine_factor(0.0, 1.0, params, j=1)
 
     assert isinstance(value, complex)
     assert abs(value - (1.0 + 0.0j)) < 1e-12

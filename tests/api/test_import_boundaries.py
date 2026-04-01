@@ -87,7 +87,7 @@ def _forbidden_imports_in_file(path: Path) -> list[str]:
 
 
 def test_core_does_not_import_diagnostics() -> None:
-    repo_root = Path(__file__).resolve().parents[1]
+    repo_root = Path(__file__).resolve().parents[2]
     offenders: list[str] = []
 
     for path in _iter_core_pyfiles(repo_root):

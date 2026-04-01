@@ -1,4 +1,4 @@
-# tests/test_fd_diff.py
+# tests/numerics/test_fd_diff.py
 
 import importlib
 

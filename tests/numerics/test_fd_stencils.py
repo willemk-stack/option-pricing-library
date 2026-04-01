@@ -1,4 +1,4 @@
-# tests/test_fd_stencils.py
+# tests/numerics/test_fd_stencils.py
 
 import importlib
 
