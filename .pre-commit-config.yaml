@@ -37,10 +37,10 @@ repos:
       - id: benchmark-source-manifest-refresh
         name: benchmark source manifest refresh
         entry: python
-        args: [scripts/build_benchmark_artifacts.py, --write-source-manifest]
+        args: [scripts/refresh_benchmark_source_manifest.py]
         language: system
-        pass_filenames: false
-        files: ^(benchmarks/(conftest\.py|test_bench_(iv|localvol|macro|pde|tree)\.py)|scripts/build_benchmark_artifacts\.py|src/option_pricing/(models/.*\.py|numerics/.*\.py|pricers/.*\.py|types\.py|vol/.*\.py))$
+        pass_filenames: true
+        files: ^(benchmarks/|scripts/|src/option_pricing/)
         stages: [pre-commit]
 
       - id: docs-source-link-guard

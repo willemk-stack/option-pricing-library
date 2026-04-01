@@ -107,15 +107,12 @@ def test_pre_commit_refreshes_benchmark_source_manifest_for_benchmark_inputs() -
     )
 
     assert hook["entry"] == "python"
-    assert hook["args"] == [
-        "scripts/build_benchmark_artifacts.py",
-        "--write-source-manifest",
-    ]
-    assert hook["pass_filenames"] is False
+    assert hook["args"] == ["scripts/refresh_benchmark_source_manifest.py"]
+    assert hook["pass_filenames"] is True
     assert hook["stages"] == ["pre-commit"]
-    assert "test_bench_" in str(hook["files"])
+    assert "benchmarks/" in str(hook["files"])
+    assert "scripts/" in str(hook["files"])
     assert "src/option_pricing/" in str(hook["files"])
-    assert "scripts/build_benchmark_artifacts\\.py" in str(hook["files"])
 
 
 def test_dev_extras_include_pre_commit_for_local_docs_guards() -> None:

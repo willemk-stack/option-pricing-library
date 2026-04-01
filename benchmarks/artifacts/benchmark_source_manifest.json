@@ -6,6 +6,18 @@
     "benchmarks/test_bench_macro.py": "6c2f7e38efd2f28a6af677b6b8c3d1cf489a5f5382ceed28a6a75f3437902d82",
     "benchmarks/test_bench_pde.py": "3d2718571612b53b00c5f4d8bb172cb8e9d522e2243bb403ad60d94ce14e8f5b",
     "benchmarks/test_bench_tree.py": "310b298ae86bbb7face452b244eff9999a68c1ae75a9318649c01e3f515e1844",
+    "scripts/build_benchmark_artifacts.py": "eef50a9a7137920c0a65a04f6d0e0b6f980b50361b3759977b159ca640ebbc85",
+    "src/option_pricing/__init__.py": "c470a03e6f5bf6f0089b219228f556f2f8b691ed9072665fd6dd71a6ca04dd53",
+    "src/option_pricing/config.py": "6893a0d59c7eee2dceba3496b21ec7a36f6b3d2fae005573512bcbe4205e6517",
+    "src/option_pricing/exceptions.py": "d5de380e6ba0e4dcfca4705b21e69cd0c7955e8b19243f256c5238771ddc93a9",
+    "src/option_pricing/instruments/__init__.py": "f7a634198bede51aed17c0ba3ed812f82a732c47eec0419a334da4ff59e3cd6f",
+    "src/option_pricing/instruments/base.py": "06fd52b1520487dbb66ee61b2f2f3c7fd8dc9b7cb8906ba8d8c683b432b78009",
+    "src/option_pricing/instruments/digital.py": "5b95a372d5c1cd33ed1c644fed9c757e1e5d62e04253c24eddf1005def6af309",
+    "src/option_pricing/instruments/factory.py": "0c0d1bc2aa96e8f93b708a71fd50bd0e584a2d3c393c266b023f0f8b59f6b081",
+    "src/option_pricing/instruments/payoffs.py": "b4509d34523f08b85e5b73d8926902902199dc9c4f9e58c5638282b252e068c8",
+    "src/option_pricing/instruments/vanilla.py": "d634728a5e2a6f57121a964f06454df9dbc35dbbb426c468b02d67452ffa5c13",
+    "src/option_pricing/market/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/option_pricing/market/curves.py": "5426b5b2a9f91a336a1d11f158f2ebe1b09e3af5fcba356b3bf43a26f12a9ce7",
     "src/option_pricing/models/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/option_pricing/models/binomial_crr.py": "bb0c7595b4a07fb8dcc76c72629dcfb518a59c04f9c48899e42810e9d04a0ca0",
     "src/option_pricing/models/black_scholes/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -35,7 +47,6 @@
     "src/option_pricing/numerics/tridiag.py": "e9edf1df0dca1625384f903b00e5a2871a5ecca4767641e6577fa6ec29b4dd21",
     "src/option_pricing/pricers/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/option_pricing/pricers/black_scholes.py": "fcbe43fc449b920b0ac13ef202755f7d4c7315d94e7c829ce52692795a05c342",
-    "src/option_pricing/pricers/finite_diff.py": "fa5a7374115d17e87452a0cda665bc5feb7079105fe4207c04de2c91fad8a77b",
     "src/option_pricing/pricers/mc.py": "0048f6fe691afeb941d3417d625cb4402bd2b805c4db244c87bb93c73b21da26",
     "src/option_pricing/pricers/pde/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "src/option_pricing/pricers/pde/digital_black_scholes.py": "bf0bf1d8f201b5f70019acbc76f2fab9f2eb8b648f54df9f69a4158a9da72fae",
@@ -48,6 +59,9 @@
     "src/option_pricing/pricers/pde_pricer.py": "627a309fc7e0082f19fced4813061a065d18616ba70c0f21c7dd16c28745ed7c",
     "src/option_pricing/pricers/tree.py": "d6528bfa9f6c110c8ea535ab1c03b53b24ebba5967c32d2f468daf770b4db432",
     "src/option_pricing/types.py": "a2683659a6a7d6438d4603a8f388274744355ace8abac229b642c277ac3a8dca",
+    "src/option_pricing/typing.py": "1ffd067f3b8a7b3d98298dab7921fee2307acb52dd3dd9ea6ae341a725226a7d",
+    "src/option_pricing/viz/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "src/option_pricing/viz/publishing.py": "a4b5148b4a06641362c89f21520df9483ba43d38897b5792faa53f402e742cf2",
     "src/option_pricing/vol/__init__.py": "5285f5e0650af980dd8d9714d19e0f486f913f1098859dd2ffaa733edf716cc3",
     "src/option_pricing/vol/arbitrage.py": "124e10de0d42674292a802cc3b9cc2c213fd5ccd4b645c78a5852810a8092d8c",
     "src/option_pricing/vol/implied_vol_common.py": "17dffcf091c0c08deb2e952eac41d3987e732caf2e431cfd2b4294ea71a1ba61",
@@ -86,5 +100,5 @@
     "src/option_pricing/vol/svi/wings.py": "50a26e52bcffd1acc3a178b015480c4977ab24135a69f332def2181c76c965f7",
     "src/option_pricing/vol/vol_types.py": "57f348370ef9e8d6a1acc7efc827fa49cd54f2e7b9131d9ae5bbac19cbea900e"
   },
-  "version": 2
+  "version": 3
 }

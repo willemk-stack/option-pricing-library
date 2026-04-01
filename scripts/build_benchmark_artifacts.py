@@ -18,6 +18,11 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+try:
+    from .benchmark_source_scope import iter_benchmark_source_files
+except ImportError:
+    from benchmark_source_scope import iter_benchmark_source_files
+
 import numpy as np
 import pandas as pd
 
@@ -57,20 +62,7 @@ from option_pricing.vol.surface_core import VolSurface
 from option_pricing.vol.svi import SVIParams, svi_total_variance
 
 BENCHMARK_SOURCE_MANIFEST = "benchmark_source_manifest.json"
-BENCHMARK_SOURCE_INPUTS = (
-    "benchmarks/conftest.py",
-    "benchmarks/test_bench_iv.py",
-    "benchmarks/test_bench_localvol.py",
-    "benchmarks/test_bench_macro.py",
-    "benchmarks/test_bench_pde.py",
-    "benchmarks/test_bench_tree.py",
-    "src/option_pricing/models/",
-    "src/option_pricing/numerics/",
-    "src/option_pricing/pricers/",
-    "src/option_pricing/types.py",
-    "src/option_pricing/vol/",
-)
-BENCHMARK_SOURCE_MANIFEST_VERSION = 2
+BENCHMARK_SOURCE_MANIFEST_VERSION = 3
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -139,17 +131,7 @@ def _source_sha256(path: Path) -> str:
 
 
 def _iter_benchmark_source_files() -> list[Path]:
-    files: list[Path] = []
-    for entry in BENCHMARK_SOURCE_INPUTS:
-        path = ROOT / entry
-        if path.is_file():
-            files.append(path)
-            continue
-        if path.is_dir():
-            files.extend(
-                candidate for candidate in path.rglob("*.py") if candidate.is_file()
-            )
-    return sorted(set(files))
+    return list(iter_benchmark_source_files(ROOT))
 
 
 def _benchmark_source_manifest_payload() -> dict[str, Any]:
