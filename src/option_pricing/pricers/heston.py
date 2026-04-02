@@ -1,8 +1,14 @@
+from typing import overload
+
 import numpy as np
+from numpy.typing import NDArray
 
 from ..instruments import VanillaOption
 from ..models.heston import HestonParams, P_j
 from ..types import MarketData, OptionType, PricingContext
+from ..typing import FloatArray
+
+type RealArray = NDArray[np.float64]
 
 
 def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
@@ -12,15 +18,74 @@ def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
     return market.to_context()
 
 
-def _validate_inputs_Heston(spot: float, strike: float, tau: float):
+def _validate_inputs_Heston(
+    spot: float, strike: float | FloatArray, tau: float
+) -> None:
     if tau < 0.0:
         raise ValueError("Time to expiry 'tau' must be non-negative")
-    if strike <= 0.0:
-        raise ValueError("strike must be positive")
+    if np.any(strike <= 0.0):
+        raise ValueError("strike(s) must be positive")
     if spot <= 0.0:
         raise ValueError("spot must be positive")
 
 
+def _normalize_strike(
+    strike: float | FloatArray,
+) -> tuple[RealArray, bool, tuple[int, ...]]:
+    strike_arr = np.asarray(strike, dtype=np.float64)
+    scalar_input = strike_arr.ndim == 0
+    original_shape = strike_arr.shape
+    strike_arr = np.asarray(np.atleast_1d(strike_arr), dtype=np.float64)
+
+    if not np.all(np.isfinite(strike_arr)):
+        raise ValueError("strike(s) must be finite")
+    if np.any(strike_arr <= 0.0):
+        raise ValueError("strike(s) must be positive")
+
+    return strike_arr, scalar_input, original_shape
+
+
+def _restore_output(
+    value: RealArray,
+    scalar_input: bool,
+    original_shape: tuple[int, ...],
+) -> float | RealArray:
+    value = np.asarray(value, dtype=np.float64)
+    if scalar_input:
+        return float(value[0])
+    return np.asarray(value.reshape(original_shape), dtype=np.float64)
+
+
+def _intrinsic_value(spot: float, strike: RealArray, kind: OptionType) -> RealArray:
+    if kind == OptionType.CALL:
+        return np.asarray(np.maximum(spot - strike, 0.0), dtype=np.float64)
+    if kind == OptionType.PUT:
+        return np.asarray(np.maximum(strike - spot, 0.0), dtype=np.float64)
+
+    raise ValueError(f"Invalid kind passed: {kind}, should be an `OptionType` Enum")
+
+
+def _probability_array(
+    *,
+    probability: float | None,
+    x: RealArray,
+    tau: float,
+    params: HestonParams,
+    j: int,
+) -> RealArray:
+    if probability is not None:
+        return np.full(x.shape, probability, dtype=np.float64)
+
+    return np.asarray(
+        [
+            P_j(x=float(log_moneyness), tau=tau, params=params, j=j)
+            for log_moneyness in x
+        ],
+        dtype=np.float64,
+    )
+
+
+@overload
 def heston_price_call_from_ctx(
     *,
     strike: float,
@@ -29,25 +94,69 @@ def heston_price_call_from_ctx(
     params: HestonParams,
     P_0: float | None = None,
     P_1: float | None = None,
-) -> float:
-    _validate_inputs_Heston(spot=ctx.spot, strike=strike, tau=tau)
-
-    forward = ctx.fwd(tau=tau)
-    df = ctx.df(tau=tau)
-
-    x = np.log(forward / strike)
-
-    if P_0 is None:
-        P_0 = P_j(x=x, tau=tau, params=params, j=0)
-    if P_1 is None:
-        P_1 = P_j(x=x, tau=tau, params=params, j=1)
-
-    # Return var
-    Call = df * (forward * P_1 - strike * P_0)
-
-    return Call
+) -> float: ...
 
 
+@overload
+def heston_price_call_from_ctx(
+    *,
+    strike: FloatArray,
+    ctx: PricingContext,
+    tau: float,
+    params: HestonParams,
+    P_0: float | None = None,
+    P_1: float | None = None,
+) -> FloatArray: ...
+
+
+def heston_price_call_from_ctx(
+    *,
+    strike: float | FloatArray,
+    ctx: PricingContext,
+    tau: float,
+    params: HestonParams,
+    P_0: float | None = None,
+    P_1: float | None = None,
+) -> float | FloatArray:
+    strike_arr, scalar_input, original_shape = _normalize_strike(strike)
+    _validate_inputs_Heston(spot=ctx.spot, strike=strike_arr, tau=tau)
+
+    if tau == 0:
+        intrinsic = _intrinsic_value(
+            spot=ctx.spot,
+            strike=strike_arr,
+            kind=OptionType.CALL,
+        )
+        return _restore_output(intrinsic, scalar_input, original_shape)
+
+    forward = float(ctx.fwd(tau=tau))
+    df = float(ctx.df(tau=tau))
+
+    x = np.asarray(np.log(forward / strike_arr), dtype=np.float64)
+    p_0_arr = _probability_array(
+        probability=P_0,
+        x=x,
+        tau=tau,
+        params=params,
+        j=0,
+    )
+    p_1_arr = _probability_array(
+        probability=P_1,
+        x=x,
+        tau=tau,
+        params=params,
+        j=1,
+    )
+
+    call = np.asarray(
+        df * (forward * p_1_arr - strike_arr * p_0_arr),
+        dtype=np.float64,
+    )
+
+    return _restore_output(call, scalar_input, original_shape)
+
+
+@overload
 def heston_price_put_from_ctx(
     *,
     strike: float,
@@ -56,22 +165,68 @@ def heston_price_put_from_ctx(
     params: HestonParams,
     P_0: float | None = None,
     P_1: float | None = None,
-) -> float:
-
-    forward = ctx.fwd(tau=tau)
-    df = ctx.df(tau=tau)
-    x = np.log(forward / strike)
-
-    if P_0 is None:
-        P_0 = P_j(x=x, tau=tau, params=params, j=0)
-    if P_1 is None:
-        P_1 = P_j(x=x, tau=tau, params=params, j=1)
-
-    Put = df * (strike * (1 - P_0) - forward * (1 - P_1))
-
-    return Put
+) -> float: ...
 
 
+@overload
+def heston_price_put_from_ctx(
+    *,
+    strike: FloatArray,
+    tau: float,
+    ctx: PricingContext,
+    params: HestonParams,
+    P_0: float | None = None,
+    P_1: float | None = None,
+) -> FloatArray: ...
+
+
+def heston_price_put_from_ctx(
+    *,
+    strike: float | FloatArray,
+    tau: float,
+    ctx: PricingContext,
+    params: HestonParams,
+    P_0: float | None = None,
+    P_1: float | None = None,
+) -> float | FloatArray:
+    strike_arr, scalar_input, original_shape = _normalize_strike(strike)
+    _validate_inputs_Heston(spot=ctx.spot, strike=strike_arr, tau=tau)
+
+    if tau == 0:
+        intrinsic = _intrinsic_value(
+            spot=ctx.spot,
+            strike=strike_arr,
+            kind=OptionType.PUT,
+        )
+        return _restore_output(intrinsic, scalar_input, original_shape)
+
+    forward = float(ctx.fwd(tau=tau))
+    df = float(ctx.df(tau=tau))
+    x = np.asarray(np.log(forward / strike_arr), dtype=np.float64)
+
+    p_0_arr = _probability_array(
+        probability=P_0,
+        x=x,
+        tau=tau,
+        params=params,
+        j=0,
+    )
+    p_1_arr = _probability_array(
+        probability=P_1,
+        x=x,
+        tau=tau,
+        params=params,
+        j=1,
+    )
+
+    put = np.asarray(
+        df * (strike_arr * (1.0 - p_0_arr) - forward * (1.0 - p_1_arr)),
+        dtype=np.float64,
+    )
+    return _restore_output(put, scalar_input, original_shape)
+
+
+@overload
 def heston_price_from_ctx(
     *,
     kind: OptionType,
@@ -79,19 +234,41 @@ def heston_price_from_ctx(
     tau: float,
     ctx: PricingContext,
     params: HestonParams,
-) -> float:
-    forward = ctx.fwd(tau=tau)
-    x = np.log(forward / strike)
+) -> float: ...
 
-    P_0 = P_j(x=x, tau=tau, params=params, j=0)
-    P_1 = P_j(x=x, tau=tau, params=params, j=1)
+
+@overload
+def heston_price_from_ctx(
+    *,
+    kind: OptionType,
+    strike: FloatArray,
+    tau: float,
+    ctx: PricingContext,
+    params: HestonParams,
+) -> FloatArray: ...
+
+
+def heston_price_from_ctx(
+    *,
+    kind: OptionType,
+    strike: float | FloatArray,
+    tau: float,
+    ctx: PricingContext,
+    params: HestonParams,
+) -> float | FloatArray:
     if kind == OptionType.CALL:
         return heston_price_call_from_ctx(
-            strike=strike, ctx=ctx, tau=tau, params=params, P_0=P_0, P_1=P_1
+            strike=strike,
+            ctx=ctx,
+            tau=tau,
+            params=params,
         )
-    elif kind == OptionType.PUT:
+    if kind == OptionType.PUT:
         return heston_price_put_from_ctx(
-            strike=strike, ctx=ctx, tau=tau, params=params, P_0=P_0, P_1=P_1
+            strike=strike,
+            tau=tau,
+            ctx=ctx,
+            params=params,
         )
 
     raise ValueError(f"kind should be an OptionType enum, here: {kind}")
@@ -114,5 +291,7 @@ def heston_price_instrument(
 ) -> float:
     """Convenience wrapper accepting flat `MarketData`."""
     return heston_price_instrument_from_ctx(
-        inst=inst, ctx=_to_ctx(market), params=params
+        inst=inst,
+        ctx=_to_ctx(market),
+        params=params,
     )

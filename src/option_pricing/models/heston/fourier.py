@@ -36,28 +36,45 @@ def _pj_affine_factor(
 
 
 def _integrand(
-    u: float | np.ndarray,
-    x: float,
+    u: float | FloatArray,
+    x: float | FloatArray,
     tau: float,
     params: HestonParams,
     j: int,
-) -> float | FloatArray:
-    if not np.isfinite(float(x)):
+) -> float | RealArray:
+    u_arr = np.asarray(u, dtype=np.float64)
+    x_arr = np.asarray(x, dtype=np.float64)
+
+    if not np.all(np.isfinite(x_arr)):
         raise ValueError("x must be finite.")
 
-    u_arr: RealArray = np.asarray(u, dtype=np.float64)
-
-    affine_factor: ComplexArray = np.asarray(
+    affine_factor = np.asarray(
         _pj_affine_factor(u_arr, tau, params, j=j),
         dtype=np.complex128,
     )
-    values: RealArray = np.asarray(
-        np.real(np.exp(1j * u_arr * x) * affine_factor / (1j * u_arr)),
-        dtype=np.float64,
-    )
+
+    if u_arr.ndim == 0 and x_arr.ndim == 0:
+        value = np.real(np.exp(1j * u_arr * x_arr) * affine_factor / (1j * u_arr))
+        return float(value)
+
     if u_arr.ndim == 0:
-        return float(values)
-    return values
+        values = np.real(np.exp(1j * u_arr * x_arr) * affine_factor / (1j * u_arr))
+        return np.asarray(values, dtype=np.float64)
+
+    if x_arr.ndim == 0:
+        values = np.real(np.exp(1j * u_arr * x_arr) * affine_factor / (1j * u_arr))
+        return np.asarray(values, dtype=np.float64)
+
+    # Full outer-product style broadcasting:
+    # u.shape = (n_u, ...)
+    # x.shape = (n_x, ...)
+    # result.shape = u.shape + x.shape
+    u_b = u_arr.reshape(u_arr.shape + (1,) * x_arr.ndim)
+    x_b = x_arr.reshape((1,) * u_arr.ndim + x_arr.shape)
+    affine_b = affine_factor.reshape(affine_factor.shape + (1,) * x_arr.ndim)
+
+    values = np.real(np.exp(1j * u_b * x_b) * affine_b / (1j * u_b))
+    return np.asarray(values, dtype=np.float64)
 
 
 def _integrand_scalar(
@@ -87,7 +104,11 @@ def P_j(
 ) -> float:
 
     integral, err_est = quad(
-        _integrand_scalar, a=0, b=np.inf, args=(x, tau, params, j), complex_func=False
+        _integrand_scalar,
+        a=0,
+        b=np.inf,
+        args=(x, tau, params, j),
+        complex_func=False,
     )
     out = 0.5 + integral / np.pi
 
