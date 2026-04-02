@@ -74,6 +74,31 @@ def test_benchmark_source_change_targets_performance_page() -> None:
     assert impact.review_paths == []
 
 
+def test_non_benchmark_src_change_no_longer_requires_benchmark_refresh() -> None:
+    impact = classify_docs_impact(["src/option_pricing/pricers/heston.py"])
+
+    assert impact.docs_sensitive is True
+    assert impact.docs_site_required is True
+    assert impact.benchmark_artifacts_required is False
+    assert impact.visual_assets_required is True
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "src/option_pricing/pricers/pde_pricer.py",
+        "src/option_pricing/instruments/digital.py",
+        "src/option_pricing/viz/publishing.py",
+    ],
+)
+def test_benchmark_relevant_src_change_requires_benchmark_refresh(path: str) -> None:
+    impact = classify_docs_impact([path])
+
+    assert impact.docs_sensitive is True
+    assert impact.docs_site_required is True
+    assert impact.benchmark_artifacts_required is True
+
+
 def test_git_changed_files_reports_missing_refs_actionably() -> None:
     with pytest.raises(RuntimeError, match="checkout is shallow|base/head commits"):
         git_changed_files("refs/heads/definitely-missing-docs-impact-ref", "HEAD")

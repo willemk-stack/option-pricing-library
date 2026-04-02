@@ -7,6 +7,11 @@ import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+try:
+    from .benchmark_source_scope import is_benchmark_freshness_input
+except ImportError:
+    from benchmark_source_scope import is_benchmark_freshness_input
+
 ROOT = Path(__file__).resolve().parents[1]
 EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
@@ -29,22 +34,6 @@ BENCHMARK_SNAPSHOT_INPUTS = (
     "scripts/render_performance_page.py",
     "scripts/templates/performance.md.template",
 )
-
-BENCHMARK_INPUTS = (
-    "benchmarks/conftest.py",
-    "benchmarks/test_bench_iv.py",
-    "benchmarks/test_bench_localvol.py",
-    "benchmarks/test_bench_macro.py",
-    "benchmarks/test_bench_pde.py",
-    "benchmarks/test_bench_tree.py",
-    "src/option_pricing/models/",
-    "src/option_pricing/numerics/",
-    "src/option_pricing/pricers/",
-    "src/option_pricing/types.py",
-    "src/option_pricing/vol/",
-)
-
-BENCHMARK_FRESHNESS_INPUTS = (*BENCHMARK_SNAPSHOT_INPUTS, *BENCHMARK_INPUTS)
 
 D2_INPUTS = (
     "docs/assets/diagrams/src/",
@@ -169,7 +158,7 @@ def is_docs_sensitive(path: str) -> bool:
     return (
         _matches(path, README_INPUTS)
         or _matches(path, PERFORMANCE_PAGE_INPUTS)
-        or _matches(path, BENCHMARK_INPUTS)
+        or is_benchmark_freshness_input(path, ROOT)
         or _matches(path, D2_INPUTS)
         or _matches(path, VISUAL_ASSET_INPUTS)
         or _matches(path, DOCS_SITE_INPUTS)
@@ -262,7 +251,9 @@ def classify_docs_impact(changed_files: list[str]) -> DocsImpact:
         _matches(path, PERFORMANCE_PAGE_INPUTS) for path in docs_sensitive_files
     )
     benchmark_artifacts_required = any(
-        _matches(path, BENCHMARK_FRESHNESS_INPUTS) for path in docs_sensitive_files
+        _matches(path, BENCHMARK_SNAPSHOT_INPUTS)
+        or is_benchmark_freshness_input(path, ROOT)
+        for path in docs_sensitive_files
     )
     d2_required = any(_matches(path, D2_INPUTS) for path in docs_sensitive_files)
     visual_assets_required = any(

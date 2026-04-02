@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import scripts.benchmark_source_scope as benchmark_scope
 import scripts.build_benchmark_artifacts as benchmark_artifacts
 
 
@@ -19,8 +20,8 @@ def test_benchmark_source_manifest_payload_normalizes_checkout_newlines(
     monkeypatch.setattr(benchmark_artifacts, "ROOT", tmp_path)
     monkeypatch.setattr(
         benchmark_artifacts,
-        "BENCHMARK_SOURCE_INPUTS",
-        ("benchmarks/sample.py",),
+        "_iter_benchmark_source_files",
+        lambda: [source_path],
     )
 
     _write_sample_source(source_path, newline=b"\n")
@@ -42,8 +43,8 @@ def test_check_benchmark_source_manifest_ignores_checkout_newlines(
     monkeypatch.setattr(benchmark_artifacts, "ROOT", tmp_path)
     monkeypatch.setattr(
         benchmark_artifacts,
-        "BENCHMARK_SOURCE_INPUTS",
-        ("benchmarks/sample.py",),
+        "_iter_benchmark_source_files",
+        lambda: [source_path],
     )
 
     _write_sample_source(source_path, newline=b"\n")
@@ -68,8 +69,8 @@ def test_check_benchmark_source_manifest_requires_current_version(
     monkeypatch.setattr(benchmark_artifacts, "ROOT", tmp_path)
     monkeypatch.setattr(
         benchmark_artifacts,
-        "BENCHMARK_SOURCE_INPUTS",
-        ("benchmarks/sample.py",),
+        "_iter_benchmark_source_files",
+        lambda: [source_path],
     )
 
     _write_sample_source(source_path, newline=b"\n")
@@ -85,3 +86,65 @@ def test_check_benchmark_source_manifest_requires_current_version(
     assert benchmark_artifacts._check_benchmark_source_manifest(artifacts_dir) == 1
     output = capsys.readouterr().out
     assert "Benchmark source manifest format is out of date." in output
+
+
+def test_benchmark_source_scope_tracks_expected_repo_files() -> None:
+    paths = set(benchmark_scope.benchmark_source_paths())
+
+    assert "src/option_pricing/instruments/digital.py" in paths
+    assert "src/option_pricing/viz/publishing.py" in paths
+    assert "src/option_pricing/vol/svi/__init__.py" in paths
+    assert "src/option_pricing/pricers/heston.py" not in paths
+    assert "src/option_pricing/models/heston/__init__.py" not in paths
+
+
+def test_benchmark_source_scope_ignores_untracked_files(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    builder_path = tmp_path / "scripts" / "build_benchmark_artifacts.py"
+    benchmark_path = tmp_path / "benchmarks" / "test_bench_tmp.py"
+    package_root = tmp_path / "src" / "option_pricing"
+    tracked_paths = frozenset(
+        {
+            "benchmarks/test_bench_tmp.py",
+            "scripts/build_benchmark_artifacts.py",
+            "src/option_pricing/__init__.py",
+            "src/option_pricing/pricers/__init__.py",
+            "src/option_pricing/pricers/core.py",
+        }
+    )
+
+    (package_root / "pricers").mkdir(parents=True, exist_ok=True)
+    builder_path.parent.mkdir(parents=True, exist_ok=True)
+    benchmark_path.parent.mkdir(parents=True, exist_ok=True)
+
+    builder_path.write_text(
+        "from option_pricing.pricers.core import price\n",
+        encoding="utf-8",
+    )
+    benchmark_path.write_text(
+        "from option_pricing.pricers.core import price\n",
+        encoding="utf-8",
+    )
+    (package_root / "__init__.py").write_text("", encoding="utf-8")
+    (package_root / "pricers" / "__init__.py").write_text("", encoding="utf-8")
+    (package_root / "pricers" / "core.py").write_text(
+        "def price() -> float:\n    return 1.0\n",
+        encoding="utf-8",
+    )
+    (package_root / "pricers" / "heston.py").write_text(
+        "def unused() -> float:\n    return 0.0\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        benchmark_scope,
+        "_git_tracked_paths",
+        lambda root_str: tracked_paths,
+    )
+
+    paths = set(benchmark_scope.benchmark_source_paths(tmp_path))
+
+    assert "src/option_pricing/pricers/core.py" in paths
+    assert "src/option_pricing/pricers/heston.py" not in paths
