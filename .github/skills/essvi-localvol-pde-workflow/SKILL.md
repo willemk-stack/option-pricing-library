@@ -39,45 +39,45 @@ Prefer targeted validation before broad validation.
 ### Surface / eSSVI focused
 Start with one or more of:
 ```bash
-pytest -q tests/test_essvi_calibrate.py
-pytest -q tests/test_essvi_surface.py
-pytest -q tests/test_essvi_objective.py
-pytest -q tests/test_essvi_mingone_projection.py
-pytest -q tests/test_svi.py tests/test_svi_repair.py
-pytest -q tests/test_arbitrage.py tests/test_surface_svi_and_localvol.py
+pytest -q tests/vol/essvi/test_essvi_calibrate.py
+pytest -q tests/vol/essvi/test_essvi_surface.py
+pytest -q tests/vol/essvi/test_essvi_objective.py
+pytest -q tests/vol/essvi/test_essvi_mingone_projection.py
+pytest -q tests/vol/svi/test_svi.py tests/vol/svi/test_svi_repair.py
+pytest -q tests/vol/surface/test_arbitrage.py tests/vol/surface/test_surface_svi_and_localvol.py
 ```
 
 ### Local-vol / Dupire focused
 Start with one or more of:
 ```bash
-pytest -q tests/test_dupire_constant_vol.py
-pytest -q tests/test_surface_svi_and_localvol.py
-pytest -q tests/test_localvol_pde_vanilla_vs_bs.py
-pytest -q tests/test_localvol_digital_vs_bs.py
-pytest -q tests/test_localvol_digital_vs_call_strike_derivative.py
+pytest -q tests/vol/localvol/test_dupire_constant_vol.py
+pytest -q tests/vol/surface/test_surface_svi_and_localvol.py
+pytest -q tests/vol/localvol/test_localvol_pde_vanilla_vs_bs.py
+pytest -q tests/vol/localvol/test_localvol_digital_vs_bs.py
+pytest -q tests/vol/localvol/test_localvol_digital_vs_call_strike_derivative.py
 ```
 
 ### PDE focused
 Start with one or more of:
 ```bash
-pytest -q tests/test_pde_pricer.py
-pytest -q tests/test_localvol_pde_vanilla_vs_bs.py
-pytest -q tests/test_convergence_remedies_digital.py
-pytest -q tests/test_pde_digital_wrappers.py
-pytest -q tests/test_pde_domain_branches.py
+pytest -q tests/pricers/test_pde_pricer.py
+pytest -q tests/vol/localvol/test_localvol_pde_vanilla_vs_bs.py
+pytest -q tests/vol/localvol/test_convergence_remedies_digital.py
+pytest -q tests/pricers/test_pde_digital_wrappers.py
+pytest -q tests/numerics/test_pde_domain_branches.py
 ```
 
 ### When the change is broad
 Run the broader numerics checks after targeted tests pass:
 ```bash
-pytest -q tests/test_surface_svi_and_localvol.py tests/test_dupire_constant_vol.py tests/test_localvol_pde_vanilla_vs_bs.py tests/test_convergence_remedies_digital.py
+pytest -q tests/vol/surface/test_surface_svi_and_localvol.py tests/vol/localvol/test_dupire_constant_vol.py tests/vol/localvol/test_localvol_pde_vanilla_vs_bs.py tests/vol/localvol/test_convergence_remedies_digital.py
 ```
 
 ### When public signatures or typing changed
 Also run:
 ```bash
 mypy src/option_pricing
-pytest -q tests/test_api_contracts.py tests/test_api_smoke.py tests/test_import_boundaries.py
+pytest -q tests/api/test_api_contracts.py tests/api/test_config_validation.py tests/api/test_import_boundaries.py
 ```
 
 ## Decision rules
