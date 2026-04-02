@@ -1,7 +1,7 @@
 # Notes
 
 These notes are a compact “story” of the standard option-pricing toolkit used throughout the library:
-**no-arbitrage → risk-neutral pricing → Brownian motion/Itô → GBM → Black–Scholes → implied vol → numerical methods**.
+**no-arbitrage → risk-neutral pricing → Brownian motion/Itô → GBM → Black–Scholes → implied vol → numerical methods → local vol → stochastic vol**.
 
 They are written to be readable linearly, but each note also stands on its own.
 
@@ -14,6 +14,9 @@ They are written to be readable linearly, but each note also stands on its own.
 5. [Implied volatility](IV.md) — “vol as the price”; inversion, bounds, and practical solver notes.
 6. [Monte Carlo](mc.md) — simulation pricing, error bars, and variance reduction.
 7. [Binomial CRR](binomial_crr.md) — discrete-time replication and convergence to Black–Scholes.
+8. [Finite Differences](finite_difference_pde.md) — how PDE pricing is discretized in practice.
+9. [Dupire local vol](dupire_local_vol.md) — deterministic volatility surfaces that fit vanilla prices.
+10. [Heston stochastic volatility](heston_stochastic_vol.md) — affine stochastic vol, characteristic functions, and the bridge to capstone 3.
 
 ## Conventions and notation
 
