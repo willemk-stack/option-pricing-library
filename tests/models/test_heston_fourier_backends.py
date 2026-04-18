@@ -14,8 +14,7 @@ from option_pricing.models.heston.fourier import (
 )
 from option_pricing.numerics.quadrature import (
     QuadratureConfig,
-    build_composite_rule,
-    gauss_legendre_nodes_weights,
+    build_gauss_legendre_rule,
 )
 
 
@@ -25,8 +24,7 @@ def _sample_params() -> HestonParams:
 
 def _sample_rule():
     cfg = QuadratureConfig(u_max=10.0, n_panels=2, nodes_per_panel=4)
-    nodes, weights = gauss_legendre_nodes_weights(cfg.nodes_per_panel)
-    return build_composite_rule(cfg, nodes, weights)
+    return build_gauss_legendre_rule(cfg)
 
 
 def _patch_quad_with_overrides(
@@ -196,6 +194,52 @@ def test_p_j_dispatches_to_gauss_legendre_backend(
     assert probability == pytest.approx(0.5 + 0.25 / np.pi)
 
 
+def test_p_j_dispatches_to_gauss_legendre_backend_with_explicit_rule(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    params = _sample_params()
+    rule = _sample_rule()
+    calls: dict[str, object] = {}
+
+    def _fail_quad_backend(*args, **kwargs):
+        raise AssertionError("Gauss-Legendre backend should not call quad")
+
+    def _fake_resolve_gauss_rule(*, quad_cfg, rule):
+        calls["resolve"] = (quad_cfg, rule)
+        return rule
+
+    def _fake_integrate_fixed_rule(
+        x: float,
+        tau: float,
+        params_: HestonParams,
+        j: int,
+        rule,
+    ) -> float:
+        calls["gauss"] = (x, tau, params_, j, rule)
+        return 0.125
+
+    monkeypatch.setattr(heston_fourier, "_integrate_pj_quad", _fail_quad_backend)
+    monkeypatch.setattr(heston_fourier, "_resolve_gauss_rule", _fake_resolve_gauss_rule)
+    monkeypatch.setattr(
+        heston_fourier,
+        "_integrate_pj_fixed_rule",
+        _fake_integrate_fixed_rule,
+    )
+
+    probability = P_j(
+        x=0.15,
+        tau=0.5,
+        params=params,
+        j=1,
+        backend="gauss_legendre",
+        rule=rule,
+    )
+
+    assert calls["resolve"] == (None, rule)
+    assert calls["gauss"] == (0.15, 0.5, params, 1, rule)
+    assert probability == pytest.approx(0.5 + 0.125 / np.pi)
+
+
 def test_p_j_with_diagnostics_dispatches_to_quad_backend(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -311,6 +355,15 @@ def test_gauss_backend_rejects_quad_cfg_and_rule_together(fn) -> None:
             quad_cfg=quad_cfg,
             rule=rule,
         )
+
+
+def test_heston_build_gauss_rule_reuses_generic_cached_rule() -> None:
+    build_gauss_legendre_rule.cache_clear()
+    cfg = QuadratureConfig(u_max=10.0, n_panels=2, nodes_per_panel=4)
+
+    rule = heston_fourier._build_heston_gauss_rule(cfg)
+
+    assert rule is build_gauss_legendre_rule(cfg)
 
 
 def test_gauss_backend_converges_as_u_max_increases() -> None:

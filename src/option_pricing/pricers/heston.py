@@ -4,7 +4,8 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..instruments import VanillaOption
-from ..models.heston import HestonParams, P_j
+from ..models.heston import HestonParams, P_j_Scalar
+from ..numerics.quadrature import CompositeRule, QuadratureConfig
 from ..types import MarketData, OptionType, PricingContext
 from ..typing import FloatArray
 
@@ -75,18 +76,22 @@ def _probability_array(
     params: HestonParams,
     j: HestonProbabilityIndex,
     backend: HestonBackend,
+    quad_cfg: QuadratureConfig | None,
+    rule: CompositeRule | None,
 ) -> RealArray:
     if probability is not None:
         return np.full(x.shape, probability, dtype=np.float64)
 
     return np.asarray(
         [
-            P_j(
+            P_j_Scalar(
                 x=float(log_moneyness),
                 tau=tau,
                 params=params,
                 j=j,
                 backend=backend,
+                quad_cfg=quad_cfg,
+                rule=rule,
             )
             for log_moneyness in x
         ],
@@ -104,6 +109,8 @@ def heston_price_call_from_ctx(
     P_0: float | None = None,
     P_1: float | None = None,
     backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
 ) -> float: ...
 
 
@@ -117,6 +124,8 @@ def heston_price_call_from_ctx(
     P_0: float | None = None,
     P_1: float | None = None,
     backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
 ) -> FloatArray: ...
 
 
@@ -129,6 +138,8 @@ def heston_price_call_from_ctx(
     P_0: float | None = None,
     P_1: float | None = None,
     backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
 ) -> float | FloatArray:
     strike_arr, scalar_input, original_shape = _normalize_strike(strike)
     _validate_inputs_Heston(spot=ctx.spot, strike=strike_arr, tau=tau)
@@ -152,6 +163,8 @@ def heston_price_call_from_ctx(
         params=params,
         j=0,
         backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
     )
     p_1_arr = _probability_array(
         probability=P_1,
@@ -160,6 +173,8 @@ def heston_price_call_from_ctx(
         params=params,
         j=1,
         backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
     )
 
     call = np.asarray(
@@ -180,6 +195,8 @@ def heston_price_put_from_ctx(
     P_0: float | None = None,
     P_1: float | None = None,
     backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
 ) -> float: ...
 
 
@@ -193,6 +210,8 @@ def heston_price_put_from_ctx(
     P_0: float | None = None,
     P_1: float | None = None,
     backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
 ) -> FloatArray: ...
 
 
@@ -205,6 +224,8 @@ def heston_price_put_from_ctx(
     P_0: float | None = None,
     P_1: float | None = None,
     backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
 ) -> float | FloatArray:
     strike_arr, scalar_input, original_shape = _normalize_strike(strike)
     _validate_inputs_Heston(spot=ctx.spot, strike=strike_arr, tau=tau)
@@ -228,6 +249,8 @@ def heston_price_put_from_ctx(
         params=params,
         j=0,
         backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
     )
     p_1_arr = _probability_array(
         probability=P_1,
@@ -236,6 +259,8 @@ def heston_price_put_from_ctx(
         params=params,
         j=1,
         backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
     )
 
     put = np.asarray(
@@ -254,6 +279,8 @@ def heston_price_from_ctx(
     ctx: PricingContext,
     params: HestonParams,
     backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
 ) -> float: ...
 
 
@@ -266,6 +293,8 @@ def heston_price_from_ctx(
     ctx: PricingContext,
     params: HestonParams,
     backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
 ) -> FloatArray: ...
 
 
@@ -277,6 +306,8 @@ def heston_price_from_ctx(
     ctx: PricingContext,
     params: HestonParams,
     backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
 ) -> float | FloatArray:
     if kind == OptionType.CALL:
         return heston_price_call_from_ctx(
@@ -285,6 +316,8 @@ def heston_price_from_ctx(
             tau=tau,
             params=params,
             backend=backend,
+            quad_cfg=quad_cfg,
+            rule=rule,
         )
     if kind == OptionType.PUT:
         return heston_price_put_from_ctx(
@@ -293,6 +326,8 @@ def heston_price_from_ctx(
             ctx=ctx,
             params=params,
             backend=backend,
+            quad_cfg=quad_cfg,
+            rule=rule,
         )
 
     raise ValueError(f"kind should be an OptionType enum, here: {kind}")
@@ -304,6 +339,8 @@ def heston_price_instrument_from_ctx(
     ctx: PricingContext,
     params: HestonParams,
     backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
 ) -> float:
     return heston_price_from_ctx(
         kind=inst.kind,
@@ -312,6 +349,8 @@ def heston_price_instrument_from_ctx(
         ctx=ctx,
         params=params,
         backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
     )
 
 
@@ -321,6 +360,8 @@ def heston_price_instrument(
     market: MarketData | PricingContext,
     params: HestonParams,
     backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
 ) -> float:
     """Convenience wrapper accepting flat `MarketData`."""
     return heston_price_instrument_from_ctx(
@@ -328,4 +369,6 @@ def heston_price_instrument(
         ctx=_to_ctx(market),
         params=params,
         backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
     )

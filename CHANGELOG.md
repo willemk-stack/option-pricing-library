@@ -9,9 +9,11 @@ The format is based on *Keep a Changelog*, and this project aims to follow *Sema
 ## [Unreleased]
 ### Added
 - (Add bullets here as you work; move them into the next release at tag time.)
+- Cached reusable Gauss-Legendre quadrature rules for the Heston Fourier path, including `option_pricing.numerics` exports for `QuadratureConfig`, `PanelSpacing`, `CompositeRule`, `CompositeIntegrationResult`, and `build_gauss_legendre_rule`.
 
 ### Changed
 - Docs workflow architecture notes now describe the single-workflow `docs-ci` validate/build/deploy contract and the split between fast local pre-push checks and heavier manual/CI browser validation.
+- Heston pricer entrypoints can now accept either a reusable quadrature config or a prebuilt composite rule and pass it through to the Fourier backend without changing the default numerical path.
 
 ### Fixed
 - Locked the docs workflow contract in tests so blocking CI remains check-only for committed generated docs assets, deployment stays in `docs-ci`, and the docs-impact-selected authoritative visual suites remain the blocking source of truth.

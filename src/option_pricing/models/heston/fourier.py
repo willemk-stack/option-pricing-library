@@ -14,8 +14,7 @@ from scipy.integrate import quad
 from ...numerics.quadrature import (
     CompositeRule,
     QuadratureConfig,
-    build_composite_rule,
-    gauss_legendre_nodes_weights,
+    build_gauss_legendre_rule,
     integrate_composite_rule,
 )
 from ...typing import ArrayLike, FloatArray
@@ -135,12 +134,11 @@ def _default_heston_quadrature_config() -> QuadratureConfig:
         u_max=150.0,
         n_panels=24,
         nodes_per_panel=16,
-    )
+    )  # TODO: CHECK IF DEFAULTS ARE ACTUALLY VALID
 
 
 def _build_heston_gauss_rule(cfg: QuadratureConfig) -> CompositeRule:
-    nodes, weights = gauss_legendre_nodes_weights(cfg.nodes_per_panel)
-    return build_composite_rule(cfg, nodes, weights)
+    return build_gauss_legendre_rule(cfg)
 
 
 def _resolve_gauss_rule(
@@ -201,7 +199,7 @@ def _integrate_pj_fixed_rule_with_diagnostics(
     )
 
 
-def P_j(
+def P_j_Scalar(
     x: float,
     tau: float,
     params: HestonParams,

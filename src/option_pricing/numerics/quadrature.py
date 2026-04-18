@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import cache
 
 import numpy as np
 from scipy.special import roots_legendre
@@ -148,6 +149,13 @@ def build_composite_rule(
     )
 
 
+@cache
+def build_gauss_legendre_rule(cfg: QuadratureConfig) -> CompositeRule:
+    cfg.validate()
+    nodes, weights = gauss_legendre_nodes_weights(cfg.nodes_per_panel)
+    return build_composite_rule(cfg, nodes, weights)
+
+
 def integrate_composite_rule(
     eval_fn: Callable[[ArrayLike], ArrayLike],
     rule: CompositeRule,
@@ -184,5 +192,6 @@ def composite_gauss_legendre(
     eval_fn: Callable[[ArrayLike], ArrayLike],
     cfg: QuadratureConfig,
 ) -> float:
-    nodes, weights = gauss_legendre_nodes_weights(cfg.nodes_per_panel)
-    return composite_fixed_rule(eval_fn, cfg, nodes, weights)
+    rule = build_gauss_legendre_rule(cfg)
+    result = integrate_composite_rule(eval_fn, rule)
+    return result.total
