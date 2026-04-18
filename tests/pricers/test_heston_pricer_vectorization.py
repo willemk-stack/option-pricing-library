@@ -5,7 +5,10 @@ import pytest
 
 import option_pricing.pricers.heston as heston_pricer
 from option_pricing.instruments.vanilla import VanillaOption
-from option_pricing.models.heston import HestonParams
+from option_pricing.models.heston import (
+    HestonParams,
+    recommend_heston_quadrature_config,
+)
 from option_pricing.numerics import QuadratureConfig, build_gauss_legendre_rule
 from option_pricing.pricers.heston import (
     heston_price_call_from_ctx,
@@ -29,17 +32,43 @@ def _quad_cfg() -> QuadratureConfig:
     return QuadratureConfig(u_max=60.0, n_panels=8, nodes_per_panel=8)
 
 
+def _recommended_quad_cfg_for_slice(
+    *,
+    ctx,
+    strikes: np.ndarray,
+    tau: float,
+    params: HestonParams,
+) -> QuadratureConfig:
+    forward = float(ctx.fwd(tau=tau))
+    max_abs_x = float(
+        np.max(np.abs(np.log(forward / np.asarray(strikes, dtype=float))))
+    )
+    return recommend_heston_quadrature_config(
+        x=max_abs_x,
+        tau=tau,
+        params=params,
+        quality="robust",
+    )
+
+
 def test_heston_call_slice_matches_scalar_loop() -> None:
     ctx = _ctx()
     params = _params()
     tau = 1.0
     strikes = np.linspace(80.0, 120.0, 7)
+    quad_cfg = _recommended_quad_cfg_for_slice(
+        ctx=ctx,
+        strikes=strikes,
+        tau=tau,
+        params=params,
+    )
 
     slice_prices = heston_price_call_from_ctx(
         strike=strikes,
         ctx=ctx,
         tau=tau,
         params=params,
+        quad_cfg=quad_cfg,
     )
     scalar_loop_prices = np.asarray(
         [
@@ -48,6 +77,7 @@ def test_heston_call_slice_matches_scalar_loop() -> None:
                 ctx=ctx,
                 tau=tau,
                 params=params,
+                quad_cfg=quad_cfg,
             )
             for strike in strikes
         ],
@@ -64,12 +94,19 @@ def test_heston_put_slice_matches_scalar_loop() -> None:
     params = _params()
     tau = 1.0
     strikes = np.linspace(80.0, 120.0, 7)
+    quad_cfg = _recommended_quad_cfg_for_slice(
+        ctx=ctx,
+        strikes=strikes,
+        tau=tau,
+        params=params,
+    )
 
     slice_prices = heston_price_put_from_ctx(
         strike=strikes,
         tau=tau,
         ctx=ctx,
         params=params,
+        quad_cfg=quad_cfg,
     )
     scalar_loop_prices = np.asarray(
         [
@@ -78,6 +115,7 @@ def test_heston_put_slice_matches_scalar_loop() -> None:
                 tau=tau,
                 ctx=ctx,
                 params=params,
+                quad_cfg=quad_cfg,
             )
             for strike in strikes
         ],
@@ -138,7 +176,7 @@ def test_heston_call_pricer_defaults_to_gauss_legendre_backend(
         calls.append((j, backend, quad_cfg, rule))
         return 0.35 if j == 0 else 0.55
 
-    monkeypatch.setattr(heston_pricer, "P_j", _fake_p_j)
+    monkeypatch.setattr(heston_pricer, "P_j_Scalar", _fake_p_j)
 
     price = heston_pricer.heston_price_call_from_ctx(
         strike=100.0,
@@ -178,7 +216,7 @@ def test_heston_pricer_forwards_explicit_backend(
         calls.append((j, backend, quad_cfg, rule))
         return 0.40 if j == 0 else 0.60
 
-    monkeypatch.setattr(heston_pricer, "P_j", _fake_p_j)
+    monkeypatch.setattr(heston_pricer, "P_j_Scalar", _fake_p_j)
 
     price = heston_pricer.heston_price_from_ctx(
         kind=OptionType.PUT,
@@ -218,7 +256,7 @@ def test_heston_call_pricer_forwards_quad_cfg(
         calls.append((j, quad_cfg, rule))
         return 0.33 if j == 0 else 0.66
 
-    monkeypatch.setattr(heston_pricer, "P_j", _fake_p_j)
+    monkeypatch.setattr(heston_pricer, "P_j_Scalar", _fake_p_j)
 
     heston_price_call_from_ctx(
         strike=100.0,
@@ -252,7 +290,7 @@ def test_heston_put_pricer_forwards_rule(
         calls.append((j, quad_cfg, rule))
         return 0.45 if j == 0 else 0.65
 
-    monkeypatch.setattr(heston_pricer, "P_j", _fake_p_j)
+    monkeypatch.setattr(heston_pricer, "P_j_Scalar", _fake_p_j)
 
     heston_price_put_from_ctx(
         strike=100.0,

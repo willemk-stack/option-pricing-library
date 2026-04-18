@@ -5,7 +5,10 @@ import pytest
 
 import option_pricing.models.heston.fourier as heston_fourier
 from option_pricing.models.black_scholes.bs import black76_call_price
-from option_pricing.models.heston import HestonParams
+from option_pricing.models.heston import (
+    HestonParams,
+    recommend_heston_quadrature_config,
+)
 from option_pricing.pricers.heston import heston_price_call_from_ctx
 from option_pricing.types import MarketData, OptionSpec, OptionType
 from option_pricing.vol.implied_vol_scalar import implied_vol_bs
@@ -24,14 +27,25 @@ def _deterministic_variance_black76_sigma(params: HestonParams, tau: float) -> f
     return float(np.sqrt(integrated_variance / tau))
 
 
+def _recommended_gauss_quad_cfg(*, x: float, tau: float, params: HestonParams):
+    return recommend_heston_quadrature_config(
+        x=x,
+        tau=tau,
+        params=params,
+        quality="robust",
+    )
+
+
 def _call_price_slice(
     *,
     strikes: np.ndarray,
     tau: float,
     params: HestonParams,
     backend: str = "gauss_legendre",
+    use_recommended_quad_cfg: bool = False,
 ) -> np.ndarray:
     ctx = _ctx()
+    forward = float(ctx.fwd(tau=tau))
     return np.asarray(
         [
             heston_price_call_from_ctx(
@@ -40,6 +54,15 @@ def _call_price_slice(
                 tau=tau,
                 params=params,
                 backend=backend,
+                quad_cfg=(
+                    _recommended_gauss_quad_cfg(
+                        x=float(np.log(forward / float(strike))),
+                        tau=tau,
+                        params=params,
+                    )
+                    if use_recommended_quad_cfg and backend == "gauss_legendre"
+                    else None
+                ),
             )
             for strike in strikes
         ],
@@ -230,7 +253,12 @@ def test_heston_very_small_vol_of_vol_limit_is_close_to_black76() -> None:
         v=0.07,
     )
 
-    heston_prices = _call_price_slice(strikes=strikes, tau=tau, params=params)
+    heston_prices = _call_price_slice(
+        strikes=strikes,
+        tau=tau,
+        params=params,
+        use_recommended_quad_cfg=True,
+    )
     black_prices = _black76_call_slice(
         strikes=strikes,
         tau=tau,
@@ -265,11 +293,13 @@ def test_heston_low_correlation_regime_has_milder_skew_than_negative_correlation
         strikes=strikes,
         tau=tau,
         params=params_low_corr,
+        use_recommended_quad_cfg=True,
     )
     neg_corr_prices = _call_price_slice(
         strikes=strikes,
         tau=tau,
         params=params_neg_corr,
+        use_recommended_quad_cfg=True,
     )
 
     low_corr_ivs = _implied_vol_slice(strikes=strikes, tau=tau, prices=low_corr_prices)
