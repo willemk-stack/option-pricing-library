@@ -157,4 +157,5 @@ nav:
       - Interpolation: notes/interpolation.md
       - PDE convergence: notes/pde/PDE_convergence.md
       - PDE diagnostics notes: notes/diagnostics_notes.md
+      - Fixed-rule quadrature: notes/Integration_Quadrature.md
   - Future work: roadmap.md
