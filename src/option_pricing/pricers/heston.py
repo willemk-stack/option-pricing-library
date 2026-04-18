@@ -1,4 +1,4 @@
-from typing import overload
+from typing import Literal, overload
 
 import numpy as np
 from numpy.typing import NDArray
@@ -9,6 +9,8 @@ from ..types import MarketData, OptionType, PricingContext
 from ..typing import FloatArray
 
 type RealArray = NDArray[np.float64]
+type HestonBackend = Literal["gauss_legendre", "quad"]
+type HestonProbabilityIndex = Literal[0, 1]
 
 
 def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
@@ -71,14 +73,21 @@ def _probability_array(
     x: RealArray,
     tau: float,
     params: HestonParams,
-    j: int,
+    j: HestonProbabilityIndex,
+    backend: HestonBackend,
 ) -> RealArray:
     if probability is not None:
         return np.full(x.shape, probability, dtype=np.float64)
 
     return np.asarray(
         [
-            P_j(x=float(log_moneyness), tau=tau, params=params, j=j)
+            P_j(
+                x=float(log_moneyness),
+                tau=tau,
+                params=params,
+                j=j,
+                backend=backend,
+            )
             for log_moneyness in x
         ],
         dtype=np.float64,
@@ -94,6 +103,7 @@ def heston_price_call_from_ctx(
     params: HestonParams,
     P_0: float | None = None,
     P_1: float | None = None,
+    backend: HestonBackend = "gauss_legendre",
 ) -> float: ...
 
 
@@ -106,6 +116,7 @@ def heston_price_call_from_ctx(
     params: HestonParams,
     P_0: float | None = None,
     P_1: float | None = None,
+    backend: HestonBackend = "gauss_legendre",
 ) -> FloatArray: ...
 
 
@@ -117,6 +128,7 @@ def heston_price_call_from_ctx(
     params: HestonParams,
     P_0: float | None = None,
     P_1: float | None = None,
+    backend: HestonBackend = "gauss_legendre",
 ) -> float | FloatArray:
     strike_arr, scalar_input, original_shape = _normalize_strike(strike)
     _validate_inputs_Heston(spot=ctx.spot, strike=strike_arr, tau=tau)
@@ -139,6 +151,7 @@ def heston_price_call_from_ctx(
         tau=tau,
         params=params,
         j=0,
+        backend=backend,
     )
     p_1_arr = _probability_array(
         probability=P_1,
@@ -146,6 +159,7 @@ def heston_price_call_from_ctx(
         tau=tau,
         params=params,
         j=1,
+        backend=backend,
     )
 
     call = np.asarray(
@@ -165,6 +179,7 @@ def heston_price_put_from_ctx(
     params: HestonParams,
     P_0: float | None = None,
     P_1: float | None = None,
+    backend: HestonBackend = "gauss_legendre",
 ) -> float: ...
 
 
@@ -177,6 +192,7 @@ def heston_price_put_from_ctx(
     params: HestonParams,
     P_0: float | None = None,
     P_1: float | None = None,
+    backend: HestonBackend = "gauss_legendre",
 ) -> FloatArray: ...
 
 
@@ -188,6 +204,7 @@ def heston_price_put_from_ctx(
     params: HestonParams,
     P_0: float | None = None,
     P_1: float | None = None,
+    backend: HestonBackend = "gauss_legendre",
 ) -> float | FloatArray:
     strike_arr, scalar_input, original_shape = _normalize_strike(strike)
     _validate_inputs_Heston(spot=ctx.spot, strike=strike_arr, tau=tau)
@@ -210,6 +227,7 @@ def heston_price_put_from_ctx(
         tau=tau,
         params=params,
         j=0,
+        backend=backend,
     )
     p_1_arr = _probability_array(
         probability=P_1,
@@ -217,6 +235,7 @@ def heston_price_put_from_ctx(
         tau=tau,
         params=params,
         j=1,
+        backend=backend,
     )
 
     put = np.asarray(
@@ -234,6 +253,7 @@ def heston_price_from_ctx(
     tau: float,
     ctx: PricingContext,
     params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
 ) -> float: ...
 
 
@@ -245,6 +265,7 @@ def heston_price_from_ctx(
     tau: float,
     ctx: PricingContext,
     params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
 ) -> FloatArray: ...
 
 
@@ -255,6 +276,7 @@ def heston_price_from_ctx(
     tau: float,
     ctx: PricingContext,
     params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
 ) -> float | FloatArray:
     if kind == OptionType.CALL:
         return heston_price_call_from_ctx(
@@ -262,6 +284,7 @@ def heston_price_from_ctx(
             ctx=ctx,
             tau=tau,
             params=params,
+            backend=backend,
         )
     if kind == OptionType.PUT:
         return heston_price_put_from_ctx(
@@ -269,13 +292,18 @@ def heston_price_from_ctx(
             tau=tau,
             ctx=ctx,
             params=params,
+            backend=backend,
         )
 
     raise ValueError(f"kind should be an OptionType enum, here: {kind}")
 
 
 def heston_price_instrument_from_ctx(
-    *, inst: VanillaOption, ctx: PricingContext, params: HestonParams
+    *,
+    inst: VanillaOption,
+    ctx: PricingContext,
+    params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
 ) -> float:
     return heston_price_from_ctx(
         kind=inst.kind,
@@ -283,15 +311,21 @@ def heston_price_instrument_from_ctx(
         tau=float(inst.expiry),
         ctx=ctx,
         params=params,
+        backend=backend,
     )
 
 
 def heston_price_instrument(
-    inst: VanillaOption, *, market: MarketData | PricingContext, params: HestonParams
+    inst: VanillaOption,
+    *,
+    market: MarketData | PricingContext,
+    params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
 ) -> float:
     """Convenience wrapper accepting flat `MarketData`."""
     return heston_price_instrument_from_ctx(
         inst=inst,
         ctx=_to_ctx(market),
         params=params,
+        backend=backend,
     )

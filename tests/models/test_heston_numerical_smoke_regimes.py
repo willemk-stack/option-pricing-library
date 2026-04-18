@@ -29,6 +29,7 @@ def _call_price_slice(
     strikes: np.ndarray,
     tau: float,
     params: HestonParams,
+    backend: str = "gauss_legendre",
 ) -> np.ndarray:
     ctx = _ctx()
     return np.asarray(
@@ -38,6 +39,7 @@ def _call_price_slice(
                 ctx=ctx,
                 tau=tau,
                 params=params,
+                backend=backend,
             )
             for strike in strikes
         ],
@@ -208,7 +210,12 @@ def _call_price_slice_with_quad_settings(
 
     with pytest.MonkeyPatch.context() as monkeypatch:
         monkeypatch.setattr(heston_fourier, "quad", _quad_with_overrides)
-        return _call_price_slice(strikes=strikes, tau=tau, params=params)
+        return _call_price_slice(
+            strikes=strikes,
+            tau=tau,
+            params=params,
+            backend="quad",
+        )
 
 
 def test_heston_very_small_vol_of_vol_limit_is_close_to_black76() -> None:
