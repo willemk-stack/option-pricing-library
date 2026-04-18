@@ -6,6 +6,7 @@ Top-level package `option_pricing` exposes the everyday pricing API.
 This subpackage exposes reusable numerical primitives.
 """
 
+from .quadrature import CompositeRule
 from .root_finding import RootMethod, RootResult, ensure_bracket, get_root_method
 from .tridiag import (
     DEFAULT_BC,
@@ -31,4 +32,6 @@ __all__ = [
     "solve_tridiag_scipy",
     "tridiag_mv",
     "tridiag_to_dense",
+    # Quadrature
+    "CompositeRule",
 ]

@@ -37,6 +37,23 @@ class QuadratureConfig:
             raise ValueError("cluster_strength must be > 0")
 
 
+@dataclass(frozen=True, slots=True)
+class CompositeRule:
+    """Reusable object for rule caching."""
+
+    panel_edges: FloatArray
+    u_panel: FloatArray
+    omega_panel: FloatArray
+    u_flat: FloatArray
+    omega_flat: FloatArray
+
+
+@dataclass(frozen=True, slots=True)
+class CompositeIntegrationResult:
+    total: float
+    panel_contribs: FloatArray
+
+
 def build_panels(cfg: QuadratureConfig) -> FloatArray:
     cfg.validate()
 
@@ -50,7 +67,8 @@ def build_panels(cfg: QuadratureConfig) -> FloatArray:
 
 
 def _validate_rule(
-    nodes: FloatArray, weights: FloatArray
+    nodes: FloatArray,
+    weights: FloatArray,
 ) -> tuple[FloatArray, FloatArray]:
     x = np.asarray(nodes, dtype=np.float64)
     w = np.asarray(weights, dtype=np.float64)
@@ -95,12 +113,11 @@ def map_rule_to_interval(
     return np.asarray(u, dtype=np.float64), np.asarray(omega, dtype=np.float64)
 
 
-def composite_fixed_rule(
-    eval_fn: Callable[[ArrayLike], ArrayLike],
+def build_composite_rule(
     cfg: QuadratureConfig,
     nodes: FloatArray,
     weights: FloatArray,
-) -> float:
+) -> CompositeRule:
     cfg.validate()
     x, w = _validate_rule(nodes, weights)
 
@@ -111,19 +128,56 @@ def composite_fixed_rule(
         )
 
     panel_edges = build_panels(cfg)
-    total = 0.0
+    n_panels = cfg.n_panels
+    n_nodes = cfg.nodes_per_panel
 
-    for a, b in zip(panel_edges[:-1], panel_edges[1:], strict=False):
-        u, omega = map_rule_to_interval(x, w, float(a), float(b))
-        values = np.asarray(eval_fn(u), dtype=np.float64)
-        if values.shape != u.shape:
-            raise ValueError(
-                "eval_fn must return an array with the same shape as input nodes "
-                f"for scalar integration. Got {values.shape} vs {u.shape}."
-            )
-        total += float(np.sum(omega * values))
+    u_panel = np.empty((n_panels, n_nodes), dtype=np.float64)
+    omega_panel = np.empty((n_panels, n_nodes), dtype=np.float64)
 
-    return total
+    for i, (a, b) in enumerate(zip(panel_edges[:-1], panel_edges[1:], strict=False)):
+        u_i, omega_i = map_rule_to_interval(x, w, float(a), float(b))
+        u_panel[i, :] = u_i
+        omega_panel[i, :] = omega_i
+
+    return CompositeRule(
+        panel_edges=np.asarray(panel_edges, dtype=np.float64),
+        u_panel=u_panel,
+        omega_panel=omega_panel,
+        u_flat=np.asarray(u_panel.ravel(), dtype=np.float64),
+        omega_flat=np.asarray(omega_panel.ravel(), dtype=np.float64),
+    )
+
+
+def integrate_composite_rule(
+    eval_fn: Callable[[ArrayLike], ArrayLike],
+    rule: CompositeRule,
+) -> CompositeIntegrationResult:
+    values_panel = np.asarray(eval_fn(rule.u_panel), dtype=np.float64)
+
+    if values_panel.shape != rule.u_panel.shape:
+        raise ValueError(
+            "eval_fn must return an array with the same shape as rule.u_panel "
+            f"for scalar integration. Got {values_panel.shape} vs {rule.u_panel.shape}."
+        )
+
+    panel_contribs = np.sum(rule.omega_panel * values_panel, axis=1)
+    total = float(np.sum(panel_contribs))
+
+    return CompositeIntegrationResult(
+        total=total,
+        panel_contribs=np.asarray(panel_contribs, dtype=np.float64),
+    )
+
+
+def composite_fixed_rule(
+    eval_fn: Callable[[ArrayLike], ArrayLike],
+    cfg: QuadratureConfig,
+    nodes: FloatArray,
+    weights: FloatArray,
+) -> float:
+    rule = build_composite_rule(cfg, nodes, weights)
+    result = integrate_composite_rule(eval_fn, rule)
+    return result.total
 
 
 def composite_gauss_legendre(
