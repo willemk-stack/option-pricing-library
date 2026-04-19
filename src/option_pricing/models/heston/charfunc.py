@@ -95,7 +95,7 @@ def _heston_affine_coeffs(
     tau = _validate_tau(tau)
     j = _validate_probability_index(j)
 
-    if tau == 0.0 or params.eta == 0.0:
+    if tau == 0.0 or params.eta == 0.0:  # TODO: Fallback if eta near 0.0
         return _deterministic_affine_coeffs(u, tau, params, j=j)
 
     eta2 = params.eta * params.eta
@@ -103,16 +103,15 @@ def _heston_affine_coeffs(
     beta = params.kappa - params.rho * params.eta * (j + 1j * u)
     d = _stable_discriminant(beta, quadratic_term, params.eta)
 
-    r_minus = (beta - d) / eta2
-    r_plus = (beta + d) / eta2
-    g = r_minus / r_plus
+    r_minus = -quadratic_term / (beta + d)
+    g = -eta2 * quadratic_term / (beta + d) ** 2
     exp_neg_dt = np.exp(-d * tau)
+    one_minus_exp_neg_dt = -np.expm1(-d * tau)
     one_minus_g_exp = 1.0 - g * exp_neg_dt
-    one_minus_g = 1.0 - g
 
-    D = r_minus * ((1.0 - exp_neg_dt) / one_minus_g_exp)
+    D = r_minus * (one_minus_exp_neg_dt / one_minus_g_exp)
     C = params.kappa * (
-        r_minus * tau - 2.0 * np.log(one_minus_g_exp / one_minus_g) / eta2
+        r_minus * tau - 2.0 * (np.log1p(-g * exp_neg_dt) - np.log1p(-g)) / eta2
     )
     return C, D
 
