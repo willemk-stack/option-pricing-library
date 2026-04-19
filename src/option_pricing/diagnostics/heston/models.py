@@ -299,6 +299,37 @@ class HestonBackendComparisonDiagnostics(_HestonTableArtifact):
 
 
 @dataclass(frozen=True, slots=True)
+class HestonIntegrationDiagnosticsBundle:
+    """Readable Step 2 integration diagnostics bundle.
+
+    The bundle keeps the Step 1 packaged probability artifact intact while
+    exposing the additional notebook-facing tables needed for downstream review.
+    """
+
+    meta: dict[str, Any]
+    probability: HestonProbabilitySliceDiagnostics
+    tables: dict[str, pd.DataFrame]
+    arrays: dict[str, Any]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "meta", _normalize_meta(self.meta))
+        object.__setattr__(self, "arrays", _normalize_arrays(self.arrays))
+        object.__setattr__(
+            self,
+            "tables",
+            {str(name): _as_dataframe(table) for name, table in self.tables.items()},
+        )
+
+        required_tables = ("panels", "warning_summary", "worst_panels", "reason_counts")
+        missing_tables = [name for name in required_tables if name not in self.tables]
+        if missing_tables:
+            raise ValueError(
+                "HestonIntegrationDiagnosticsBundle.tables is missing required "
+                f"table(s): {', '.join(missing_tables)}."
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class HestonDiagnosticsReport:
     """Full Step 1 notebook-facing Heston diagnostics report.
 

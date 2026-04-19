@@ -10,6 +10,7 @@ from .pricing import (
     compare_backend_slice,
     price_slice_with_diagnostics,
     probability_slice_with_diagnostics,
+    run_heston_pricing_diagnostics,
 )
 from .report import run_heston_slice_diagnostics
 
@@ -21,5 +22,6 @@ __all__ = [
     "compare_backend_slice",
     "price_slice_with_diagnostics",
     "probability_slice_with_diagnostics",
+    "run_heston_pricing_diagnostics",
     "run_heston_slice_diagnostics",
 ]
