@@ -1,6 +1,5 @@
 """Public Heston pricing helpers built on the Fourier probability routines."""
 
-from dataclasses import dataclass
 from typing import Literal, overload
 
 import numpy as np
@@ -8,10 +7,6 @@ from numpy.typing import NDArray
 
 from ..instruments import VanillaOption
 from ..models.heston import HestonParams, P_j
-from ..models.heston.fourier import (
-    HestonIntegralBatchDiagnostics,
-    HestonIntegralDiagnostics,
-)
 from ..numerics.quadrature import CompositeRule, QuadratureConfig
 from ..types import MarketData, OptionType, PricingContext
 from ..typing import ArrayLike, FloatArray
@@ -143,38 +138,6 @@ def _probability_array(
         ),
         dtype=np.float64,
     )
-
-
-@dataclass(frozen=True, slots=True)
-class HestonPriceDiagnostics:
-    """Scalar pricing diagnostics assembled from ``P_0`` and ``P_1``."""
-
-    strike: float
-    tau: float
-    forward: float
-    df: float
-    p0: HestonIntegralDiagnostics
-    p1: HestonIntegralDiagnostics
-    price: float
-
-
-@dataclass(frozen=True, slots=True)
-class HestonPriceBatchDiagnostics:
-    """Batch pricing diagnostics container for a strike slice.
-
-    Notes
-    -----
-    This shape is primarily suited to vectorized fixed-rule evaluation. The
-    current public pricing helpers do not yet expose a batch diagnostics API.
-    """
-
-    strike: FloatArray  # batch_shape
-    tau: float
-    forward: float
-    df: float
-    p0: HestonIntegralBatchDiagnostics
-    p1: HestonIntegralBatchDiagnostics
-    price: FloatArray  # batch_shape
 
 
 @overload

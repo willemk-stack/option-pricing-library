@@ -184,9 +184,9 @@ def test_p_j_dispatches_to_gauss_legendre_backend(
     def _fail_quad_backend(*args, **kwargs):
         raise AssertionError("Gauss-Legendre backend should not call quad")
 
-    def _fake_resolve_gauss_rule(*, quad_cfg, rule):
+    def _fake_resolve_gauss_rule_and_quad_cfg(*, quad_cfg, rule):
         calls["resolve"] = (quad_cfg, rule)
-        return sentinel_rule
+        return sentinel_rule, quad_cfg
 
     def _fake_integrate_fixed_rule(
         x: float,
@@ -199,7 +199,11 @@ def test_p_j_dispatches_to_gauss_legendre_backend(
         return 0.25
 
     monkeypatch.setattr(heston_fourier, "_integrate_pj_quad", _fail_quad_backend)
-    monkeypatch.setattr(heston_fourier, "_resolve_gauss_rule", _fake_resolve_gauss_rule)
+    monkeypatch.setattr(
+        heston_fourier,
+        "_resolve_gauss_rule_and_quad_cfg",
+        _fake_resolve_gauss_rule_and_quad_cfg,
+    )
     monkeypatch.setattr(
         heston_fourier,
         "_integrate_pj_fixed_rule",
@@ -357,6 +361,7 @@ def test_p_j_with_diagnostics_dispatches_to_gauss_legendre_backend(
     sentinel_rule = object()
     expected = HestonIntegralDiagnostics(
         backend="gauss_legendre",
+        quad_cfg=quad_cfg,
         j=1,
         x=0.1,
         tau=0.9,
@@ -371,9 +376,9 @@ def test_p_j_with_diagnostics_dispatches_to_gauss_legendre_backend(
     def _fail_quad_backend(*args, **kwargs):
         raise AssertionError("Gauss-Legendre backend should not call quad")
 
-    def _fake_resolve_gauss_rule(*, quad_cfg, rule):
+    def _fake_resolve_gauss_rule_and_quad_cfg(*, quad_cfg, rule):
         calls["resolve"] = (quad_cfg, rule)
-        return sentinel_rule
+        return sentinel_rule, quad_cfg
 
     def _fake_integrate_fixed_rule_with_diagnostics(
         x: float,
@@ -381,12 +386,18 @@ def test_p_j_with_diagnostics_dispatches_to_gauss_legendre_backend(
         params: HestonParams,
         j: int,
         rule: object,
+        *,
+        quad_cfg: QuadratureConfig | None,
     ) -> HestonIntegralDiagnostics:
-        calls["gauss"] = (x, tau, params, j, rule)
+        calls["gauss"] = (x, tau, params, j, rule, quad_cfg)
         return expected
 
     monkeypatch.setattr(heston_fourier, "_integrate_pj_quad", _fail_quad_backend)
-    monkeypatch.setattr(heston_fourier, "_resolve_gauss_rule", _fake_resolve_gauss_rule)
+    monkeypatch.setattr(
+        heston_fourier,
+        "_resolve_gauss_rule_and_quad_cfg",
+        _fake_resolve_gauss_rule_and_quad_cfg,
+    )
     monkeypatch.setattr(
         heston_fourier,
         "_integrate_pj_fixed_rule_with_diagnostics",
@@ -403,7 +414,7 @@ def test_p_j_with_diagnostics_dispatches_to_gauss_legendre_backend(
     )
 
     assert calls["resolve"] == (quad_cfg, None)
-    assert calls["gauss"] == (0.1, 0.9, params, 1, sentinel_rule)
+    assert calls["gauss"] == (0.1, 0.9, params, 1, sentinel_rule, quad_cfg)
     assert diagnostics is expected
 
 

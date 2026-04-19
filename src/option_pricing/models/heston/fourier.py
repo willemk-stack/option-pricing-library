@@ -5,6 +5,7 @@ Heston Fourier inversion and probability integrals.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import IntFlag
 from typing import Literal, overload
 
 import numpy as np
@@ -16,7 +17,6 @@ from ...numerics.quadrature import (
     PanelSpacing,
     QuadratureConfig,
     build_gauss_legendre_rule,
-    integrate_composite_rule,
 )
 from ...typing import ArrayLike, FloatArray
 from .charfunc import (
@@ -29,67 +29,120 @@ from .params import HestonParams
 type QuadratureQuality = Literal["fast", "balanced", "robust", "diagnostics"]
 type ComplexArray = NDArray[np.complex128]
 type RealArray = NDArray[np.float64]
+type BoolArray = NDArray[np.bool_]
+type UInt32Array = NDArray[np.uint32]
 type Backend = Literal["gauss_legendre", "quad"]
 type J = Literal[0, 1]
 
 
+# ---------------------------------------------------------------------------
+# Diagnostics heuristics.
+#
+# These are intentionally module-level knobs to be tuned during Sprint 2
+# without changing the public API. Might be a good idea to promote to a typed
+# diagnostics settings object later.
+# ---------------------------------------------------------------------------
+HESTON_DIAG_PROBABILITY_TOL = 1.0e-10
+HESTON_DIAG_TAIL_PANEL_COUNT = 3
+HESTON_DIAG_TAIL_ABS_FRACTION_WARN = 5.0e-2
+HESTON_DIAG_CANCELLATION_RATIO_WARN = 5.0e1
+HESTON_DIAG_BAD_PANEL_COUNT_WARN = 3
+HESTON_DIAG_QUAD_REL_ERROR_WARN = 1.0e-6
+HESTON_DIAG_NEAR_ORIGIN_PANEL_COUNT = 2
+HESTON_DIAG_NEAR_ORIGIN_ABS_FRACTION_WARN = 6.0e-1
+HESTON_DIAG_TAIL_LAST_OVER_PREV_WARN = 8.0e-1
+HESTON_DIAG_OSCILLATION_SPIKE_FACTOR = 5.0
+_DIAG_EPS = 1.0e-14
+
+
+class HestonPanelReason(IntFlag):
+    NONE = 0
+    NONFINITE_PANEL_CONTRIB = 1 << 0
+    NONFINITE_INTEGRAND = 1 << 1
+    UNDERRESOLVED_NEAR_ORIGIN = 1 << 2
+    UNDERRESOLVED_TAIL = 1 << 3
+    TAIL_TOO_LARGE = 1 << 4
+    OSCILLATION_SPIKE = 1 << 5
+
+
+class HestonIntegralWarning(IntFlag):
+    NONE = 0
+    NONFINITE_TOTAL = 1 << 0
+    NONFINITE_PROBABILITY = 1 << 1
+    PROBABILITY_OUT_OF_RANGE = 1 << 2
+    LARGE_TAIL_FRACTION = 1 << 3
+    EXCESSIVE_CANCELLATION = 1 << 4
+    TOO_MANY_BAD_PANELS = 1 << 5
+    QUAD_ERROR_LARGE = 1 << 6
+
+
 @dataclass(frozen=True, slots=True)
 class HestonIntegralDiagnostics:
-    """Scalar diagnostics for one Heston probability integral.
-
-    Attributes
-    ----------
-    backend : {"gauss_legendre", "quad"}
-        Integration backend used.
-    j : {0, 1}
-        Probability index.
-    x : float
-        Log-forward moneyness supplied to the integral.
-    tau : float
-        Time to expiry in years.
-    total_integral : float
-        Raw integral value before conversion to a probability.
-    probability : float
-        Probability obtained from ``0.5 + integral / pi``.
-    panel_contribs : ndarray, optional
-        Per-panel contributions for the fixed-rule backend.
-    panel_edges : ndarray, optional
-        Panel edges corresponding to ``panel_contribs``.
-    quad_error_estimate : float, optional
-        Error estimate returned by :func:`scipy.integrate.quad`.
-    """
-
+    # configuration / identity
     backend: Backend
+    quad_cfg: QuadratureConfig | None
     j: J
     x: float
     tau: float
+
+    # raw result
     total_integral: float
     probability: float
-    panel_contribs: FloatArray | None = None  # shape (n_panels,)
-    panel_edges: FloatArray | None = None  # shape (n_panels + 1,)
+
+    # raw backend outputs
+    panel_edges: FloatArray | None = None
+    panel_contribs: FloatArray | None = None
     quad_error_estimate: float | None = None
+
+    # panel-local diagnostics
+    panel_invalid: BoolArray | None = None
+    panel_reason: UInt32Array | None = None
+
+    # whole-integral diagnostics
+    warning_flags: HestonIntegralWarning = HestonIntegralWarning.NONE
+    tail_abs_fraction: float | None = None
+    cancellation_ratio: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class HestonIntegralBatchDiagnostics:
-    """Batch diagnostics container for fixed-rule probability integrals.
+    """Batch diagnostics container for Heston probability integrals.
 
     Notes
     -----
-    This shape is suitable for vectorized fixed-rule evaluation over a batch of
-    ``x`` values. The public diagnostics entry point exposed today,
-    :func:`P_j_with_diagnostics`, is still scalar-only.
+    Leading shape matches ``x.shape``. Panel-local arrays append an extra
+    trailing ``n_panels`` axis when the backend is fixed-rule Gauss-Legendre.
+    For ``backend="quad"``, panel-local fields are ``None``.
     """
 
+    # configuration / identity
     backend: Backend
+    quad_cfg: QuadratureConfig | None
     j: J
-    x: FloatArray  # shape batch_shape
+    x: RealArray  # shape batch_shape
     tau: float
-    total_integral: FloatArray  # shape batch_shape
-    probability: FloatArray  # shape batch_shape
-    panel_contribs: FloatArray | None = None  # shape batch_shape + (n_panels,)
-    panel_edges: FloatArray | None = None  # shape (n_panels + 1,)
-    quad_error_estimate: FloatArray | None = None  # shape batch_shape, or None
+
+    # raw result
+    total_integral: RealArray  # shape batch_shape
+    probability: RealArray  # shape batch_shape
+
+    # raw backend outputs
+    panel_edges: RealArray | None = None  # shape (n_panels + 1,)
+    panel_contribs: RealArray | None = None  # shape batch_shape + (n_panels,)
+    quad_error_estimate: RealArray | None = None  # shape batch_shape
+
+    # panel-local diagnostics
+    panel_invalid: BoolArray | None = None  # shape batch_shape + (n_panels,)
+    panel_reason: UInt32Array | None = None  # shape batch_shape + (n_panels,)
+
+    # whole-integral diagnostics
+    warning_flags: UInt32Array | None = None  # shape batch_shape
+    tail_abs_fraction: RealArray | None = None  # shape batch_shape
+    cancellation_ratio: RealArray | None = None  # shape batch_shape
+
+
+def _flag_u32(flag: IntFlag) -> np.uint32:
+    return np.uint32(int(flag))
 
 
 def _normalize_x_grid(
@@ -142,32 +195,7 @@ def _integrand(
     params: HestonParams,
     j: J,
 ) -> float | RealArray:
-    """Evaluate the real-valued Heston inversion integrand.
-
-    Parameters
-    ----------
-    u : array-like
-        Frequency point or grid.
-    x : array-like
-        Log-forward moneyness value(s), usually ``log(F / K)``.
-    tau : float
-        Time to expiry in years.
-    params : HestonParams
-        Heston parameter set.
-    j : {0, 1}
-        Probability index.
-
-    Returns
-    -------
-    float or ndarray
-        Integrand values with output shape ``x.shape + u.shape`` after scalar
-        dimensions are removed in the usual way.
-
-    Notes
-    -----
-    This helper is vectorized jointly over ``x`` and ``u`` and provides the
-    batched shape contract used by the fixed-rule Gauss-Legendre backend.
-    """
+    """Evaluate the real-valued Heston inversion integrand."""
     x_flat, x_scalar, x_shape = _normalize_x_grid(x)
     u_flat, u_scalar, u_shape = _normalize_frequency_grid(u)
 
@@ -208,52 +236,44 @@ def _probability_from_integral(integral: float | ArrayLike) -> float | RealArray
     return np.asarray(values, dtype=np.float64)
 
 
-def _integrate_pj_quad(
-    x: float,
-    tau: float,
-    params: HestonParams,
-    j: J,
-) -> tuple[float, float]:
-    """Integrate one Heston probability kernel with SciPy ``quad``.
-
-    Parameters
-    ----------
-    x : float
-        Scalar log-forward moneyness.
-    tau : float
-        Time to expiry in years.
-    params : HestonParams
-        Heston parameter set.
-    j : {0, 1}
-        Probability index.
-
-    Returns
-    -------
-    tuple of float
-        Integral value and ``quad`` error estimate.
-
-    Notes
-    -----
-    This path is intentionally scalar. When callers pass an array of ``x``
-    values through :func:`P_j`, the ``quad`` backend evaluates this function in
-    a Python loop and is therefore not vectorized across the batch.
-    """
-    integral, err_est = quad(
-        _integrand_scalar,
-        a=0.0,
-        b=np.inf,
-        args=(x, tau, params, j),
-        complex_func=False,
-    )
-    return float(integral), float(err_est)
-
-
 def _default_heston_quadrature_config() -> QuadratureConfig:
     return QuadratureConfig(
         u_max=150.0,
         n_panels=24,
         nodes_per_panel=16,
     )
+
+
+def _build_heston_gauss_rule(quad_cfg: QuadratureConfig) -> CompositeRule:
+    """Build the cached fixed Gauss-Legendre rule used by the Heston backend."""
+    return build_gauss_legendre_rule(quad_cfg)
+
+
+def _resolve_gauss_rule_and_quad_cfg(
+    *,
+    quad_cfg: QuadratureConfig | None,
+    rule: CompositeRule | None,
+) -> tuple[CompositeRule, QuadratureConfig | None]:
+    if quad_cfg is not None and rule is not None:
+        raise ValueError(
+            "Pass either quad_cfg or rule, not both. "
+            "If you already built a rule, it is the authoritative discretization."
+        )
+
+    if rule is not None:
+        return rule, None
+
+    active_quad_cfg = quad_cfg or _default_heston_quadrature_config()
+    return _build_heston_gauss_rule(active_quad_cfg), active_quad_cfg
+
+
+def _resolve_gauss_rule(
+    *,
+    quad_cfg: QuadratureConfig | None,
+    rule: CompositeRule | None,
+) -> CompositeRule:
+    active_rule, _ = _resolve_gauss_rule_and_quad_cfg(quad_cfg=quad_cfg, rule=rule)
+    return active_rule
 
 
 def _round_up_to_multiple(value: int, multiple: int) -> int:
@@ -269,45 +289,7 @@ def recommend_heston_quadrature_config(
     params: HestonParams,
     quality: QuadratureQuality = "balanced",
 ) -> QuadratureConfig:
-    """Recommend a fixed Gauss-Legendre rule for Heston inversion.
-
-    Parameters
-    ----------
-    x : float
-        Representative absolute log-forward moneyness. For slice pricing, a good
-        choice is ``max(abs(log(F / K_i)))`` over the slice.
-    tau : float
-        Time to expiry in years. Must be finite and nonnegative.
-    params : HestonParams
-        Heston parameter set.
-    quality : {"fast", "balanced", "robust", "diagnostics"}, default "balanced"
-        Heuristic quality preset controlling interval length, panel count, and
-        nodes per panel.
-
-    Returns
-    -------
-    QuadratureConfig
-        Recommended composite Gauss-Legendre configuration.
-
-    Notes
-    -----
-    The recommender starts from the baseline rule
-
-    ``u_max = 150, n_panels = 24, nodes_per_panel = 16``
-
-    and then adjusts it using simple regime heuristics:
-
-    - short maturities, large ``|x|``, and large ``eta`` extend the truncation
-      interval and usually increase the panel count,
-    - near-deterministic and near-Black regimes increase local resolution and
-      may switch to clustered panel spacing,
-    - robust and diagnostics modes preserve roughly the baseline local panel
-      width when ``u_max`` grows.
-
-    These constants are heuristic rather than theorem-driven. They are chosen to
-    keep the fixed-rule path reproducible while remaining conservative in harder
-    parameter regimes.
-    """
+    """Recommend a fixed Gauss-Legendre rule for Heston inversion."""
     if quality not in ("fast", "balanced", "robust", "diagnostics"):
         raise ValueError(
             "quality must be one of: 'fast', 'balanced', 'robust', 'diagnostics'"
@@ -346,10 +328,6 @@ def recommend_heston_quadrature_config(
     panel_spacing = PanelSpacing.UNIFORM
     cluster_strength = 2.0
 
-    # ------------------------------------------------------------------
-    # 1) Truncation heuristic: short maturities and hard regimes often
-    #    need a longer interval.
-    # ------------------------------------------------------------------
     if tau < 0.05:
         u_max = max(u_max, 280.0)
         n_panels = max(n_panels, 44)
@@ -360,10 +338,6 @@ def recommend_heston_quadrature_config(
         u_max = max(u_max, 180.0)
         n_panels = max(n_panels, 28)
 
-    # ------------------------------------------------------------------
-    # 2) Oscillation heuristic: larger |x| means faster e^{iux} oscillation.
-    #    That argues for more panels, and sometimes a larger interval too.
-    # ------------------------------------------------------------------
     if abs_x > 0.50:
         n_panels = max(n_panels, 32)
     if abs_x > 1.00:
@@ -373,11 +347,6 @@ def recommend_heston_quadrature_config(
         u_max = max(u_max, 280.0)
         n_panels = max(n_panels, 48)
 
-    # ------------------------------------------------------------------
-    # 3) Vol-of-vol / correlation heuristic:
-    #    high eta broadens difficult regimes; strong rho with high eta tends
-    #    to make the inversion less forgiving.
-    # ------------------------------------------------------------------
     if eta > 0.80:
         u_max = max(u_max, 220.0)
         n_panels = max(n_panels, 36)
@@ -388,11 +357,6 @@ def recommend_heston_quadrature_config(
         u_max = max(u_max, 240.0)
         n_panels = max(n_panels, 40)
 
-    # ------------------------------------------------------------------
-    # 4) Near-deterministic / near-Black heuristic:
-    #    these regimes often do not need more tail, but do need more local
-    #    resolution near the origin. Prefer clustering and more local order.
-    # ------------------------------------------------------------------
     if eta < 1e-3:
         panel_spacing = PanelSpacing.CLUSTERED
         cluster_strength = 2.5
@@ -403,9 +367,6 @@ def recommend_heston_quadrature_config(
         cluster_strength = 2.0
         n_panels = max(n_panels, 28)
 
-    # ------------------------------------------------------------------
-    # 5) Quality presets.
-    # ------------------------------------------------------------------
     if quality == "fast":
         u_max *= 0.85
         n_panels = max(16, int(np.ceil(0.75 * n_panels)))
@@ -422,17 +383,9 @@ def recommend_heston_quadrature_config(
             panel_spacing = PanelSpacing.CLUSTERED
             cluster_strength = 2.0
 
-    # ------------------------------------------------------------------
-    # 6) Preserve local panel width when u_max grows.
-    #
-    # The current baseline width is 150 / 24 = 6.25. Keep roughly that scale
-    # for balanced/robust/diagnostics so that increasing u_max does not
-    # accidentally *reduce* local resolution.
-    # ------------------------------------------------------------------
     target_panel_width = 7.5 if quality == "fast" else 6.25
     n_panels = max(n_panels, int(np.ceil(u_max / target_panel_width)))
 
-    # Round to tidy values for repeatability / caching / readability.
     n_panels = _round_up_to_multiple(n_panels, 4)
     nodes_per_panel = _round_up_to_multiple(nodes_per_panel, 4)
 
@@ -447,26 +400,263 @@ def recommend_heston_quadrature_config(
     return cfg
 
 
-def _build_heston_gauss_rule(cfg: QuadratureConfig) -> CompositeRule:
-    return build_gauss_legendre_rule(cfg)
+def _integrate_pj_quad(
+    x: float,
+    tau: float,
+    params: HestonParams,
+    j: J,
+) -> tuple[float, float]:
+    """Integrate one Heston probability kernel with SciPy ``quad``."""
+    integral, err_est = quad(
+        _integrand_scalar,
+        a=0.0,
+        b=np.inf,
+        args=(x, tau, params, j),
+        complex_func=False,
+    )
+    return float(integral), float(err_est)
 
 
-def _resolve_gauss_rule(
-    *,
-    quad_cfg: QuadratureConfig | None,
-    rule: CompositeRule | None,
-) -> CompositeRule:
-    if quad_cfg is not None and rule is not None:
-        raise ValueError(
-            "Pass either quad_cfg or rule, not both. "
-            "If you already built a rule, it is the authoritative discretization."
+def _compute_fixed_rule_panel_reason(
+    values_panel: ArrayLike,
+    panel_contribs: ArrayLike,
+) -> UInt32Array:
+    """Return one bitmap per panel, flattened over any leading batch shape."""
+    values_panel_arr = np.asarray(values_panel, dtype=np.float64)
+    panel_contribs_arr = np.asarray(panel_contribs, dtype=np.float64)
+
+    if values_panel_arr.ndim == 2:
+        values_panel_flat = values_panel_arr.reshape(1, *values_panel_arr.shape)
+    else:
+        values_panel_flat = values_panel_arr.reshape(
+            -1,
+            values_panel_arr.shape[-2],
+            values_panel_arr.shape[-1],
         )
 
-    if rule is not None:
-        return rule
+    if panel_contribs_arr.ndim == 1:
+        panel_contribs_flat = panel_contribs_arr.reshape(1, -1)
+    else:
+        panel_contribs_flat = panel_contribs_arr.reshape(
+            -1, panel_contribs_arr.shape[-1]
+        )
 
-    cfg = quad_cfg or _default_heston_quadrature_config()
-    return _build_heston_gauss_rule(cfg)
+    if values_panel_flat.shape[:2] != panel_contribs_flat.shape:
+        raise ValueError(
+            "values_panel and panel_contribs shapes are inconsistent for diagnostics."
+        )
+
+    batch_size, n_panels, _ = values_panel_flat.shape
+    panel_reason = np.zeros((batch_size, n_panels), dtype=np.uint32)
+
+    panel_reason[np.any(~np.isfinite(values_panel_flat), axis=-1)] |= _flag_u32(
+        HestonPanelReason.NONFINITE_INTEGRAND
+    )
+    panel_reason[~np.isfinite(panel_contribs_flat)] |= _flag_u32(
+        HestonPanelReason.NONFINITE_PANEL_CONTRIB
+    )
+
+    abs_panel_contribs = np.abs(panel_contribs_flat)
+    finite_abs_panel_contribs = np.where(
+        np.isfinite(abs_panel_contribs), abs_panel_contribs, 0.0
+    )
+    abs_mass = np.sum(finite_abs_panel_contribs, axis=1)
+
+    near_n = min(HESTON_DIAG_NEAR_ORIGIN_PANEL_COUNT, n_panels)
+    if near_n > 0:
+        near_abs = np.sum(finite_abs_panel_contribs[:, :near_n], axis=1)
+        near_fraction = np.zeros(batch_size, dtype=np.float64)
+        nonzero_mass = abs_mass > 0.0
+        near_fraction[nonzero_mass] = near_abs[nonzero_mass] / abs_mass[nonzero_mass]
+        near_mask = near_fraction > HESTON_DIAG_NEAR_ORIGIN_ABS_FRACTION_WARN
+        if np.any(near_mask):
+            panel_reason[near_mask, :near_n] |= _flag_u32(
+                HestonPanelReason.UNDERRESOLVED_NEAR_ORIGIN
+            )
+
+    tail_n = min(HESTON_DIAG_TAIL_PANEL_COUNT, n_panels)
+    tail_fraction = np.zeros(batch_size, dtype=np.float64)
+    if tail_n > 0:
+        tail_abs = np.sum(finite_abs_panel_contribs[:, -tail_n:], axis=1)
+        nonzero_mass = abs_mass > 0.0
+        tail_fraction[nonzero_mass] = tail_abs[nonzero_mass] / abs_mass[nonzero_mass]
+        tail_mask = tail_fraction > HESTON_DIAG_TAIL_ABS_FRACTION_WARN
+        if np.any(tail_mask):
+            panel_reason[tail_mask, -tail_n:] |= _flag_u32(
+                HestonPanelReason.TAIL_TOO_LARGE
+            )
+
+    if n_panels >= 2 and tail_n > 0:
+        last_abs = abs_panel_contribs[:, -1]
+        prev_abs = abs_panel_contribs[:, -2]
+        last_over_prev = np.full(batch_size, np.inf, dtype=np.float64)
+
+        prev_nonzero = prev_abs > _DIAG_EPS
+        last_over_prev[prev_nonzero] = last_abs[prev_nonzero] / prev_abs[prev_nonzero]
+        last_over_prev[~prev_nonzero & (last_abs <= _DIAG_EPS)] = 0.0
+
+        under_tail_mask = (tail_fraction > 0.5 * HESTON_DIAG_TAIL_ABS_FRACTION_WARN) & (
+            last_over_prev > HESTON_DIAG_TAIL_LAST_OVER_PREV_WARN
+        )
+        if np.any(under_tail_mask):
+            panel_reason[under_tail_mask, -tail_n:] |= _flag_u32(
+                HestonPanelReason.UNDERRESOLVED_TAIL
+            )
+
+    if n_panels >= 3:
+        for i in range(1, n_panels - 1):
+            left = abs_panel_contribs[:, i - 1]
+            right = abs_panel_contribs[:, i + 1]
+
+            local_sum = np.zeros(batch_size, dtype=np.float64)
+            local_count = np.zeros(batch_size, dtype=np.float64)
+
+            left_finite = np.isfinite(left)
+            right_finite = np.isfinite(right)
+
+            local_sum[left_finite] += left[left_finite]
+            local_sum[right_finite] += right[right_finite]
+            local_count[left_finite] += 1.0
+            local_count[right_finite] += 1.0
+
+            local_ref = np.full(batch_size, _DIAG_EPS, dtype=np.float64)
+            has_ref = local_count > 0.0
+            local_ref[has_ref] = np.maximum(
+                local_sum[has_ref] / local_count[has_ref],
+                _DIAG_EPS,
+            )
+
+            spike_mask = np.isfinite(abs_panel_contribs[:, i]) & (
+                abs_panel_contribs[:, i]
+                > HESTON_DIAG_OSCILLATION_SPIKE_FACTOR * local_ref
+            )
+            if np.any(spike_mask):
+                panel_reason[spike_mask, i] |= _flag_u32(
+                    HestonPanelReason.OSCILLATION_SPIKE
+                )
+
+    return np.asarray(panel_reason.reshape(panel_contribs_arr.shape), dtype=np.uint32)
+
+
+def _compute_global_warning_flags(
+    total_integral: float | ArrayLike,
+    probability: float | ArrayLike,
+    *,
+    panel_invalid: BoolArray | None = None,
+    panel_contribs: ArrayLike | None = None,
+    quad_error_estimate: float | ArrayLike | None = None,
+) -> tuple[UInt32Array, RealArray | None, RealArray | None]:
+    """Return flattened warning flags and optional explanatory metrics."""
+    total_flat = np.asarray(total_integral, dtype=np.float64).reshape(-1)
+    probability_flat = np.asarray(probability, dtype=np.float64).reshape(-1)
+    if total_flat.shape != probability_flat.shape:
+        raise ValueError("total_integral and probability must have matching shapes.")
+
+    flags = np.zeros(total_flat.shape, dtype=np.uint32)
+
+    flags[~np.isfinite(total_flat)] |= _flag_u32(HestonIntegralWarning.NONFINITE_TOTAL)
+    flags[~np.isfinite(probability_flat)] |= _flag_u32(
+        HestonIntegralWarning.NONFINITE_PROBABILITY
+    )
+
+    prob_out_of_range = np.isfinite(probability_flat) & (
+        (probability_flat < -HESTON_DIAG_PROBABILITY_TOL)
+        | (probability_flat > 1.0 + HESTON_DIAG_PROBABILITY_TOL)
+    )
+    flags[prob_out_of_range] |= _flag_u32(
+        HestonIntegralWarning.PROBABILITY_OUT_OF_RANGE
+    )
+
+    tail_abs_fraction: RealArray | None = None
+    cancellation_ratio: RealArray | None = None
+
+    if panel_contribs is not None:
+        panel_contribs_arr = np.asarray(panel_contribs, dtype=np.float64)
+        if panel_contribs_arr.ndim == 1:
+            panel_contribs_flat = panel_contribs_arr.reshape(1, -1)
+        else:
+            panel_contribs_flat = panel_contribs_arr.reshape(
+                -1, panel_contribs_arr.shape[-1]
+            )
+
+        if panel_contribs_flat.shape[0] != total_flat.shape[0]:
+            raise ValueError(
+                "panel_contribs batch shape must match total_integral/probability."
+            )
+
+        abs_panel_contribs = np.abs(panel_contribs_flat)
+        finite_abs_panel_contribs = np.where(
+            np.isfinite(abs_panel_contribs),
+            abs_panel_contribs,
+            0.0,
+        )
+        abs_mass = np.sum(finite_abs_panel_contribs, axis=1)
+
+        tail_n = min(HESTON_DIAG_TAIL_PANEL_COUNT, panel_contribs_flat.shape[1])
+        tail_abs_fraction = np.zeros(total_flat.shape, dtype=np.float64)
+        if tail_n > 0:
+            tail_abs = np.sum(finite_abs_panel_contribs[:, -tail_n:], axis=1)
+            nonzero_mass = abs_mass > 0.0
+            tail_abs_fraction[nonzero_mass] = (
+                tail_abs[nonzero_mass] / abs_mass[nonzero_mass]
+            )
+            flags[tail_abs_fraction > HESTON_DIAG_TAIL_ABS_FRACTION_WARN] |= _flag_u32(
+                HestonIntegralWarning.LARGE_TAIL_FRACTION
+            )
+
+        cancellation_ratio = np.zeros(total_flat.shape, dtype=np.float64)
+        nonzero_mass = abs_mass > 0.0
+        cancellation_ratio[nonzero_mass] = abs_mass[nonzero_mass] / np.maximum(
+            np.abs(total_flat[nonzero_mass]), _DIAG_EPS
+        )
+        flags[cancellation_ratio > HESTON_DIAG_CANCELLATION_RATIO_WARN] |= _flag_u32(
+            HestonIntegralWarning.EXCESSIVE_CANCELLATION
+        )
+
+        if panel_invalid is not None:
+            panel_invalid_arr = np.asarray(panel_invalid, dtype=np.bool_)
+            if panel_invalid_arr.ndim == 1:
+                panel_invalid_flat = panel_invalid_arr.reshape(1, -1)
+            else:
+                panel_invalid_flat = panel_invalid_arr.reshape(
+                    -1, panel_invalid_arr.shape[-1]
+                )
+
+            if panel_invalid_flat.shape != panel_contribs_flat.shape:
+                raise ValueError(
+                    "panel_invalid and panel_contribs must have matching panel shapes."
+                )
+
+            bad_panel_counts = np.count_nonzero(panel_invalid_flat, axis=1)
+            flags[bad_panel_counts >= HESTON_DIAG_BAD_PANEL_COUNT_WARN] |= _flag_u32(
+                HestonIntegralWarning.TOO_MANY_BAD_PANELS
+            )
+
+    if quad_error_estimate is not None:
+        quad_error_flat = np.asarray(quad_error_estimate, dtype=np.float64).reshape(-1)
+        if quad_error_flat.shape != total_flat.shape:
+            raise ValueError(
+                "quad_error_estimate must match total_integral/probability shape."
+            )
+
+        rel_error = quad_error_flat / np.maximum(1.0, np.abs(total_flat))
+        flags[rel_error > HESTON_DIAG_QUAD_REL_ERROR_WARN] |= _flag_u32(
+            HestonIntegralWarning.QUAD_ERROR_LARGE
+        )
+
+    return (
+        np.asarray(flags, dtype=np.uint32),
+        (
+            None
+            if tail_abs_fraction is None
+            else np.asarray(tail_abs_fraction, dtype=np.float64)
+        ),
+        (
+            None
+            if cancellation_ratio is None
+            else np.asarray(cancellation_ratio, dtype=np.float64)
+        ),
+    )
 
 
 def _integrate_pj_fixed_rule(
@@ -476,38 +666,21 @@ def _integrate_pj_fixed_rule(
     j: J,
     rule: CompositeRule,
 ) -> float | RealArray:
-    """Integrate one Heston probability kernel on a reusable fixed rule.
-
-    Parameters
-    ----------
-    x : array-like
-        Scalar or batch of log-forward moneyness values.
-    tau : float
-        Time to expiry in years.
-    params : HestonParams
-        Heston parameter set.
-    j : {0, 1}
-        Probability index.
-    rule : CompositeRule
-        Prebuilt composite Gauss-Legendre rule.
-
-    Returns
-    -------
-    float or ndarray
-        Integral value(s) with the same scalar/array shape as ``x``.
-
-    Notes
-    -----
-    This helper is vectorized over ``x`` because
-    :func:`integrate_composite_rule` accepts a leading batch shape.
-    """
+    """Integrate one Heston probability kernel on a reusable fixed rule."""
     x_arr, scalar_input, original_shape = _normalize_x_grid(x)
-    result = integrate_composite_rule(
-        lambda u: _integrand(u=u, x=x_arr, tau=tau, params=params, j=j),
-        rule,
+
+    values_panel = np.asarray(
+        _integrand(u=rule.u_panel, x=x_arr, tau=tau, params=params, j=j),
+        dtype=np.float64,
     )
+
+    omega = rule.omega_panel.reshape((1,) + rule.omega_panel.shape)
+    weighted = values_panel * omega
+    panel_contribs = np.sum(weighted, axis=-1)
+    total = np.sum(panel_contribs, axis=-1)
+
     return _restore_x_shape(
-        result.total,
+        total,
         scalar_input=scalar_input,
         original_shape=original_shape,
     )
@@ -519,49 +692,56 @@ def _integrate_pj_fixed_rule_with_diagnostics(
     params: HestonParams,
     j: J,
     rule: CompositeRule,
+    *,
+    quad_cfg: QuadratureConfig | None,
 ) -> HestonIntegralDiagnostics:
-    """Integrate one fixed-rule probability kernel and keep panel diagnostics.
-
-    Parameters
-    ----------
-    x : float
-        Scalar log-forward moneyness.
-    tau : float
-        Time to expiry in years.
-    params : HestonParams
-        Heston parameter set.
-    j : {0, 1}
-        Probability index.
-    rule : CompositeRule
-        Prebuilt composite Gauss-Legendre rule.
-
-    Returns
-    -------
-    HestonIntegralDiagnostics
-        Scalar diagnostics object for this integral.
-
-    Notes
-    -----
-    This wrapper is intentionally scalar even though the underlying fixed-rule
-    integration can batch over ``x``. A public batch diagnostics constructor has
-    not been wired yet.
-    """
-    result = integrate_composite_rule(
-        lambda u: _integrand(u=u, x=x, tau=tau, params=params, j=j),
-        rule,
+    """Integrate one fixed-rule probability kernel and keep panel diagnostics."""
+    values_panel = np.asarray(
+        _integrand(u=rule.u_panel, x=x, tau=tau, params=params, j=j),
+        dtype=np.float64,
     )
-    probability = _probability_from_integral(result.total)
+    panel_contribs = np.asarray(
+        np.sum(rule.omega_panel * values_panel, axis=-1),
+        dtype=np.float64,
+    )
+    total_integral = float(np.sum(panel_contribs))
+    probability = float(_probability_from_integral(total_integral))
+
+    panel_reason = _compute_fixed_rule_panel_reason(values_panel, panel_contribs)
+    panel_invalid = np.asarray(panel_reason != 0, dtype=np.bool_)
+
+    warning_flags_arr, tail_abs_fraction_arr, cancellation_ratio_arr = (
+        _compute_global_warning_flags(
+            total_integral,
+            probability,
+            panel_invalid=panel_invalid,
+            panel_contribs=panel_contribs,
+        )
+    )
+
+    tail_abs_fraction = (
+        None if tail_abs_fraction_arr is None else float(tail_abs_fraction_arr[0])
+    )
+    cancellation_ratio = (
+        None if cancellation_ratio_arr is None else float(cancellation_ratio_arr[0])
+    )
 
     return HestonIntegralDiagnostics(
         backend="gauss_legendre",
+        quad_cfg=quad_cfg,
         j=j,
         x=x,
         tau=tau,
-        total_integral=float(result.total),
-        probability=float(probability),
-        panel_contribs=np.asarray(result.panel_contribs, dtype=np.float64),
-        panel_edges=rule.panel_edges,
+        total_integral=total_integral,
+        probability=probability,
+        panel_contribs=np.asarray(panel_contribs, dtype=np.float64),
+        panel_edges=np.asarray(rule.panel_edges, dtype=np.float64),
         quad_error_estimate=None,
+        panel_invalid=panel_invalid,
+        panel_reason=np.asarray(panel_reason, dtype=np.uint32),
+        warning_flags=HestonIntegralWarning(int(warning_flags_arr[0])),
+        tail_abs_fraction=tail_abs_fraction,
+        cancellation_ratio=cancellation_ratio,
     )
 
 
@@ -571,38 +751,10 @@ def _integrate_pj_fixed_rule_batch_with_diagnostics(
     params: HestonParams,
     j: J,
     rule: CompositeRule,
+    *,
+    quad_cfg: QuadratureConfig | None,
 ) -> HestonIntegralBatchDiagnostics:
-    """Integrate a batch of fixed-rule probability kernels with diagnostics.
-
-    Parameters
-    ----------
-    x : array-like
-        Non-scalar batch of log-forward moneyness values.
-    tau : float
-        Time to expiry in years.
-    params : HestonParams
-        Heston parameter set.
-    j : {0, 1}
-        Probability index.
-    rule : CompositeRule
-        Prebuilt composite Gauss-Legendre rule.
-
-    Returns
-    -------
-    HestonIntegralBatchDiagnostics
-        Batch diagnostics whose leading shape matches ``x.shape``.
-
-    Raises
-    ------
-    ValueError
-        If ``x`` is scalar.
-
-    Notes
-    -----
-    This helper is intended for the fixed-rule Gauss-Legendre path only. There
-    is no analogous batched diagnostics implementation for the scalar SciPy
-    ``quad`` backend.
-    """
+    """Integrate a batch of fixed-rule probability kernels with diagnostics."""
     x_arr, scalar_input, original_shape = _normalize_x_grid(x)
 
     if scalar_input:
@@ -611,31 +763,79 @@ def _integrate_pj_fixed_rule_batch_with_diagnostics(
             "not a scalar."
         )
 
-    result = integrate_composite_rule(
-        lambda u: _integrand(u=u, x=x_arr, tau=tau, params=params, j=j),
-        rule,
+    values_panel = np.asarray(
+        _integrand(u=rule.u_panel, x=x_arr, tau=tau, params=params, j=j),
+        dtype=np.float64,
     )
+    omega = rule.omega_panel.reshape((1,) + rule.omega_panel.shape)
+    weighted = values_panel * omega
 
-    total_integral = np.asarray(result.total, dtype=np.float64).reshape(original_shape)
+    panel_contribs_flat = np.asarray(np.sum(weighted, axis=-1), dtype=np.float64)
+    total_integral = np.asarray(
+        np.sum(panel_contribs_flat, axis=-1),
+        dtype=np.float64,
+    ).reshape(original_shape)
     probability = np.asarray(
         _probability_from_integral(total_integral),
         dtype=np.float64,
     ).reshape(original_shape)
 
-    panel_contribs = np.asarray(result.panel_contribs, dtype=np.float64)
+    panel_reason_flat = _compute_fixed_rule_panel_reason(
+        values_panel, panel_contribs_flat
+    )
+    panel_invalid_flat = np.asarray(panel_reason_flat != 0, dtype=np.bool_)
+
+    warning_flags_flat, tail_abs_fraction_flat, cancellation_ratio_flat = (
+        _compute_global_warning_flags(
+            total_integral,
+            probability,
+            panel_invalid=panel_invalid_flat,
+            panel_contribs=panel_contribs_flat,
+        )
+    )
+
+    n_panels = rule.u_panel.shape[0]
 
     return HestonIntegralBatchDiagnostics(
         backend="gauss_legendre",
+        quad_cfg=quad_cfg,
         j=j,
         x=np.asarray(x_arr.reshape(original_shape), dtype=np.float64),
         tau=tau,
-        total_integral=total_integral,
+        total_integral=np.asarray(total_integral, dtype=np.float64),
         probability=probability,
-        panel_contribs=panel_contribs.reshape(
-            original_shape + (rule.u_panel.shape[0],)
+        panel_contribs=np.asarray(
+            panel_contribs_flat.reshape(original_shape + (n_panels,)),
+            dtype=np.float64,
         ),
         panel_edges=np.asarray(rule.panel_edges, dtype=np.float64),
         quad_error_estimate=None,
+        panel_invalid=np.asarray(
+            panel_invalid_flat.reshape(original_shape + (n_panels,)),
+            dtype=np.bool_,
+        ),
+        panel_reason=np.asarray(
+            panel_reason_flat.reshape(original_shape + (n_panels,)),
+            dtype=np.uint32,
+        ),
+        warning_flags=np.asarray(
+            warning_flags_flat.reshape(original_shape),
+            dtype=np.uint32,
+        ),
+        tail_abs_fraction=(
+            None
+            if tail_abs_fraction_flat is None
+            else np.asarray(
+                tail_abs_fraction_flat.reshape(original_shape), dtype=np.float64
+            )
+        ),
+        cancellation_ratio=(
+            None
+            if cancellation_ratio_flat is None
+            else np.asarray(
+                cancellation_ratio_flat.reshape(original_shape), dtype=np.float64
+            )
+        ),
     )
 
 
@@ -672,44 +872,7 @@ def P_j(
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
 ) -> float | RealArray:
-    """Evaluate a Heston probability integral ``P_j``.
-
-    Parameters
-    ----------
-    x : float or array-like
-        Log-forward moneyness value(s), usually ``log(F / K)``.
-    tau : float
-        Time to expiry in years. Must be finite and nonnegative.
-    params : HestonParams
-        Heston parameter set.
-    j : {0, 1}
-        Probability index in the Heston inversion formula.
-    backend : {"gauss_legendre", "quad"}, default "gauss_legendre"
-        Integration backend.
-    quad_cfg : QuadratureConfig, optional
-        Fixed-rule configuration for the Gauss-Legendre backend.
-    rule : CompositeRule, optional
-        Prebuilt fixed rule for the Gauss-Legendre backend.
-
-    Returns
-    -------
-    float or ndarray
-        Probability value(s) with the same scalar/array shape as ``x``.
-
-    Raises
-    ------
-    ValueError
-        If an unknown backend is requested, or if ``quad_cfg`` / ``rule`` are
-        passed to the scalar ``quad`` backend.
-
-    Notes
-    -----
-    The Gauss-Legendre backend is vectorized across array-valued ``x`` inputs.
-    The ``quad`` backend accepts array input for API consistency, but it
-    internally evaluates one scalar :func:`scipy.integrate.quad` call per
-    element of ``x``. In other words, batch ``quad`` evaluation is convenient
-    but not vectorized.
-    """
+    """Evaluate a Heston probability integral ``P_j``."""
     x_arr, scalar_input, original_shape = _normalize_x_grid(x)
 
     if backend == "quad":
@@ -747,61 +910,47 @@ def P_j_with_diagnostics(
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
 ) -> HestonIntegralDiagnostics:
-    """Evaluate ``P_j`` and return scalar integration diagnostics.
-
-    Parameters
-    ----------
-    x : float
-        Scalar log-forward moneyness.
-    tau : float
-        Time to expiry in years.
-    params : HestonParams
-        Heston parameter set.
-    j : {0, 1}
-        Probability index in the Heston inversion formula.
-    backend : {"gauss_legendre", "quad"}, default "gauss_legendre"
-        Integration backend.
-    quad_cfg : QuadratureConfig, optional
-        Fixed-rule configuration for the Gauss-Legendre backend.
-    rule : CompositeRule, optional
-        Prebuilt fixed rule for the Gauss-Legendre backend.
-
-    Returns
-    -------
-    HestonIntegralDiagnostics
-        Scalar diagnostics object for the requested integral.
-
-    Notes
-    -----
-    Diagnostics are currently exposed only for scalar ``x`` inputs. The fixed
-    Gauss-Legendre machinery can batch over ``x`` internally, but a public batch
-    diagnostics routine has not been wired through this API yet.
-    """
+    """Evaluate ``P_j`` and return scalar integration diagnostics."""
     if backend == "quad":
         if quad_cfg is not None or rule is not None:
             raise ValueError("quad backend does not accept quad_cfg or rule.")
         integral, err_est = _integrate_pj_quad(x, tau, params, j)
-        probability = _probability_from_integral(integral)
+        probability = float(_probability_from_integral(integral))
+        warning_flags_arr, _, _ = _compute_global_warning_flags(
+            integral,
+            probability,
+            quad_error_estimate=err_est,
+        )
         return HestonIntegralDiagnostics(
             backend="quad",
+            quad_cfg=None,
             j=j,
             x=x,
             tau=tau,
             total_integral=float(integral),
-            probability=float(probability),
+            probability=probability,
             panel_contribs=None,
             panel_edges=None,
             quad_error_estimate=float(err_est),
+            panel_invalid=None,
+            panel_reason=None,
+            warning_flags=HestonIntegralWarning(int(warning_flags_arr[0])),
+            tail_abs_fraction=None,
+            cancellation_ratio=None,
         )
 
     if backend == "gauss_legendre":
-        active_rule = _resolve_gauss_rule(quad_cfg=quad_cfg, rule=rule)
+        active_rule, active_quad_cfg = _resolve_gauss_rule_and_quad_cfg(
+            quad_cfg=quad_cfg,
+            rule=rule,
+        )
         return _integrate_pj_fixed_rule_with_diagnostics(
             x=x,
             tau=tau,
             params=params,
             j=j,
             rule=active_rule,
+            quad_cfg=active_quad_cfg,
         )
 
     raise ValueError(f"Unknown backend: {backend}")
@@ -816,46 +965,7 @@ def P_j_batch_with_diagnostics(
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
 ) -> HestonIntegralBatchDiagnostics:
-    """Evaluate ``P_j`` on a batch of ``x`` values and return diagnostics.
-
-    Parameters
-    ----------
-    x : array_like
-        Array-like log-forward moneyness grid. Scalars are rejected; use
-        :func:`P_j_with_diagnostics` for the scalar case.
-    tau : float
-        Time to expiry in years.
-    params : HestonParams
-        Heston parameter set.
-    j : {0, 1}
-        Probability index in the Heston inversion formula.
-    backend : {"gauss_legendre", "quad"}, default "gauss_legendre"
-        Integration backend.
-    quad_cfg : QuadratureConfig, optional
-        Fixed-rule configuration for the Gauss-Legendre backend.
-    rule : CompositeRule, optional
-        Prebuilt fixed rule for the Gauss-Legendre backend.
-
-    Returns
-    -------
-    HestonIntegralBatchDiagnostics
-        Batch diagnostics object with outputs reshaped to match ``x``.
-
-    Raises
-    ------
-    ValueError
-        If ``x`` is scalar, if ``backend`` is unknown, or if ``quad_cfg`` or
-        ``rule`` are provided with the ``"quad"`` backend.
-
-    Notes
-    -----
-    For ``backend="gauss_legendre"``, the integrand and fixed-rule quadrature
-    are evaluated in batch over ``x``.
-
-    For ``backend="quad"``, array input is supported as a convenience API only.
-    The routine still loops over each element of ``x`` and calls the scalar
-    adaptive integrator once per point, so this route is not vectorized.
-    """
+    """Evaluate ``P_j`` on a batch of ``x`` values and return diagnostics."""
     x_arr, scalar_input, original_shape = _normalize_x_grid(x)
 
     if scalar_input:
@@ -876,34 +986,55 @@ def P_j_batch_with_diagnostics(
             integrals[idx] = integral_i
             errors[idx] = err_i
 
-        total_integral = integrals.reshape(original_shape)
+        total_integral = np.asarray(integrals.reshape(original_shape), dtype=np.float64)
         probability = np.asarray(
             _probability_from_integral(total_integral),
             dtype=np.float64,
         ).reshape(original_shape)
 
+        warning_flags_flat, _, _ = _compute_global_warning_flags(
+            total_integral,
+            probability,
+            quad_error_estimate=np.asarray(
+                errors.reshape(original_shape), dtype=np.float64
+            ),
+        )
+
         return HestonIntegralBatchDiagnostics(
             backend="quad",
+            quad_cfg=None,
             j=j,
             x=np.asarray(x_arr.reshape(original_shape), dtype=np.float64),
             tau=tau,
-            total_integral=np.asarray(total_integral, dtype=np.float64),
+            total_integral=total_integral,
             probability=probability,
             panel_contribs=None,
             panel_edges=None,
             quad_error_estimate=np.asarray(
                 errors.reshape(original_shape), dtype=np.float64
             ),
+            panel_invalid=None,
+            panel_reason=None,
+            warning_flags=np.asarray(
+                warning_flags_flat.reshape(original_shape),
+                dtype=np.uint32,
+            ),
+            tail_abs_fraction=None,
+            cancellation_ratio=None,
         )
 
     if backend == "gauss_legendre":
-        active_rule = _resolve_gauss_rule(quad_cfg=quad_cfg, rule=rule)
+        active_rule, active_quad_cfg = _resolve_gauss_rule_and_quad_cfg(
+            quad_cfg=quad_cfg,
+            rule=rule,
+        )
         return _integrate_pj_fixed_rule_batch_with_diagnostics(
             x=x_arr.reshape(original_shape),
             tau=tau,
             params=params,
             j=j,
             rule=active_rule,
+            quad_cfg=active_quad_cfg,
         )
 
     raise ValueError(f"Unknown backend: {backend}")

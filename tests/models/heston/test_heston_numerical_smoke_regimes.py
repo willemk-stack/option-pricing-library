@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from option_pricing.models.black_scholes.bs import black76_call_price
 from option_pricing.models.heston import (
@@ -10,6 +11,64 @@ from option_pricing.models.heston import (
 from option_pricing.pricers.heston import heston_price_call_from_ctx
 from option_pricing.types import MarketData, OptionSpec, OptionType
 from option_pricing.vol.implied_vol_scalar import implied_vol_bs
+from option_pricing.vol.implied_vol_slice import implied_vol_black76_slice
+
+STRESS_REGIMES = [
+    pytest.param(
+        "high_xi",
+        HestonParams(kappa=1.2, vbar=0.04, eta=1.8, rho=-0.75, v=0.05),
+        1.0,
+        id="high-xi",
+    ),
+    pytest.param(
+        "rho_near_minus_one",
+        HestonParams(kappa=1.5, vbar=0.04, eta=1.0, rho=-0.98, v=0.04),
+        1.0,
+        id="rho-near-minus-one",
+    ),
+    pytest.param(
+        "slow_mean_reversion",
+        HestonParams(kappa=0.15, vbar=0.04, eta=0.9, rho=-0.8, v=0.05),
+        1.0,
+        id="slow-mean-reversion",
+    ),
+    pytest.param(
+        "small_v0",
+        HestonParams(kappa=1.5, vbar=0.04, eta=0.8, rho=-0.7, v=1e-4),
+        1.0,
+        id="small-v0",
+    ),
+    pytest.param(
+        "long_maturity",
+        HestonParams(kappa=1.2, vbar=0.04, eta=0.9, rho=-0.8, v=0.05),
+        5.0,
+        id="long-maturity",
+    ),
+    pytest.param(
+        "short_maturity",
+        HestonParams(kappa=1.2, vbar=0.04, eta=0.9, rho=-0.8, v=0.05),
+        0.03,
+        id="short-maturity",
+    ),
+]
+
+
+CONTINUITY_CASES = [
+    pytest.param(
+        "high_xi",
+        HestonParams(kappa=1.2, vbar=0.04, eta=1.8, rho=-0.75, v=0.05),
+        HestonParams(kappa=1.201, vbar=0.0401, eta=1.801, rho=-0.749, v=0.0501),
+        1.0,
+        id="high-xi",
+    ),
+    pytest.param(
+        "rho_near_minus_one",
+        HestonParams(kappa=1.5, vbar=0.04, eta=1.0, rho=-0.98, v=0.04),
+        HestonParams(kappa=1.501, vbar=0.0401, eta=1.001, rho=-0.979, v=0.0401),
+        1.0,
+        id="rho-near-minus-one",
+    ),
+]
 
 
 def _ctx():
@@ -32,6 +91,29 @@ def _recommended_gauss_quad_cfg(*, x: float, tau: float, params: HestonParams):
         params=params,
         quality="robust",
     )
+
+
+def _diagnostics_slice_quad_cfg(
+    *,
+    strikes: np.ndarray,
+    tau: float,
+    params: HestonParams,
+):
+    ctx = _ctx()
+    forward = float(ctx.fwd(tau=tau))
+    max_abs_x = float(
+        np.max(np.abs(np.log(forward / np.asarray(strikes, dtype=float))))
+    )
+    return recommend_heston_quadrature_config(
+        x=max_abs_x,
+        tau=tau,
+        params=params,
+        quality="diagnostics",
+    )
+
+
+def _stress_strike_grid() -> np.ndarray:
+    return np.linspace(85.0, 115.0, 61)
 
 
 def _call_price_slice(
@@ -251,3 +333,112 @@ def test_heston_low_correlation_regime_has_milder_skew_than_negative_correlation
             params_neg_corr=params_neg_corr,
         )
     )
+
+
+@pytest.mark.parametrize(("regime_name", "params", "tau"), STRESS_REGIMES)
+def test_heston_stress_regimes_return_finite_monotone_dense_call_slices(
+    regime_name: str,
+    params: HestonParams,
+    tau: float,
+) -> None:
+    strikes = _stress_strike_grid()
+    quad_cfg = _diagnostics_slice_quad_cfg(strikes=strikes, tau=tau, params=params)
+
+    prices = np.asarray(
+        heston_price_call_from_ctx(
+            strike=strikes,
+            ctx=_ctx(),
+            tau=tau,
+            params=params,
+            quad_cfg=quad_cfg,
+        ),
+        dtype=float,
+    )
+
+    assert np.all(np.isfinite(prices)), regime_name
+    assert float(np.min(prices)) >= -1e-7, regime_name
+    assert float(np.max(np.diff(prices))) <= 5e-7, regime_name
+    assert float(prices[0]) > float(prices[-1]), regime_name
+
+
+@pytest.mark.parametrize(("regime_name", "params", "tau"), STRESS_REGIMES)
+def test_heston_dense_smiles_are_smooth_across_stress_regimes(
+    regime_name: str,
+    params: HestonParams,
+    tau: float,
+) -> None:
+    ctx = _ctx()
+    strikes = _stress_strike_grid()
+    quad_cfg = _diagnostics_slice_quad_cfg(strikes=strikes, tau=tau, params=params)
+    forward = float(ctx.fwd(tau))
+    df = float(ctx.df(tau))
+
+    prices = np.asarray(
+        heston_price_call_from_ctx(
+            strike=strikes,
+            ctx=ctx,
+            tau=tau,
+            params=params,
+            quad_cfg=quad_cfg,
+        ),
+        dtype=float,
+    )
+    implied_vols, result = implied_vol_black76_slice(
+        forward=forward,
+        strikes=strikes,
+        tau=tau,
+        df=df,
+        prices=prices,
+        is_call=True,
+        return_result=True,
+    )
+
+    assert np.all(result.converged), regime_name
+    assert np.all(np.isfinite(implied_vols)), regime_name
+    assert float(np.max(np.abs(np.diff(implied_vols)))) < 2e-2, regime_name
+    assert float(np.max(np.abs(np.diff(implied_vols, n=2)))) < 2e-2, regime_name
+
+
+@pytest.mark.parametrize(
+    ("regime_name", "base_params", "perturbed_params", "tau"),
+    CONTINUITY_CASES,
+)
+def test_heston_call_slices_change_continuously_under_small_parameter_perturbations(
+    regime_name: str,
+    base_params: HestonParams,
+    perturbed_params: HestonParams,
+    tau: float,
+) -> None:
+    ctx = _ctx()
+    strikes = _stress_strike_grid()
+    quad_cfg = _diagnostics_slice_quad_cfg(
+        strikes=strikes,
+        tau=tau,
+        params=base_params,
+    )
+
+    base_prices = np.asarray(
+        heston_price_call_from_ctx(
+            strike=strikes,
+            ctx=ctx,
+            tau=tau,
+            params=base_params,
+            quad_cfg=quad_cfg,
+        ),
+        dtype=float,
+    )
+    perturbed_prices = np.asarray(
+        heston_price_call_from_ctx(
+            strike=strikes,
+            ctx=ctx,
+            tau=tau,
+            params=perturbed_params,
+            quad_cfg=quad_cfg,
+        ),
+        dtype=float,
+    )
+    diff = perturbed_prices - base_prices
+
+    assert np.all(np.isfinite(diff)), regime_name
+    assert float(np.max(np.abs(diff))) < 2e-2, regime_name
+    assert float(np.max(np.abs(np.diff(diff, n=2)))) < 5e-4, regime_name
