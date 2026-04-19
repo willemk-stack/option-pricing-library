@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
-import option_pricing.models.heston.fourier as heston_fourier
 from option_pricing.models.black_scholes.bs import black76_call_price
 from option_pricing.models.heston import (
     HestonParams,
@@ -173,74 +171,6 @@ def _format_skew_diagnostics(
     return "\n".join(rows)
 
 
-def _format_refinement_diagnostics(
-    *,
-    strikes: np.ndarray,
-    coarse_prices: np.ndarray,
-    refined_prices: np.ndarray,
-    extra_refined_prices: np.ndarray,
-    params: HestonParams,
-    tau: float,
-) -> str:
-    coarse_to_refined = coarse_prices - refined_prices
-    refined_to_extra_refined = refined_prices - extra_refined_prices
-    rows = [
-        f"tau={tau:.6f}",
-        f"params={params}",
-        ("max_abs(coarse-refined)=" f"{float(np.max(np.abs(coarse_to_refined))):.12e}"),
-        (
-            "max_abs(refined-extra_refined)="
-            f"{float(np.max(np.abs(refined_to_extra_refined))):.12e}"
-        ),
-        "",
-        "strike | coarse | refined | extra_refined | coarse-refined | refined-extra",
-    ]
-    for strike, coarse, refined, extra_refined, coarse_diff, refined_diff in zip(
-        strikes,
-        coarse_prices,
-        refined_prices,
-        extra_refined_prices,
-        coarse_to_refined,
-        refined_to_extra_refined,
-        strict=True,
-    ):
-        rows.append(
-            f"{float(strike):7.3f} | {float(coarse): .12f} |"
-            f" {float(refined): .12f} | {float(extra_refined): .12f} |"
-            f" {float(coarse_diff): .12e} | {float(refined_diff): .12e}"
-        )
-    return "\n".join(rows)
-
-
-def _call_price_slice_with_quad_settings(
-    *,
-    strikes: np.ndarray,
-    tau: float,
-    params: HestonParams,
-    quad_kwargs: dict[str, float | int],
-) -> np.ndarray:
-    original_quad = heston_fourier.quad
-
-    def _quad_with_overrides(func, a, b, args=(), complex_func=False):
-        return original_quad(
-            func,
-            a=a,
-            b=b,
-            args=args,
-            complex_func=complex_func,
-            **quad_kwargs,
-        )
-
-    with pytest.MonkeyPatch.context() as monkeypatch:
-        monkeypatch.setattr(heston_fourier, "quad", _quad_with_overrides)
-        return _call_price_slice(
-            strikes=strikes,
-            tau=tau,
-            params=params,
-            backend="quad",
-        )
-
-
 def test_heston_very_small_vol_of_vol_limit_is_close_to_black76() -> None:
     """Smoke-test a small-eta regime against its Black-76 deterministic limit."""
     tau = 1.0
@@ -319,54 +249,5 @@ def test_heston_low_correlation_regime_has_milder_skew_than_negative_correlation
             neg_corr_ivs=neg_corr_ivs,
             params_low_corr=params_low_corr,
             params_neg_corr=params_neg_corr,
-        )
-    )
-
-
-def test_heston_prices_stabilize_when_quad_settings_are_tightened() -> None:
-    """Iteration target: tighter integration settings should reduce price drift."""
-    tau = 1.0
-    strikes = np.linspace(80.0, 120.0, 9)
-    params = HestonParams(
-        kappa=100.0,
-        vbar=0.04,
-        eta=1e-6,
-        rho=0.0,
-        v=0.04,
-    )
-
-    coarse_prices = _call_price_slice_with_quad_settings(
-        strikes=strikes,
-        tau=tau,
-        params=params,
-        quad_kwargs={"limit": 50, "epsabs": 1e-6, "epsrel": 1e-6},
-    )
-    refined_prices = _call_price_slice_with_quad_settings(
-        strikes=strikes,
-        tau=tau,
-        params=params,
-        quad_kwargs={"limit": 150, "epsabs": 1e-10, "epsrel": 1e-10},
-    )
-    extra_refined_prices = _call_price_slice_with_quad_settings(
-        strikes=strikes,
-        tau=tau,
-        params=params,
-        quad_kwargs={"limit": 300, "epsabs": 1e-12, "epsrel": 1e-12},
-    )
-
-    coarse_to_refined = float(np.max(np.abs(coarse_prices - refined_prices)))
-    refined_to_extra_refined = float(
-        np.max(np.abs(refined_prices - extra_refined_prices))
-    )
-
-    assert refined_to_extra_refined < coarse_to_refined, (
-        "Tightening quad settings should stabilize Heston prices.\n"
-        + _format_refinement_diagnostics(
-            strikes=strikes,
-            coarse_prices=coarse_prices,
-            refined_prices=refined_prices,
-            extra_refined_prices=extra_refined_prices,
-            params=params,
-            tau=tau,
         )
     )

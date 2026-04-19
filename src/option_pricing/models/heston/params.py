@@ -1,8 +1,4 @@
-"""
-- typed Heston parameter object
-- validation and bounds
-- constrained/unconstrained transforms for calibration
-"""
+"""Typed Heston parameter object and calibration transforms."""
 
 from __future__ import annotations
 
@@ -30,6 +26,27 @@ def _atanh_clipped(x: float) -> float:
 
 @dataclass(frozen=True, slots=True)
 class HestonParams:
+    """Validated Heston parameter set.
+
+    Parameters
+    ----------
+    kappa : float
+        Mean reversion speed of the variance process. Must be positive.
+    vbar : float
+        Long-run mean variance. Must be nonnegative.
+    eta : float
+        Volatility of variance, often called vol-of-vol. Must be nonnegative.
+    rho : float
+        Spot/variance correlation. Must lie in ``[-1, 1]``.
+    v : float
+        Initial variance. Must be nonnegative.
+
+    Notes
+    -----
+    The class validates basic admissibility bounds but does not enforce the
+    Feller condition.
+    """
+
     kappa: float
     vbar: float
     eta: float
@@ -72,11 +89,30 @@ class HestonParams:
             )
 
     def as_array(self) -> np.ndarray:
+        """Return parameters as a dense ``float64`` vector.
+
+        Returns
+        -------
+        ndarray
+            Vector ordered as ``[kappa, vbar, eta, rho, v]``.
+        """
         return np.array(
             [self.kappa, self.vbar, self.eta, self.rho, self.v], dtype=np.float64
         )
 
     def TransformToUnconstrained(self) -> np.ndarray:
+        """Map constrained parameters to an unconstrained calibration vector.
+
+        Returns
+        -------
+        ndarray
+            Unconstrained vector ordered as ``[kappa, vbar, eta, rho, v]``.
+
+        Notes
+        -----
+        Positive parameters are mapped with a softplus inverse and correlation
+        is mapped with a clipped ``atanh`` transform.
+        """
         return np.array(
             [
                 _softplus_inv(self.kappa),
@@ -92,6 +128,29 @@ class HestonParams:
     def TransformToConstrained(
         cls, raw: np.ndarray | list[float] | tuple[float, ...]
     ) -> HestonParams:
+        """Map an unconstrained calibration vector into valid Heston parameters.
+
+        Parameters
+        ----------
+        raw : array-like
+            Length-5 unconstrained vector ordered as
+            ``[kappa, vbar, eta, rho, v]``.
+
+        Returns
+        -------
+        HestonParams
+            Constrained parameter object.
+
+        Raises
+        ------
+        ValueError
+            If ``raw`` does not contain exactly five finite entries.
+
+        Notes
+        -----
+        Positive parameters are mapped with softplus and correlation is mapped
+        with ``tanh``.
+        """
         raw_arr = np.asarray(raw, dtype=np.float64).reshape(-1)
         if raw_arr.size != 5:
             raise ValueError(

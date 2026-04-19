@@ -51,16 +51,23 @@ def _recommended_quad_cfg_for_slice(
     )
 
 
-def test_heston_call_slice_matches_scalar_loop() -> None:
+@pytest.mark.parametrize("backend", ["gauss_legendre", "quad"])
+def test_heston_call_slice_matches_scalar_loop_for_same_backend(
+    backend: str,
+) -> None:
     ctx = _ctx()
     params = _params()
     tau = 1.0
     strikes = np.linspace(80.0, 120.0, 7)
-    quad_cfg = _recommended_quad_cfg_for_slice(
-        ctx=ctx,
-        strikes=strikes,
-        tau=tau,
-        params=params,
+    quad_cfg = (
+        _recommended_quad_cfg_for_slice(
+            ctx=ctx,
+            strikes=strikes,
+            tau=tau,
+            params=params,
+        )
+        if backend == "gauss_legendre"
+        else None
     )
 
     slice_prices = heston_price_call_from_ctx(
@@ -68,6 +75,7 @@ def test_heston_call_slice_matches_scalar_loop() -> None:
         ctx=ctx,
         tau=tau,
         params=params,
+        backend=backend,
         quad_cfg=quad_cfg,
     )
     scalar_loop_prices = np.asarray(
@@ -77,6 +85,7 @@ def test_heston_call_slice_matches_scalar_loop() -> None:
                 ctx=ctx,
                 tau=tau,
                 params=params,
+                backend=backend,
                 quad_cfg=quad_cfg,
             )
             for strike in strikes
@@ -89,16 +98,23 @@ def test_heston_call_slice_matches_scalar_loop() -> None:
     assert np.allclose(slice_prices, scalar_loop_prices, atol=1e-10, rtol=0.0)
 
 
-def test_heston_put_slice_matches_scalar_loop() -> None:
+@pytest.mark.parametrize("backend", ["gauss_legendre", "quad"])
+def test_heston_put_slice_matches_scalar_loop_for_same_backend(
+    backend: str,
+) -> None:
     ctx = _ctx()
     params = _params()
     tau = 1.0
     strikes = np.linspace(80.0, 120.0, 7)
-    quad_cfg = _recommended_quad_cfg_for_slice(
-        ctx=ctx,
-        strikes=strikes,
-        tau=tau,
-        params=params,
+    quad_cfg = (
+        _recommended_quad_cfg_for_slice(
+            ctx=ctx,
+            strikes=strikes,
+            tau=tau,
+            params=params,
+        )
+        if backend == "gauss_legendre"
+        else None
     )
 
     slice_prices = heston_price_put_from_ctx(
@@ -106,6 +122,7 @@ def test_heston_put_slice_matches_scalar_loop() -> None:
         tau=tau,
         ctx=ctx,
         params=params,
+        backend=backend,
         quad_cfg=quad_cfg,
     )
     scalar_loop_prices = np.asarray(
@@ -115,6 +132,7 @@ def test_heston_put_slice_matches_scalar_loop() -> None:
                 tau=tau,
                 ctx=ctx,
                 params=params,
+                backend=backend,
                 quad_cfg=quad_cfg,
             )
             for strike in strikes
@@ -176,7 +194,7 @@ def test_heston_call_pricer_defaults_to_gauss_legendre_backend(
         calls.append((j, backend, quad_cfg, rule))
         return 0.35 if j == 0 else 0.55
 
-    monkeypatch.setattr(heston_pricer, "P_j_Scalar", _fake_p_j)
+    monkeypatch.setattr(heston_pricer, "P_j", _fake_p_j)
 
     price = heston_pricer.heston_price_call_from_ctx(
         strike=100.0,
@@ -216,7 +234,7 @@ def test_heston_pricer_forwards_explicit_backend(
         calls.append((j, backend, quad_cfg, rule))
         return 0.40 if j == 0 else 0.60
 
-    monkeypatch.setattr(heston_pricer, "P_j_Scalar", _fake_p_j)
+    monkeypatch.setattr(heston_pricer, "P_j", _fake_p_j)
 
     price = heston_pricer.heston_price_from_ctx(
         kind=OptionType.PUT,
@@ -256,7 +274,7 @@ def test_heston_call_pricer_forwards_quad_cfg(
         calls.append((j, quad_cfg, rule))
         return 0.33 if j == 0 else 0.66
 
-    monkeypatch.setattr(heston_pricer, "P_j_Scalar", _fake_p_j)
+    monkeypatch.setattr(heston_pricer, "P_j", _fake_p_j)
 
     heston_price_call_from_ctx(
         strike=100.0,
@@ -290,7 +308,7 @@ def test_heston_put_pricer_forwards_rule(
         calls.append((j, quad_cfg, rule))
         return 0.45 if j == 0 else 0.65
 
-    monkeypatch.setattr(heston_pricer, "P_j_Scalar", _fake_p_j)
+    monkeypatch.setattr(heston_pricer, "P_j", _fake_p_j)
 
     heston_price_put_from_ctx(
         strike=100.0,

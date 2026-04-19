@@ -72,6 +72,20 @@ def test_heston_charfunc_supports_frequency_vectors() -> None:
     assert abs(values[0] - (1.0 + 0.0j)) < 1e-12
 
 
+def test_heston_charfunc_supports_complex_frequency_vectors() -> None:
+    params = _sample_params()
+    tau = 0.75
+    x = 0.3
+    u = np.array([0.25 + 0.1j, 1.0 - 0.25j, 2.0 + 0.5j], dtype=np.complex128)
+
+    C, D = _heston_affine_coeffs(u, tau, params, j=0)
+    expected = np.exp(C * params.vbar + D * params.v + 1j * u * x)
+
+    values = HestonCharFn(u, tau, params, x=x)
+
+    assert np.allclose(values, expected, atol=1e-12, rtol=0.0)
+
+
 def test_heston_charfunc_is_built_from_affine_coefficients_and_phase() -> None:
     params = _sample_params()
     tau = 0.75

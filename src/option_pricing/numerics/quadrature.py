@@ -51,7 +51,7 @@ class CompositeRule:
 
 @dataclass(frozen=True, slots=True)
 class CompositeIntegrationResult:
-    total: float
+    total: float | FloatArray
     panel_contribs: FloatArray
 
 
@@ -162,17 +162,39 @@ def integrate_composite_rule(
 ) -> CompositeIntegrationResult:
     values_panel = np.asarray(eval_fn(rule.u_panel), dtype=np.float64)
 
-    if values_panel.shape != rule.u_panel.shape:
-        raise ValueError(
-            "eval_fn must return an array with the same shape as rule.u_panel "
-            f"for scalar integration. Got {values_panel.shape} vs {rule.u_panel.shape}."
+    rule_shape = rule.u_panel.shape
+    if values_panel.shape == rule_shape:
+        panel_contribs = np.sum(rule.omega_panel * values_panel, axis=1)
+        total = float(np.sum(panel_contribs))
+        return CompositeIntegrationResult(
+            total=total,
+            panel_contribs=np.asarray(panel_contribs, dtype=np.float64),
         )
 
-    panel_contribs = np.sum(rule.omega_panel * values_panel, axis=1)
-    total = float(np.sum(panel_contribs))
+    if values_panel.ndim < rule.u_panel.ndim:
+        raise ValueError(
+            "eval_fn must return either rule.u_panel.shape or "
+            "batch_shape + rule.u_panel.shape. "
+            f"Got {values_panel.shape} for rule shape {rule_shape}."
+        )
+
+    if values_panel.shape[-rule.u_panel.ndim :] != rule_shape:
+        raise ValueError(
+            "eval_fn must return either rule.u_panel.shape or "
+            "batch_shape + rule.u_panel.shape. "
+            f"Got {values_panel.shape} for rule shape {rule_shape}."
+        )
+
+    batch_shape = values_panel.shape[: -rule.u_panel.ndim]
+
+    omega = rule.omega_panel.reshape((1,) * len(batch_shape) + rule_shape)
+    weighted = values_panel * omega
+
+    panel_contribs = np.sum(weighted, axis=-1)  # integrates nodes_per_panel
+    total = np.sum(panel_contribs, axis=-1)  # integrates n_panels
 
     return CompositeIntegrationResult(
-        total=total,
+        total=np.asarray(total, dtype=np.float64),
         panel_contribs=np.asarray(panel_contribs, dtype=np.float64),
     )
 
@@ -182,7 +204,7 @@ def composite_fixed_rule(
     cfg: QuadratureConfig,
     nodes: FloatArray,
     weights: FloatArray,
-) -> float:
+) -> float | FloatArray:
     rule = build_composite_rule(cfg, nodes, weights)
     result = integrate_composite_rule(eval_fn, rule)
     return result.total
@@ -191,7 +213,7 @@ def composite_fixed_rule(
 def composite_gauss_legendre(
     eval_fn: Callable[[ArrayLike], ArrayLike],
     cfg: QuadratureConfig,
-) -> float:
+) -> float | FloatArray:
     rule = build_gauss_legendre_rule(cfg)
     result = integrate_composite_rule(eval_fn, rule)
     return result.total

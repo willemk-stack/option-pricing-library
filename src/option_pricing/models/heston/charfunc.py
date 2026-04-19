@@ -1,23 +1,33 @@
-"""
-- stable characteristic function implementation
-"""
+"""Stable Heston characteristic-function building blocks."""
 
 from __future__ import annotations
+
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
 
+from ...typing import ArrayLike
 from .params import HestonParams
 
 type ComplexArray = NDArray[np.complex128]
 type BoolArray = NDArray[np.bool_]
+type J = Literal[0, 1]
 
 
 def _normalize_frequency_grid(
-    u: float | np.ndarray,
-) -> tuple[np.ndarray, bool, tuple[int, ...]]:
-    u_arr = np.asarray(u, dtype=np.float64)
-    return u_arr.reshape(-1).astype(np.complex128), u_arr.ndim == 0, u_arr.shape
+    u: complex | ArrayLike,
+) -> tuple[ComplexArray, bool, tuple[int, ...]]:
+    u_arr = np.asarray(u, dtype=np.complex128)
+
+    if not np.all(np.isfinite(u_arr.real)) or not np.all(np.isfinite(u_arr.imag)):
+        raise ValueError("u must be finite.")
+
+    return (
+        np.asarray(u_arr.reshape(-1), dtype=np.complex128),
+        u_arr.ndim == 0,
+        u_arr.shape,
+    )
 
 
 def _restore_frequency_shape(
@@ -37,13 +47,13 @@ def _validate_tau(tau: float) -> float:
     return tau
 
 
-def _validate_probability_index(j: int) -> int:
+def _validate_probability_index(j: J) -> J:
     if j not in (0, 1):
         raise ValueError("j must be either 0 or 1.")
-    return int(j)
+    return j
 
 
-def _quadratic_term(u: np.ndarray, *, j: int) -> ComplexArray:
+def _quadratic_term(u: np.ndarray, *, j: J) -> ComplexArray:
     out: ComplexArray = u * u + 1j * (1 - 2 * j) * u
     return out
 
@@ -56,7 +66,7 @@ def _integrated_variance(params: HestonParams, tau: float) -> float:
 
 
 def _deterministic_affine_coeffs(
-    u: np.ndarray, tau: float, params: HestonParams, *, j: int
+    u: np.ndarray, tau: float, params: HestonParams, *, j: J
 ) -> tuple[np.ndarray, np.ndarray]:
     quadratic_term = _quadratic_term(u, j=j)
     mean_reversion_loading = (1.0 - np.exp(-params.kappa * tau)) / params.kappa
@@ -90,8 +100,32 @@ def _heston_affine_coeffs(
     tau: float,
     params: HestonParams,
     *,
-    j: int,
+    j: J,
 ) -> tuple[np.ndarray, np.ndarray]:
+    """Return stable Heston affine coefficients on a frequency grid.
+
+    Parameters
+    ----------
+    u : ndarray
+        Complex frequency grid, usually already normalized to a flat array.
+    tau : float
+        Time to expiry in years. Must be finite and nonnegative.
+    params : HestonParams
+        Heston parameter set.
+    j : {0, 1}
+        Probability index used by the Lewis/Gatheral inversion formulas.
+
+    Returns
+    -------
+    tuple of ndarray
+        The affine coefficients ``(C, D)`` such that the transform factor is
+        ``exp(C * vbar + D * v)``.
+
+    Notes
+    -----
+    The implementation follows a numerically stable Gatheral-style branch
+    selection via :func:`_stable_discriminant`.
+    """
     tau = _validate_tau(tau)
     j = _validate_probability_index(j)
 
@@ -117,18 +151,39 @@ def _heston_affine_coeffs(
 
 
 def HestonCharFn(
-    u: float | np.ndarray,
+    u: complex | ArrayLike,
     tau: float,
     params: HestonParams,
     *,
     x: float = 0.0,
 ) -> complex | ComplexArray:
-    """
-    Stable Gatheral-form characteristic function for log-forward returns.
+    """Evaluate the Heston characteristic function for log-forward returns.
 
-    The exponent is written in Gatheral's affine form
-    ``C(u, tau) * vbar + D(u, tau) * v + i * u * x`` using the parameter
-    names from ``HestonParams``: ``kappa``, ``vbar``, ``eta``, ``rho``, and ``v``.
+    Parameters
+    ----------
+    u : float, complex, or ndarray
+        Real or complex frequency, or a frequency grid.
+    tau : float
+        Time to expiry in years. Must be finite and nonnegative.
+    params : HestonParams
+        Heston parameter set.
+    x : float, default 0.0
+        Log-forward return shift added to the exponent. This is typically
+        ``log(F_t / F_0)`` or ``log(F / K)`` depending on the calling formula.
+
+    Returns
+    -------
+    complex or ndarray of complex128
+        Characteristic-function value(s) with the same scalar/array shape as
+        ``u``.
+
+    Notes
+    -----
+    The exponent is written in affine Gatheral form,
+
+    ``C(u, tau) * vbar + D(u, tau) * v + i * u * x``,
+
+    using the parameter names from :class:`HestonParams`.
     """
     tau = _validate_tau(tau)
     if not np.isfinite(float(x)):
