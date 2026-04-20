@@ -94,7 +94,7 @@ def _backend_compare_table() -> pd.DataFrame:
     )
 
 
-def _report() -> object:
+def _report():
     slice_table = _slice_table()
     probability_artifact = probability_slice_with_diagnostics(
         probability_columns={
@@ -102,22 +102,13 @@ def _report() -> object:
             "probability": np.array([0.42, 0.5, 0.61], dtype=np.float64),
             "warning_count": np.array([0, 0, 1], dtype=np.int64),
         },
-        arrays={
-            "log_moneyness": slice_table["log_moneyness"].to_numpy(dtype=np.float64),
-            "probability": np.array([0.42, 0.5, 0.61], dtype=np.float64),
-        },
+        arrays={"probability": np.array([0.42, 0.5, 0.61], dtype=np.float64)},
     )
     price_artifact = price_slice_with_diagnostics(
         slice_table=slice_table,
         arrays={
             "primary_price": slice_table["price"].to_numpy(dtype=np.float64),
-            "smoothness_signal": np.array([np.nan, 0.09, np.nan], dtype=np.float64),
-            "discontinuity_signal": np.array([np.nan, np.nan, 0.18], dtype=np.float64),
             "config_price_span": np.array([0.0, 2.0e-4, 5.0e-4], dtype=np.float64),
-            "perturbation_max_relative_price_change": np.array(
-                [0.01, 0.12, 0.05],
-                dtype=np.float64,
-            ),
             "suspicious_flag": np.array([False, True, True], dtype=np.bool_),
         },
     )
@@ -127,7 +118,7 @@ def _report() -> object:
     )
 
     return run_heston_slice_diagnostics(
-        meta={"stage": "step5"},
+        meta={"stage": "report"},
         tables={
             "summary": _summary_table(),
             "worst_strikes": slice_table.iloc[[1, 2]].copy(),
@@ -135,38 +126,15 @@ def _report() -> object:
                 {
                     "config_label": np.array(["primary", "comparison"], dtype=object),
                     "backend": np.array(["gauss_legendre", "quad"], dtype=object),
-                    "p0_max_severity": np.array(["ok", "warning"], dtype=object),
-                    "p1_max_severity": np.array(["ok", "warning"], dtype=object),
-                    "p0_warning_point_count": np.array([0, 1], dtype=np.int64),
-                    "p1_warning_point_count": np.array([0, 1], dtype=np.int64),
-                    "max_abs_price_diff_vs_baseline": np.array(
-                        [0.0, 3.0e-4],
-                        dtype=np.float64,
-                    ),
-                    "mean_abs_price_diff_vs_baseline": np.array(
-                        [0.0, 2.0e-4],
-                        dtype=np.float64,
-                    ),
-                    "max_abs_probability_diff_p0": np.array(
-                        [0.0, 2.0e-4],
-                        dtype=np.float64,
-                    ),
-                    "max_abs_probability_diff_p1": np.array(
-                        [0.0, 2.0e-4],
-                        dtype=np.float64,
-                    ),
                     "notes": np.array(["", ""], dtype=object),
                 }
             ),
         },
         arrays={
-            "probability_p0": {
-                "probability": np.array([0.4, 0.5, 0.6], dtype=np.float64)
-            },
             "parameter_perturbation_table": {
                 "label": np.array(["eta_up"], dtype=object),
                 "max_relative_price_change": np.array([0.12], dtype=np.float64),
-            },
+            }
         },
         probability=probability_artifact,
         price=price_artifact,
@@ -174,9 +142,7 @@ def _report() -> object:
     )
 
 
-def test_run_heston_slice_diagnostics_keeps_step1_shape_and_optional_array_contract() -> (
-    None
-):
+def test_run_heston_slice_diagnostics_merges_artifacts_into_plain_data_report() -> None:
     report = _report()
     payload = report.to_dict()
 
@@ -193,11 +159,11 @@ def test_run_heston_slice_diagnostics_keeps_step1_shape_and_optional_array_contr
     assert "probability" in report.tables
     assert {"probability", "slice", "backend_compare"} <= set(report.arrays)
     assert "parameter_perturbation_table" in report.arrays
-    assert "config_sweep_prices" in report.meta["optional_array_groups"]
     assert "plotting_contract" in report.meta
+    assert "config_sweep_prices" in report.meta["optional_array_groups"]
 
 
-def test_run_heston_slice_diagnostics_default_tables_use_plot_friendly_columns() -> (
+def test_run_heston_slice_diagnostics_default_tables_keep_plot_friendly_columns() -> (
     None
 ):
     report = run_heston_slice_diagnostics()
@@ -208,7 +174,9 @@ def test_run_heston_slice_diagnostics_default_tables_use_plot_friendly_columns()
     assert "suspicious_reasons" in report.tables["worst_strikes"].columns
 
 
-def test_run_heston_slice_diagnostics_rejects_matplotlib_objects_in_payload() -> None:
+def test_run_heston_slice_diagnostics_rejects_matplotlib_objects_in_meta_and_arrays() -> (
+    None
+):
     fig, ax = plt.subplots()
     try:
         with pytest.raises(TypeError, match="matplotlib"):
@@ -219,9 +187,8 @@ def test_run_heston_slice_diagnostics_rejects_matplotlib_objects_in_payload() ->
         plt.close(fig)
 
 
-def test_report_serialization_remains_plain_data_friendly() -> None:
+def test_heston_report_json_serialization_stays_plain_data_friendly() -> None:
     report = _report()
-
     payload = json.loads(report.to_json())
 
     assert set(payload) == {"meta", "tables", "arrays"}

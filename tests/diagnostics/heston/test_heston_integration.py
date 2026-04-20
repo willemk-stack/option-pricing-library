@@ -15,7 +15,7 @@ def _params() -> HestonParams:
     return HestonParams(kappa=2.0, vbar=0.04, eta=0.55, rho=-0.70, v=0.05)
 
 
-def _tail_warning_params() -> HestonParams:
+def _stressed_params() -> HestonParams:
     return HestonParams(kappa=0.4, vbar=0.04, eta=1.2, rho=-0.95, v=0.02)
 
 
@@ -23,18 +23,17 @@ def _gauss_cfg() -> QuadratureConfig:
     return QuadratureConfig(u_max=120.0, n_panels=12, nodes_per_panel=12)
 
 
-def test_integration_diagnostics_gauss_exposes_readable_panel_artifacts() -> None:
-    x = np.array([-0.15, 0.0, 0.15], dtype=np.float64)
-    strike = np.array([115.0, 100.0, 87.0], dtype=np.float64)
-
+def test_integration_diagnostics_gauss_builds_readable_panel_warning_and_reason_tables() -> (
+    None
+):
     artifact = integration_diagnostics(
-        x=x,
+        x=np.array([-0.15, 0.0, 0.15], dtype=np.float64),
         tau=0.75,
         params=_params(),
         j=1,
         backend="gauss_legendre",
         quad_cfg=_gauss_cfg(),
-        strike=strike,
+        strike=np.array([115.0, 100.0, 87.0], dtype=np.float64),
     )
 
     assert isinstance(artifact, HestonIntegrationDiagnosticsBundle)
@@ -44,7 +43,10 @@ def test_integration_diagnostics_gauss_exposes_readable_panel_artifacts() -> Non
         "worst_panels",
         "reason_counts",
     }
-    assert {"severity", "warning_labels"} <= set(artifact.probability.table.columns)
+    assert artifact.meta["backend"] == "gauss_legendre"
+    assert artifact.meta["probability_index"] == 1
+    assert artifact.meta["point_count"] == 3
+    assert artifact.meta["panel_detail_available"] is True
 
     panels = artifact.tables["panels"]
     assert {
@@ -81,16 +83,16 @@ def test_integration_diagnostics_quad_marks_panel_detail_unavailable() -> None:
     assert reason_counts.iloc[0]["severity"] == "info"
 
 
-def test_integration_diagnostics_decodes_warnings_and_builds_config_sweep() -> None:
-    stressed_cfg = QuadratureConfig(u_max=10.0, n_panels=8, nodes_per_panel=8)
-
+def test_integration_diagnostics_decodes_warning_and_reason_counts_for_stressed_case() -> (
+    None
+):
     artifact = integration_diagnostics(
         x=0.0,
         tau=0.1,
-        params=_tail_warning_params(),
+        params=_stressed_params(),
         j=0,
         backend="gauss_legendre",
-        quad_cfg=stressed_cfg,
+        quad_cfg=QuadratureConfig(u_max=10.0, n_panels=8, nodes_per_panel=8),
         strike=100.0,
     )
 
@@ -103,6 +105,10 @@ def test_integration_diagnostics_decodes_warnings_and_builds_config_sweep() -> N
         {"ok", "info", "warning", "severe", "critical"}
     )
 
+
+def test_integration_config_sweep_returns_summary_table_and_artifacts_by_label() -> (
+    None
+):
     sweep, artifacts = integration_config_sweep(
         x=np.array([-0.1, 0.0, 0.1], dtype=np.float64),
         tau=0.5,
@@ -122,3 +128,5 @@ def test_integration_diagnostics_decodes_warnings_and_builds_config_sweep() -> N
     assert {"config_label", "backend", "max_severity"} <= set(sweep.columns)
     assert set(artifacts) == {"gauss", "quad"}
     assert sweep.shape[0] == 2
+    assert isinstance(artifacts["gauss"], HestonIntegrationDiagnosticsBundle)
+    assert artifacts["gauss"].tables["worst_panels"].columns[0] == "rank"
