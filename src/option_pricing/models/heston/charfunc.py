@@ -12,7 +12,8 @@ from .params import HestonParams
 
 type ComplexArray = NDArray[np.complex128]
 type BoolArray = NDArray[np.bool_]
-type J = Literal[0, 1]
+type HestonProbabilityIndex = Literal[0, 1]
+type J = HestonProbabilityIndex
 
 
 def _normalize_frequency_grid(
@@ -47,13 +48,15 @@ def _validate_tau(tau: float) -> float:
     return tau
 
 
-def _validate_probability_index(j: J) -> J:
-    if j not in (0, 1):
+def _validate_probability_index(
+    probability_index: HestonProbabilityIndex,
+) -> HestonProbabilityIndex:
+    if probability_index not in (0, 1):
         raise ValueError("j must be either 0 or 1.")
-    return j
+    return probability_index
 
 
-def _quadratic_term(u: np.ndarray, *, j: J) -> ComplexArray:
+def _quadratic_term(u: np.ndarray, *, j: HestonProbabilityIndex) -> ComplexArray:
     out: ComplexArray = u * u + 1j * (1 - 2 * j) * u
     return out
 
@@ -66,7 +69,11 @@ def _integrated_variance(params: HestonParams, tau: float) -> float:
 
 
 def _deterministic_affine_coeffs(
-    u: np.ndarray, tau: float, params: HestonParams, *, j: J
+    u: np.ndarray,
+    tau: float,
+    params: HestonParams,
+    *,
+    j: HestonProbabilityIndex,
 ) -> tuple[np.ndarray, np.ndarray]:
     quadratic_term = _quadratic_term(u, j=j)
     mean_reversion_loading = (1.0 - np.exp(-params.kappa * tau)) / params.kappa
@@ -100,7 +107,7 @@ def _heston_affine_coeffs(
     tau: float,
     params: HestonParams,
     *,
-    j: J,
+    j: HestonProbabilityIndex,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Return stable Heston affine coefficients on a frequency grid.
 
@@ -150,7 +157,7 @@ def _heston_affine_coeffs(
     return C, D
 
 
-def HestonCharFn(
+def heston_char_fn(
     u: complex | ArrayLike,
     tau: float,
     params: HestonParams,
@@ -195,3 +202,7 @@ def HestonCharFn(
     return _restore_frequency_shape(
         values, scalar_input=scalar_input, original_shape=original_shape
     )
+
+
+# Backward-compatible alias for earlier notebook-facing releases.
+HestonCharFn = heston_char_fn

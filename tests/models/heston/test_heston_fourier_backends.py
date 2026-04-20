@@ -9,12 +9,12 @@ from scipy.integrate import IntegrationWarning
 import option_pricing.models.heston.fourier as heston_fourier
 from option_pricing.models.heston import (
     HestonParams,
-    P_j,
+    heston_probability,
     recommend_heston_quadrature_config,
 )
 from option_pricing.models.heston.fourier import (
     HestonIntegralDiagnostics,
-    P_j_with_diagnostics,
+    heston_probability_with_diagnostics,
 )
 from option_pricing.numerics.quadrature import (
     QuadratureConfig,
@@ -51,11 +51,11 @@ def _patch_quad_with_overrides(
 
 
 def _gauss_reference_probability() -> float:
-    return P_j(
+    return heston_probability(
         x=-0.2,
         tau=1.0,
         params=_sample_params(),
-        j=0,
+        probability_index=0,
         backend="gauss_legendre",
         quad_cfg=QuadratureConfig(u_max=240.0, n_panels=48, nodes_per_panel=32),
     )
@@ -67,11 +67,11 @@ def _gauss_errors(configs: list[QuadratureConfig]) -> np.ndarray:
     return np.asarray(
         [
             abs(
-                P_j(
+                heston_probability(
                     x=-0.2,
                     tau=1.0,
                     params=params,
-                    j=0,
+                    probability_index=0,
                     backend="gauss_legendre",
                     quad_cfg=cfg,
                 )
@@ -118,11 +118,11 @@ def _backend_probabilities(
         )
         for j in (0, 1):
             probabilities.append(
-                P_j(
+                heston_probability(
                     x=float(x),
                     tau=tau,
                     params=params,
-                    j=j,
+                    probability_index=j,
                     backend=backend,
                     quad_cfg=quad_cfg,
                 )
@@ -153,7 +153,9 @@ def _format_backend_comparison(
     return "\n".join(rows)
 
 
-def test_p_j_dispatches_to_quad_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_heston_probability_dispatches_to_quad_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     params = _sample_params()
     calls: dict[str, object] = {}
 
@@ -167,13 +169,19 @@ def test_p_j_dispatches_to_quad_backend(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(heston_fourier, "_integrate_pj_quad", _fake_integrate_quad)
     monkeypatch.setattr(heston_fourier, "_resolve_gauss_rule", _fail_resolve_gauss_rule)
 
-    probability = P_j(x=0.2, tau=1.0, params=params, j=1, backend="quad")
+    probability = heston_probability(
+        x=0.2,
+        tau=1.0,
+        params=params,
+        probability_index=1,
+        backend="quad",
+    )
 
     assert calls["quad"] == (0.2, 1.0, params, 1)
     assert probability == pytest.approx(0.5 + 0.75 / np.pi)
 
 
-def test_p_j_dispatches_to_gauss_legendre_backend(
+def test_heston_probability_dispatches_to_gauss_legendre_backend(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     params = _sample_params()
@@ -210,11 +218,11 @@ def test_p_j_dispatches_to_gauss_legendre_backend(
         _fake_integrate_fixed_rule,
     )
 
-    probability = P_j(
+    probability = heston_probability(
         x=-0.1,
         tau=0.75,
         params=params,
-        j=0,
+        probability_index=0,
         backend="gauss_legendre",
         quad_cfg=quad_cfg,
     )
@@ -224,7 +232,7 @@ def test_p_j_dispatches_to_gauss_legendre_backend(
     assert probability == pytest.approx(0.5 + 0.25 / np.pi)
 
 
-def test_p_j_dispatches_to_gauss_legendre_backend_with_explicit_rule(
+def test_heston_probability_dispatches_to_gauss_legendre_backend_with_explicit_rule(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     params = _sample_params()
@@ -256,11 +264,11 @@ def test_p_j_dispatches_to_gauss_legendre_backend_with_explicit_rule(
         _fake_integrate_fixed_rule,
     )
 
-    probability = P_j(
+    probability = heston_probability(
         x=0.15,
         tau=0.5,
         params=params,
-        j=1,
+        probability_index=1,
         backend="gauss_legendre",
         rule=rule,
     )
@@ -271,7 +279,9 @@ def test_p_j_dispatches_to_gauss_legendre_backend_with_explicit_rule(
 
 
 @pytest.mark.parametrize("backend", ["gauss_legendre", "quad"])
-def test_p_j_batch_matches_scalar_route_for_same_backend(backend: str) -> None:
+def test_heston_probability_batch_matches_scalar_route_for_same_backend(
+    backend: str,
+) -> None:
     params = _sample_params()
     tau = 1.0
     x = np.array([-0.4, -0.1, 0.0, 0.2, 0.5], dtype=np.float64)
@@ -288,11 +298,11 @@ def test_p_j_batch_matches_scalar_route_for_same_backend(backend: str) -> None:
     )
 
     batch_values = np.asarray(
-        P_j(
+        heston_probability(
             x=x,
             tau=tau,
             params=params,
-            j=0,
+            probability_index=0,
             backend=backend,
             quad_cfg=quad_cfg,
         ),
@@ -300,11 +310,11 @@ def test_p_j_batch_matches_scalar_route_for_same_backend(backend: str) -> None:
     )
     scalar_values = np.asarray(
         [
-            P_j(
+            heston_probability(
                 x=float(xi),
                 tau=tau,
                 params=params,
-                j=0,
+                probability_index=0,
                 backend=backend,
                 quad_cfg=quad_cfg,
             )
@@ -317,7 +327,7 @@ def test_p_j_batch_matches_scalar_route_for_same_backend(backend: str) -> None:
     assert np.allclose(batch_values, scalar_values, atol=1e-10, rtol=0.0)
 
 
-def test_p_j_with_diagnostics_dispatches_to_quad_backend(
+def test_heston_probability_with_diagnostics_dispatches_to_quad_backend(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     params = _sample_params()
@@ -333,11 +343,11 @@ def test_p_j_with_diagnostics_dispatches_to_quad_backend(
     monkeypatch.setattr(heston_fourier, "_integrate_pj_quad", _fake_integrate_quad)
     monkeypatch.setattr(heston_fourier, "_resolve_gauss_rule", _fail_resolve_gauss_rule)
 
-    diagnostics = P_j_with_diagnostics(
+    diagnostics = heston_probability_with_diagnostics(
         x=0.0,
         tau=0.5,
         params=params,
-        j=0,
+        probability_index=0,
         backend="quad",
     )
 
@@ -353,7 +363,7 @@ def test_p_j_with_diagnostics_dispatches_to_quad_backend(
     assert diagnostics.quad_error_estimate == pytest.approx(1e-7)
 
 
-def test_p_j_with_diagnostics_dispatches_to_gauss_legendre_backend(
+def test_heston_probability_with_diagnostics_dispatches_to_gauss_legendre_backend(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     params = _sample_params()
@@ -404,11 +414,11 @@ def test_p_j_with_diagnostics_dispatches_to_gauss_legendre_backend(
         _fake_integrate_fixed_rule_with_diagnostics,
     )
 
-    diagnostics = P_j_with_diagnostics(
+    diagnostics = heston_probability_with_diagnostics(
         x=0.1,
         tau=0.9,
         params=params,
-        j=1,
+        probability_index=1,
         backend="gauss_legendre",
         quad_cfg=quad_cfg,
     )
@@ -421,8 +431,11 @@ def test_p_j_with_diagnostics_dispatches_to_gauss_legendre_backend(
 @pytest.mark.parametrize(
     "fn",
     [
-        pytest.param(P_j, id="P_j"),
-        pytest.param(P_j_with_diagnostics, id="P_j_with_diagnostics"),
+        pytest.param(heston_probability, id="heston_probability"),
+        pytest.param(
+            heston_probability_with_diagnostics,
+            id="heston_probability_with_diagnostics",
+        ),
     ],
 )
 def test_gauss_backend_rejects_quad_cfg_and_rule_together(fn) -> None:
@@ -434,7 +447,7 @@ def test_gauss_backend_rejects_quad_cfg_and_rule_together(fn) -> None:
             x=0.0,
             tau=1.0,
             params=_sample_params(),
-            j=0,
+            probability_index=0,
             backend="gauss_legendre",
             quad_cfg=quad_cfg,
             rule=rule,

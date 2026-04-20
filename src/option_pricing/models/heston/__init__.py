@@ -2,13 +2,16 @@
 Heston model public API.
 """
 
-from .charfunc import HestonCharFn
-from .fourier import P_j, recommend_heston_quadrature_config
+from .charfunc import heston_char_fn
+from .fourier import heston_probability, recommend_heston_quadrature_config
 from .params import HestonParams
 
+HestonCharFn = heston_char_fn
+P_j = heston_probability
+
 __all__ = [
-    "P_j",
+    "heston_probability",
     "recommend_heston_quadrature_config",
     "HestonParams",
-    "HestonCharFn",
+    "heston_char_fn",
 ]

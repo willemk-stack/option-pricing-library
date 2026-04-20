@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pytest
 
-from option_pricing.models.heston.charfunc import HestonCharFn, _heston_affine_coeffs
+from option_pricing.models.heston.charfunc import _heston_affine_coeffs, heston_char_fn
 from option_pricing.models.heston.fourier import _integrand, _pj_affine_factor
 from option_pricing.models.heston.params import HestonParams
 
@@ -17,8 +17,8 @@ def _sample_params() -> HestonParams:
 def test_heston_params_round_trip_unconstrained_transform() -> None:
     params = _sample_params()
 
-    raw = params.TransformToUnconstrained()
-    rebuilt = HestonParams.TransformToConstrained(raw)
+    raw = params.transform_to_unconstrained()
+    rebuilt = HestonParams.transform_to_constrained(raw)
 
     assert np.allclose(rebuilt.as_array(), params.as_array(), atol=1e-12, rtol=0.0)
 
@@ -44,7 +44,7 @@ def test_heston_params_validate_inputs(field: str, value: float) -> None:
 def test_heston_charfunc_is_one_at_zero_frequency() -> None:
     params = _sample_params()
 
-    value = HestonCharFn(0.0, 1.25, params)
+    value = heston_char_fn(0.0, 1.25, params)
 
     assert isinstance(value, complex)
     assert abs(value - (1.0 + 0.0j)) < 1e-12
@@ -55,7 +55,7 @@ def test_heston_charfunc_tau_zero_returns_initial_phase() -> None:
     u = 0.75
     x = 0.2
 
-    value = HestonCharFn(u, 0.0, params, x=x)
+    value = heston_char_fn(u, 0.0, params, x=x)
 
     assert abs(value - np.exp(1j * u * x)) < 1e-12
 
@@ -64,7 +64,7 @@ def test_heston_charfunc_supports_frequency_vectors() -> None:
     params = _sample_params()
     u = np.array([0.0, 0.25, 1.0, 2.0], dtype=np.float64)
 
-    values = HestonCharFn(u, 0.75, params)
+    values = heston_char_fn(u, 0.75, params)
 
     assert isinstance(values, np.ndarray)
     assert values.shape == u.shape
@@ -81,7 +81,7 @@ def test_heston_charfunc_supports_complex_frequency_vectors() -> None:
     C, D = _heston_affine_coeffs(u, tau, params, j=0)
     expected = np.exp(C * params.vbar + D * params.v + 1j * u * x)
 
-    values = HestonCharFn(u, tau, params, x=x)
+    values = heston_char_fn(u, tau, params, x=x)
 
     assert np.allclose(values, expected, atol=1e-12, rtol=0.0)
 
@@ -95,7 +95,7 @@ def test_heston_charfunc_is_built_from_affine_coefficients_and_phase() -> None:
     C, D = _heston_affine_coeffs(np.asarray(u, dtype=np.complex128), tau, params, j=0)
     expected = np.exp(C * params.vbar + D * params.v + 1j * u * x)
 
-    values = HestonCharFn(u, tau, params, x=x)
+    values = heston_char_fn(u, tau, params, x=x)
 
     assert np.allclose(values, expected, atol=1e-12, rtol=0.0)
 
@@ -110,7 +110,7 @@ def test_heston_charfunc_matches_deterministic_variance_case_when_eta_is_zero() 
     )
     expected = np.exp(-0.5 * (u * u + 1j * u) * integrated_var)
 
-    values = HestonCharFn(u, tau, params)
+    values = heston_char_fn(u, tau, params)
 
     assert np.allclose(values, expected, atol=1e-12, rtol=0.0)
 
@@ -120,7 +120,7 @@ def test_p0_affine_factor_matches_characteristic_function_without_phase() -> Non
     u = np.array([0.25, 1.0, 2.0], dtype=np.float64)
 
     kernel = _pj_affine_factor(u, 0.9, params, j=0)
-    values = HestonCharFn(u, 0.9, params)
+    values = heston_char_fn(u, 0.9, params)
 
     assert np.allclose(kernel, values, atol=1e-12, rtol=0.0)
 

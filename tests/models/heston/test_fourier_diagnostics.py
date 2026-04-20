@@ -7,10 +7,10 @@ import option_pricing.models.heston.fourier as heston_fourier
 from option_pricing.models.heston.fourier import (
     HestonIntegralWarning,
     HestonPanelReason,
-    P_j_batch_with_diagnostics,
-    P_j_with_diagnostics,
     _compute_fixed_rule_panel_reason,
     _compute_global_warning_flags,
+    heston_probability_batch_with_diagnostics,
+    heston_probability_with_diagnostics,
     recommend_heston_quadrature_config,
 )
 from option_pricing.models.heston.params import HestonParams
@@ -85,11 +85,11 @@ def test_scalar_fixed_rule_diagnostics_populate_new_fields() -> None:
         quality="balanced",
     )
 
-    diag = P_j_with_diagnostics(
+    diag = heston_probability_with_diagnostics(
         x=0.25,
         tau=0.5,
         params=params,
-        j=0,
+        probability_index=0,
         backend="gauss_legendre",
         quad_cfg=cfg,
     )
@@ -126,11 +126,11 @@ def test_batch_fixed_rule_diagnostics_shapes_match_x_shape() -> None:
         quality="balanced",
     )
 
-    diag = P_j_batch_with_diagnostics(
+    diag = heston_probability_batch_with_diagnostics(
         x=x,
         tau=0.5,
         params=params,
-        j=0,
+        probability_index=0,
         backend="gauss_legendre",
         quad_cfg=cfg,
     )
@@ -165,11 +165,11 @@ def test_batch_quad_diagnostics_only_populate_global_fields() -> None:
     )
     x = np.array([-0.25, 0.0, 0.25], dtype=np.float64)
 
-    diag = P_j_batch_with_diagnostics(
+    diag = heston_probability_batch_with_diagnostics(
         x=x,
         tau=0.5,
         params=params,
-        j=0,
+        probability_index=0,
         backend="quad",
     )
 
@@ -200,11 +200,11 @@ def test_scalar_quad_diagnostics_marks_nonfinite_total_and_probability(
 
     monkeypatch.setattr(heston_fourier, "_integrate_pj_quad", _fake_integrate_pj_quad)
 
-    diag = P_j_with_diagnostics(
+    diag = heston_probability_with_diagnostics(
         x=0.0,
         tau=0.5,
         params=_tail_warning_params(),
-        j=0,
+        probability_index=0,
         backend="quad",
     )
 
@@ -227,11 +227,11 @@ def test_scalar_quad_diagnostics_marks_out_of_range_probability(
 
     monkeypatch.setattr(heston_fourier, "_integrate_pj_quad", _fake_integrate_pj_quad)
 
-    diag = P_j_with_diagnostics(
+    diag = heston_probability_with_diagnostics(
         x=0.0,
         tau=0.5,
         params=_tail_warning_params(),
-        j=1,
+        probability_index=1,
         backend="quad",
     )
 
@@ -240,11 +240,11 @@ def test_scalar_quad_diagnostics_marks_out_of_range_probability(
 
 
 def test_too_small_u_max_triggers_tail_warnings_on_hard_regime() -> None:
-    diag = P_j_with_diagnostics(
+    diag = heston_probability_with_diagnostics(
         x=0.0,
         tau=0.1,
         params=_tail_warning_params(),
-        j=0,
+        probability_index=0,
         backend="gauss_legendre",
         quad_cfg=QuadratureConfig(u_max=10.0, n_panels=8, nodes_per_panel=8),
     )
@@ -268,11 +268,11 @@ def test_hard_regime_exposes_large_cancellation_metric(
 ) -> None:
     monkeypatch.setattr(heston_fourier, "HESTON_DIAG_CANCELLATION_RATIO_WARN", 10.0)
 
-    diag = P_j_with_diagnostics(
+    diag = heston_probability_with_diagnostics(
         x=0.0,
         tau=0.03,
         params=_hard_cancellation_params(),
-        j=0,
+        probability_index=0,
         backend="gauss_legendre",
         quad_cfg=QuadratureConfig(u_max=10.0, n_panels=16, nodes_per_panel=4),
     )
@@ -287,20 +287,20 @@ def test_gauss_batch_warning_flags_match_scalar_warning_flags() -> None:
     x = np.array([-1.0, 0.0, 0.5, 1.0], dtype=np.float64)
     cfg = QuadratureConfig(u_max=10.0, n_panels=8, nodes_per_panel=8)
 
-    batch_diag = P_j_batch_with_diagnostics(
+    batch_diag = heston_probability_batch_with_diagnostics(
         x=x,
         tau=0.1,
         params=params,
-        j=0,
+        probability_index=0,
         backend="gauss_legendre",
         quad_cfg=cfg,
     )
     scalar_diags = [
-        P_j_with_diagnostics(
+        heston_probability_with_diagnostics(
             x=float(x_i),
             tau=0.1,
             params=params,
-            j=0,
+            probability_index=0,
             backend="gauss_legendre",
             quad_cfg=cfg,
         )

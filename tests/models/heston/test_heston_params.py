@@ -32,8 +32,8 @@ def test_heston_params_roundtrip_transforms_preserve_core_fields() -> None:
         v=0.027,
     )
 
-    raw = params.TransformToUnconstrained()
-    restored = HestonParams.TransformToConstrained(raw)
+    raw = params.transform_to_unconstrained()
+    restored = HestonParams.transform_to_constrained(raw)
 
     np.testing.assert_allclose(
         restored.as_array(),
@@ -43,7 +43,7 @@ def test_heston_params_roundtrip_transforms_preserve_core_fields() -> None:
     )
 
 
-def test_heston_params_alias_methods_match_pascal_case_methods() -> None:
+def test_heston_params_pascal_case_aliases_match_snake_case_methods() -> None:
     params = HestonParams(
         kappa=2.0,
         vbar=0.04,
@@ -52,10 +52,10 @@ def test_heston_params_alias_methods_match_pascal_case_methods() -> None:
         v=0.05,
     )
 
-    raw_pascal = params.TransformToUnconstrained()
     raw_snake = params.transform_to_unconstrained()
-    restored_pascal = HestonParams.TransformToConstrained(raw_pascal)
+    raw_pascal = params.TransformToUnconstrained()
     restored_snake = HestonParams.transform_to_constrained(raw_snake)
+    restored_pascal = HestonParams.TransformToConstrained(raw_pascal)
 
     np.testing.assert_allclose(raw_pascal, raw_snake, atol=0.0, rtol=0.0)
     np.testing.assert_allclose(
@@ -90,7 +90,7 @@ def test_heston_params_validation_rejects_invalid_inputs(
 
 def test_heston_params_transform_to_constrained_rejects_bad_raw_vectors() -> None:
     with pytest.raises(ValueError, match="Expected 5 unconstrained parameters"):
-        HestonParams.TransformToConstrained([0.0, 1.0, 2.0, 3.0])
+        HestonParams.transform_to_constrained([0.0, 1.0, 2.0, 3.0])
 
     with pytest.raises(ValueError, match="must be finite"):
-        HestonParams.TransformToConstrained([0.0, 1.0, np.nan, 3.0, 4.0])
+        HestonParams.transform_to_constrained([0.0, 1.0, np.nan, 3.0, 4.0])

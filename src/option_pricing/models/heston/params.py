@@ -100,7 +100,7 @@ class HestonParams:
             [self.kappa, self.vbar, self.eta, self.rho, self.v], dtype=np.float64
         )
 
-    def TransformToUnconstrained(self) -> np.ndarray:
+    def transform_to_unconstrained(self) -> np.ndarray:
         """Map constrained parameters to an unconstrained calibration vector.
 
         Returns
@@ -125,7 +125,7 @@ class HestonParams:
         )
 
     @classmethod
-    def TransformToConstrained(
+    def transform_to_constrained(
         cls, raw: np.ndarray | list[float] | tuple[float, ...]
     ) -> HestonParams:
         """Map an unconstrained calibration vector into valid Heston parameters.
@@ -167,5 +167,5 @@ class HestonParams:
             v=_softplus(float(raw_arr[4])),
         )
 
-    transform_to_unconstrained = TransformToUnconstrained
-    transform_to_constrained = TransformToConstrained
+    TransformToUnconstrained = transform_to_unconstrained
+    TransformToConstrained = transform_to_constrained

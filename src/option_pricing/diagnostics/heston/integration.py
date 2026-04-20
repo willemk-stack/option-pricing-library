@@ -14,8 +14,8 @@ from ...models.heston.fourier import (
     HestonIntegralDiagnostics,
     HestonIntegralWarning,
     HestonPanelReason,
-    P_j_batch_with_diagnostics,
-    P_j_with_diagnostics,
+    heston_probability_batch_with_diagnostics,
+    heston_probability_with_diagnostics,
 )
 from ...models.heston.params import HestonParams
 from ...numerics.quadrature import CompositeRule, QuadratureConfig
@@ -839,21 +839,21 @@ def integration_diagnostics(
     x_arr = np.asarray(x, dtype=np.float64)
     raw: ProbabilityDiagnosticsInput
     if x_arr.ndim == 0:
-        raw = P_j_with_diagnostics(
+        raw = heston_probability_with_diagnostics(
             x=float(x_arr),
             tau=tau,
             params=params,
-            j=j,
+            probability_index=j,
             backend=backend,
             quad_cfg=quad_cfg,
             rule=rule,
         )
     else:
-        raw = P_j_batch_with_diagnostics(
+        raw = heston_probability_batch_with_diagnostics(
             x=x_arr,
             tau=tau,
             params=params,
-            j=j,
+            probability_index=j,
             backend=backend,
             quad_cfg=quad_cfg,
             rule=rule,

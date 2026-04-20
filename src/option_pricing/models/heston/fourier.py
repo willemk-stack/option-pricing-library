@@ -31,8 +31,10 @@ type ComplexArray = NDArray[np.complex128]
 type RealArray = NDArray[np.float64]
 type BoolArray = NDArray[np.bool_]
 type UInt32Array = NDArray[np.uint32]
-type Backend = Literal["gauss_legendre", "quad"]
-type J = Literal[0, 1]
+type HestonBackend = Literal["gauss_legendre", "quad"]
+type HestonProbabilityIndex = Literal[0, 1]
+type Backend = HestonBackend
+type J = HestonProbabilityIndex
 
 
 # ---------------------------------------------------------------------------
@@ -79,9 +81,9 @@ class HestonIntegralWarning(IntFlag):
 @dataclass(frozen=True, slots=True)
 class HestonIntegralDiagnostics:
     # configuration / identity
-    backend: Backend
+    backend: HestonBackend
     quad_cfg: QuadratureConfig | None
-    j: J
+    j: HestonProbabilityIndex
     x: float
     tau: float
 
@@ -116,9 +118,9 @@ class HestonIntegralBatchDiagnostics:
     """
 
     # configuration / identity
-    backend: Backend
+    backend: HestonBackend
     quad_cfg: QuadratureConfig | None
-    j: J
+    j: HestonProbabilityIndex
     x: RealArray  # shape batch_shape
     tau: float
 
@@ -176,7 +178,7 @@ def _pj_affine_factor(
     tau: float,
     params: HestonParams,
     *,
-    j: J,
+    j: HestonProbabilityIndex,
 ) -> complex | ComplexArray:
     u_arr, scalar_input, original_shape = _normalize_frequency_grid(u)
     C, D = _heston_affine_coeffs(u_arr, tau, params, j=j)
@@ -193,7 +195,7 @@ def _integrand(
     x: ArrayLike,
     tau: float,
     params: HestonParams,
-    j: J,
+    j: HestonProbabilityIndex,
 ) -> float | RealArray:
     """Evaluate the real-valued Heston inversion integrand."""
     x_flat, x_scalar, x_shape = _normalize_x_grid(x)
@@ -224,7 +226,7 @@ def _integrand_scalar(
     x: float,
     tau: float,
     params: HestonParams,
-    j: J,
+    j: HestonProbabilityIndex,
 ) -> float:
     return float(_integrand(u=u, x=x, tau=tau, params=params, j=j))
 
@@ -404,7 +406,7 @@ def _integrate_pj_quad(
     x: float,
     tau: float,
     params: HestonParams,
-    j: J,
+    j: HestonProbabilityIndex,
 ) -> tuple[float, float]:
     """Integrate one Heston probability kernel with SciPy ``quad``."""
     integral, err_est = quad(
@@ -663,7 +665,7 @@ def _integrate_pj_fixed_rule(
     x: ArrayLike,
     tau: float,
     params: HestonParams,
-    j: J,
+    j: HestonProbabilityIndex,
     rule: CompositeRule,
 ) -> float | RealArray:
     """Integrate one Heston probability kernel on a reusable fixed rule."""
@@ -690,7 +692,7 @@ def _integrate_pj_fixed_rule_with_diagnostics(
     x: float,
     tau: float,
     params: HestonParams,
-    j: J,
+    j: HestonProbabilityIndex,
     rule: CompositeRule,
     *,
     quad_cfg: QuadratureConfig | None,
@@ -749,7 +751,7 @@ def _integrate_pj_fixed_rule_batch_with_diagnostics(
     x: ArrayLike,
     tau: float,
     params: HestonParams,
-    j: J,
+    j: HestonProbabilityIndex,
     rule: CompositeRule,
     *,
     quad_cfg: QuadratureConfig | None,
@@ -840,40 +842,41 @@ def _integrate_pj_fixed_rule_batch_with_diagnostics(
 
 
 @overload
-def P_j(
+def heston_probability(
     x: float | np.floating,
     tau: float,
     params: HestonParams,
-    j: J,
-    backend: Backend = "gauss_legendre",
+    probability_index: HestonProbabilityIndex,
+    backend: HestonBackend = "gauss_legendre",
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
 ) -> float: ...
 
 
 @overload
-def P_j(
+def heston_probability(
     x: np.ndarray,
     tau: float,
     params: HestonParams,
-    j: J,
-    backend: Backend = "gauss_legendre",
+    probability_index: HestonProbabilityIndex,
+    backend: HestonBackend = "gauss_legendre",
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
 ) -> RealArray: ...
 
 
-def P_j(
+def heston_probability(
     x: ArrayLike,
     tau: float,
     params: HestonParams,
-    j: J,
-    backend: Backend = "gauss_legendre",
+    probability_index: HestonProbabilityIndex,
+    backend: HestonBackend = "gauss_legendre",
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
 ) -> float | RealArray:
-    """Evaluate a Heston probability integral ``P_j``."""
+    """Evaluate a Heston probability integral."""
     x_arr, scalar_input, original_shape = _normalize_x_grid(x)
+    j = probability_index
 
     if backend == "quad":
         if quad_cfg is not None or rule is not None:
@@ -901,16 +904,38 @@ def P_j(
     raise ValueError(f"Unknown backend: {backend}")
 
 
-def P_j_with_diagnostics(
+def P_j(
+    x: ArrayLike,
+    tau: float,
+    params: HestonParams,
+    j: HestonProbabilityIndex,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> float | RealArray:
+    """Backward-compatible alias for :func:`heston_probability`."""
+    return heston_probability(
+        x=x,
+        tau=tau,
+        params=params,
+        probability_index=j,
+        backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
+    )
+
+
+def heston_probability_with_diagnostics(
     x: float,
     tau: float,
     params: HestonParams,
-    j: J,
-    backend: Backend = "gauss_legendre",
+    probability_index: HestonProbabilityIndex,
+    backend: HestonBackend = "gauss_legendre",
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
 ) -> HestonIntegralDiagnostics:
-    """Evaluate ``P_j`` and return scalar integration diagnostics."""
+    """Evaluate one Heston probability and return scalar integration diagnostics."""
+    j = probability_index
     if backend == "quad":
         if quad_cfg is not None or rule is not None:
             raise ValueError("quad backend does not accept quad_cfg or rule.")
@@ -956,22 +981,45 @@ def P_j_with_diagnostics(
     raise ValueError(f"Unknown backend: {backend}")
 
 
-def P_j_batch_with_diagnostics(
+def P_j_with_diagnostics(
+    x: float,
+    tau: float,
+    params: HestonParams,
+    j: HestonProbabilityIndex,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> HestonIntegralDiagnostics:
+    """Backward-compatible alias for :func:`heston_probability_with_diagnostics`."""
+    return heston_probability_with_diagnostics(
+        x=x,
+        tau=tau,
+        params=params,
+        probability_index=j,
+        backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
+    )
+
+
+def heston_probability_batch_with_diagnostics(
     x: ArrayLike,
     tau: float,
     params: HestonParams,
-    j: J,
-    backend: Backend = "gauss_legendre",
+    probability_index: HestonProbabilityIndex,
+    backend: HestonBackend = "gauss_legendre",
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
 ) -> HestonIntegralBatchDiagnostics:
-    """Evaluate ``P_j`` on a batch of ``x`` values and return diagnostics."""
+    """Evaluate a batch of Heston probabilities and return diagnostics."""
     x_arr, scalar_input, original_shape = _normalize_x_grid(x)
+    j = probability_index
 
     if scalar_input:
         raise ValueError(
-            "P_j_batch_with_diagnostics requires array-like x, not a scalar. "
-            "Use P_j_with_diagnostics for the scalar case."
+            "heston_probability_batch_with_diagnostics requires array-like x, "
+            "not a scalar. Use heston_probability_with_diagnostics for the "
+            "scalar case."
         )
 
     if backend == "quad":
@@ -1038,3 +1086,24 @@ def P_j_batch_with_diagnostics(
         )
 
     raise ValueError(f"Unknown backend: {backend}")
+
+
+def P_j_batch_with_diagnostics(
+    x: ArrayLike,
+    tau: float,
+    params: HestonParams,
+    j: HestonProbabilityIndex,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> HestonIntegralBatchDiagnostics:
+    """Backward-compatible alias for :func:`heston_probability_batch_with_diagnostics`."""
+    return heston_probability_batch_with_diagnostics(
+        x=x,
+        tau=tau,
+        params=params,
+        probability_index=j,
+        backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
+    )

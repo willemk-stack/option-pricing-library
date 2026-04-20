@@ -6,7 +6,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..instruments import VanillaOption
-from ..models.heston import HestonParams, P_j
+from ..models.heston import HestonParams, heston_probability
 from ..numerics.quadrature import CompositeRule, QuadratureConfig
 from ..types import MarketData, OptionType, PricingContext
 from ..typing import ArrayLike, FloatArray
@@ -23,7 +23,7 @@ def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
     return market.to_context()
 
 
-def _validate_inputs_Heston(
+def _validate_heston_inputs(
     spot: float, strike: float | FloatArray, tau: float
 ) -> None:
     if tau < 0.0:
@@ -32,6 +32,20 @@ def _validate_inputs_Heston(
         raise ValueError("strike(s) must be positive")
     if spot <= 0.0:
         raise ValueError("spot must be positive")
+
+
+def _resolve_probability_override_alias(
+    *,
+    canonical_name: str,
+    canonical_value: float | ArrayLike | None,
+    legacy_name: str,
+    legacy_value: float | ArrayLike | None,
+) -> float | ArrayLike | None:
+    if canonical_value is not None and legacy_value is not None:
+        raise ValueError(f"Pass either {canonical_name} or {legacy_name}, not both.")
+    if canonical_value is not None:
+        return canonical_value
+    return legacy_value
 
 
 def _normalize_strike(
@@ -81,7 +95,7 @@ def _probability_array(
     quad_cfg: QuadratureConfig | None,
     rule: CompositeRule | None,
 ) -> RealArray:
-    """Resolve a probability slice from overrides or from ``P_j``.
+    """Resolve a probability slice from overrides or from ``heston_probability``.
 
     Parameters
     ----------
@@ -111,9 +125,9 @@ def _probability_array(
     Notes
     -----
     When ``backend="quad"``, array-valued ``x`` is handled by the public
-    :func:`option_pricing.models.heston.P_j` API through a scalar loop over the
-    batch. Only the fixed-rule Gauss-Legendre backend is vectorized across the
-    slice.
+    :func:`option_pricing.models.heston.heston_probability` API through a
+    scalar loop over the batch. Only the fixed-rule Gauss-Legendre backend is
+    vectorized across the slice.
     """
     if probability_override is not None:
         override = np.asarray(probability_override, dtype=np.float64)
@@ -127,11 +141,11 @@ def _probability_array(
             ) from exc
 
     return np.asarray(
-        P_j(
+        heston_probability(
             x=x,
             tau=tau,
             params=params,
-            j=j,
+            probability_index=j,
             backend=backend,
             quad_cfg=quad_cfg,
             rule=rule,
@@ -147,8 +161,8 @@ def heston_price_call_from_ctx(
     ctx: PricingContext,
     tau: float,
     params: HestonParams,
-    P_0: float | ArrayLike | None = None,
-    P_1: float | ArrayLike | None = None,
+    p0: float | ArrayLike | None = None,
+    p1: float | ArrayLike | None = None,
     backend: HestonBackend = "gauss_legendre",
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
@@ -162,8 +176,8 @@ def heston_price_call_from_ctx(
     ctx: PricingContext,
     tau: float,
     params: HestonParams,
-    P_0: float | ArrayLike | None = None,
-    P_1: float | ArrayLike | None = None,
+    p0: float | ArrayLike | None = None,
+    p1: float | ArrayLike | None = None,
     backend: HestonBackend = "gauss_legendre",
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
@@ -176,11 +190,13 @@ def heston_price_call_from_ctx(
     ctx: PricingContext,
     tau: float,
     params: HestonParams,
-    P_0: float | ArrayLike | None = None,
-    P_1: float | ArrayLike | None = None,
+    p0: float | ArrayLike | None = None,
+    p1: float | ArrayLike | None = None,
     backend: HestonBackend = "gauss_legendre",
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
+    P_0: float | ArrayLike | None = None,
+    P_1: float | ArrayLike | None = None,
 ) -> float | FloatArray:
     """Price a European call under Heston from a pricing context.
 
@@ -194,7 +210,7 @@ def heston_price_call_from_ctx(
         Time to expiry in years. Must be nonnegative.
     params : HestonParams
         Heston parameter set.
-    P_0, P_1 : float or array-like, optional
+    p0, p1 : float or array-like, optional
         Optional probability overrides. Each override must be scalar or
         broadcastable to ``strike.shape``.
     backend : {"gauss_legendre", "quad"}, default "gauss_legendre"
@@ -212,7 +228,7 @@ def heston_price_call_from_ctx(
     Notes
     -----
     For array-valued ``strike``, the function computes ``x = log(F / K)``
-    elementwise and then evaluates ``P_0`` and ``P_1`` on that slice.
+    elementwise and then evaluates ``p0`` and ``p1`` on that slice.
 
     The Gauss-Legendre backend is vectorized across the slice. The ``quad``
     backend accepts batched strikes for API consistency, but under the hood it
@@ -222,7 +238,19 @@ def heston_price_call_from_ctx(
     When ``tau == 0``, the function short-circuits to intrinsic value.
     """
     strike_arr, scalar_input, original_shape = _normalize_strike(strike)
-    _validate_inputs_Heston(spot=ctx.spot, strike=strike_arr, tau=tau)
+    _validate_heston_inputs(spot=ctx.spot, strike=strike_arr, tau=tau)
+    p0 = _resolve_probability_override_alias(
+        canonical_name="p0",
+        canonical_value=p0,
+        legacy_name="P_0",
+        legacy_value=P_0,
+    )
+    p1 = _resolve_probability_override_alias(
+        canonical_name="p1",
+        canonical_value=p1,
+        legacy_name="P_1",
+        legacy_value=P_1,
+    )
 
     if tau == 0:
         intrinsic = _intrinsic_value(
@@ -237,7 +265,7 @@ def heston_price_call_from_ctx(
 
     x = np.asarray(np.log(forward / strike_arr), dtype=np.float64)
     p_0_arr = _probability_array(
-        probability_override=P_0,
+        probability_override=p0,
         x=x,
         tau=tau,
         params=params,
@@ -247,7 +275,7 @@ def heston_price_call_from_ctx(
         rule=rule,
     )
     p_1_arr = _probability_array(
-        probability_override=P_1,
+        probability_override=p1,
         x=x,
         tau=tau,
         params=params,
@@ -272,8 +300,8 @@ def heston_price_put_from_ctx(
     tau: float,
     ctx: PricingContext,
     params: HestonParams,
-    P_0: float | ArrayLike | None = None,
-    P_1: float | ArrayLike | None = None,
+    p0: float | ArrayLike | None = None,
+    p1: float | ArrayLike | None = None,
     backend: HestonBackend = "gauss_legendre",
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
@@ -287,8 +315,8 @@ def heston_price_put_from_ctx(
     tau: float,
     ctx: PricingContext,
     params: HestonParams,
-    P_0: float | ArrayLike | None = None,
-    P_1: float | ArrayLike | None = None,
+    p0: float | ArrayLike | None = None,
+    p1: float | ArrayLike | None = None,
     backend: HestonBackend = "gauss_legendre",
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
@@ -301,11 +329,13 @@ def heston_price_put_from_ctx(
     tau: float,
     ctx: PricingContext,
     params: HestonParams,
-    P_0: float | ArrayLike | None = None,
-    P_1: float | ArrayLike | None = None,
+    p0: float | ArrayLike | None = None,
+    p1: float | ArrayLike | None = None,
     backend: HestonBackend = "gauss_legendre",
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
+    P_0: float | ArrayLike | None = None,
+    P_1: float | ArrayLike | None = None,
 ) -> float | FloatArray:
     """Price a European put under Heston from a pricing context.
 
@@ -319,7 +349,7 @@ def heston_price_put_from_ctx(
         Market context providing spot, forwards, and discount factors.
     params : HestonParams
         Heston parameter set.
-    P_0, P_1 : float or array-like, optional
+    p0, p1 : float or array-like, optional
         Optional probability overrides. Each override must be scalar or
         broadcastable to ``strike.shape``.
     backend : {"gauss_legendre", "quad"}, default "gauss_legendre"
@@ -343,7 +373,19 @@ def heston_price_put_from_ctx(
     When ``tau == 0``, the function short-circuits to intrinsic value.
     """
     strike_arr, scalar_input, original_shape = _normalize_strike(strike)
-    _validate_inputs_Heston(spot=ctx.spot, strike=strike_arr, tau=tau)
+    _validate_heston_inputs(spot=ctx.spot, strike=strike_arr, tau=tau)
+    p0 = _resolve_probability_override_alias(
+        canonical_name="p0",
+        canonical_value=p0,
+        legacy_name="P_0",
+        legacy_value=P_0,
+    )
+    p1 = _resolve_probability_override_alias(
+        canonical_name="p1",
+        canonical_value=p1,
+        legacy_name="P_1",
+        legacy_value=P_1,
+    )
 
     if tau == 0:
         intrinsic = _intrinsic_value(
@@ -358,7 +400,7 @@ def heston_price_put_from_ctx(
     x = np.asarray(np.log(forward / strike_arr), dtype=np.float64)
 
     p_0_arr = _probability_array(
-        probability_override=P_0,
+        probability_override=p0,
         x=x,
         tau=tau,
         params=params,
@@ -368,7 +410,7 @@ def heston_price_put_from_ctx(
         rule=rule,
     )
     p_1_arr = _probability_array(
-        probability_override=P_1,
+        probability_override=p1,
         x=x,
         tau=tau,
         params=params,
@@ -563,3 +605,7 @@ def heston_price_instrument(
         quad_cfg=quad_cfg,
         rule=rule,
     )
+
+
+# Backward-compatible alias for older Fourier naming.
+P_j = heston_probability

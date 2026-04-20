@@ -186,15 +186,15 @@ def test_heston_call_pricer_defaults_to_gauss_legendre_backend(
         x: float,
         tau: float,
         params: HestonParams,
-        j: int,
+        probability_index: int,
         backend: str = "gauss_legendre",
         quad_cfg: QuadratureConfig | None = None,
         rule=None,
     ) -> float:
-        calls.append((j, backend, quad_cfg, rule))
-        return 0.35 if j == 0 else 0.55
+        calls.append((probability_index, backend, quad_cfg, rule))
+        return 0.35 if probability_index == 0 else 0.55
 
-    monkeypatch.setattr(heston_pricer, "P_j", _fake_p_j)
+    monkeypatch.setattr(heston_pricer, "heston_probability", _fake_p_j)
 
     price = heston_pricer.heston_price_call_from_ctx(
         strike=100.0,
@@ -226,15 +226,15 @@ def test_heston_pricer_forwards_explicit_backend(
         x: float,
         tau: float,
         params: HestonParams,
-        j: int,
+        probability_index: int,
         backend: str = "gauss_legendre",
         quad_cfg: QuadratureConfig | None = None,
         rule=None,
     ) -> float:
-        calls.append((j, backend, quad_cfg, rule))
-        return 0.40 if j == 0 else 0.60
+        calls.append((probability_index, backend, quad_cfg, rule))
+        return 0.40 if probability_index == 0 else 0.60
 
-    monkeypatch.setattr(heston_pricer, "P_j", _fake_p_j)
+    monkeypatch.setattr(heston_pricer, "heston_probability", _fake_p_j)
 
     price = heston_pricer.heston_price_from_ctx(
         kind=OptionType.PUT,
@@ -266,15 +266,15 @@ def test_heston_call_pricer_forwards_quad_cfg(
         x: float,
         tau: float,
         params: HestonParams,
-        j: int,
+        probability_index: int,
         backend: str = "gauss_legendre",
         quad_cfg: QuadratureConfig | None = None,
         rule=None,
     ) -> float:
-        calls.append((j, quad_cfg, rule))
-        return 0.33 if j == 0 else 0.66
+        calls.append((probability_index, quad_cfg, rule))
+        return 0.33 if probability_index == 0 else 0.66
 
-    monkeypatch.setattr(heston_pricer, "P_j", _fake_p_j)
+    monkeypatch.setattr(heston_pricer, "heston_probability", _fake_p_j)
 
     heston_price_call_from_ctx(
         strike=100.0,
@@ -300,15 +300,15 @@ def test_heston_put_pricer_forwards_rule(
         x: float,
         tau: float,
         params: HestonParams,
-        j: int,
+        probability_index: int,
         backend: str = "gauss_legendre",
         quad_cfg: QuadratureConfig | None = None,
         rule=None,
     ) -> float:
-        calls.append((j, quad_cfg, rule))
-        return 0.45 if j == 0 else 0.65
+        calls.append((probability_index, quad_cfg, rule))
+        return 0.45 if probability_index == 0 else 0.65
 
-    monkeypatch.setattr(heston_pricer, "P_j", _fake_p_j)
+    monkeypatch.setattr(heston_pricer, "heston_probability", _fake_p_j)
 
     heston_price_put_from_ctx(
         strike=100.0,
