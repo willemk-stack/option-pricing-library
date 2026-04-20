@@ -1,182 +1,194 @@
-# Heston diagnostics user guide
+# Heston diagnostics
 
-This page is a practical guide to the Heston Fourier diagnostics returned by:
+This guide covers the notebook-facing Heston diagnostics workflow under
+`option_pricing.diagnostics.heston`.
 
-- `P_j_with_diagnostics(...)`
-- `P_j_batch_with_diagnostics(...)`
+It is a downstream review layer over the existing Fourier engine. The intended
+flow is:
 
-These diagnostics exist to expose integration stability signals alongside the Heston Fourier probabilities and to make quadrature settings explicit when results look fragile.
+1. run one report with `run_heston_pricing_diagnostics(...)`
+2. inspect the packaged `meta`, `tables`, and `arrays`
+3. review convergence, smoothness, continuity, and visible failure modes with
+   the frozen plot set
 
-## Quick start
+[Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/11_heston_diagnostics_review.ipynb){ .md-button .md-button--primary }
+
+## What this report is for
+
+- review numerical stability behavior across one strike slice
+- surface warnings, backend differences, config-sweep behavior, and panel-level
+  failure modes without rebuilding diagnostics ad hoc
+- keep the actual numerical source of truth under
+  `option_pricing.models.heston.fourier`
+
+It does **not** prove price correctness, prove economic smile validity, or cover
+calibration, optimizer, or Monte Carlo diagnostics.
+
+## One-call report
 
 ```python
+import matplotlib
+matplotlib.use("Agg")
+
 import numpy as np
 
-from option_pricing.models.heston.fourier import (
-    P_j_with_diagnostics,
-    P_j_batch_with_diagnostics,
-    recommend_heston_quadrature_config,
+from option_pricing.diagnostics.heston import (
+    HestonDiagnosticsReport,
+    run_heston_pricing_diagnostics,
 )
-from option_pricing.models.heston.params import HestonParams
-
-params = HestonParams(
-    kappa=2.0,
-    vbar=0.04,
-    eta=0.6,
-    rho=-0.7,
-    v=0.04,
+from option_pricing.diagnostics.heston.plot import (
+    plot_backend_difference_by_strike,
+    plot_cancellation_ratio_by_strike,
+    plot_config_sweep,
+    plot_panel_contributions,
+    plot_smile_with_warning_overlay,
+    plot_tail_fraction_by_strike,
 )
+from option_pricing.models.heston import HestonParams
+from option_pricing.types import MarketData
 
-cfg = recommend_heston_quadrature_config(
-    x=0.75,
-    tau=0.5,
+market = MarketData(spot=100.0, rate=0.02, dividend_yield=0.0)
+params = HestonParams(kappa=2.0, vbar=0.04, eta=0.55, rho=-0.70, v=0.05)
+strike = np.array([80.0, 90.0, 100.0, 110.0, 120.0], dtype=np.float64)
+
+report = run_heston_pricing_diagnostics(
+    strike=strike,
+    tau=0.75,
+    market=market,
     params=params,
-    quality="balanced",
 )
 
-diag = P_j_with_diagnostics(
-    x=0.25,
-    tau=0.5,
-    params=params,
-    j=0,
-    backend="gauss_legendre",
-    quad_cfg=cfg,
-)
-
-print(diag.probability)
-print(diag.warning_flags)
-print(diag.tail_abs_fraction)
-print(diag.cancellation_ratio)
-print(diag.panel_reason)
+assert isinstance(report, HestonDiagnosticsReport)
+assert set(report.tables) >= {
+    "summary",
+    "slice",
+    "worst_strikes",
+    "backend_compare",
+    "config_sweep",
+    "worst_panels_p0",
+    "worst_panels_p1",
+}
+assert {"probability_p0", "probability_p1", "config_sweep_prices"} <= set(report.arrays)
 ```
 
-## Scalar diagnostics object
+The one-call report is the preferred notebook entrypoint. It returns the frozen
+top-level shape:
 
-For `backend="gauss_legendre"` the scalar diagnostics object contains:
+- `report.meta`
+- `report.tables`
+- `report.arrays`
 
-- `backend`
-- `quad_cfg`
-- `j`, `x`, `tau`
-- `total_integral`
-- `probability`
-- `panel_edges`
-- `panel_contribs`
-- `panel_invalid`
-- `panel_reason`
-- `warning_flags`
-- `tail_abs_fraction`
-- `cancellation_ratio`
+`report.meta` carries context such as the chosen backends, forward, and the
+current provisional policy block. `report.tables` is the main review surface.
+`report.arrays` holds optional dense payloads that the plot helpers consume.
 
-For `backend="quad"` the object contains:
+## Inspect the key tables
 
-- whole-integral diagnostics
-- `quad_error_estimate`
+```python
+summary = report.tables["summary"]
+slice_table = report.tables["slice"]
+worst_strikes = report.tables["worst_strikes"]
+backend_compare = report.tables["backend_compare"]
+config_sweep = report.tables["config_sweep"]
+worst_panels_p0 = report.tables["worst_panels_p0"]
+worst_panels_p1 = report.tables["worst_panels_p1"]
 
-and panel-local fields are `None`.
+summary[["metric", "value", "severity"]]
 
-## Batch diagnostics object
+slice_table[
+    [
+        "strike",
+        "price",
+        "implied_vol",
+        "warning_count",
+        "severity",
+        "smoothness_flag",
+        "discontinuity_flag",
+        "suspicious_flag",
+    ]
+].head()
 
-For a batch `x` input, the leading shape of every array field matches `x.shape`.
+worst_strikes[
+    [
+        "rank",
+        "strike",
+        "severity",
+        "combined_warning_labels",
+        "config_price_span",
+        "smoothness_signal",
+        "discontinuity_signal",
+        "suspicious_reasons",
+    ]
+].head()
 
-For example, if `x.shape == (n_strikes,)` and the rule has `p` panels:
+backend_compare[["strike", "backend_a", "backend_b", "abs_price_diff"]].head()
 
-- `probability.shape == (n_strikes,)`
-- `warning_flags.shape == (n_strikes,)`
-- `panel_contribs.shape == (n_strikes, p)`
-- `panel_reason.shape == (n_strikes, p)`
+config_sweep[
+    [
+        "config_label",
+        "backend",
+        "max_abs_price_diff_vs_baseline",
+        "p0_max_severity",
+        "p1_max_severity",
+    ]
+]
 
-If `x.shape == (n_expiries, n_strikes)`:
+worst_panels_p0.head()
+worst_panels_p1.head()
+```
 
-- `warning_flags.shape == (n_expiries, n_strikes)`
-- `panel_reason.shape == (n_expiries, n_strikes, p)`
+The most useful review pattern is:
 
-## How to interpret warning flags
+- start with `summary`
+- move to the canonical `slice` table and `worst_strikes`
+- inspect `backend_compare` and `config_sweep`
+- use `worst_panels_p0` and `worst_panels_p1` when you need panel-local failure
+  detail
 
-### Hard failures
-Treat these as “do not trust this result”:
+## Render the frozen plot set
 
-- `NONFINITE_TOTAL`
-- `NONFINITE_PROBABILITY`
+```python
+import matplotlib.pyplot as plt
 
-Usually also treat this as a failure:
+fig, axes = plt.subplots(3, 2, figsize=(13.5, 12.0), constrained_layout=True)
 
-- `PROBABILITY_OUT_OF_RANGE`
+plot_panel_contributions(report, probability_key="probability_p1", ax=axes[0, 0])
+plot_tail_fraction_by_strike(report, ax=axes[0, 1])
+plot_cancellation_ratio_by_strike(report, ax=axes[1, 0])
+plot_backend_difference_by_strike(report, ax=axes[1, 1])
+plot_config_sweep(report, ax=axes[2, 0])
+plot_smile_with_warning_overlay(report, ax=axes[2, 1])
 
-### Soft warnings
-Treat these as “finite but numerically suspicious”:
+plt.close(fig)
+```
 
-- `LARGE_TAIL_FRACTION`
-- `EXCESSIVE_CANCELLATION`
-- `TOO_MANY_BAD_PANELS`
-- `QUAD_ERROR_LARGE`
+These helpers only consume the packaged report artifacts. They do not call the
+pricing engine or rebuild diagnostics inside the plotting layer.
 
-These often suggest that you should rerun with stronger settings before trusting the number for calibration or regression baselines.
+## How to read the report
 
-## Typical recovery actions
+- Convergence: use `config_sweep` and `plot_config_sweep(...)` to see whether
+  small configuration changes produce materially different prices or
+  probabilities.
+- Smoothness and continuity: inspect `smoothness_flag`,
+  `discontinuity_flag`, `smoothness_signal`, `discontinuity_signal`, and the
+  smile overlay plot.
+- Visible failure modes: start from `worst_strikes`, then drill into
+  `worst_panels_p0` or `worst_panels_p1` and the panel-contribution plot.
+- Backend disagreement: use `backend_compare` and
+  `plot_backend_difference_by_strike(...)` to see where the primary and
+  comparison backends diverge.
 
-### Tail warnings
-Symptoms:
-- `LARGE_TAIL_FRACTION`
-- tail panel flags
-- wing instability
+## Policy notes
 
-Actions:
-- increase `u_max`
-- often also increase `n_panels`
-- consider `quality="robust"` or `quality="diagnostics"`
+The report intentionally keeps policy-sensitive semantics explicit instead of
+hard-coding them into prose:
 
-### Origin-resolution warnings
-Symptoms:
-- `UNDERRESOLVED_NEAR_ORIGIN`
-- most mass concentrated in first few panels
+- suspiciousness thresholds remain provisional
+- continuity and smoothness thresholds remain provisional
+- severity labels reflect the current implementation, not owner-approved final
+  semantics
 
-Actions:
-- use clustered spacing
-- increase `nodes_per_panel`
-- increase `n_panels`
-
-### Oscillation warnings
-Symptoms:
-- `OSCILLATION_SPIKE`
-- noisy smile points at large `|x|`
-
-Actions:
-- increase `n_panels`
-- possibly increase `nodes_per_panel`
-- use a more conservative quality preset
-
-### Cancellation warnings
-Symptoms:
-- very large `cancellation_ratio`
-- unstable results under tiny setting changes
-
-Actions:
-- compare with a more robust fixed rule
-- compare against `quad`
-- avoid treating the current run as a reference value
-
-## Recommended workflow
-
-### For fast exploratory runs
-Use:
-- `quality="fast"` or `quality="balanced"`
-- inspect only whole-integral warnings
-
-### For production-style slice pricing
-Use:
-- `quality="balanced"` or `quality="robust"`
-- review both whole-integral flags and worst panels on suspicious strikes
-
-### For regression baselines and notebook diagnostics
-Use:
-- `quality="diagnostics"`
-- run `P_j_batch_with_diagnostics(...)`
-- store `warning_flags`, `tail_abs_fraction`, and `cancellation_ratio`
-- inspect where warnings cluster over strike / maturity grids
-
-## What should be documented elsewhere
-
-Once the docs structure is cleaned up, this page should likely be split into:
-- one implementation note for the characteristic function and branch handling
-- one user-facing diagnostics guide
-- one report/notebook guide under `option_pricing.diagnostics.heston`
+If you need lower-level raw Fourier diagnostics, use the existing objects under
+`option_pricing.models.heston.fourier` or inspect the packaged
+`probability_p0` / `probability_p1` arrays carried by the report.

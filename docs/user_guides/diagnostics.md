@@ -94,6 +94,20 @@ print(attempts)
 
 This is handy when you want a robust notebook workflow that tries repair-enabled SVI fits first and then falls back to a simple grid surface.
 
+## 5) Review a Heston slice for numerical stability
+
+For the notebook-facing Heston report and plot workflow, use
+[Heston diagnostics](heston_diagnostics.md).
+
+That guide stays downstream of the existing Fourier engine and focuses on:
+
+- the one-call `run_heston_pricing_diagnostics(...)` entrypoint
+- the packaged `meta`, `tables`, and `arrays` report shape
+- the review tables `summary`, `slice`, `worst_strikes`, `backend_compare`,
+  `config_sweep`, `worst_panels_p0`, and `worst_panels_p1`
+- the frozen plot set for panel contributions, tail fraction, cancellation
+  ratio, backend difference, config sweep, and smile overlays
+
 ## Notes
 
 - These helpers are mostly orchestration and reporting utilities.

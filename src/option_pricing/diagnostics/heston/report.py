@@ -1,4 +1,14 @@
-"""One-call Step 1 report assembly for notebook-facing Heston diagnostics."""
+"""One-call Step 5 orchestration for notebook-facing Heston diagnostics.
+
+This module preserves the frozen Step 1 report topology:
+
+- ``meta``
+- ``tables``
+- ``arrays``
+
+It only packages already-computed artifacts. Plot objects are rejected so the
+report stays lightweight and serialization-friendly.
+"""
 
 from __future__ import annotations
 
@@ -18,6 +28,99 @@ from .models import (
     HestonDiagnosticsReport,
     HestonPriceSliceDiagnostics,
     HestonProbabilitySliceDiagnostics,
+)
+
+_DEFAULT_WORST_STRIKE_COLUMNS: tuple[str, ...] = (
+    "rank",
+    *HESTON_SLICE_TABLE_COLUMNS,
+    "warning_count_p0",
+    "warning_count_p1",
+    "severity_p0",
+    "severity_p1",
+    "combined_warning_labels",
+    "config_price_span",
+    "smoothness_signal",
+    "discontinuity_signal",
+    "perturbation_max_relative_price_change",
+    "suspicious_flag",
+    "suspicious_reasons",
+)
+
+_DEFAULT_BACKEND_COMPARE_COLUMNS: tuple[str, ...] = (
+    "strike",
+    "log_moneyness",
+    "backend_a",
+    "backend_b",
+    "price_a",
+    "price_b",
+    "price_diff",
+    "abs_price_diff",
+    "implied_vol_a",
+    "implied_vol_b",
+    "implied_vol_diff",
+    "warning_count_a",
+    "warning_count_b",
+    "severity_a",
+    "severity_b",
+)
+
+_DEFAULT_CONFIG_SWEEP_COLUMNS: tuple[str, ...] = (
+    "config_label",
+    "backend",
+    "config_resolution",
+    "resolved_u_max",
+    "resolved_n_panels",
+    "resolved_nodes_per_panel",
+    "resolved_panel_spacing",
+    "resolved_cluster_strength",
+    "p0_max_severity",
+    "p1_max_severity",
+    "p0_warning_point_count",
+    "p1_warning_point_count",
+    "max_abs_price_diff_vs_baseline",
+    "mean_abs_price_diff_vs_baseline",
+    "max_abs_probability_diff_p0",
+    "max_abs_probability_diff_p1",
+    "notes",
+)
+
+_DEFAULT_WORST_PANEL_COLUMNS: tuple[str, ...] = (
+    "rank",
+    "point_index",
+    "probability_index",
+    "backend",
+    "log_moneyness",
+    "strike",
+    "point_severity",
+    "point_warning_count",
+    "panel_index",
+    "panel_start",
+    "panel_end",
+    "panel_width",
+    "panel_contribution",
+    "abs_panel_contribution",
+    "panel_invalid",
+    "reason_code",
+    "reason_count",
+    "reason_names",
+    "reason_labels",
+    "severity",
+    "severity_rank",
+    "detail_available",
+    "notes",
+)
+
+_OPTIONAL_ARRAY_GROUPS: tuple[str, ...] = (
+    "probability",
+    "slice",
+    "backend_compare",
+    "probability_p0",
+    "probability_p1",
+    "comparison_probability_p0",
+    "comparison_probability_p1",
+    "config_sweep_prices",
+    "parameter_perturbation_prices",
+    "parameter_perturbation_table",
 )
 
 
@@ -47,11 +150,11 @@ def _default_report_tables() -> dict[str, pd.DataFrame]:
     return {
         "summary": _default_summary_table(),
         "slice": _empty_table(HESTON_SLICE_TABLE_COLUMNS),
-        "worst_strikes": _empty_table(("strike", "notes")),
-        "backend_compare": _empty_table(("backend_a", "backend_b", "price_diff")),
-        "config_sweep": _empty_table(("config_label", "metric", "value")),
-        "worst_panels_p0": _empty_table(("panel_index", "notes")),
-        "worst_panels_p1": _empty_table(("panel_index", "notes")),
+        "worst_strikes": _empty_table(_DEFAULT_WORST_STRIKE_COLUMNS),
+        "backend_compare": _empty_table(_DEFAULT_BACKEND_COMPARE_COLUMNS),
+        "config_sweep": _empty_table(_DEFAULT_CONFIG_SWEEP_COLUMNS),
+        "worst_panels_p0": _empty_table(_DEFAULT_WORST_PANEL_COLUMNS),
+        "worst_panels_p1": _empty_table(_DEFAULT_WORST_PANEL_COLUMNS),
     }
 
 
@@ -67,6 +170,35 @@ def _merge_mapping(
     return base
 
 
+def _copy_tables(
+    tables: Mapping[str, pd.DataFrame] | None,
+) -> dict[str, pd.DataFrame]:
+    if tables is None:
+        return {}
+    return {str(name): table.copy() for name, table in tables.items()}
+
+
+def _is_matplotlib_object(value: Any) -> bool:
+    module = type(value).__module__
+    return module.startswith("matplotlib")
+
+
+def _reject_plot_objects(value: Any, *, label: str) -> None:
+    if _is_matplotlib_object(value):
+        raise TypeError(
+            f"{label} may not include matplotlib figure, axes, or artist objects."
+        )
+
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            _reject_plot_objects(item, label=f"{label}.{key}")
+        return
+
+    if isinstance(value, (list, tuple)):
+        for idx, item in enumerate(value):
+            _reject_plot_objects(item, label=f"{label}[{idx}]")
+
+
 def run_heston_slice_diagnostics(
     *,
     meta: Mapping[str, Any] | None = None,
@@ -76,28 +208,44 @@ def run_heston_slice_diagnostics(
     price: HestonPriceSliceDiagnostics | None = None,
     backend_comparison: HestonBackendComparisonDiagnostics | None = None,
 ) -> HestonDiagnosticsReport:
-    """Assemble the full Step 1 Heston diagnostics report.
+    """Assemble the full notebook-facing Heston diagnostics report.
 
-    This runner intentionally freezes report topology without adding hidden
-    recomputation. Callers provide already-packaged artifacts and/or explicit
-    tables/arrays, and this helper only assembles them into the full
-    ``HestonDiagnosticsReport`` contract.
+    This function is downstream-only orchestration. It merges already-built
+    artifacts and explicit tables/arrays into the frozen Step 1 report shape
+    without re-running pricing, recomputing diagnostics, or embedding plotting
+    objects.
 
-    Notes
-    -----
-    - The report always exposes ``meta``, ``tables``, and ``arrays``.
-    - Required v1 tables are always present.
-    - Plotting code must consume returned tables and arrays only.
+    Required tables are always present:
+
+    - ``summary``
+    - ``slice``
+    - ``worst_strikes``
+    - ``backend_compare``
+    - ``config_sweep``
+    - ``worst_panels_p0``
+    - ``worst_panels_p1``
+
+    There are no required arrays. Optional packaged array groups include:
+
+    - ``probability``
+    - ``slice``
+    - ``backend_compare``
+    - ``probability_p0``
+    - ``probability_p1``
+    - ``comparison_probability_p0``
+    - ``comparison_probability_p1``
+    - ``config_sweep_prices``
+    - ``parameter_perturbation_prices``
+    - ``parameter_perturbation_table``
+
+    The resulting report is meant for review notebooks and serialization. It
+    does not prove correctness and it does not finalize policy-sensitive
+    semantics such as suspiciousness thresholds.
     """
 
     default_tables = _default_report_tables()
-    report_tables: dict[str, pd.DataFrame] = {
-        name: table.copy() for name, table in default_tables.items()
-    }
-
-    if tables is not None:
-        for name, table in tables.items():
-            report_tables[str(name)] = table.copy()
+    report_tables = {name: table.copy() for name, table in default_tables.items()}
+    report_tables.update(_copy_tables(tables))
 
     if price is not None:
         if tables is not None and "slice" in tables:
@@ -148,6 +296,7 @@ def run_heston_slice_diagnostics(
             "they must not recompute diagnostics"
         ),
     )
+    report_meta.setdefault("optional_array_groups", list(_OPTIONAL_ARRAY_GROUPS))
 
     report_arrays: dict[str, Any] = {}
     report_arrays = _merge_mapping(report_arrays, arrays)
@@ -157,10 +306,10 @@ def run_heston_slice_diagnostics(
     if price is not None:
         report_arrays.setdefault("slice", dict(price.arrays))
     if backend_comparison is not None:
-        report_arrays.setdefault(
-            "backend_compare",
-            dict(backend_comparison.arrays),
-        )
+        report_arrays.setdefault("backend_compare", dict(backend_comparison.arrays))
+
+    _reject_plot_objects(report_meta, label="meta")
+    _reject_plot_objects(report_arrays, label="arrays")
 
     return HestonDiagnosticsReport(
         meta=report_meta,

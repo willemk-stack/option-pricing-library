@@ -198,7 +198,17 @@ def _deserialize_tables(payload: Mapping[str, Any]) -> dict[str, pd.DataFrame]:
 
 @dataclass(frozen=True, slots=True)
 class _HestonTableArtifact:
-    """Shared runtime container for notebook-facing diagnostics artifacts."""
+    """Shared runtime container for notebook-facing diagnostics artifacts.
+
+    Subclasses keep three plain-data pieces together:
+
+    - ``meta`` for lightweight context
+    - ``table`` for the main notebook-facing ``pandas.DataFrame``
+    - ``arrays`` for optional dense arrays or nested array groups
+
+    The container normalizes inputs eagerly and does not perform any hidden
+    recomputation.
+    """
 
     meta: dict[str, Any]
     table: pd.DataFrame
@@ -225,7 +235,15 @@ class _HestonTableArtifact:
 
 @dataclass(frozen=True, slots=True)
 class HestonProbabilitySliceDiagnostics(_HestonTableArtifact):
-    """Notebook-facing artifact for a packaged probability slice."""
+    """Notebook-facing artifact for one packaged ``P0`` or ``P1`` slice.
+
+    The table is the readable per-point view that notebooks inspect directly.
+    When created from the Fourier diagnostics wrappers, ``arrays`` can also
+    carry panel-local detail such as ``panel_contribs`` or ``panel_reason``.
+
+    This artifact surfaces numerical behavior for review; it does not prove the
+    underlying probabilities are correct.
+    """
 
     @classmethod
     def from_dict(
@@ -245,7 +263,16 @@ class HestonProbabilitySliceDiagnostics(_HestonTableArtifact):
 
 @dataclass(frozen=True, slots=True)
 class HestonPriceSliceDiagnostics(_HestonTableArtifact):
-    """Notebook-facing artifact for the canonical slice diagnostics table."""
+    """Notebook-facing artifact for the canonical strike-slice diagnostics table.
+
+    The required front columns follow the frozen Step 1 contract so notebooks
+    can rely on a stable view of price, implied-vol, warning, and
+    continuity-related signals. Extra downstream review columns are preserved
+    after that canonical prefix.
+
+    The artifact is descriptive only: it packages already-computed diagnostics
+    and should not be interpreted as proof of pricing correctness.
+    """
 
     def __post_init__(self) -> None:
         _HestonTableArtifact.__post_init__(self)
@@ -280,7 +307,12 @@ class HestonPriceSliceDiagnostics(_HestonTableArtifact):
 
 @dataclass(frozen=True, slots=True)
 class HestonBackendComparisonDiagnostics(_HestonTableArtifact):
-    """Notebook-facing artifact for backend-comparison diagnostics."""
+    """Notebook-facing artifact for backend-comparison diagnostics.
+
+    This keeps the primary/comparison backend table and any aligned arrays in a
+    plain runtime container so notebooks can inspect disagreement without
+    re-running the pricing engine.
+    """
 
     @classmethod
     def from_dict(
@@ -303,7 +335,8 @@ class HestonIntegrationDiagnosticsBundle:
     """Readable Step 2 integration diagnostics bundle.
 
     The bundle keeps the Step 1 packaged probability artifact intact while
-    exposing the additional notebook-facing tables needed for downstream review.
+    exposing the additional notebook-facing tables needed for downstream review,
+    especially warning summaries, worst panels, and panel-reason counts.
     """
 
     meta: dict[str, Any]
@@ -341,6 +374,15 @@ class HestonDiagnosticsReport:
 
     Runtime tables stay as ``pandas.DataFrame`` objects until explicitly
     serialized via :meth:`to_dict`.
+
+    Required tables include ``summary``, ``slice``, ``worst_strikes``,
+    ``backend_compare``, ``config_sweep``, ``worst_panels_p0``, and
+    ``worst_panels_p1``. Optional arrays may carry probability-detail payloads
+    and convergence/config-sweep artifacts for plotting.
+
+    The report is a review surface over existing diagnostics logic. It does not
+    prove price correctness, economic validity of the smile, or final
+    suspiciousness policy.
     """
 
     meta: dict[str, Any]

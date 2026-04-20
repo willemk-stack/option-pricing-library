@@ -12,6 +12,10 @@ from numpy.typing import NDArray
 
 from ...market.curves import PricingContext
 from ...models.heston import HestonParams, recommend_heston_quadrature_config
+from ...models.heston.fourier import (
+    QuadratureQuality,
+    _default_heston_quadrature_config,
+)
 from ...numerics.quadrature import CompositeRule, QuadratureConfig
 from ...pricers.heston import (
     heston_price_call_from_ctx,
@@ -49,6 +53,14 @@ class _BackendSliceResult:
     p1: HestonIntegrationDiagnosticsBundle
     price: FloatArray
     implied_vol: FloatArray
+
+
+@dataclass(frozen=True, slots=True)
+class _ResolvedBackendConfig:
+    backend: HestonDiagnosticsBackend
+    quad_cfg: QuadratureConfig | None
+    rule: CompositeRule | None
+    config_resolution: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +133,103 @@ def _coerce_backend(value: object) -> HestonDiagnosticsBackend:
         return "quad"
     raise ValueError(
         "backend must be one of 'gauss_legendre' or 'quad'. " f"Got {value!r}."
+    )
+
+
+def _gauss_config_details(quad_cfg: QuadratureConfig | None) -> dict[str, Any]:
+    if quad_cfg is None:
+        return {
+            "u_max": None,
+            "n_panels": None,
+            "nodes_per_panel": None,
+            "panel_spacing": None,
+            "cluster_strength": None,
+        }
+
+    return {
+        "u_max": float(quad_cfg.u_max),
+        "n_panels": int(quad_cfg.n_panels),
+        "nodes_per_panel": int(quad_cfg.nodes_per_panel),
+        "panel_spacing": str(quad_cfg.panel_spacing),
+        "cluster_strength": float(quad_cfg.cluster_strength),
+    }
+
+
+def _resolved_backend_config_meta(
+    resolved: _ResolvedBackendConfig,
+) -> dict[str, Any]:
+    return {
+        "backend": resolved.backend,
+        "config_resolution": resolved.config_resolution,
+        **_gauss_config_details(
+            resolved.quad_cfg
+            if resolved.backend == "gauss_legendre" and resolved.rule is None
+            else None
+        ),
+    }
+
+
+def _resolve_backend_config(
+    *,
+    backend: HestonDiagnosticsBackend,
+    quad_cfg: QuadratureConfig | None,
+    rule: CompositeRule | None,
+    x: float,
+    tau: float,
+    params: HestonParams,
+    recommended_quality: QuadratureQuality | None = None,
+) -> _ResolvedBackendConfig:
+    resolved_backend = _coerce_backend(backend)
+
+    if resolved_backend != "gauss_legendre":
+        return _ResolvedBackendConfig(
+            backend=resolved_backend,
+            quad_cfg=quad_cfg,
+            rule=rule,
+            config_resolution=None,
+        )
+
+    if quad_cfg is not None and rule is not None:
+        raise ValueError(
+            "Pass either quad_cfg or rule, not both. "
+            "If you already built a rule, it is the authoritative discretization."
+        )
+
+    if quad_cfg is not None:
+        return _ResolvedBackendConfig(
+            backend=resolved_backend,
+            quad_cfg=quad_cfg,
+            rule=None,
+            config_resolution="explicit_quad_cfg",
+        )
+
+    if rule is not None:
+        return _ResolvedBackendConfig(
+            backend=resolved_backend,
+            quad_cfg=None,
+            rule=rule,
+            config_resolution="explicit_rule",
+        )
+
+    if recommended_quality is not None:
+        recommended_cfg = recommend_heston_quadrature_config(
+            x=x,
+            tau=tau,
+            params=params,
+            quality=recommended_quality,
+        )
+        return _ResolvedBackendConfig(
+            backend=resolved_backend,
+            quad_cfg=recommended_cfg,
+            rule=None,
+            config_resolution=f"recommended_{recommended_quality}",
+        )
+
+    return _ResolvedBackendConfig(
+        backend=resolved_backend,
+        quad_cfg=_default_heston_quadrature_config(),
+        rule=None,
+        config_resolution="default_hard_coded",
     )
 
 
@@ -306,21 +415,48 @@ def _append_case(
     backend: HestonDiagnosticsBackend,
     quad_cfg: QuadratureConfig | None,
     rule: CompositeRule | None,
+    config_resolution: str | None = None,
 ) -> None:
     for case in cases:
-        same_backend = case["backend"] == backend
-        same_quad_cfg = case.get("quad_cfg") == quad_cfg
-        same_rule = case.get("rule") is rule
-        if case["label"] == label or (same_backend and same_quad_cfg and same_rule):
+        if case["label"] == label:
             return
-    cases.append(
-        {
-            "label": label,
-            "backend": backend,
-            "quad_cfg": quad_cfg,
-            "rule": rule,
-        }
-    )
+    case = {
+        "label": label,
+        "backend": backend,
+        "quad_cfg": quad_cfg,
+        "rule": rule,
+    }
+    if config_resolution is not None:
+        case["config_resolution"] = config_resolution
+    cases.append(case)
+
+
+def _config_sweep_case_details(case: Mapping[str, Any]) -> dict[str, Any]:
+    backend = _coerce_backend(case.get("backend", "gauss_legendre"))
+    quad_cfg = case.get("quad_cfg")
+    rule = case.get("rule")
+    config_resolution = case.get("config_resolution")
+
+    if backend == "gauss_legendre" and config_resolution is None:
+        if quad_cfg is not None and rule is not None:
+            raise ValueError(
+                "Pass either quad_cfg or rule, not both. "
+                "If you already built a rule, it is the authoritative discretization."
+            )
+        if quad_cfg is not None:
+            config_resolution = "explicit_quad_cfg"
+        elif rule is not None:
+            config_resolution = "explicit_rule"
+        else:
+            config_resolution = "default_hard_coded"
+            quad_cfg = _default_heston_quadrature_config()
+
+    return {
+        "config_resolution": config_resolution,
+        **_gauss_config_details(
+            quad_cfg if backend == "gauss_legendre" and rule is None else None
+        ),
+    }
 
 
 def _default_config_sweep_cases(
@@ -328,12 +464,8 @@ def _default_config_sweep_cases(
     x: FloatArray,
     tau: float,
     params: HestonParams,
-    primary_backend: HestonDiagnosticsBackend,
-    primary_quad_cfg: QuadratureConfig | None,
-    primary_rule: CompositeRule | None,
-    comparison_backend: HestonDiagnosticsBackend,
-    comparison_quad_cfg: QuadratureConfig | None,
-    comparison_rule: CompositeRule | None,
+    primary_config: _ResolvedBackendConfig,
+    comparison_config: _ResolvedBackendConfig,
 ) -> list[dict[str, Any]]:
     max_abs_x = float(np.max(np.abs(x)))
     balanced_cfg = recommend_heston_quadrature_config(
@@ -353,16 +485,18 @@ def _default_config_sweep_cases(
     _append_case(
         cases,
         label="primary",
-        backend=primary_backend,
-        quad_cfg=primary_quad_cfg,
-        rule=primary_rule,
+        backend=primary_config.backend,
+        quad_cfg=primary_config.quad_cfg,
+        rule=primary_config.rule,
+        config_resolution=primary_config.config_resolution,
     )
     _append_case(
         cases,
         label="comparison",
-        backend=comparison_backend,
-        quad_cfg=comparison_quad_cfg,
-        rule=comparison_rule,
+        backend=comparison_config.backend,
+        quad_cfg=comparison_config.quad_cfg,
+        rule=comparison_config.rule,
+        config_resolution=comparison_config.config_resolution,
     )
     _append_case(
         cases,
@@ -370,6 +504,7 @@ def _default_config_sweep_cases(
         backend="gauss_legendre",
         quad_cfg=robust_cfg,
         rule=None,
+        config_resolution="recommended_robust",
     )
     _append_case(
         cases,
@@ -377,6 +512,7 @@ def _default_config_sweep_cases(
         backend="gauss_legendre",
         quad_cfg=balanced_cfg,
         rule=None,
+        config_resolution="recommended_balanced",
     )
     return cases
 
@@ -513,7 +649,16 @@ def price_slice_with_diagnostics(
     meta: Mapping[str, Any] | None = None,
     arrays: Mapping[str, Any] | None = None,
 ) -> HestonPriceSliceDiagnostics:
-    """Freeze the canonical notebook-facing slice-table contract."""
+    """Freeze the canonical notebook-facing strike-slice contract.
+
+    Use this when downstream code already has the slice table and needs the
+    stable ``HestonPriceSliceDiagnostics`` wrapper without rerunning pricing.
+    The required Step 1 columns must be present; any additional review columns
+    are preserved after that canonical prefix.
+
+    This function packages existing diagnostics only. It does not calculate
+    prices, warnings, or continuity signals by itself.
+    """
 
     if slice_table is None and slice_columns is None:
         raise ValueError("Provide slice_table or slice_columns.")
@@ -547,7 +692,12 @@ def compare_backend_slice(
     meta: Mapping[str, Any] | None = None,
     arrays: Mapping[str, Any] | None = None,
 ) -> HestonBackendComparisonDiagnostics:
-    """Package backend-comparison data for a strike slice."""
+    """Package backend-comparison data for a strike slice.
+
+    The helper keeps the comparison table and aligned arrays in a lightweight
+    runtime artifact so notebooks can inspect backend disagreement without
+    re-running the comparison logic.
+    """
 
     if comparison_table is None and comparison_columns is None:
         raise ValueError("Provide comparison_table or comparison_columns.")
@@ -585,11 +735,33 @@ def run_heston_pricing_diagnostics(
     comparison_backend: HestonDiagnosticsBackend | None = None,
     comparison_quad_cfg: QuadratureConfig | None = None,
     comparison_rule: CompositeRule | None = None,
+    use_recommended_cfg: bool = False,
     config_sweep_cases: Sequence[Mapping[str, Any]] | None = None,
     parameter_perturbations: Sequence[Mapping[str, Any]] | None = None,
     top_n: int = 10,
 ) -> HestonDiagnosticsReport:
-    """Build the Step 3 strike-slice diagnostics report."""
+    """Run the notebook-facing Heston strike-slice diagnostics workflow.
+
+    This is the one-call entrypoint used by review notebooks. It prices a
+    representative strike slice with one primary backend, runs the comparison
+    backend, collects the packaged ``P0``/``P1`` diagnostics, builds the
+    convergence/config-sweep summaries, and returns a
+    :class:`~option_pricing.diagnostics.heston.models.HestonDiagnosticsReport`
+    with the frozen ``meta`` / ``tables`` / ``arrays`` topology.
+
+    The returned report is designed for stability review:
+
+    - convergence and config-sweep behavior
+    - smoothness and continuity signals
+    - backend differences
+    - visible failure modes through worst-strike and worst-panel tables
+
+    It is intentionally conservative about claims. The report does not prove
+    prices are correct, does not validate economic smile realism, and does not
+    cover calibration, optimizer, or Monte Carlo diagnostics. Thresholds used
+    for suspiciousness and continuity flags remain provisional and are surfaced
+    in ``report.meta["provisional_policy"]`` rather than hidden in the docs.
+    """
 
     if tau <= 0.0:
         raise ValueError("tau must be > 0 for pricing diagnostics.")
@@ -599,6 +771,7 @@ def run_heston_pricing_diagnostics(
     strike_arr = _normalize_strike_slice(strike)
     forward = float(ctx.fwd(tau))
     x = np.asarray(np.log(forward / strike_arr), dtype=np.float64)
+    max_abs_x = float(np.max(np.abs(x)))
 
     resolved_comparison_backend: HestonDiagnosticsBackend = (
         "quad" if backend == "gauss_legendre" else "gauss_legendre"
@@ -606,17 +779,28 @@ def run_heston_pricing_diagnostics(
     if comparison_backend is not None:
         resolved_comparison_backend = comparison_backend
 
-    if (
-        resolved_comparison_backend == "gauss_legendre"
-        and comparison_quad_cfg is None
-        and comparison_rule is None
-    ):
-        comparison_quad_cfg = recommend_heston_quadrature_config(
-            x=float(np.max(np.abs(x))),
-            tau=tau,
-            params=params,
-            quality="robust",
-        )
+    primary_config = _resolve_backend_config(
+        backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
+        x=max_abs_x,
+        tau=tau,
+        params=params,
+        recommended_quality="balanced" if use_recommended_cfg else None,
+    )
+    comparison_config = _resolve_backend_config(
+        backend=resolved_comparison_backend,
+        quad_cfg=comparison_quad_cfg,
+        rule=comparison_rule,
+        x=max_abs_x,
+        tau=tau,
+        params=params,
+        recommended_quality=(
+            "robust"
+            if use_recommended_cfg and resolved_comparison_backend == "gauss_legendre"
+            else None
+        ),
+    )
 
     primary = _compute_backend_slice(
         strike=strike_arr,
@@ -626,9 +810,9 @@ def run_heston_pricing_diagnostics(
         ctx=ctx,
         market=market,
         kind=kind,
-        backend=backend,
-        quad_cfg=quad_cfg,
-        rule=rule,
+        backend=primary_config.backend,
+        quad_cfg=primary_config.quad_cfg,
+        rule=primary_config.rule,
     )
     comparison = _compute_backend_slice(
         strike=strike_arr,
@@ -638,9 +822,9 @@ def run_heston_pricing_diagnostics(
         ctx=ctx,
         market=market,
         kind=kind,
-        backend=resolved_comparison_backend,
-        quad_cfg=comparison_quad_cfg,
-        rule=comparison_rule,
+        backend=comparison_config.backend,
+        quad_cfg=comparison_config.quad_cfg,
+        rule=comparison_config.rule,
     )
 
     if config_sweep_cases is None:
@@ -648,12 +832,8 @@ def run_heston_pricing_diagnostics(
             x=x,
             tau=tau,
             params=params,
-            primary_backend=backend,
-            primary_quad_cfg=quad_cfg,
-            primary_rule=rule,
-            comparison_backend=resolved_comparison_backend,
-            comparison_quad_cfg=comparison_quad_cfg,
-            comparison_rule=comparison_rule,
+            primary_config=primary_config,
+            comparison_config=comparison_config,
         )
 
     config_sweep_p0, p0_cases = integration_config_sweep(
@@ -701,10 +881,17 @@ def run_heston_pricing_diagnostics(
         abs_diff = np.abs(case_price - baseline_price)
         p0_row = config_sweep_p0.loc[config_sweep_p0["config_label"] == label].iloc[0]
         p1_row = config_sweep_p1.loc[config_sweep_p1["config_label"] == label].iloc[0]
+        case_details = _config_sweep_case_details(case)
         config_rows.append(
             {
                 "config_label": label,
                 "backend": case_backend,
+                "config_resolution": case_details["config_resolution"],
+                "resolved_u_max": case_details["u_max"],
+                "resolved_n_panels": case_details["n_panels"],
+                "resolved_nodes_per_panel": case_details["nodes_per_panel"],
+                "resolved_panel_spacing": case_details["panel_spacing"],
+                "resolved_cluster_strength": case_details["cluster_strength"],
                 "p0_max_severity": p0_row["max_severity"],
                 "p1_max_severity": p1_row["max_severity"],
                 "p0_warning_point_count": int(p0_row["warning_point_count"]),
@@ -1079,8 +1266,12 @@ def run_heston_pricing_diagnostics(
             "tau": float(tau),
             "spot": float(ctx.spot),
             "forward": float(forward),
-            "primary_backend": backend,
+            "primary_backend": primary_config.backend,
             "comparison_backend": resolved_comparison_backend,
+            "primary_backend_config": _resolved_backend_config_meta(primary_config),
+            "comparison_backend_config": _resolved_backend_config_meta(
+                comparison_config
+            ),
             "provisional_policy": asdict(policy),
             "config_sweep_labels": [str(case["label"]) for case in config_sweep_cases],
             "parameter_perturbations": [

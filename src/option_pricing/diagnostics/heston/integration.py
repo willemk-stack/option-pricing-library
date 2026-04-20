@@ -333,7 +333,17 @@ def probability_slice_with_diagnostics(
     meta: Mapping[str, Any] | None = None,
     arrays: Mapping[str, Any] | None = None,
 ) -> HestonProbabilitySliceDiagnostics:
-    """Package a probability slice into a notebook-facing diagnostics artifact."""
+    """Package one probability slice into a notebook-facing diagnostics artifact.
+
+    Pass either the raw Fourier diagnostics object, an already-built
+    ``probability_table``, or plain ``probability_columns``. When the raw
+    diagnostics object is supplied, the helper copies through the packaged
+    whole-integral and panel-local arrays so downstream tables and plots can use
+    the real diagnostics flow without recomputing it in notebooks.
+
+    This helper normalizes and packages data only; it does not validate pricing
+    correctness or invent additional diagnostics.
+    """
 
     sources = [
         probability_diagnostics is not None,

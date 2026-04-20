@@ -18,6 +18,7 @@ EXAMPLE_SCRIPTS = [
 DOC_SNIPPETS = [
     ROOT / "docs" / "api" / "index.md",
     ROOT / "docs" / "user_guides" / "market_api.md",
+    ROOT / "docs" / "user_guides" / "heston_diagnostics.md",
 ]
 
 

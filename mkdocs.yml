@@ -120,6 +120,7 @@ nav:
       - Binomial CRR: user_guides/binomial_crr.md
       - PDE pricing: user_guides/pde_pricing.md
       - Diagnostics: user_guides/diagnostics.md
+      - Heston diagnostics: user_guides/heston_diagnostics.md
       - Implied volatility: user_guides/implied_vol.md
       - Volatility surface: user_guides/vol_surface.md
       - eSSVI: user_guides/essvi.md
