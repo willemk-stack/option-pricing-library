@@ -97,12 +97,130 @@ def test_run_heston_pricing_diagnostics_returns_required_tables_and_slice_contra
     assert {
         "primary_backend_config",
         "comparison_backend_config",
+        "parameter_perturbation_backend_config",
         "provisional_policy",
     } <= set(report.meta)
     assert {"slice", "parameter_perturbation_table"} <= set(report.arrays)
     assert {"smoothness_signal", "discontinuity_signal", "suspicious_flag"} <= set(
         report.arrays["slice"]
     )
+
+
+def test_perturbation_instability_mask_requires_relative_and_absolute_thresholds() -> (
+    None
+):
+    policy = heston_pricing._DEFAULT_PROVISIONAL_POLICY
+
+    mask = heston_pricing._perturbation_instability_mask(
+        perturbation_abs_price_change=np.array(
+            [2.5e-4, 7.5e-4, 7.5e-4],
+            dtype=np.float64,
+        ),
+        perturbation_rel_price_change=np.array(
+            [0.25, 0.05, 0.25],
+            dtype=np.float64,
+        ),
+        policy=policy,
+    )
+
+    np.testing.assert_array_equal(mask, np.array([False, False, True], dtype=np.bool_))
+
+
+def test_demo11_style_otm_flags_split_parameter_sensitivity_from_suspicious() -> None:
+    market = MarketData(spot=100.0, rate=0.02, dividend_yield=0.0)
+    params = HestonParams(kappa=2.0, vbar=0.04, eta=0.80, rho=-0.75, v=0.05)
+    strike = np.linspace(75.0, 125.0, 17, dtype=np.float64)
+
+    report = run_heston_pricing_diagnostics(
+        strike=strike,
+        tau=0.15,
+        market=market,
+        params=params,
+        use_recommended_cfg=True,
+    )
+
+    slice_table = report.tables["slice"]
+    flagged = slice_table.loc[
+        slice_table["parameter_sensitivity_flag"].fillna(False).astype(bool)
+    ]
+
+    assert set(flagged["strike"].to_numpy(dtype=np.float64)) == {115.625, 118.75}
+    assert not slice_table["suspicious_flag"].fillna(False).astype(bool).any()
+
+
+def test_recommended_cfg_perturbation_runs_reuse_resolved_primary_config() -> None:
+    params = _params()
+    strike = np.array([85.0, 95.0, 100.0, 105.0, 115.0], dtype=np.float64)
+    tau = 0.75
+    forward = _market().to_context().fwd(tau)
+    x = np.log(forward / strike)
+    balanced_cfg = heston_pricing.recommend_heston_quadrature_config(
+        x=float(np.max(np.abs(x))),
+        tau=tau,
+        params=params,
+        quality="balanced",
+    )
+
+    report_recommended = run_heston_pricing_diagnostics(
+        strike=strike,
+        tau=tau,
+        market=_market(),
+        params=params,
+        backend="gauss_legendre",
+        comparison_backend="quad",
+        use_recommended_cfg=True,
+        parameter_perturbations=_minimal_parameter_perturbations(params),
+    )
+    report_explicit = run_heston_pricing_diagnostics(
+        strike=strike,
+        tau=tau,
+        market=_market(),
+        params=params,
+        backend="gauss_legendre",
+        quad_cfg=balanced_cfg,
+        comparison_backend="quad",
+        parameter_perturbations=_minimal_parameter_perturbations(params),
+    )
+
+    assert (
+        report_recommended.meta["parameter_perturbation_backend_config"][
+            "config_resolution"
+        ]
+        == "recommended_balanced"
+    )
+
+    perturbation_table = report_recommended.arrays["parameter_perturbation_table"]
+    assert {
+        "backend",
+        "config_resolution",
+        "resolved_u_max",
+        "resolved_n_panels",
+        "resolved_nodes_per_panel",
+        "resolved_panel_spacing",
+        "resolved_cluster_strength",
+    } <= set(perturbation_table)
+    assert set(perturbation_table["config_resolution"]) == {"recommended_balanced"}
+    assert all(
+        value == pytest.approx(balanced_cfg.u_max)
+        for value in perturbation_table["resolved_u_max"]
+    )
+    assert set(perturbation_table["resolved_n_panels"]) == {balanced_cfg.n_panels}
+    assert set(perturbation_table["resolved_nodes_per_panel"]) == {
+        balanced_cfg.nodes_per_panel
+    }
+
+    for label, recommended_prices in report_recommended.arrays[
+        "parameter_perturbation_prices"
+    ].items():
+        np.testing.assert_allclose(
+            np.asarray(recommended_prices, dtype=np.float64),
+            np.asarray(
+                report_explicit.arrays["parameter_perturbation_prices"][label],
+                dtype=np.float64,
+            ),
+            atol=1.0e-12,
+            rtol=0.0,
+        )
 
 
 def test_run_heston_pricing_diagnostics_uses_recommended_configs_when_enabled(

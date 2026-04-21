@@ -48,12 +48,15 @@ HESTON_DIAG_PROBABILITY_TOL = 1.0e-10
 HESTON_DIAG_TAIL_PANEL_COUNT = 3
 HESTON_DIAG_TAIL_ABS_FRACTION_WARN = 5.0e-2
 HESTON_DIAG_CANCELLATION_RATIO_WARN = 5.0e1
-HESTON_DIAG_BAD_PANEL_COUNT_WARN = 3
+HESTON_DIAG_BAD_PANEL_COUNT_WARN = 5
+HESTON_DIAG_BAD_PANEL_FRACTION_WARN = 1.0e-1
 HESTON_DIAG_QUAD_REL_ERROR_WARN = 1.0e-6
 HESTON_DIAG_NEAR_ORIGIN_PANEL_COUNT = 2
 HESTON_DIAG_NEAR_ORIGIN_ABS_FRACTION_WARN = 6.0e-1
 HESTON_DIAG_TAIL_LAST_OVER_PREV_WARN = 8.0e-1
 HESTON_DIAG_OSCILLATION_SPIKE_FACTOR = 5.0
+HESTON_DIAG_OSCILLATION_ABS_MASS_FLOOR = 1.0e-4
+HESTON_DIAG_OSCILLATION_REL_MASS_FLOOR = 1.0e-3
 _DIAG_EPS = 1.0e-14
 
 
@@ -284,6 +287,21 @@ def _round_up_to_multiple(value: int, multiple: int) -> int:
     return int(multiple * np.ceil(float(value) / float(multiple)))
 
 
+def _bad_panel_count_threshold(n_panels: int) -> int:
+    return max(
+        int(HESTON_DIAG_BAD_PANEL_COUNT_WARN),
+        int(np.ceil(HESTON_DIAG_BAD_PANEL_FRACTION_WARN * float(n_panels))),
+    )
+
+
+def _oscillation_mass_floor(abs_mass: ArrayLike) -> RealArray:
+    abs_mass_arr = np.asarray(abs_mass, dtype=np.float64)
+    return np.maximum(
+        HESTON_DIAG_OSCILLATION_ABS_MASS_FLOOR,
+        HESTON_DIAG_OSCILLATION_REL_MASS_FLOOR * abs_mass_arr,
+    )
+
+
 def recommend_heston_quadrature_config(
     *,
     x: float,
@@ -463,6 +481,7 @@ def _compute_fixed_rule_panel_reason(
         np.isfinite(abs_panel_contribs), abs_panel_contribs, 0.0
     )
     abs_mass = np.sum(finite_abs_panel_contribs, axis=1)
+    oscillation_mass_floor = _oscillation_mass_floor(abs_mass)
 
     near_n = min(HESTON_DIAG_NEAR_ORIGIN_PANEL_COUNT, n_panels)
     if near_n > 0:
@@ -528,9 +547,13 @@ def _compute_fixed_rule_panel_reason(
                 _DIAG_EPS,
             )
 
-            spike_mask = np.isfinite(abs_panel_contribs[:, i]) & (
-                abs_panel_contribs[:, i]
-                > HESTON_DIAG_OSCILLATION_SPIKE_FACTOR * local_ref
+            spike_mask = (
+                np.isfinite(abs_panel_contribs[:, i])
+                & (
+                    abs_panel_contribs[:, i]
+                    > HESTON_DIAG_OSCILLATION_SPIKE_FACTOR * local_ref
+                )
+                & (abs_panel_contribs[:, i] >= oscillation_mass_floor)
             )
             if np.any(spike_mask):
                 panel_reason[spike_mask, i] |= _flag_u32(
@@ -546,6 +569,7 @@ def _compute_global_warning_flags(
     *,
     panel_invalid: BoolArray | None = None,
     panel_contribs: ArrayLike | None = None,
+    panel_reason: UInt32Array | None = None,
     quad_error_estimate: float | ArrayLike | None = None,
 ) -> tuple[UInt32Array, RealArray | None, RealArray | None]:
     """Return flattened warning flags and optional explanatory metrics."""
@@ -629,8 +653,32 @@ def _compute_global_warning_flags(
                     "panel_invalid and panel_contribs must have matching panel shapes."
                 )
 
-            bad_panel_counts = np.count_nonzero(panel_invalid_flat, axis=1)
-            flags[bad_panel_counts >= HESTON_DIAG_BAD_PANEL_COUNT_WARN] |= _flag_u32(
+            panel_reason_flat: UInt32Array | None = None
+            if panel_reason is not None:
+                panel_reason_arr = np.asarray(panel_reason, dtype=np.uint32)
+                if panel_reason_arr.ndim == 1:
+                    panel_reason_flat = panel_reason_arr.reshape(1, -1)
+                else:
+                    panel_reason_flat = panel_reason_arr.reshape(
+                        -1, panel_reason_arr.shape[-1]
+                    )
+
+                if panel_reason_flat.shape != panel_contribs_flat.shape:
+                    raise ValueError(
+                        "panel_reason and panel_contribs must have matching panel "
+                        "shapes."
+                    )
+
+            effective_bad_panels = np.asarray(panel_invalid_flat, dtype=np.bool_).copy()
+            if panel_reason_flat is not None:
+                near_origin_only = panel_reason_flat == _flag_u32(
+                    HestonPanelReason.UNDERRESOLVED_NEAR_ORIGIN
+                )
+                effective_bad_panels &= ~near_origin_only
+
+            bad_panel_counts = np.count_nonzero(effective_bad_panels, axis=1)
+            threshold = _bad_panel_count_threshold(panel_contribs_flat.shape[1])
+            flags[bad_panel_counts >= threshold] |= _flag_u32(
                 HestonIntegralWarning.TOO_MANY_BAD_PANELS
             )
 
@@ -718,6 +766,7 @@ def _integrate_pj_fixed_rule_with_diagnostics(
             probability,
             panel_invalid=panel_invalid,
             panel_contribs=panel_contribs,
+            panel_reason=panel_reason,
         )
     )
 
@@ -793,6 +842,7 @@ def _integrate_pj_fixed_rule_batch_with_diagnostics(
             probability,
             panel_invalid=panel_invalid_flat,
             panel_contribs=panel_contribs_flat,
+            panel_reason=panel_reason_flat,
         )
     )
 

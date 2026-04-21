@@ -70,6 +70,71 @@ def test_compute_fixed_rule_panel_reason_marks_nonfinite_tail_and_spike() -> Non
     assert int(panel_reason[3]) & int(HestonPanelReason.TAIL_TOO_LARGE)
 
 
+def test_compute_fixed_rule_panel_reason_ignores_tiny_oscillation_spikes() -> None:
+    values_panel = np.ones((7, 2), dtype=np.float64)
+    panel_contribs = np.array(
+        [0.3, 0.3, 1.0e-6, 1.0e-5, 1.0e-6, 0.3, 0.3],
+        dtype=np.float64,
+    )
+
+    panel_reason = _compute_fixed_rule_panel_reason(values_panel, panel_contribs)
+
+    assert panel_reason.shape == (7,)
+    assert not (int(panel_reason[3]) & int(HestonPanelReason.OSCILLATION_SPIKE))
+
+
+def test_compute_global_warning_flags_ignores_near_origin_only_panels() -> None:
+    panel_invalid = np.array([True, True, True, True, True], dtype=np.bool_)
+    panel_reason = np.array(
+        [
+            int(HestonPanelReason.UNDERRESOLVED_NEAR_ORIGIN),
+            int(HestonPanelReason.UNDERRESOLVED_NEAR_ORIGIN),
+            int(HestonPanelReason.OSCILLATION_SPIKE),
+            int(HestonPanelReason.OSCILLATION_SPIKE),
+            int(HestonPanelReason.OSCILLATION_SPIKE),
+        ],
+        dtype=np.uint32,
+    )
+
+    flags, _, _ = _compute_global_warning_flags(
+        total_integral=np.array([10.0], dtype=np.float64),
+        probability=np.array([0.5], dtype=np.float64),
+        panel_invalid=panel_invalid,
+        panel_contribs=np.ones(5, dtype=np.float64),
+        panel_reason=panel_reason,
+    )
+
+    assert not (int(flags[0]) & int(HestonIntegralWarning.TOO_MANY_BAD_PANELS))
+
+
+def test_compute_global_warning_flags_scales_with_panel_count() -> None:
+    panel_invalid = np.zeros(60, dtype=np.bool_)
+    panel_reason = np.zeros(60, dtype=np.uint32)
+    panel_invalid[:5] = True
+    panel_reason[:5] = int(HestonPanelReason.OSCILLATION_SPIKE)
+
+    five_flags, _, _ = _compute_global_warning_flags(
+        total_integral=np.array([100.0], dtype=np.float64),
+        probability=np.array([0.5], dtype=np.float64),
+        panel_invalid=panel_invalid,
+        panel_contribs=np.ones(60, dtype=np.float64),
+        panel_reason=panel_reason,
+    )
+
+    panel_invalid[5] = True
+    panel_reason[5] = int(HestonPanelReason.OSCILLATION_SPIKE)
+    six_flags, _, _ = _compute_global_warning_flags(
+        total_integral=np.array([100.0], dtype=np.float64),
+        probability=np.array([0.5], dtype=np.float64),
+        panel_invalid=panel_invalid,
+        panel_contribs=np.ones(60, dtype=np.float64),
+        panel_reason=panel_reason,
+    )
+
+    assert not (int(five_flags[0]) & int(HestonIntegralWarning.TOO_MANY_BAD_PANELS))
+    assert int(six_flags[0]) & int(HestonIntegralWarning.TOO_MANY_BAD_PANELS)
+
+
 def test_scalar_fixed_rule_diagnostics_populate_new_fields() -> None:
     params = HestonParams(
         kappa=2.0,
@@ -250,7 +315,9 @@ def test_too_small_u_max_triggers_tail_warnings_on_hard_regime() -> None:
     )
 
     assert int(diag.warning_flags) & int(HestonIntegralWarning.LARGE_TAIL_FRACTION)
-    assert int(diag.warning_flags) & int(HestonIntegralWarning.TOO_MANY_BAD_PANELS)
+    assert not (
+        int(diag.warning_flags) & int(HestonIntegralWarning.TOO_MANY_BAD_PANELS)
+    )
     assert diag.tail_abs_fraction is not None
     assert diag.tail_abs_fraction > 0.5
     assert diag.panel_reason is not None

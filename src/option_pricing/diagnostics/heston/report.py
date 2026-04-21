@@ -41,7 +41,10 @@ _DEFAULT_WORST_STRIKE_COLUMNS: tuple[str, ...] = (
     "config_price_span",
     "smoothness_signal",
     "discontinuity_signal",
+    "perturbation_max_absolute_price_change",
     "perturbation_max_relative_price_change",
+    "parameter_sensitivity_flag",
+    "parameter_sensitivity_reasons",
     "suspicious_flag",
     "suspicious_reasons",
 )

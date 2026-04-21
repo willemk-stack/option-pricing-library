@@ -44,9 +44,13 @@ def test_integration_diagnostics_gauss_builds_readable_panel_warning_and_reason_
         "reason_counts",
     }
     assert artifact.meta["backend"] == "gauss_legendre"
+    assert artifact.meta["config_resolution"] == "explicit_quad_cfg"
     assert artifact.meta["probability_index"] == 1
     assert artifact.meta["point_count"] == 3
     assert artifact.meta["panel_detail_available"] is True
+    assert artifact.meta["u_max"] == _gauss_cfg().u_max
+    assert artifact.meta["n_panels"] == _gauss_cfg().n_panels
+    assert artifact.meta["nodes_per_panel"] == _gauss_cfg().nodes_per_panel
 
     panels = artifact.tables["panels"]
     assert {
@@ -77,6 +81,9 @@ def test_integration_diagnostics_quad_marks_panel_detail_unavailable() -> None:
     panels = artifact.tables["panels"]
     assert not bool(panels["detail_available"].any())
     assert panels["notes"].str.contains("unavailable", case=False).all()
+    assert artifact.meta["config_resolution"] is None
+    assert artifact.meta["u_max"] is None
+    assert artifact.meta["n_panels"] is None
 
     reason_counts = artifact.tables["reason_counts"]
     assert reason_counts.iloc[0]["reason_name"] == "panel_detail_unavailable"
@@ -125,8 +132,20 @@ def test_integration_config_sweep_returns_summary_table_and_artifacts_by_label()
         ],
     )
 
-    assert {"config_label", "backend", "max_severity"} <= set(sweep.columns)
+    assert {
+        "config_label",
+        "backend",
+        "config_resolution",
+        "resolved_u_max",
+        "resolved_n_panels",
+        "resolved_nodes_per_panel",
+        "resolved_panel_spacing",
+        "resolved_cluster_strength",
+        "max_severity",
+    } <= set(sweep.columns)
     assert set(artifacts) == {"gauss", "quad"}
     assert sweep.shape[0] == 2
     assert isinstance(artifacts["gauss"], HestonIntegrationDiagnosticsBundle)
     assert artifacts["gauss"].tables["worst_panels"].columns[0] == "rank"
+    assert artifacts["gauss"].meta["config_resolution"] == "explicit_quad_cfg"
+    assert artifacts["quad"].meta["config_resolution"] is None

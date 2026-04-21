@@ -23,6 +23,7 @@ from ...pricers.heston import (
 )
 from ...types import MarketData, OptionSpec, OptionType
 from ...vol.implied_vol_scalar import implied_vol_bs
+from ._provenance import backend_config_meta
 from .contracts import (
     HESTON_SLICE_TABLE_COLUMNS,
     HESTON_SUMMARY_METRICS,
@@ -77,6 +78,7 @@ class _ProvisionalStrikePolicy:
     discontinuity_local_jump: float = 0.12
     config_price_span_abs: float = 1.0e-4
     perturbation_relative_price_change: float = 0.10
+    perturbation_absolute_price_change: float = 5.0e-4
     positive_parameter_relative_bump: float = 0.01
     positive_parameter_absolute_floor: float = 1.0e-4
     rho_absolute_bump: float = 0.01
@@ -134,39 +136,6 @@ def _coerce_backend(value: object) -> HestonDiagnosticsBackend:
     raise ValueError(
         "backend must be one of 'gauss_legendre' or 'quad'. " f"Got {value!r}."
     )
-
-
-def _gauss_config_details(quad_cfg: QuadratureConfig | None) -> dict[str, Any]:
-    if quad_cfg is None:
-        return {
-            "u_max": None,
-            "n_panels": None,
-            "nodes_per_panel": None,
-            "panel_spacing": None,
-            "cluster_strength": None,
-        }
-
-    return {
-        "u_max": float(quad_cfg.u_max),
-        "n_panels": int(quad_cfg.n_panels),
-        "nodes_per_panel": int(quad_cfg.nodes_per_panel),
-        "panel_spacing": str(quad_cfg.panel_spacing),
-        "cluster_strength": float(quad_cfg.cluster_strength),
-    }
-
-
-def _resolved_backend_config_meta(
-    resolved: _ResolvedBackendConfig,
-) -> dict[str, Any]:
-    return {
-        "backend": resolved.backend,
-        "config_resolution": resolved.config_resolution,
-        **_gauss_config_details(
-            resolved.quad_cfg
-            if resolved.backend == "gauss_legendre" and resolved.rule is None
-            else None
-        ),
-    }
 
 
 def _resolve_backend_config(
@@ -349,6 +318,19 @@ def _nanmax_or_none(values: np.ndarray) -> float | None:
     return float(np.max(finite))
 
 
+def _perturbation_instability_mask(
+    *,
+    perturbation_abs_price_change: np.ndarray,
+    perturbation_rel_price_change: np.ndarray,
+    policy: _ProvisionalStrikePolicy,
+) -> np.ndarray:
+    return np.asarray(
+        (perturbation_rel_price_change > policy.perturbation_relative_price_change)
+        & (perturbation_abs_price_change > policy.perturbation_absolute_price_change),
+        dtype=np.bool_,
+    )
+
+
 def _continuity_signals(
     *,
     strike: np.ndarray,
@@ -435,28 +417,12 @@ def _config_sweep_case_details(case: Mapping[str, Any]) -> dict[str, Any]:
     backend = _coerce_backend(case.get("backend", "gauss_legendre"))
     quad_cfg = case.get("quad_cfg")
     rule = case.get("rule")
-    config_resolution = case.get("config_resolution")
-
-    if backend == "gauss_legendre" and config_resolution is None:
-        if quad_cfg is not None and rule is not None:
-            raise ValueError(
-                "Pass either quad_cfg or rule, not both. "
-                "If you already built a rule, it is the authoritative discretization."
-            )
-        if quad_cfg is not None:
-            config_resolution = "explicit_quad_cfg"
-        elif rule is not None:
-            config_resolution = "explicit_rule"
-        else:
-            config_resolution = "default_hard_coded"
-            quad_cfg = _default_heston_quadrature_config()
-
-    return {
-        "config_resolution": config_resolution,
-        **_gauss_config_details(
-            quad_cfg if backend == "gauss_legendre" and rule is None else None
-        ),
-    }
+    return backend_config_meta(
+        backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
+        config_resolution=case.get("config_resolution"),
+    )
 
 
 def _default_config_sweep_cases(
@@ -801,6 +767,18 @@ def run_heston_pricing_diagnostics(
             else None
         ),
     )
+    primary_config_meta = backend_config_meta(
+        backend=primary_config.backend,
+        quad_cfg=primary_config.quad_cfg,
+        rule=primary_config.rule,
+        config_resolution=primary_config.config_resolution,
+    )
+    comparison_config_meta = backend_config_meta(
+        backend=comparison_config.backend,
+        quad_cfg=comparison_config.quad_cfg,
+        rule=comparison_config.rule,
+        config_resolution=comparison_config.config_resolution,
+    )
 
     primary = _compute_backend_slice(
         strike=strike_arr,
@@ -924,8 +902,15 @@ def run_heston_pricing_diagnostics(
     )
     perturbation_rows: list[dict[str, Any]] = []
     perturbation_price_by_label: dict[str, FloatArray] = {}
+    perturbation_abs_price_change = np.zeros(strike_arr.shape, dtype=np.float64)
     perturbation_rel_price_change = np.zeros(strike_arr.shape, dtype=np.float64)
     baseline_primary_price = primary.price.copy()
+    perturbation_config_meta = backend_config_meta(
+        backend=primary_config.backend,
+        quad_cfg=primary_config.quad_cfg,
+        rule=primary_config.rule,
+        config_resolution=primary_config.config_resolution,
+    )
 
     for case in perturbation_cases:
         label = str(case["label"])
@@ -938,13 +923,16 @@ def run_heston_pricing_diagnostics(
             ctx=ctx,
             market=market,
             kind=kind,
-            backend=backend,
-            quad_cfg=quad_cfg,
-            rule=rule,
+            backend=primary_config.backend,
+            quad_cfg=primary_config.quad_cfg,
+            rule=primary_config.rule,
         )
         abs_diff = np.abs(perturbed.price - baseline_primary_price)
         rel_diff = abs_diff / np.maximum(np.abs(baseline_primary_price), 1.0e-8)
         perturbation_price_by_label[label] = perturbed.price
+        perturbation_abs_price_change = np.maximum(
+            perturbation_abs_price_change, abs_diff
+        )
         perturbation_rel_price_change = np.maximum(
             perturbation_rel_price_change, rel_diff
         )
@@ -954,6 +942,15 @@ def run_heston_pricing_diagnostics(
                 "parameter": case["parameter"],
                 "direction": case["direction"],
                 "bump": float(case["bump"]),
+                "backend": perturbation_config_meta["backend"],
+                "config_resolution": perturbation_config_meta["config_resolution"],
+                "resolved_u_max": perturbation_config_meta["u_max"],
+                "resolved_n_panels": perturbation_config_meta["n_panels"],
+                "resolved_nodes_per_panel": perturbation_config_meta["nodes_per_panel"],
+                "resolved_panel_spacing": perturbation_config_meta["panel_spacing"],
+                "resolved_cluster_strength": perturbation_config_meta[
+                    "cluster_strength"
+                ],
                 "max_abs_price_change": float(np.nanmax(abs_diff)),
                 "max_relative_price_change": float(np.nanmax(rel_diff)),
                 "notes": "Provisional perturbation magnitudes; owner approval required.",
@@ -1003,17 +1000,22 @@ def run_heston_pricing_diagnostics(
     warning_count = warning_count_p0 + warning_count_p1
     tail_fraction = _rowwise_nanmax([tail_fraction_p0, tail_fraction_p1])
     cancellation_ratio = _rowwise_nanmax([cancellation_p0, cancellation_p1])
+    parameter_sensitivity_flag = _perturbation_instability_mask(
+        perturbation_abs_price_change=perturbation_abs_price_change,
+        perturbation_rel_price_change=perturbation_rel_price_change,
+        policy=policy,
+    )
 
     suspicious_flag = np.asarray(
         (backend_diff > policy.backend_price_diff_abs)
         | (severity_rank >= _severity_rank("warning"))
         | smoothness_flag
         | discontinuity_flag
-        | (config_price_span > policy.config_price_span_abs)
-        | (perturbation_rel_price_change > policy.perturbation_relative_price_change),
+        | (config_price_span > policy.config_price_span_abs),
         dtype=np.bool_,
     )
     suspicious_reasons: list[str] = []
+    parameter_sensitivity_reasons: list[str] = []
     for idx in range(len(strike_arr)):
         reasons: list[str] = []
         if backend_diff[idx] > policy.backend_price_diff_abs:
@@ -1026,12 +1028,12 @@ def run_heston_pricing_diagnostics(
             reasons.append("discontinuity flag")
         if config_price_span[idx] > policy.config_price_span_abs:
             reasons.append("config sweep price span")
-        if (
-            perturbation_rel_price_change[idx]
-            > policy.perturbation_relative_price_change
-        ):
-            reasons.append("parameter perturbation instability")
         suspicious_reasons.append("; ".join(reasons) if reasons else "none")
+        parameter_sensitivity_reasons.append(
+            "parameter perturbation instability"
+            if parameter_sensitivity_flag[idx]
+            else "none"
+        )
 
     slice_table = pd.DataFrame(
         {
@@ -1070,9 +1072,12 @@ def run_heston_pricing_diagnostics(
             "implied_vol_comparison_backend": comparison.implied_vol,
             "backend_price_diff_signed": primary.price - comparison.price,
             "config_price_span": config_price_span,
+            "perturbation_max_absolute_price_change": perturbation_abs_price_change,
             "smoothness_signal": smoothness_signal,
             "discontinuity_signal": discontinuity_signal,
             "perturbation_max_relative_price_change": perturbation_rel_price_change,
+            "parameter_sensitivity_flag": parameter_sensitivity_flag,
+            "parameter_sensitivity_reasons": parameter_sensitivity_reasons,
             "suspicious_flag": suspicious_flag,
             "suspicious_reasons": suspicious_reasons,
         }
@@ -1118,16 +1123,29 @@ def run_heston_pricing_diagnostics(
     worst_strikes = slice_table.sort_values(
         [
             "suspicious_flag",
+            "parameter_sensitivity_flag",
             "severity",
             "backend_diff",
             "config_price_span",
             "perturbation_max_relative_price_change",
+            "perturbation_max_absolute_price_change",
             "warning_count",
             "tail_fraction",
             "cancellation_ratio",
         ],
         key=lambda col: col.map(_severity_rank) if col.name == "severity" else col,
-        ascending=[False, False, False, False, False, False, False, False],
+        ascending=[
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+        ],
         ignore_index=True,
     ).head(int(top_n))
     worst_strikes = worst_strikes.copy()
@@ -1139,21 +1157,27 @@ def run_heston_pricing_diagnostics(
     worst_row = slice_table.sort_values(
         [
             "suspicious_flag",
+            "parameter_sensitivity_flag",
             "severity",
             "backend_diff",
             "config_price_span",
             "perturbation_max_relative_price_change",
+            "perturbation_max_absolute_price_change",
             "warning_count",
         ],
         key=lambda col: col.map(_severity_rank) if col.name == "severity" else col,
-        ascending=[False, False, False, False, False, False],
+        ascending=[False, False, False, False, False, False, False, False],
         ignore_index=True,
     ).head(1)
     worst_strike_value = None if worst_row.empty else float(worst_row.iloc[0]["strike"])
     worst_strike_notes = (
         "No strike diagnostics were produced."
         if worst_row.empty
-        else str(worst_row.iloc[0]["suspicious_reasons"])
+        else str(
+            worst_row.iloc[0]["suspicious_reasons"]
+            if str(worst_row.iloc[0]["suspicious_reasons"]) != "none"
+            else worst_row.iloc[0]["parameter_sensitivity_reasons"]
+        )
     )
     worst_strike_severity = (
         "ok" if worst_row.empty else str(worst_row.iloc[0]["severity"])
@@ -1209,8 +1233,8 @@ def run_heston_pricing_diagnostics(
     summary_lookup["suspicious_strike_count"] = {
         "value": suspicious_count,
         "notes": (
-            "Provisional policy block used for backend diff, continuity, config "
-            "sweep, and perturbation thresholds; owner approval required."
+            "Provisional policy block used for backend diff, continuity, and "
+            "config sweep thresholds; owner approval required."
         ),
         "severity": "warning" if suspicious_count > 0 else "ok",
     }
@@ -1232,6 +1256,8 @@ def run_heston_pricing_diagnostics(
             "tau": float(tau),
             "backend": backend,
             "comparison_backend": resolved_comparison_backend,
+            "backend_config": primary_config_meta,
+            "comparison_backend_config": comparison_config_meta,
             "policy": "provisional_owner_approval_required",
         },
         arrays={
@@ -1241,8 +1267,10 @@ def run_heston_pricing_diagnostics(
             "comparison_implied_vol": comparison.implied_vol,
             "smoothness_signal": smoothness_signal,
             "discontinuity_signal": discontinuity_signal,
+            "perturbation_max_absolute_price_change": perturbation_abs_price_change,
             "config_price_span": config_price_span,
             "perturbation_max_relative_price_change": perturbation_rel_price_change,
+            "parameter_sensitivity_flag": parameter_sensitivity_flag,
             "suspicious_flag": suspicious_flag,
         },
     )
@@ -1251,6 +1279,8 @@ def run_heston_pricing_diagnostics(
         meta={
             "backend_a": backend,
             "backend_b": resolved_comparison_backend,
+            "backend_a_config": primary_config_meta,
+            "backend_b_config": comparison_config_meta,
             "primary_metric": "price difference",
         },
         arrays={
@@ -1268,10 +1298,9 @@ def run_heston_pricing_diagnostics(
             "forward": float(forward),
             "primary_backend": primary_config.backend,
             "comparison_backend": resolved_comparison_backend,
-            "primary_backend_config": _resolved_backend_config_meta(primary_config),
-            "comparison_backend_config": _resolved_backend_config_meta(
-                comparison_config
-            ),
+            "primary_backend_config": primary_config_meta,
+            "comparison_backend_config": comparison_config_meta,
+            "parameter_perturbation_backend_config": perturbation_config_meta,
             "provisional_policy": asdict(policy),
             "config_sweep_labels": [str(case["label"]) for case in config_sweep_cases],
             "parameter_perturbations": [
@@ -1280,6 +1309,13 @@ def run_heston_pricing_diagnostics(
                     "parameter": row["parameter"],
                     "direction": row["direction"],
                     "bump": row["bump"],
+                    "backend": row["backend"],
+                    "config_resolution": row["config_resolution"],
+                    "resolved_u_max": row["resolved_u_max"],
+                    "resolved_n_panels": row["resolved_n_panels"],
+                    "resolved_nodes_per_panel": row["resolved_nodes_per_panel"],
+                    "resolved_panel_spacing": row["resolved_panel_spacing"],
+                    "resolved_cluster_strength": row["resolved_cluster_strength"],
                 }
                 for row in perturbation_rows
             ],

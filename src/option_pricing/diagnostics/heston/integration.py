@@ -19,6 +19,7 @@ from ...models.heston.fourier import (
 )
 from ...models.heston.params import HestonParams
 from ...numerics.quadrature import CompositeRule, QuadratureConfig
+from ._provenance import backend_config_meta
 from .contracts import HESTON_SEVERITY_ORDER, HestonDiagnosticsBackend
 from .models import (
     HestonIntegrationDiagnosticsBundle,
@@ -837,6 +838,11 @@ def integration_diagnostics(
     """Wrap the existing Fourier diagnostics in readable Step 2 artifacts."""
 
     x_arr = np.asarray(x, dtype=np.float64)
+    config_meta = backend_config_meta(
+        backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
+    )
     raw: ProbabilityDiagnosticsInput
     if x_arr.ndim == 0:
         raw = heston_probability_with_diagnostics(
@@ -863,7 +869,10 @@ def integration_diagnostics(
     probability = probability_slice_with_diagnostics(
         probability_diagnostics=diagnostics,
         strike=strike,
-        meta=meta,
+        meta={
+            **config_meta,
+            **({} if meta is None else dict(meta)),
+        },
         arrays=arrays,
     )
     panels = _build_panel_table(probability)
@@ -873,6 +882,7 @@ def integration_diagnostics(
     worst_panels = _build_worst_panels(panels, top_n=top_n_panels)
 
     bundle_meta = {
+        **config_meta,
         "backend": diagnostics.backend,
         "probability_index": int(diagnostics.j),
         "tau": float(diagnostics.tau),
@@ -951,6 +961,12 @@ def integration_config_sweep(
             {
                 "config_label": label,
                 "backend": artifact.meta["backend"],
+                "config_resolution": artifact.meta.get("config_resolution"),
+                "resolved_u_max": artifact.meta.get("u_max"),
+                "resolved_n_panels": artifact.meta.get("n_panels"),
+                "resolved_nodes_per_panel": artifact.meta.get("nodes_per_panel"),
+                "resolved_panel_spacing": artifact.meta.get("panel_spacing"),
+                "resolved_cluster_strength": artifact.meta.get("cluster_strength"),
                 "probability_index": int(j),
                 "point_count": int(len(table)),
                 "warning_point_count": int((table["warning_count"] > 0).sum()),

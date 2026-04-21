@@ -32,11 +32,14 @@ from option_pricing.diagnostics.heston.plot import (
 )
 
 from ._step6_policy import (
+    FROZEN_ACCEPTANCE_SLICES,
     PROVISIONAL_GAUSS_LEGENDRE_CFG,
     PROVISIONAL_MARKET,
     PROVISIONAL_STRESS_CASES,
     PROVISIONAL_STRIKE_GRID,
+    STEP6_FROZEN_ACCEPTANCE_NOTE,
     STEP6_OWNER_APPROVAL_NOTE,
+    build_frozen_acceptance_report,
     build_pricing_report,
     provisional_stress_case,
 )
@@ -110,9 +113,66 @@ def test_step6_public_api_surface_exports_contract_entrypoints() -> None:
     }
 
     assert "Owner review required" in STEP6_OWNER_APPROVAL_NOTE
+    assert "frozen acceptance slices" in STEP6_FROZEN_ACCEPTANCE_NOTE
     assert expected_callables <= set(public_heston.__all__)
     for name in expected_callables:
         assert callable(getattr(public_heston, name))
+
+
+@pytest.mark.parametrize(
+    "acceptance",
+    FROZEN_ACCEPTANCE_SLICES,
+    ids=lambda acceptance: acceptance.label,
+)
+def test_step6_frozen_acceptance_slices_remain_stable(acceptance) -> None:
+    report = build_frozen_acceptance_report(acceptance)
+    slice_table = report.tables["slice"]
+    backend_compare = report.tables["backend_compare"]
+    perturbation_table = report.arrays["parameter_perturbation_table"]
+
+    non_ok_severity_count = int((slice_table["severity"].astype(str) != "ok").sum())
+    suspicious_count = _count_true(slice_table["suspicious_flag"])
+    parameter_sensitivity_count = _count_true(slice_table["parameter_sensitivity_flag"])
+    max_backend_discrepancy = float(backend_compare["abs_price_diff"].max())
+    max_config_price_span = float(
+        pd.to_numeric(slice_table["config_price_span"], errors="coerce").max()
+    )
+
+    assert np.isfinite(slice_table["price"].to_numpy(dtype=np.float64)).all()
+    assert np.isfinite(
+        backend_compare["abs_price_diff"].to_numpy(dtype=np.float64)
+    ).all()
+
+    assert max_backend_discrepancy <= acceptance.max_backend_discrepancy
+    assert max_config_price_span <= acceptance.max_config_price_span
+    assert suspicious_count <= acceptance.max_suspicious_strikes
+    assert non_ok_severity_count <= acceptance.max_non_ok_severity_count
+    assert parameter_sensitivity_count <= acceptance.max_parameter_sensitivity_strikes
+
+    if acceptance.require_any_review_signal:
+        assert (
+            suspicious_count + non_ok_severity_count + parameter_sensitivity_count
+        ) > 0
+
+    primary_cfg = report.meta["primary_backend_config"]
+    perturbation_cfg = report.meta["parameter_perturbation_backend_config"]
+    assert primary_cfg["backend"] == "gauss_legendre"
+    assert primary_cfg["config_resolution"] == "recommended_balanced"
+    assert perturbation_cfg["backend"] == "gauss_legendre"
+    assert perturbation_cfg["config_resolution"] == "recommended_balanced"
+    assert set(report.meta["config_sweep_labels"]) == set(
+        report.arrays["config_sweep_prices"]
+    )
+
+    assert {"backend", "config_resolution", "resolved_u_max"} <= set(perturbation_table)
+    assert set(perturbation_table["config_resolution"]) == {"recommended_balanced"}
+    assert set(perturbation_table["backend"]) == {"gauss_legendre"}
+
+    summary = report.tables["summary"].set_index("metric")
+    assert float(summary.loc["max_backend_discrepancy", "value"]) == pytest.approx(
+        max_backend_discrepancy
+    )
+    assert int(summary.loc["suspicious_strike_count", "value"]) == suspicious_count
 
 
 def test_step6_public_entrypoints_return_notebook_usable_artifacts() -> None:
@@ -303,6 +363,7 @@ def test_step6_provisional_policy_and_owner_review_notes_stay_explicit() -> None
         "discontinuity_local_jump",
         "config_price_span_abs",
         "perturbation_relative_price_change",
+        "perturbation_absolute_price_change",
     } <= set(policy)
     assert report.meta["price"]["policy"] == "provisional_owner_approval_required"
     assert report.meta["backend_comparison"]["primary_metric"] == "price difference"
