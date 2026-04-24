@@ -177,7 +177,9 @@ def simulate_gbm_paths(
     return paths
 
 
-# To be removed....
+# These helpers remain here for tutorial notebooks and plotting utilities.
+# The canonical pricing-facing GBM APIs are `simulate_gbm_terminal` and
+# `simulate_gbm_paths` above.
 def plot_sample_paths(
     t: np.ndarray, paths: np.ndarray, n_plot: int = 10, title: str = "Sample paths"
 ) -> None:

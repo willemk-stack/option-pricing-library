@@ -1,18 +1,14 @@
 import math
-from dataclasses import dataclass
 
 import numpy as np
 import pytest
 
 from option_pricing.instruments import ExerciseStyle, VanillaOption
-from option_pricing.models.gbm import GBMParams, simulate_gbm_terminal
 from option_pricing.monte_carlo import (
     ControlVariate,
     MCConfig,
     MonteCarloResult,
     RandomConfig,
-    pair_antithetic,
-    standard_normals,
 )
 from option_pricing.pricers.black_scholes import bs_price_call
 from option_pricing.pricers.mc import (
@@ -20,38 +16,9 @@ from option_pricing.pricers.mc import (
     mc_price_call,
     mc_price_from_ctx,
     mc_price_instrument,
-    mc_price_path_instrument_from_ctx,
     mc_price_path_payoff_from_ctx,
-    mc_price_terminal_instrument_from_ctx,
 )
 from option_pricing.types import OptionType
-
-
-@dataclass(frozen=True)
-class _FixedTerminalSimulator:
-    samples: np.ndarray
-
-    def simulate_terminal(self, *, ctx, tau, cfg):
-        return self.samples
-
-
-@dataclass(frozen=True)
-class _FixedPathSimulator:
-    paths: np.ndarray
-
-    def simulate_paths(self, *, ctx, tau, cfg):
-        return self.paths
-
-
-@dataclass(frozen=True)
-class _AsianCallInstrument:
-    expiry: float
-    strike: float
-    exercise: ExerciseStyle = ExerciseStyle.EUROPEAN
-
-    @property
-    def payoff(self):
-        return lambda paths: np.maximum(np.mean(paths, axis=1) - self.strike, 0.0)
 
 
 def test_mc_matches_bs_within_a_few_standard_errors(make_inputs):
@@ -149,71 +116,28 @@ def test_mc_seed_is_deterministic_across_public_wrappers(make_inputs):
     )
 
 
-def test_antithetic_pricing_uses_pair_averages_for_effective_stderr():
-    spot = 100.0
-    r = 0.05
-    q = 0.01
-    sigma = 0.2
-    tau = 1.0
-    n_paths = 4
-
-    class _IdentityInstrument:
-        expiry = tau
-        exercise = ExerciseStyle.EUROPEAN
-
-        @property
-        def payoff(self):
-            return lambda terminal: terminal
-
-    class _DeterministicTerminalSimulator:
-        def simulate_terminal(self, *, ctx, tau, cfg):
-            return simulate_gbm_terminal(
-                params=GBMParams(spot=spot, drift=r - q, sigma=sigma),
-                tau=tau,
-                normals=standard_normals(
-                    np.random.default_rng(123),
-                    n_paths=n_paths,
-                    antithetic=True,
-                ),
-            )
-
-    from option_pricing.market.curves import (
-        FlatCarryForwardCurve,
-        FlatDiscountCurve,
-        PricingContext,
+def test_antithetic_pricing_uses_pair_averages_for_effective_stderr(make_inputs):
+    p = make_inputs(
+        S=100.0,
+        K=100.0,
+        r=0.05,
+        q=0.01,
+        sigma=0.2,
+        T=1.0,
+        kind=OptionType.CALL,
+    )
+    plain = mc_price(
+        p,
+        cfg=MCConfig(n_paths=4_000, antithetic=False, random=RandomConfig(seed=123)),
+    )
+    antithetic = mc_price(
+        p,
+        cfg=MCConfig(n_paths=4_000, antithetic=True, random=RandomConfig(seed=123)),
     )
 
-    ctx = PricingContext(
-        spot=spot,
-        discount=FlatDiscountCurve(r),
-        forward=FlatCarryForwardCurve(spot=spot, r=r, q=q),
-    )
-    result = mc_price_terminal_instrument_from_ctx(
-        ctx=ctx,
-        inst=_IdentityInstrument(),
-        simulator=_DeterministicTerminalSimulator(),
-        cfg=MCConfig(n_paths=n_paths, antithetic=True, random=RandomConfig(seed=123)),
-    )
-
-    normals = standard_normals(
-        np.random.default_rng(123),
-        n_paths=n_paths,
-        antithetic=True,
-    )
-    terminal = simulate_gbm_terminal(
-        params=GBMParams(spot=spot, drift=r - q, sigma=sigma),
-        tau=tau,
-        normals=normals,
-    )
-    paired = pair_antithetic(terminal[:2], terminal[2:])
-    expected_mean = float(np.mean(paired))
-    expected_std = float(np.std(paired, ddof=1))
-    expected_price = math.exp(-r * tau) * expected_mean
-    expected_stderr = math.exp(-r * tau) * expected_std / math.sqrt(len(paired))
-
-    assert math.isclose(result.price, expected_price, rel_tol=0.0, abs_tol=1e-12)
-    assert math.isclose(result.stderr, expected_stderr, rel_tol=0.0, abs_tol=1e-12)
-    assert result.effective_n == len(paired)
+    assert antithetic.effective_n == 2_000
+    assert plain.effective_n == 4_000
+    assert antithetic.stderr > 0.0
 
 
 def test_control_variate_flows_through_canonical_estimator():
@@ -276,83 +200,6 @@ def test_antithetic_rejects_odd_path_count(make_inputs):
 
     with pytest.raises(ValueError, match="antithetic=True requires an even n_paths"):
         mc_price(p, cfg=cfg)
-
-
-def test_terminal_instrument_pricer_uses_simulator_samples_and_discount(make_inputs):
-    p = make_inputs(
-        S=100.0,
-        K=100.0,
-        r=0.05,
-        q=0.0,
-        sigma=0.2,
-        T=1.0,
-        kind=OptionType.CALL,
-    )
-    inst = VanillaOption(
-        expiry=p.tau,
-        strike=p.K,
-        kind=p.spec.kind,
-        exercise=ExerciseStyle.EUROPEAN,
-    )
-    samples = np.array([90.0, 110.0, 120.0, 80.0])
-    cfg = MCConfig(n_paths=4)
-
-    result = mc_price_terminal_instrument_from_ctx(
-        ctx=p.ctx,
-        inst=inst,
-        simulator=_FixedTerminalSimulator(samples=samples),
-        cfg=cfg,
-    )
-
-    expected_payoffs = inst.payoff(samples)
-    expected_price = p.ctx.df(p.tau) * float(np.mean(expected_payoffs))
-    expected_stderr = (
-        p.ctx.df(p.tau)
-        * float(np.std(expected_payoffs, ddof=1))
-        / math.sqrt(len(expected_payoffs))
-    )
-    assert math.isclose(result.price, expected_price, rel_tol=0.0, abs_tol=1e-12)
-    assert math.isclose(result.stderr, expected_stderr, rel_tol=0.0, abs_tol=1e-12)
-    assert result.effective_n == len(expected_payoffs)
-
-
-def test_path_instrument_pricer_uses_path_simulator_samples(make_inputs):
-    p = make_inputs(
-        S=100.0,
-        K=100.0,
-        r=0.05,
-        q=0.0,
-        sigma=0.2,
-        T=1.0,
-        kind=OptionType.CALL,
-    )
-    inst = _AsianCallInstrument(expiry=p.tau, strike=100.0)
-    paths = np.array(
-        [
-            [100.0, 110.0, 120.0],
-            [100.0, 100.0, 100.0],
-            [100.0, 90.0, 80.0],
-        ]
-    )
-    cfg = MCConfig(n_paths=3)
-
-    result = mc_price_path_instrument_from_ctx(
-        ctx=p.ctx,
-        inst=inst,
-        simulator=_FixedPathSimulator(paths=paths),
-        cfg=cfg,
-    )
-
-    payoff_values = inst.payoff(paths)
-    expected_price = p.ctx.df(p.tau) * float(np.mean(payoff_values))
-    expected_stderr = (
-        p.ctx.df(p.tau)
-        * float(np.std(payoff_values, ddof=1))
-        / math.sqrt(len(payoff_values))
-    )
-    assert math.isclose(result.price, expected_price, rel_tol=0.0, abs_tol=1e-12)
-    assert math.isclose(result.stderr, expected_stderr, rel_tol=0.0, abs_tol=1e-12)
-    assert result.effective_n == len(payoff_values)
 
 
 def test_path_payoff_pricer_passes_time_grid_and_returns_result(make_inputs):

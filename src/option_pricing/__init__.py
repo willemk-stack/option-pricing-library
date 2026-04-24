@@ -46,9 +46,7 @@ from .pricers.mc import (
     mc_price_from_ctx,
     mc_price_instrument,
     mc_price_instrument_from_ctx,
-    mc_price_path_instrument_from_ctx,
     mc_price_path_payoff_from_ctx,
-    mc_price_terminal_instrument_from_ctx,
 )
 from .pricers.tree import (
     binom_price,
@@ -94,9 +92,7 @@ __all__ = [
     "mc_price_from_ctx",
     "mc_price_instrument",
     "mc_price_instrument_from_ctx",
-    "mc_price_terminal_instrument_from_ctx",
     "mc_price_path_payoff_from_ctx",
-    "mc_price_path_instrument_from_ctx",
     "binom_price",
     "binom_price_from_ctx",
     "binom_price_instrument",

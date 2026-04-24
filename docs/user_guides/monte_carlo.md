@@ -107,6 +107,12 @@ result = mc_price_instrument(inst, market=market, sigma=0.20, cfg=cfg)
 print(result.price, result.stderr)
 ```
 
+If you need the advanced simulator/instrument orchestration layer directly,
+use `option_pricing.monte_carlo.mc_price_terminal_instrument_from_ctx(...)` or
+`option_pricing.monte_carlo.mc_price_path_instrument_from_ctx(...)` together
+with reusable adapters such as `option_pricing.models.gbm.GBMTerminalSimulator`
+and `option_pricing.models.gbm.GBMPathSimulator`.
+
 For direct path payoffs, pass a callable that accepts `(paths, *, times=None)`:
 
 ```python

@@ -9,6 +9,10 @@ under ``option_pricing.models``, and user-facing pricing wrappers belong under
 """
 
 from .config import MCConfig, RandomConfig, RngType
+from .engine import (
+    mc_price_path_instrument_from_ctx,
+    mc_price_terminal_instrument_from_ctx,
+)
 from .estimators import (
     ControlVariate,
     apply_control_variate,
@@ -18,6 +22,11 @@ from .estimators import (
 )
 from .results import MonteCarloResult, monte_carlo_result_from_samples
 from .rng import correlated_normals, make_rng, rng_from_random_config, standard_normals
+from .samples import (
+    as_1d_samples,
+    effective_payoff_samples,
+    effective_samples_from_payoffs,
+)
 from .simulators import PathSimulator, TerminalSimulator
 
 __all__ = [
@@ -25,6 +34,9 @@ __all__ = [
     "MCConfig",
     "RandomConfig",
     "RngType",
+    # engine orchestration
+    "mc_price_terminal_instrument_from_ctx",
+    "mc_price_path_instrument_from_ctx",
     # rng/noise generation
     "make_rng",
     "rng_from_random_config",
@@ -32,6 +44,10 @@ __all__ = [
     "correlated_normals",
     "TerminalSimulator",
     "PathSimulator",
+    # sample validation/effective samples
+    "as_1d_samples",
+    "effective_samples_from_payoffs",
+    "effective_payoff_samples",
     # estimators/estimation
     "ControlVariate",
     "apply_control_variate",

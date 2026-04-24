@@ -66,6 +66,8 @@ See the dedicated [Curves-first API](curves.md) page for the canonical class doc
         - MonteCarloResult
         - TerminalSimulator
         - PathSimulator
+        - mc_price_terminal_instrument_from_ctx
+        - mc_price_path_instrument_from_ctx
 
 ::: option_pricing.numerics.root_finding
     options:
