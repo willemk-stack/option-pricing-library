@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pandas as pd
 
-from option_pricing.config import MCConfig, RandomConfig
+from option_pricing.monte_carlo import MCConfig, RandomConfig
 
 if TYPE_CHECKING:  # pragma: no cover
     from option_pricing.types import PricingInputs

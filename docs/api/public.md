@@ -28,6 +28,8 @@
     options:
       members:
         - ExerciseStyle
+        - TerminalInstrument
+        - PathInstrument
 
 ::: option_pricing.instruments.vanilla
     options:
@@ -54,9 +56,16 @@ See the dedicated [Curves-first API](curves.md) page for the canonical class doc
 ::: option_pricing.config
     options:
       members:
+        - ImpliedVolConfig
+
+::: option_pricing.monte_carlo
+    options:
+      members:
         - RandomConfig
         - MCConfig
-        - ImpliedVolConfig
+        - MonteCarloResult
+        - TerminalSimulator
+        - PathSimulator
 
 ::: option_pricing.numerics.root_finding
     options:

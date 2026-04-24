@@ -21,7 +21,7 @@ def main() -> None:
         bs_price,
         mc_price,
     )
-    from option_pricing.config import MCConfig, RandomConfig
+    from option_pricing.monte_carlo import MCConfig, RandomConfig
 
     market = MarketData(spot=100.0, rate=0.05, dividend_yield=0.0)
     # In PricingInputs, expiry is the absolute expiry T; with t=0 it equals tau numerically.
@@ -32,8 +32,8 @@ def main() -> None:
     print("Greeks:", bs_greeks(p))
 
     cfg_mc = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=0))
-    price_mc, se = mc_price(p, cfg=cfg_mc)
-    print("MC:", price_mc, "(SE=", se, ")")
+    mc_result = mc_price(p, cfg=cfg_mc)
+    print("MC:", mc_result.price, "(SE=", mc_result.stderr, ")")
 
     print("CRR:", binom_price(p, n_steps=500))
     # [END README_QUICKSTART]

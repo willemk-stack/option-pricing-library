@@ -3,6 +3,7 @@ from typing import Any, cast
 import numpy as np
 import pytest
 
+from option_pricing.instruments import base
 from option_pricing.instruments.digital import DigitalPayoff, digital_put_payoff
 from option_pricing.instruments.vanilla import VanillaOption, VanillaPayoff
 from option_pricing.types import OptionType
@@ -27,3 +28,7 @@ def test_digital_and_vanilla_unsupported_kind_raises():
 def test_vanilla_intrinsic_value_calls_payoff():
     inst = VanillaOption(expiry=1.0, strike=100.0, kind=OptionType.CALL)
     assert inst.intrinsic_value(105.0) == inst.payoff(105.0)
+
+
+def test_legacy_instrument_alias_is_removed():
+    assert not hasattr(base, "Instrument")

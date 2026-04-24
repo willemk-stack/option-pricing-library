@@ -15,7 +15,7 @@ from option_pricing import (
     mc_price,
     mc_price_from_ctx,
 )
-from option_pricing.config import MCConfig, RandomConfig
+from option_pricing.monte_carlo import MCConfig, RandomConfig
 
 
 def test_marketdata_fwd_alias() -> None:
@@ -70,8 +70,8 @@ def test_pricers_from_ctx_match_pricinginputs_wrappers() -> None:
 
     # Monte Carlo (fixed RNG -> exact equality between wrappers)
     cfg = MCConfig(n_paths=50_000, antithetic=True, random=RandomConfig(seed=123))
-    px_inputs, se_inputs = mc_price(p, cfg=cfg)
-    px_ctx, se_ctx = mc_price_from_ctx(
+    mc_inputs = mc_price(p, cfg=cfg)
+    mc_ctx = mc_price_from_ctx(
         kind=spec.kind,
         strike=spec.strike,
         sigma=p.sigma,
@@ -79,5 +79,5 @@ def test_pricers_from_ctx_match_pricinginputs_wrappers() -> None:
         ctx=ctx,
         cfg=cfg,
     )
-    assert math.isclose(px_inputs, px_ctx, rel_tol=0.0, abs_tol=1e-12)
-    assert math.isclose(se_inputs, se_ctx, rel_tol=0.0, abs_tol=1e-12)
+    assert math.isclose(mc_inputs.price, mc_ctx.price, rel_tol=0.0, abs_tol=1e-12)
+    assert math.isclose(mc_inputs.stderr, mc_ctx.stderr, rel_tol=0.0, abs_tol=1e-12)

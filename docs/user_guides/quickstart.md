@@ -34,32 +34,32 @@ A few conventions matter right away:
 
 ```python
 from option_pricing import bs_price, binom_price, mc_price
-from option_pricing.config import MCConfig, RandomConfig
+from option_pricing.monte_carlo import MCConfig, RandomConfig
 
 bs = bs_price(p)
 binom = binom_price(p, n_steps=400)
-mc, se = mc_price(
+mc = mc_price(
     p,
     cfg=MCConfig(n_paths=50_000, random=RandomConfig(seed=0)),
 )
 
 print(f"BS:    {bs:.6f}")
 print(f"CRR:   {binom:.6f}")
-print(f"MC:    {mc:.6f}  (SE={se:.6f})")
+print(f"MC:    {mc.price:.6f}  (SE={mc.stderr:.6f})")
 ```
 
 Typical behavior:
 
 - Black-Scholes is the closed-form benchmark
 - CRR approaches the Black-Scholes value as `n_steps` grows
-- Monte Carlo returns both a price estimate and a standard error
+- Monte Carlo returns a result object carrying both a price estimate and a standard error
 
 ## 3) Turn the Monte Carlo error into a rough confidence interval
 
 ```python
 z = 1.96
-ci_low = mc - z * se
-ci_high = mc + z * se
+ci_low = mc.price - z * mc.stderr
+ci_high = mc.price + z * mc.stderr
 
 print(ci_low, ci_high)
 ```

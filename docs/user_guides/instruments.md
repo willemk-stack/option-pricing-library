@@ -48,19 +48,21 @@ from option_pricing import (
     mc_price_instrument,
     binom_price_instrument,
 )
-from option_pricing.config import MCConfig, RandomConfig
+from option_pricing.monte_carlo import MCConfig, RandomConfig
 
 market = MarketData(spot=100.0, rate=0.02, dividend_yield=0.00)
 sigma = 0.20
 
 bs = bs_price_instrument(inst, market=market, sigma=sigma)
-mc, se = mc_price_instrument(
+mc = mc_price_instrument(
     inst,
     market=market,
     sigma=sigma,
     cfg=MCConfig(n_paths=100_000, random=RandomConfig(seed=0)),
 )
 crr = binom_price_instrument(inst, market=market, sigma=sigma, n_steps=400)
+
+print(mc.price, mc.stderr)
 ```
 
 ## American exercise with the binomial tree
@@ -93,7 +95,7 @@ For American exercise, `method="tree"` is required.
 ctx = market.to_context()
 
 bs_ctx = bs_price_instrument(inst, market=ctx, sigma=sigma)
-mc_ctx, se_ctx = mc_price_instrument(inst, market=ctx, sigma=sigma)
+mc_ctx = mc_price_instrument(inst, market=ctx, sigma=sigma)
 crr_ctx = binom_price_instrument(inst, market=ctx, sigma=sigma, n_steps=400)
 ```
 

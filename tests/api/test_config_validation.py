@@ -1,6 +1,8 @@
 import pytest
 
-from option_pricing.config import ImpliedVolConfig, MCConfig, NumericsConfig
+import option_pricing.config as config
+from option_pricing.config import ImpliedVolConfig, NumericsConfig
+from option_pricing.monte_carlo import MCConfig
 
 
 def test_numerics_config_validation():
@@ -20,3 +22,8 @@ def test_implied_vol_config_validation():
 def test_mc_config_validation():
     with pytest.raises(ValueError):
         MCConfig(n_paths=0)
+
+
+def test_mc_config_is_not_exported_from_legacy_config_module():
+    assert not hasattr(config, "MCConfig")
+    assert not hasattr(config, "RandomConfig")

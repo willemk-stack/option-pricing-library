@@ -22,7 +22,7 @@ from option_pricing import (
     mc_price_from_ctx,
     mc_price_instrument,
 )
-from option_pricing.config import MCConfig, RandomConfig
+from option_pricing.monte_carlo import MCConfig, MonteCarloResult, RandomConfig
 
 
 def _build_inputs() -> PricingInputs:
@@ -194,8 +194,8 @@ def test_cross_api_consistency_monte_carlo_pricing() -> None:
     )
     cfg = MCConfig(n_paths=8_000, antithetic=True, random=RandomConfig(seed=7))
 
-    price_inputs, se_inputs = mc_price(p, cfg=cfg)
-    price_ctx, se_ctx = mc_price_from_ctx(
+    result_inputs = mc_price(p, cfg=cfg)
+    result_ctx = mc_price_from_ctx(
         kind=p.spec.kind,
         strike=p.spec.strike,
         sigma=p.sigma,
@@ -203,18 +203,35 @@ def test_cross_api_consistency_monte_carlo_pricing() -> None:
         ctx=ctx,
         cfg=cfg,
     )
-    price_inst_market, se_inst_market = mc_price_instrument(
+    result_inst_market = mc_price_instrument(
         inst, market=p.market, sigma=p.sigma, cfg=cfg
     )
-    price_inst_ctx, se_inst_ctx = mc_price_instrument(
-        inst, market=ctx, sigma=p.sigma, cfg=cfg
-    )
+    result_inst_ctx = mc_price_instrument(inst, market=ctx, sigma=p.sigma, cfg=cfg)
 
-    assert math.isfinite(price_inputs)
-    assert se_inputs > 0.0
-    assert math.isclose(price_inputs, price_ctx, rel_tol=0.0, abs_tol=1e-12)
-    assert math.isclose(price_inputs, price_inst_market, rel_tol=0.0, abs_tol=1e-12)
-    assert math.isclose(price_inputs, price_inst_ctx, rel_tol=0.0, abs_tol=1e-12)
-    assert math.isclose(se_inputs, se_ctx, rel_tol=0.0, abs_tol=1e-12)
-    assert math.isclose(se_inputs, se_inst_market, rel_tol=0.0, abs_tol=1e-12)
-    assert math.isclose(se_inputs, se_inst_ctx, rel_tol=0.0, abs_tol=1e-12)
+    assert isinstance(result_inputs, MonteCarloResult)
+    assert isinstance(result_ctx, MonteCarloResult)
+    assert isinstance(result_inst_market, MonteCarloResult)
+    assert isinstance(result_inst_ctx, MonteCarloResult)
+    assert math.isfinite(result_inputs.price)
+    assert result_inputs.stderr > 0.0
+    assert math.isclose(
+        result_inputs.price, result_ctx.price, rel_tol=0.0, abs_tol=1e-12
+    )
+    assert math.isclose(
+        result_inputs.price, result_inst_market.price, rel_tol=0.0, abs_tol=1e-12
+    )
+    assert math.isclose(
+        result_inputs.price, result_inst_ctx.price, rel_tol=0.0, abs_tol=1e-12
+    )
+    assert math.isclose(
+        result_inputs.stderr, result_ctx.stderr, rel_tol=0.0, abs_tol=1e-12
+    )
+    assert math.isclose(
+        result_inputs.stderr, result_inst_market.stderr, rel_tol=0.0, abs_tol=1e-12
+    )
+    assert math.isclose(
+        result_inputs.stderr, result_inst_ctx.stderr, rel_tol=0.0, abs_tol=1e-12
+    )
+    assert result_inputs.effective_n == result_ctx.effective_n
+    assert result_inputs.effective_n == result_inst_market.effective_n
+    assert result_inputs.effective_n == result_inst_ctx.effective_n

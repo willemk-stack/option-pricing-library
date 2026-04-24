@@ -48,6 +48,7 @@
     options:
       members:
         - mc_price_from_ctx
+        - mc_price_path_payoff_from_ctx
 
 ::: option_pricing.pricers.tree
     options:
@@ -71,6 +72,8 @@
       members:
         - mc_price_instrument
         - mc_price_instrument_from_ctx
+        - mc_price_terminal_instrument_from_ctx
+        - mc_price_path_instrument_from_ctx
 
 ::: option_pricing.pricers.tree
     options:
@@ -80,6 +83,6 @@
 
 ## Notes
 
-- `mc_price*` functions return `(price, std_error)`.
+- `mc_price*` functions return `MonteCarloResult`.
 - Black-Scholes closed-form instrument pricers support European exercise only.
 - Tree-based instrument pricers can use the instrument's exercise style, including American exercise where supported.
