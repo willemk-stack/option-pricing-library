@@ -19,15 +19,13 @@ def _v_timestep(
     params: HestonParams,
     z_v_j: FloatArray,
     dt: float,
-) -> FloatArray:
+) -> tuple[FloatArray, FloatArray]:
     kappa, theta, eta = params.kappa, params.vbar, params.eta
 
     v_pos = np.maximum(v_t, 0.0)
+    raw_v_next = v_t + kappa * (theta - v_pos) * dt + eta * np.sqrt(v_pos * dt) * z_v_j
 
-    return np.maximum(
-        v_t + kappa * (theta - v_pos) * dt + eta * np.sqrt(v_pos * dt) * z_v_j,
-        0.0,
-    )
+    return np.maximum(raw_v_next, 0.0), raw_v_next
 
 
 def _x_timestep(
@@ -75,6 +73,7 @@ def simulate_heston_euler_paths(
         x0=x0,
         v0=v0,
     )
+    negative_variance_proposal_count = 0
 
     for j in range(n_steps):
 
@@ -82,12 +81,13 @@ def simulate_heston_euler_paths(
         z_v_j = z_v[:, j]
         assert z_v_j.shape == (n_paths,)
 
-        v_t_dt = _v_timestep(
+        v_t_dt, raw_v_t_dt = _v_timestep(
             v_t=v_t,
             params=params,
             z_v_j=z_v_j,
             dt=dt,
         )
+        negative_variance_proposal_count += int(np.count_nonzero(raw_v_t_dt < 0.0))
 
         # x_step
         z_x_j = z_x[:, j]
@@ -111,6 +111,11 @@ def simulate_heston_euler_paths(
         spot_paths=spot_paths,
         var_paths=var_paths,
         dt=dt,
+        metadata={
+            "negative_variance_proposal_rate": float(
+                negative_variance_proposal_count / (n_paths * n_steps)
+            )
+        },
     )
 
     return result

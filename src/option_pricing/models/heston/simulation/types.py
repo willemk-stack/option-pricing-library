@@ -1,6 +1,7 @@
 """Typed configs and results for Heston simulation."""
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Literal
 
 from ....typing import FloatArray
@@ -13,3 +14,4 @@ class HestonSimulationResult:
     spot_paths: FloatArray
     var_paths: FloatArray
     dt: float
+    metadata: Mapping[str, float] = field(default_factory=dict)

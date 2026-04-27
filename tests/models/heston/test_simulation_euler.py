@@ -369,3 +369,33 @@ def test_full_truncation_keeps_variance_non_negative() -> None:
     assert np.all(np.isfinite(result.spot_paths))
     assert np.all(np.isfinite(result.var_paths))
     assert np.all(result.var_paths >= 0.0)
+
+
+def test_euler_metadata_tracks_negative_variance_proposal_rate() -> None:
+    params = HestonParams(
+        kappa=1.0,
+        vbar=0.0,
+        eta=10.0,
+        rho=0.0,
+        v=0.01,
+    )
+
+    shocks = np.array(
+        [
+            [[0.0, -1.0]],
+            [[0.0, 0.2]],
+        ],
+        dtype=np.float64,
+    )
+
+    result = simulate_heston_euler_paths(
+        params=params,
+        x0=100.0,
+        tau=1.0,
+        n_steps=1,
+        shocks=shocks,
+        log_drift_increments=np.zeros(1, dtype=np.float64),
+    )
+
+    assert np.all(result.var_paths >= 0.0)
+    assert result.metadata["negative_variance_proposal_rate"] == pytest.approx(0.5)

@@ -25,6 +25,8 @@ All of the public helpers return plain pandas DataFrames or matplotlib figures s
 
 The public Heston simulation and Monte Carlo pricing entrypoints default to `quadratic_exponential`. Pass `scheme="euler_full_truncation"` explicitly when you want Euler as the baseline scheme for side-by-side diagnostics or educational examples.
 
+When you inspect the low-level Euler path generator directly, `simulate_heston_euler_paths(...)` now records `result.metadata["negative_variance_proposal_rate"]`: the fraction of raw variance proposals that would have gone negative before the full-truncation floor was applied. That complements the nonnegative stored `var_paths` by showing how stressed the naive Euler proposal was.
+
 ## Bias vs timestep
 
 Use `run_heston_mc_comparison_sweep(...)` to generate one row per `(scheme, n_steps, repeat)` run and then pass the result into `summarize_bias_vs_timestep(...)`.
