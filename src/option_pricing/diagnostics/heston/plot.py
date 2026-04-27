@@ -14,6 +14,7 @@ import pandas as pd
 
 from .._mpl import get_plt, pretty_ax, require_columns
 from .models import HestonDiagnosticsReport
+from .monte_carlo import summarize_bias_vs_timestep, summarize_runtime_vs_error
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
@@ -732,10 +733,180 @@ def plot_smile_with_warning_overlay(
     return fig, resolved_ax
 
 
+def _heston_mc_metric_table(
+    source: pd.DataFrame,
+    *,
+    metric: str,
+) -> pd.DataFrame:
+    require_columns(source, ["scheme", "n_steps", "dt"])
+    if metric in source.columns:
+        return source.copy()
+
+    if {
+        "price",
+        "signed_error",
+        "abs_error",
+        "stderr",
+        "ci_half_width",
+        "covered_reference",
+    } <= set(source.columns):
+        bias_summary = summarize_bias_vs_timestep(source)
+        if metric in bias_summary.columns:
+            return bias_summary
+
+    if {
+        "runtime_seconds",
+        "runtime_per_path",
+        "abs_error",
+        "signed_error",
+        "stderr",
+    } <= set(source.columns):
+        runtime_summary = summarize_runtime_vs_error(source)
+        if metric in runtime_summary.columns:
+            return runtime_summary
+
+    raise ValueError(
+        "source must be a prepared Heston MC summary table or a raw sweep with the "
+        f"columns required to derive {metric!r}."
+    )
+
+
+def plot_heston_mc_bias_vs_timestep(
+    summary: pd.DataFrame,
+    *,
+    x: str = "dt",
+    include_abs_error: bool = False,
+    ax: Axes | None = None,
+    title: str = "Heston MC Bias vs Timestep",
+) -> tuple[Figure, Axes]:
+    if x not in {"dt", "n_steps"}:
+        raise ValueError("x must be either 'dt' or 'n_steps'.")
+
+    require_columns(summary, ["scheme", x, "mean_signed_error"])
+    if include_abs_error:
+        require_columns(summary, ["mean_abs_error"])
+
+    fig, resolved_ax = _ensure_ax(ax, figsize=(8.0, 4.5))
+    resolved_ax.set_title(title)
+    resolved_ax.set_xlabel("dt" if x == "dt" else "n_steps")
+    resolved_ax.set_ylabel("Bias (MC - reference)")
+
+    if summary.empty:
+        _note_axis(resolved_ax, "No Heston MC bias summary rows are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    for scheme, group in summary.groupby("scheme", sort=True):
+        ordered = group.sort_values(x, kind="stable")
+        x_values = pd.to_numeric(ordered[x], errors="coerce").to_numpy(dtype=np.float64)
+        bias = pd.to_numeric(ordered["mean_signed_error"], errors="coerce").to_numpy(
+            dtype=np.float64
+        )
+        resolved_ax.plot(x_values, bias, marker="o", linewidth=2.0, label=str(scheme))
+        if include_abs_error and "mean_abs_error" in ordered.columns:
+            abs_error = pd.to_numeric(
+                ordered["mean_abs_error"],
+                errors="coerce",
+            ).to_numpy(dtype=np.float64)
+            resolved_ax.plot(
+                x_values,
+                abs_error,
+                marker="x",
+                linestyle="--",
+                alpha=0.75,
+                label=f"{scheme} |bias|",
+            )
+
+    resolved_ax.axhline(0.0, color="black", linewidth=1.0, linestyle="--")
+    if resolved_ax.lines:
+        resolved_ax.legend()
+    pretty_ax(resolved_ax)
+    return fig, resolved_ax
+
+
+def plot_heston_mc_runtime_vs_error(
+    summary: pd.DataFrame,
+    *,
+    error_metric: str = "mean_abs_error",
+    ax: Axes | None = None,
+    title: str = "Heston MC Runtime vs Error",
+) -> tuple[Figure, Axes]:
+    require_columns(summary, ["scheme", "mean_runtime_seconds", error_metric])
+
+    fig, resolved_ax = _ensure_ax(ax, figsize=(8.0, 4.5))
+    resolved_ax.set_title(title)
+    resolved_ax.set_xlabel("Mean runtime (seconds)")
+    resolved_ax.set_ylabel(error_metric.replace("_", " "))
+
+    if summary.empty:
+        _note_axis(resolved_ax, "No Heston MC runtime summary rows are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    for scheme, group in summary.groupby("scheme", sort=True):
+        ordered = group.sort_values("mean_runtime_seconds", kind="stable")
+        runtime = pd.to_numeric(
+            ordered["mean_runtime_seconds"],
+            errors="coerce",
+        ).to_numpy(dtype=np.float64)
+        error = pd.to_numeric(ordered[error_metric], errors="coerce").to_numpy(
+            dtype=np.float64
+        )
+        resolved_ax.plot(runtime, error, marker="o", linewidth=2.0, label=str(scheme))
+
+    if resolved_ax.lines:
+        resolved_ax.legend()
+    pretty_ax(resolved_ax)
+    return fig, resolved_ax
+
+
+def plot_heston_mc_scheme_comparison(
+    source: pd.DataFrame,
+    *,
+    metric: str = "mean_abs_error",
+    x: str = "n_steps",
+    ax: Axes | None = None,
+    title: str = "Heston MC Scheme Comparison",
+) -> tuple[Figure, Axes]:
+    if x not in {"dt", "n_steps"}:
+        raise ValueError("x must be either 'dt' or 'n_steps'.")
+
+    table = _heston_mc_metric_table(source, metric=metric)
+    require_columns(table, ["scheme", x, metric])
+
+    fig, resolved_ax = _ensure_ax(ax, figsize=(8.0, 4.5))
+    resolved_ax.set_title(title)
+    resolved_ax.set_xlabel("dt" if x == "dt" else "n_steps")
+    resolved_ax.set_ylabel(metric.replace("_", " "))
+
+    if table.empty:
+        _note_axis(resolved_ax, "No Heston MC comparison rows are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    for scheme, group in table.groupby("scheme", sort=True):
+        ordered = group.sort_values(x, kind="stable")
+        x_values = pd.to_numeric(ordered[x], errors="coerce").to_numpy(dtype=np.float64)
+        y_values = pd.to_numeric(ordered[metric], errors="coerce").to_numpy(
+            dtype=np.float64
+        )
+        resolved_ax.plot(
+            x_values, y_values, marker="o", linewidth=2.0, label=str(scheme)
+        )
+
+    if resolved_ax.lines:
+        resolved_ax.legend()
+    pretty_ax(resolved_ax)
+    return fig, resolved_ax
+
+
 __all__ = [
     "plot_backend_difference_by_strike",
     "plot_cancellation_ratio_by_strike",
     "plot_config_sweep",
+    "plot_heston_mc_bias_vs_timestep",
+    "plot_heston_mc_runtime_vs_error",
+    "plot_heston_mc_scheme_comparison",
     "plot_panel_contributions",
     "plot_smile_with_warning_overlay",
     "plot_tail_fraction_by_strike",

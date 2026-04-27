@@ -11,6 +11,7 @@ The format is based on *Keep a Changelog*, and this project aims to follow *Sema
 - (Add bullets here as you work; move them into the next release at tag time.)
 - Cached reusable Gauss-Legendre quadrature rules for the Heston Fourier path, including `option_pricing.numerics` exports for `QuadratureConfig`, `PanelSpacing`, `CompositeRule`, `CompositeIntegrationResult`, and `build_gauss_legendre_rule`.
 - Heston simulation and Monte Carlo wrappers now support the public `quadratic_exponential` scheme, wiring Andersen QE through the path and terminal simulators.
+- Heston Monte Carlo comparison diagnostics under `option_pricing.diagnostics.heston`, including bias-vs-timestep, runtime-vs-error, scheme-comparison summaries, and table-driven plotting helpers.
 
 ### Changed
 - Docs workflow architecture notes now describe the single-workflow `docs-ci` validate/build/deploy contract and the split between fast local pre-push checks and heavier manual/CI browser validation.
