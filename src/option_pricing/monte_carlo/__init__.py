@@ -20,7 +20,11 @@ from .estimators import (
     estimate_mean_stderr,
     pair_antithetic,
 )
-from .results import MonteCarloResult, monte_carlo_result_from_samples
+from .results import (
+    ConfidenceInterval,
+    MonteCarloResult,
+    monte_carlo_result_from_samples,
+)
 from .rng import correlated_normals, make_rng, rng_from_random_config, standard_normals
 from .samples import (
     as_1d_samples,
@@ -56,5 +60,6 @@ __all__ = [
     "pair_antithetic",
     # result containers
     "MonteCarloResult",
+    "ConfidenceInterval",
     "monte_carlo_result_from_samples",
 ]

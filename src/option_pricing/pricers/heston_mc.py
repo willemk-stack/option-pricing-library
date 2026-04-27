@@ -23,8 +23,10 @@ from ..monte_carlo.engine import (
 )
 from ..monte_carlo.estimators import ControlVariate
 from ..monte_carlo.results import MonteCarloResult
+from ..numerics.quadrature import CompositeRule, QuadratureConfig
 from ..types import MarketData, OptionType, PricingInputs
 from ..typing import FloatArray, FloatDType
+from .heston import HestonBackend, heston_price_from_ctx
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +59,56 @@ def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
     if isinstance(market, PricingContext):
         return market
     return market.to_context()
+
+
+def heston_vanilla_control_from_ctx(
+    *,
+    ctx: PricingContext,
+    kind: OptionType,
+    strike: float,
+    tau: float,
+    params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> ControlVariate:
+    """Build a Heston vanilla payoff control variate.
+
+    The generic MC engine applies controls to *undiscounted* payoff samples and
+    discounts afterward. Therefore the known control mean is:
+
+        E[Y] = semi_analytic_price / df(tau)
+
+    not the discounted option price itself.
+    """
+    inst = VanillaOption(
+        expiry=float(tau),
+        strike=float(strike),
+        kind=kind,
+        exercise=ExerciseStyle.EUROPEAN,
+    )
+
+    analytic_price = float(
+        heston_price_from_ctx(
+            kind=kind,
+            strike=float(strike),
+            tau=float(tau),
+            ctx=ctx,
+            params=params,
+            backend=backend,
+            quad_cfg=quad_cfg,
+            rule=rule,
+        )
+    )
+
+    df = float(ctx.df(float(tau)))
+    if not np.isfinite(df) or df <= 0.0:
+        raise ValueError("discount factor must be finite and positive")
+
+    return ControlVariate(
+        values=inst.payoff,
+        mean=analytic_price / df,
+    )
 
 
 def heston_mc_price_from_ctx(
@@ -242,7 +294,71 @@ def heston_mc_price_put(
     )
 
 
+def heston_mc_price_with_vanilla_control_from_ctx(
+    *,
+    ctx: PricingContext,
+    kind: OptionType,
+    strike: float,
+    params: HestonParams,
+    tau: float,
+    n_steps: int,
+    scheme: HestonScheme = "euler_full_truncation",
+    cfg: MCConfig | None = None,
+    control_kind: OptionType | None = None,
+    control_strike: float | None = None,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> MonteCarloResult:
+    """Price under Heston MC using a semi-analytic vanilla control variate.
+
+    For validating vanilla MC against Fourier, usually run without this control.
+    If the control is exactly the same payoff as the target payoff, the estimator
+    collapses almost entirely to the semi-analytic price and stops being a useful
+    MC cross-check.
+    """
+    control = heston_vanilla_control_from_ctx(
+        ctx=ctx,
+        kind=kind if control_kind is None else control_kind,
+        strike=float(strike if control_strike is None else control_strike),
+        tau=float(tau),
+        params=params,
+        backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
+    )
+
+    result = heston_mc_price_from_ctx(
+        ctx=ctx,
+        kind=kind,
+        strike=float(strike),
+        params=params,
+        tau=float(tau),
+        n_steps=int(n_steps),
+        scheme=scheme,
+        cfg=cfg,
+        control=control,
+    )
+
+    return replace(
+        result,
+        metadata={
+            **dict(result.metadata),
+            "variance_reduction": {
+                "antithetic": bool(cfg.antithetic) if cfg is not None else False,
+                "control": "heston_semi_analytic_vanilla",
+                "control_kind": str(kind if control_kind is None else control_kind),
+                "control_strike": float(
+                    strike if control_strike is None else control_strike
+                ),
+            },
+        },
+    )
+
+
 __all__ = [
+    "heston_vanilla_control_from_ctx",
+    "heston_mc_price_with_vanilla_control_from_ctx",
     "heston_mc_price",
     "heston_mc_price_call",
     "heston_mc_price_from_ctx",

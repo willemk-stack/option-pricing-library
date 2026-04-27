@@ -5,7 +5,7 @@ from typing import Literal
 
 from ....typing import FloatArray
 
-HestonScheme = Literal["euler_full_truncation"]
+HestonScheme = Literal["euler_full_truncation", "quadratic_exponential"]
 
 
 @dataclass(frozen=True, slots=True)

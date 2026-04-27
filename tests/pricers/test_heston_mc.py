@@ -7,7 +7,10 @@ from option_pricing.instruments import ExerciseStyle, VanillaOption
 from option_pricing.models.heston import HestonParams
 from option_pricing.monte_carlo import MCConfig, MonteCarloResult, RandomConfig
 from option_pricing.pricers.black_scholes import bs_price_call
-from option_pricing.pricers.heston import heston_price_call_from_ctx
+from option_pricing.pricers.heston import (
+    heston_price_call_from_ctx,
+    heston_price_from_ctx,
+)
 from option_pricing.pricers.heston_mc import (
     heston_mc_price,
     heston_mc_price_call,
@@ -15,6 +18,8 @@ from option_pricing.pricers.heston_mc import (
     heston_mc_price_instrument,
     heston_mc_price_path_payoff_from_ctx,
     heston_mc_price_put,
+    heston_mc_price_with_vanilla_control_from_ctx,
+    heston_vanilla_control_from_ctx,
 )
 from option_pricing.types import OptionType
 
@@ -206,6 +211,97 @@ def test_heston_mc_returns_monte_carlo_result_and_tracks_bs_in_near_constant_var
     assert isinstance(result, MonteCarloResult)
     assert result.stderr > 0.0
     assert abs(result.price - bs) <= 4.0 * result.stderr
+
+
+def test_heston_vanilla_control_uses_undiscounted_heston_mean(make_inputs) -> None:
+    p = make_inputs(
+        S=100.0,
+        K=95.0,
+        r=0.02,
+        q=0.01,
+        sigma=0.2,
+        T=1.25,
+        kind=OptionType.CALL,
+    )
+    params = HestonParams(kappa=2.0, vbar=0.04, eta=0.55, rho=-0.70, v=0.05)
+
+    control = heston_vanilla_control_from_ctx(
+        ctx=p.ctx,
+        kind=p.spec.kind,
+        strike=p.K,
+        tau=p.tau,
+        params=params,
+    )
+    analytic_price = float(
+        heston_price_from_ctx(
+            kind=p.spec.kind,
+            strike=p.K,
+            tau=p.tau,
+            ctx=p.ctx,
+            params=params,
+        )
+    )
+    df = float(p.ctx.df(p.tau))
+
+    terminal = np.array([80.0, 95.0, 105.0, 120.0])
+    expected_payoff = np.array([0.0, 0.0, 10.0, 25.0])
+
+    assert np.allclose(control.values(terminal), expected_payoff)
+    assert math.isclose(control.mean, analytic_price / df, rel_tol=0.0, abs_tol=1e-12)
+
+
+def test_heston_mc_vanilla_control_reduces_error_and_sets_metadata(make_inputs) -> None:
+    p = make_inputs(
+        S=100.0,
+        K=100.0,
+        r=0.02,
+        q=0.0,
+        sigma=0.2,
+        T=1.0,
+        kind=OptionType.CALL,
+    )
+    params = HestonParams(kappa=2.0, vbar=0.04, eta=0.55, rho=-0.70, v=0.05)
+    cfg = MCConfig(n_paths=20_000, antithetic=True, random=RandomConfig(seed=123))
+
+    plain = heston_mc_price_from_ctx(
+        ctx=p.ctx,
+        kind=p.spec.kind,
+        strike=p.K,
+        params=params,
+        tau=p.tau,
+        n_steps=64,
+        cfg=cfg,
+    )
+    controlled = heston_mc_price_with_vanilla_control_from_ctx(
+        ctx=p.ctx,
+        kind=p.spec.kind,
+        strike=p.K,
+        params=params,
+        tau=p.tau,
+        n_steps=64,
+        cfg=cfg,
+        control_kind=OptionType.PUT,
+        control_strike=95.0,
+    )
+    analytic_price = float(
+        heston_price_from_ctx(
+            kind=p.spec.kind,
+            strike=p.K,
+            tau=p.tau,
+            ctx=p.ctx,
+            params=params,
+        )
+    )
+
+    assert controlled.stderr < plain.stderr
+    assert abs(controlled.price - analytic_price) <= abs(plain.price - analytic_price)
+    assert controlled.effective_n == plain.effective_n == 10_000
+    assert controlled.metadata["variance_reduction"] == {
+        "antithetic": True,
+        "control": "heston_semi_analytic_vanilla",
+        "control_kind": str(OptionType.PUT),
+        "control_strike": 95.0,
+    }
 
 
 def test_heston_mc_path_payoff_pricer_passes_time_grid_and_returns_result(

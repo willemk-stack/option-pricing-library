@@ -4,30 +4,14 @@ import numpy as np
 
 from ....typing import FloatArray
 from ..params import HestonParams
+from .shared import (
+    _initialize_paths,
+    _resolve_log_drift_increments,
+    _resolve_shocks,
+    _validate_initial_state,
+    _validate_time_grid,
+)
 from .types import HestonSimulationResult
-
-
-def _resolve_shocks(
-    *,
-    shocks: FloatArray,
-    n_steps: int,
-) -> tuple[int, FloatArray, FloatArray]:
-
-    if shocks.ndim != 3:
-        raise ValueError("shocks must have shape (n_paths, n_steps, 2)")
-
-    n_paths_from_shocks, n_steps_from_shocks, n_factors = shocks.shape
-
-    if n_factors != 2:
-        raise ValueError("shocks must have final dimension 2")
-
-    if n_steps_from_shocks != n_steps:
-        raise ValueError(f"shocks has {n_steps_from_shocks} steps, expected {n_steps}")
-
-    z_x = shocks[:, :, 0]  # shape == (n_paths, n_steps)
-    z_v = shocks[:, :, 1]  # shape == (n_paths, n_steps)
-
-    return n_paths_from_shocks, z_x, z_v
 
 
 def _v_timestep(
@@ -71,43 +55,26 @@ def simulate_heston_euler_paths(
     shocks: FloatArray,
     log_drift_increments: FloatArray | None = None,
 ) -> HestonSimulationResult:
+    dt = _validate_time_grid(
+        tau=tau,
+        n_steps=n_steps,
+        allow_zero_tau=True,
+    )
+    x0, v0 = _validate_initial_state(x0=x0, v0=params.v)
 
-    if not np.isfinite(tau) or tau < 0.0:
-        raise ValueError("tau must be finite and non-negative")
-    if n_steps <= 0:
-        raise ValueError("n_steps must be positive")
-
-    dt = tau / n_steps
-
-    x0 = float(x0)
-    if not np.isfinite(x0) or x0 <= 0.0:
-        raise ValueError("x0 must be finite and positive")
-
-    v0 = float(params.v)
-    if not np.isfinite(v0) or v0 < 0.0:
-        raise ValueError("v0 must be finite and non-negative")
-
-    z = np.asarray(shocks, dtype=np.float64)
-    n_paths, z_x, z_v = _resolve_shocks(shocks=z, n_steps=n_steps)
-
-    if log_drift_increments is None:
-        drift = np.zeros(n_steps, dtype=np.float64)
-    else:
-        drift = np.asarray(log_drift_increments, dtype=np.float64)
-        if drift.shape != (n_steps,):
-            raise ValueError(
-                f"log_drift_increments must have shape ({n_steps},); got {drift.shape}"
-            )
-
-    spot_paths = np.empty((n_paths, n_steps + 1), dtype=np.float64)
-    var_paths = np.empty((n_paths, n_steps + 1), dtype=np.float64)
-
-    spot_paths[:, 0] = x0  # shape(n_paths, n_steps + 1)
-    var_paths[:, 0] = v0  # shape(n_paths, n_steps + 1)
-
-    # Update object
-    log_x_t: FloatArray = np.full(n_paths, np.log(x0), dtype=np.float64)  # (n_paths,)
-    v_t: FloatArray = np.full(n_paths, v0, dtype=np.float64)  # (n_paths,)
+    n_paths, z_x, z_v = _resolve_shocks(shocks=shocks, n_steps=n_steps)
+    drift = _resolve_log_drift_increments(
+        log_drift_increments=log_drift_increments,
+        n_steps=n_steps,
+        n_paths=n_paths,
+        allow_pathwise=False,
+    )
+    spot_paths, var_paths, log_x_t, v_t = _initialize_paths(
+        n_paths=n_paths,
+        n_steps=n_steps,
+        x0=x0,
+        v0=v0,
+    )
 
     for j in range(n_steps):
 

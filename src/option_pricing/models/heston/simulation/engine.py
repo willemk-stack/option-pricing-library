@@ -4,12 +4,69 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ....monte_carlo import MCConfig, correlated_normals, make_rng
+from ....monte_carlo import (
+    MCConfig,
+    correlated_normals,
+    make_rng,
+    standard_normals,
+)
 from ....types import PricingContext
 from ....typing import FloatArray, FloatDType
 from ..params import HestonParams
 from .euler import simulate_heston_euler_paths
+from .qe import simulate_heston_qe_paths
 from .types import HestonScheme
+
+
+def _qe_uniforms(
+    *,
+    rng: np.random.Generator,
+    n_paths: int,
+    n_steps: int,
+    antithetic: bool,
+) -> FloatArray:
+    draw_paths = n_paths // 2 if antithetic else n_paths
+    uniforms = np.asarray(
+        rng.random((draw_paths, n_steps)),
+        dtype=FloatDType,
+    )
+
+    if not antithetic:
+        return uniforms
+
+    upper = np.nextafter(np.float64(1.0), np.float64(0.0))
+    antithetic_uniforms = np.minimum(1.0 - uniforms, upper)
+    return np.concatenate([uniforms, antithetic_uniforms], axis=0)
+
+
+def _qe_shocks(
+    *,
+    rng: np.random.Generator,
+    n_paths: int,
+    n_steps: int,
+    antithetic: bool,
+) -> FloatArray:
+    z_v = standard_normals(
+        rng,
+        n_paths=n_paths,
+        sample_shape=(n_steps,),
+        antithetic=antithetic,
+        dtype=np.dtype(FloatDType),
+    )
+    u_v = _qe_uniforms(
+        rng=rng,
+        n_paths=n_paths,
+        n_steps=n_steps,
+        antithetic=antithetic,
+    )
+    z_x = standard_normals(
+        rng,
+        n_paths=n_paths,
+        sample_shape=(n_steps,),
+        antithetic=antithetic,
+        dtype=np.dtype(FloatDType),
+    )
+    return np.stack([z_v, u_v, z_x], axis=-1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,26 +105,49 @@ class HestonPathSimulator:
         log_drift_increments = np.diff(np.log(fwd_grid))
 
         rng = make_rng(cfg)
-        shocks = correlated_normals(
-            rng,
-            n_paths=int(cfg.n_paths),
-            sample_shape=(int(self.n_steps),),
-            corr=np.array(
-                [[1.0, self.params.rho], [self.params.rho, 1.0]],
-                dtype=FloatDType,
-            ),
-            antithetic=bool(cfg.antithetic),
-            dtype=np.dtype(FloatDType),
-        )
+        n_steps = int(self.n_steps)
+        n_paths = int(cfg.n_paths)
+        antithetic = bool(cfg.antithetic)
 
-        result = simulate_heston_euler_paths(
-            params=self.params,
-            x0=float(ctx.spot),
-            tau=float(tau),
-            n_steps=int(self.n_steps),
-            shocks=shocks,
-            log_drift_increments=log_drift_increments,
-        )
+        if self.scheme == "euler_full_truncation":
+            shocks = correlated_normals(
+                rng,
+                n_paths=n_paths,
+                sample_shape=(n_steps,),
+                corr=np.array(
+                    [[1.0, self.params.rho], [self.params.rho, 1.0]],
+                    dtype=FloatDType,
+                ),
+                antithetic=antithetic,
+                dtype=np.dtype(FloatDType),
+            )
+
+            result = simulate_heston_euler_paths(
+                params=self.params,
+                x0=float(ctx.spot),
+                tau=float(tau),
+                n_steps=n_steps,
+                shocks=shocks,
+                log_drift_increments=log_drift_increments,
+            )
+        elif self.scheme == "quadratic_exponential":
+            shocks = _qe_shocks(
+                rng=rng,
+                n_paths=n_paths,
+                n_steps=n_steps,
+                antithetic=antithetic,
+            )
+
+            result = simulate_heston_qe_paths(
+                params=self.params,
+                x0=float(ctx.spot),
+                tau=float(tau),
+                n_steps=n_steps,
+                shocks=shocks,
+                log_drift_increments=log_drift_increments,
+            )
+        else:
+            raise ValueError(f"unsupported Heston scheme: {self.scheme}")
 
         return result.spot_paths
 

@@ -55,3 +55,41 @@ def test_monte_carlo_result_from_samples_validates_input(
             n_paths=1,
             antithetic=False,
         )
+
+
+def test_monte_carlo_result_confidence_interval_95_percent():
+    result = MonteCarloResult(
+        price=10.0,
+        stderr=0.5,
+        n_paths=10_000,
+        effective_n=10_000,
+        discount=1.0,
+        sample_mean=10.0,
+        sample_std=50.0,
+    )
+
+    ci = result.confidence_interval(0.95)
+
+    assert ci.level == 0.95
+    assert math.isclose(ci.half_width, 1.959963984540054 * 0.5)
+    assert math.isclose(ci.low, 10.0 - ci.half_width)
+    assert math.isclose(ci.high, 10.0 + ci.half_width)
+
+
+def test_monte_carlo_result_confidence_interval_validates_level():
+    result = MonteCarloResult(
+        price=10.0,
+        stderr=0.5,
+        n_paths=10_000,
+        effective_n=10_000,
+        discount=1.0,
+        sample_mean=10.0,
+    )
+
+    for bad_level in [0.0, 1.0, -0.1, 1.1]:
+        try:
+            result.confidence_interval(bad_level)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Expected ValueError")

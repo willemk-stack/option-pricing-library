@@ -2,10 +2,19 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from statistics import NormalDist
 
 import numpy as np
 
 from ..typing import FloatArray
+
+
+@dataclass(frozen=True, slots=True)
+class ConfidenceInterval:
+    level: float
+    low: float
+    high: float
+    half_width: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +32,22 @@ class MonteCarloResult:
 
     def as_tuple(self) -> tuple[float, float]:
         return self.price, self.stderr
+
+    def confidence_interval(self, level: float = 0.95) -> ConfidenceInterval:
+        """Return a normal-approximation confidence interval for the MC price."""
+        if not 0.0 < level < 1.0:
+            raise ValueError("level must be between 0 and 1")
+
+        alpha = 1.0 - float(level)
+        z = NormalDist().inv_cdf(1.0 - alpha / 2.0)
+        half_width = float(z * self.stderr)
+
+        return ConfidenceInterval(
+            level=float(level),
+            low=float(self.price - half_width),
+            high=float(self.price + half_width),
+            half_width=half_width,
+        )
 
 
 def monte_carlo_result_from_samples(
