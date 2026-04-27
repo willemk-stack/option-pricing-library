@@ -4,6 +4,7 @@ import pytest
 from option_pricing.models.heston.params import HestonParams
 from option_pricing.models.heston.simulation import (
     HestonPathSimulator,
+    HestonTerminalSimulator,
     simulate_heston_paths,
     simulate_heston_terminal,
 )
@@ -155,6 +156,82 @@ def test_simulate_heston_paths_supports_quadratic_exponential_scheme(
     assert np.all(np.isfinite(paths))
 
 
+def test_heston_path_simulator_defaults_to_quadratic_exponential(
+    heston_params: HestonParams,
+) -> None:
+    cfg = MCConfig(n_paths=4, antithetic=True, random=RandomConfig(seed=31))
+
+    default_paths = HestonPathSimulator(
+        params=heston_params,
+        n_steps=10,
+    ).simulate_paths(ctx=_ctx(), tau=0.75, cfg=cfg)
+    explicit_paths = HestonPathSimulator(
+        params=heston_params,
+        n_steps=10,
+        scheme="quadratic_exponential",
+    ).simulate_paths(ctx=_ctx(), tau=0.75, cfg=cfg)
+
+    np.testing.assert_allclose(default_paths, explicit_paths)
+
+
+def test_heston_terminal_simulator_defaults_to_quadratic_exponential(
+    heston_params: HestonParams,
+) -> None:
+    cfg = MCConfig(n_paths=4, antithetic=True, random=RandomConfig(seed=19))
+
+    default_terminal = HestonTerminalSimulator(
+        params=heston_params,
+        n_steps=10,
+    ).simulate_terminal(ctx=_ctx(), tau=0.75, cfg=cfg)
+    explicit_terminal = HestonTerminalSimulator(
+        params=heston_params,
+        n_steps=10,
+        scheme="quadratic_exponential",
+    ).simulate_terminal(ctx=_ctx(), tau=0.75, cfg=cfg)
+
+    np.testing.assert_allclose(default_terminal, explicit_terminal)
+
+
+def test_simulation_helpers_default_to_quadratic_exponential(
+    heston_params: HestonParams,
+) -> None:
+    default_paths = simulate_heston_paths(
+        ctx=_ctx(),
+        tau=1.0,
+        params=heston_params,
+        n_steps=8,
+        cfg=MCConfig(n_paths=6, random=RandomConfig(seed=17)),
+    )
+    explicit_paths = simulate_heston_paths(
+        ctx=_ctx(),
+        tau=1.0,
+        params=heston_params,
+        n_steps=8,
+        cfg=MCConfig(n_paths=6, random=RandomConfig(seed=17)),
+        scheme="quadratic_exponential",
+    )
+
+    np.testing.assert_allclose(default_paths, explicit_paths)
+
+    default_terminal = simulate_heston_terminal(
+        ctx=_ctx(),
+        tau=1.0,
+        params=heston_params,
+        n_steps=8,
+        cfg=MCConfig(n_paths=6, antithetic=True, random=RandomConfig(seed=23)),
+    )
+    explicit_terminal = simulate_heston_terminal(
+        ctx=_ctx(),
+        tau=1.0,
+        params=heston_params,
+        n_steps=8,
+        cfg=MCConfig(n_paths=6, antithetic=True, random=RandomConfig(seed=23)),
+        scheme="quadratic_exponential",
+    )
+
+    np.testing.assert_allclose(default_terminal, explicit_terminal)
+
+
 def test_heston_path_simulator_qe_is_deterministic_with_same_seed(
     heston_params: HestonParams,
 ) -> None:
@@ -178,6 +255,20 @@ def test_simulate_heston_terminal_supports_quadratic_exponential_scheme(
         ctx=_ctx(),
         tau=1.0,
         params=heston_params,
+        n_steps=8,
+        cfg=MCConfig(n_paths=6, antithetic=True, random=RandomConfig(seed=23)),
+        scheme="quadratic_exponential",
+    )
+
+    assert terminal.shape == (6,)
+    assert np.all(np.isfinite(terminal))
+
+
+def test_simulate_heston_qe_supports_zero_vol_of_vol() -> None:
+    terminal = simulate_heston_terminal(
+        ctx=_ctx(),
+        tau=1.0,
+        params=HestonParams(kappa=1.5, vbar=0.04, eta=0.0, rho=0.0, v=0.04),
         n_steps=8,
         cfg=MCConfig(n_paths=6, antithetic=True, random=RandomConfig(seed=23)),
         scheme="quadratic_exponential",

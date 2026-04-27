@@ -119,7 +119,7 @@ def heston_mc_price_from_ctx(
     params: HestonParams,
     tau: float,
     n_steps: int,
-    scheme: HestonScheme = "euler_full_truncation",
+    scheme: HestonScheme = "quadratic_exponential",
     cfg: MCConfig | None = None,
     control: ControlVariate | None = None,
 ) -> MonteCarloResult:
@@ -147,7 +147,7 @@ def heston_mc_price_instrument_from_ctx(
     inst: TerminalInstrument,
     params: HestonParams,
     n_steps: int,
-    scheme: HestonScheme = "euler_full_truncation",
+    scheme: HestonScheme = "quadratic_exponential",
     cfg: MCConfig | None = None,
     control: ControlVariate | None = None,
 ) -> MonteCarloResult:
@@ -172,7 +172,7 @@ def heston_mc_price_path_payoff_from_ctx(
     params: HestonParams,
     tau: float,
     n_steps: int,
-    scheme: HestonScheme = "euler_full_truncation",
+    scheme: HestonScheme = "quadratic_exponential",
     cfg: MCConfig | None = None,
 ) -> MonteCarloResult:
     """Price a European path payoff under Heston on an explicit time grid."""
@@ -208,7 +208,7 @@ def heston_mc_price_instrument(
     market: MarketData | PricingContext,
     params: HestonParams,
     n_steps: int,
-    scheme: HestonScheme = "euler_full_truncation",
+    scheme: HestonScheme = "quadratic_exponential",
     cfg: MCConfig | None = None,
     control: ControlVariate | None = None,
 ) -> MonteCarloResult:
@@ -229,7 +229,7 @@ def heston_mc_price(
     *,
     params: HestonParams,
     n_steps: int,
-    scheme: HestonScheme = "euler_full_truncation",
+    scheme: HestonScheme = "quadratic_exponential",
     cfg: MCConfig | None = None,
     control: ControlVariate | None = None,
 ) -> MonteCarloResult:
@@ -255,7 +255,7 @@ def heston_mc_price_call(
     *,
     params: HestonParams,
     n_steps: int,
-    scheme: HestonScheme = "euler_full_truncation",
+    scheme: HestonScheme = "quadratic_exponential",
     cfg: MCConfig | None = None,
     control: ControlVariate | None = None,
 ) -> MonteCarloResult:
@@ -277,7 +277,7 @@ def heston_mc_price_put(
     *,
     params: HestonParams,
     n_steps: int,
-    scheme: HestonScheme = "euler_full_truncation",
+    scheme: HestonScheme = "quadratic_exponential",
     cfg: MCConfig | None = None,
     control: ControlVariate | None = None,
 ) -> MonteCarloResult:
@@ -302,7 +302,7 @@ def heston_mc_price_with_vanilla_control_from_ctx(
     params: HestonParams,
     tau: float,
     n_steps: int,
-    scheme: HestonScheme = "euler_full_truncation",
+    scheme: HestonScheme = "quadratic_exponential",
     cfg: MCConfig | None = None,
     control_kind: OptionType | None = None,
     control_strike: float | None = None,

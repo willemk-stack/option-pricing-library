@@ -23,6 +23,8 @@ The plotting helpers consume the prepared tables directly:
 
 All of the public helpers return plain pandas DataFrames or matplotlib figures so they can be used in notebooks, reports, and lightweight regression checks without hiding the underlying Monte Carlo behavior.
 
+The public Heston simulation and Monte Carlo pricing entrypoints default to `quadratic_exponential`. Pass `scheme="euler_full_truncation"` explicitly when you want Euler as the baseline scheme for side-by-side diagnostics or educational examples.
+
 ## Bias vs timestep
 
 Use `run_heston_mc_comparison_sweep(...)` to generate one row per `(scheme, n_steps, repeat)` run and then pass the result into `summarize_bias_vs_timestep(...)`.

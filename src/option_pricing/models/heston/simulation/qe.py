@@ -305,6 +305,42 @@ def _qe_log_coefficients(
     return k0, k1, k2, k3, k4
 
 
+def _integrated_variance_deterministic(
+    v_t: FloatArray,
+    params: HestonParams,
+    dt: float,
+) -> FloatArray:
+    """Exact integrated variance over one step when eta = 0."""
+
+    one_minus_exp = -np.expm1(-params.kappa * dt)
+    return _as_float_array(
+        params.vbar * dt + (v_t - params.vbar) * (one_minus_exp / params.kappa)
+    )
+
+
+def _x_timestep_qe_deterministic_variance(
+    log_x_t: FloatArray,
+    v_t: FloatArray,
+    params: HestonParams,
+    z_x_j: FloatArray,
+    dt: float,
+    log_drift_step: FloatArray | float = 0.0,
+) -> FloatArray:
+    """Exact log-price step for the deterministic-variance eta = 0 limit."""
+
+    integrated_variance = _integrated_variance_deterministic(
+        v_t=v_t,
+        params=params,
+        dt=dt,
+    )
+    return _as_float_array(
+        log_x_t
+        + log_drift_step
+        - 0.5 * integrated_variance
+        + np.sqrt(np.maximum(integrated_variance, 0.0)) * z_x_j
+    )
+
+
 def _qe_branch_params(
     v_t: FloatArray,
     params: HestonParams,
@@ -580,33 +616,47 @@ def simulate_heston_qe_paths(
         x0=x0,
         v0=v0,
     )
+    deterministic_variance = params.eta == 0.0
 
     for j in range(n_steps):
-        v_next = _v_timestep_qe(
-            v_t=v_t,
-            params=params,
-            z_v_j=z_v[:, j],
-            u_v_j=u_v[:, j],
-            dt=dt,
-            psi_c=psi_c,
+        log_drift_step = _drift_step(
+            log_drift_increments=log_drift_increments_arr,
+            step_index=j,
         )
 
-        log_x_t = _x_timestep_qe(
-            log_x_t=log_x_t,
-            v_t=v_t,
-            v_next=v_next,
-            params=params,
-            z_x_j=z_x[:, j],
-            dt=dt,
-            log_drift_step=_drift_step(
-                log_drift_increments=log_drift_increments_arr,
-                step_index=j,
-            ),
-            psi_c=psi_c,
-            gamma1=gamma1,
-            gamma2=gamma2,
-            martingale_correction=martingale_correction,
-        )
+        if deterministic_variance:
+            v_next = _m(v_t=v_t, params=params, dt=dt)
+            log_x_t = _x_timestep_qe_deterministic_variance(
+                log_x_t=log_x_t,
+                v_t=v_t,
+                params=params,
+                z_x_j=z_x[:, j],
+                dt=dt,
+                log_drift_step=log_drift_step,
+            )
+        else:
+            v_next = _v_timestep_qe(
+                v_t=v_t,
+                params=params,
+                z_v_j=z_v[:, j],
+                u_v_j=u_v[:, j],
+                dt=dt,
+                psi_c=psi_c,
+            )
+
+            log_x_t = _x_timestep_qe(
+                log_x_t=log_x_t,
+                v_t=v_t,
+                v_next=v_next,
+                params=params,
+                z_x_j=z_x[:, j],
+                dt=dt,
+                log_drift_step=log_drift_step,
+                psi_c=psi_c,
+                gamma1=gamma1,
+                gamma2=gamma2,
+                martingale_correction=martingale_correction,
+            )
 
         v_t = v_next
         var_paths[:, j + 1] = v_t

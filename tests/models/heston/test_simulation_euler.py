@@ -173,6 +173,7 @@ def test_simulate_heston_paths_returns_expected_path_shape(
         params=heston_params,
         n_steps=n_steps,
         cfg=MCConfig(n_paths=n_paths, random=RandomConfig(seed=17)),
+        scheme="euler_full_truncation",
     )
 
     assert paths.shape == (n_paths, n_steps + 1)
@@ -189,6 +190,7 @@ def test_simulate_heston_terminal_returns_expected_terminal_shape(
         params=heston_params,
         n_steps=8,
         cfg=MCConfig(n_paths=6, antithetic=True, random=RandomConfig(seed=23)),
+        scheme="euler_full_truncation",
     )
 
     assert terminal.shape == (6,)
@@ -198,7 +200,11 @@ def test_simulate_heston_terminal_returns_expected_terminal_shape(
 def test_heston_path_simulator_is_deterministic_with_same_seed(
     heston_params: HestonParams,
 ) -> None:
-    simulator = HestonPathSimulator(params=heston_params, n_steps=10)
+    simulator = HestonPathSimulator(
+        params=heston_params,
+        n_steps=10,
+        scheme="euler_full_truncation",
+    )
     cfg = MCConfig(n_paths=4, antithetic=True, random=RandomConfig(seed=31))
 
     paths_a = simulator.simulate_paths(ctx=_ctx(), tau=0.75, cfg=cfg)

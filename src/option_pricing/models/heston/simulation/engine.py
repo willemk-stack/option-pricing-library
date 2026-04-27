@@ -73,7 +73,7 @@ def _qe_shocks(
 class HestonPathSimulator:
     params: HestonParams
     n_steps: int
-    scheme: HestonScheme = "euler_full_truncation"
+    scheme: HestonScheme = "quadratic_exponential"
 
     def simulate_paths(
         self,
@@ -156,7 +156,7 @@ class HestonPathSimulator:
 class HestonTerminalSimulator:
     params: HestonParams
     n_steps: int
-    scheme: HestonScheme = "euler_full_truncation"
+    scheme: HestonScheme = "quadratic_exponential"
 
     def simulate_terminal(
         self,
@@ -180,7 +180,7 @@ def simulate_heston_paths(
     params: HestonParams,
     n_steps: int,
     cfg: MCConfig,
-    scheme: HestonScheme = "euler_full_truncation",
+    scheme: HestonScheme = "quadratic_exponential",
 ) -> FloatArray:
     """Simulate Heston spot paths on a pricing-context time horizon."""
     return HestonPathSimulator(
@@ -197,7 +197,7 @@ def simulate_heston_terminal(
     params: HestonParams,
     n_steps: int,
     cfg: MCConfig,
-    scheme: HestonScheme = "euler_full_truncation",
+    scheme: HestonScheme = "quadratic_exponential",
 ) -> FloatArray:
     """Simulate Heston terminal spots on a pricing-context time horizon."""
     return HestonTerminalSimulator(

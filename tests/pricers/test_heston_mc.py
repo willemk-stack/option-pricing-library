@@ -132,6 +132,45 @@ def test_heston_mc_is_reproducible_with_same_seed(make_inputs) -> None:
     assert result_a.seed == result_b.seed == 41
 
 
+def test_heston_mc_public_wrapper_defaults_to_quadratic_exponential(
+    make_inputs,
+) -> None:
+    p = make_inputs(
+        S=100.0,
+        K=100.0,
+        r=0.02,
+        q=0.0,
+        sigma=0.2,
+        T=1.0,
+        kind=OptionType.CALL,
+    )
+    params = HestonParams(kappa=2.0, vbar=0.04, eta=0.55, rho=-0.70, v=0.05)
+    cfg = MCConfig(n_paths=20_000, antithetic=True, random=RandomConfig(seed=41))
+
+    default_result = heston_mc_price_call(p, params=params, n_steps=64, cfg=cfg)
+    explicit_qe_result = heston_mc_price_call(
+        p,
+        params=params,
+        n_steps=64,
+        scheme="quadratic_exponential",
+        cfg=cfg,
+    )
+
+    assert math.isclose(
+        default_result.price,
+        explicit_qe_result.price,
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    )
+    assert math.isclose(
+        default_result.stderr,
+        explicit_qe_result.stderr,
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    )
+    assert default_result.effective_n == explicit_qe_result.effective_n
+
+
 def test_heston_mc_antithetic_reports_half_effective_sample_count(make_inputs) -> None:
     p = make_inputs(
         S=100.0,
@@ -333,4 +372,4 @@ def test_heston_mc_path_payoff_pricer_passes_time_grid_and_returns_result(
     assert result.stderr == 0.0
     assert result.effective_n == 3
     assert result.metadata["n_steps"] == 8
-    assert result.metadata["scheme"] == "euler_full_truncation"
+    assert result.metadata["scheme"] == "quadratic_exponential"
