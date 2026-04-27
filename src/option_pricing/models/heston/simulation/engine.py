@@ -1,9 +1,127 @@
 """High-level Heston simulation entry points."""
 
+from dataclasses import dataclass
 
-def simulate_heston_paths(*args, **kwargs):
-    raise NotImplementedError
+import numpy as np
+
+from ....monte_carlo import MCConfig, correlated_normals, make_rng
+from ....types import PricingContext
+from ....typing import FloatArray, FloatDType
+from ..params import HestonParams
+from .euler import simulate_heston_euler_paths
+from .types import HestonScheme
 
 
-def simulate_heston_terminal(*args, **kwargs):
-    raise NotImplementedError
+@dataclass(frozen=True, slots=True)
+class HestonPathSimulator:
+    params: HestonParams
+    n_steps: int
+    scheme: HestonScheme = "euler_full_truncation"
+
+    def simulate_paths(
+        self,
+        *,
+        ctx: PricingContext,
+        tau: float,
+        cfg: MCConfig,
+    ) -> FloatArray:
+        if tau <= 0.0:
+            raise ValueError("tau must be positive")
+        if self.n_steps <= 0:
+            raise ValueError("n_steps must be positive")
+
+        time_grid = np.linspace(
+            0.0,
+            float(tau),
+            int(self.n_steps) + 1,
+            dtype=FloatDType,
+        )
+
+        fwd_grid = np.array(
+            [ctx.fwd(float(t)) for t in time_grid],
+            dtype=FloatDType,
+        )
+
+        if np.any(fwd_grid <= 0.0):
+            raise ValueError("forward curve must be positive on the time grid")
+
+        log_drift_increments = np.diff(np.log(fwd_grid))
+
+        rng = make_rng(cfg)
+        shocks = correlated_normals(
+            rng,
+            n_paths=int(cfg.n_paths),
+            sample_shape=(int(self.n_steps),),
+            corr=np.array(
+                [[1.0, self.params.rho], [self.params.rho, 1.0]],
+                dtype=FloatDType,
+            ),
+            antithetic=bool(cfg.antithetic),
+            dtype=np.dtype(FloatDType),
+        )
+
+        result = simulate_heston_euler_paths(
+            params=self.params,
+            x0=float(ctx.spot),
+            tau=float(tau),
+            n_steps=int(self.n_steps),
+            shocks=shocks,
+            log_drift_increments=log_drift_increments,
+        )
+
+        return result.spot_paths
+
+
+@dataclass(frozen=True, slots=True)
+class HestonTerminalSimulator:
+    params: HestonParams
+    n_steps: int
+    scheme: HestonScheme = "euler_full_truncation"
+
+    def simulate_terminal(
+        self,
+        *,
+        ctx: PricingContext,
+        tau: float,
+        cfg: MCConfig,
+    ) -> FloatArray:
+        paths = HestonPathSimulator(
+            params=self.params,
+            n_steps=self.n_steps,
+            scheme=self.scheme,
+        ).simulate_paths(ctx=ctx, tau=tau, cfg=cfg)
+        return paths[:, -1]
+
+
+def simulate_heston_paths(
+    *,
+    ctx: PricingContext,
+    tau: float,
+    params: HestonParams,
+    n_steps: int,
+    cfg: MCConfig,
+    scheme: HestonScheme = "euler_full_truncation",
+) -> FloatArray:
+    """Simulate Heston spot paths on a pricing-context time horizon."""
+    return HestonPathSimulator(
+        params=params,
+        n_steps=int(n_steps),
+        scheme=scheme,
+    ).simulate_paths(ctx=ctx, tau=tau, cfg=cfg)
+
+
+def simulate_heston_terminal(
+    *,
+    ctx: PricingContext,
+    tau: float,
+    params: HestonParams,
+    n_steps: int,
+    cfg: MCConfig,
+    scheme: HestonScheme = "euler_full_truncation",
+) -> FloatArray:
+    """Simulate Heston terminal spots on a pricing-context time horizon."""
+    return HestonTerminalSimulator(
+        params=params,
+        n_steps=int(n_steps),
+        scheme=scheme,
+    ).simulate_terminal(ctx=ctx, tau=tau, cfg=cfg)

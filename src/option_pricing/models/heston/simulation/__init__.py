@@ -1,11 +1,18 @@
 """Heston simulation package."""
 
-from .engine import simulate_heston_paths, simulate_heston_terminal
-from .types import HestonMCConfig, SimulationResult
+from .engine import (
+    HestonPathSimulator,
+    HestonTerminalSimulator,
+    simulate_heston_paths,
+    simulate_heston_terminal,
+)
+from .types import HestonScheme, HestonSimulationResult
 
 __all__ = [
+    "HestonPathSimulator",
+    "HestonTerminalSimulator",
     "simulate_heston_paths",
     "simulate_heston_terminal",
-    "HestonMCConfig",
-    "SimulationResult",
+    "HestonScheme",
+    "HestonSimulationResult",
 ]

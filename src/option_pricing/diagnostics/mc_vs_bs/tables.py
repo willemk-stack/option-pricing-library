@@ -68,6 +68,29 @@ def _get_q_compat(p: Any) -> float:
     return float("nan")
 
 
+def _extract_mc_output(out: Any) -> tuple[float, float]:
+    if isinstance(out, tuple) and len(out) >= 2:
+        return _to_float(out[0]), _to_float(out[1])
+
+    if isinstance(out, dict) and "price" in out:
+        se_raw = out.get("std_err")
+        if se_raw is None:
+            se_raw = out.get("se")
+        if se_raw is None:
+            se_raw = out.get("stderr")
+        return _to_float(out.get("price")), _to_float(se_raw)
+
+    if hasattr(out, "price"):
+        se_raw = getattr(out, "std_err", None)
+        if se_raw is None:
+            se_raw = getattr(out, "se", None)
+        if se_raw is None:
+            se_raw = getattr(out, "stderr", None)
+        return _to_float(out.price), _to_float(se_raw)
+
+    return _to_float(out), float("nan")
+
+
 def run_mc_vs_bs_cases(
     cases: Iterable[tuple[str, Any]],
     *,
@@ -103,20 +126,7 @@ def run_mc_vs_bs_cases(
             cfg = MCConfig(n_paths=int(n_paths), random=RandomConfig(seed=int(seed_i)))
 
         out = mc_price_fn(p, cfg=cfg)
-
-        # allow different MC return conventions
-        if isinstance(out, tuple) and len(out) >= 2:
-            mc_val, se_val = _to_float(out[0]), _to_float(out[1])
-        elif isinstance(out, dict) and "price" in out:
-            mc_val = _to_float(out.get("price"))
-            se_raw = out.get("std_err")
-            if se_raw is None:
-                se_raw = out.get("se")
-            if se_raw is None:
-                se_raw = out.get("stderr")
-            se_val = _to_float(se_raw)
-        else:
-            mc_val, se_val = _to_float(out), float("nan")
+        mc_val, se_val = _extract_mc_output(out)
 
         bs_val = _to_float(bs_price_fn(p))
         err = mc_val - bs_val
@@ -208,13 +218,7 @@ def convergence_table(
             cfg = MCConfig(n_paths=int(n), random=RandomConfig(seed=int(seed)))
 
         out = mc_fn(p, cfg=cfg)
-        if isinstance(out, tuple) and len(out) >= 2:
-            mc_val, se_val = _to_float(out[0]), _to_float(out[1])
-        elif isinstance(out, dict) and "price" in out:
-            mc_val = _to_float(out.get("price"))
-            se_val = _to_float(out.get("std_err") or out.get("se") or out.get("stderr"))
-        else:
-            mc_val, se_val = _to_float(out), float("nan")
+        mc_val, se_val = _extract_mc_output(out)
         err = mc_val - bs
         rows.append(
             {"n_paths": int(n), "mc": mc_val, "se": se_val, "bs": bs, "err": err}

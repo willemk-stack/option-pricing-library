@@ -1,18 +1,15 @@
 """Typed configs and results for Heston simulation."""
 
 from dataclasses import dataclass
+from typing import Literal
+
+from ....typing import FloatArray
+
+HestonScheme = Literal["euler_full_truncation"]
 
 
-@dataclass
-class HestonMCConfig:
-    n_paths: int
-    n_steps: int
-    seed: int | None = None
-    antithetic: bool = False
-
-
-@dataclass
-class SimulationResult:
-    spot_paths: object
-    var_paths: object
+@dataclass(frozen=True, slots=True)
+class HestonSimulationResult:
+    spot_paths: FloatArray
+    var_paths: FloatArray
     dt: float
