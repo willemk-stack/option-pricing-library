@@ -1,10 +1,12 @@
 import math
+from statistics import mean
 
 import numpy as np
 import pytest
 
 from option_pricing.instruments import ExerciseStyle, VanillaOption
 from option_pricing.models.heston import HestonParams
+from option_pricing.models.heston.simulation import simulate_heston_terminal
 from option_pricing.monte_carlo import MCConfig, MonteCarloResult, RandomConfig
 from option_pricing.pricers.black_scholes import bs_price_call
 from option_pricing.pricers.heston import (
@@ -21,7 +23,7 @@ from option_pricing.pricers.heston_mc import (
     heston_mc_price_with_vanilla_control_from_ctx,
     heston_vanilla_control_from_ctx,
 )
-from option_pricing.types import OptionType
+from option_pricing.types import MarketData, OptionType
 
 
 def _constant_variance_heston_params(sigma: float) -> HestonParams:
@@ -44,6 +46,171 @@ def _near_constant_variance_heston_params(sigma: float) -> HestonParams:
         rho=0.0,
         v=variance,
     )
+
+
+_QE_FOURIER_VALIDATION_CASES = (
+    pytest.param(
+        {
+            "S": 100.0,
+            "K": 100.0,
+            "r": 0.02,
+            "q": 0.0,
+            "sigma": 0.2,
+            "T": 1.0,
+            "kind": OptionType.CALL,
+        },
+        HestonParams(kappa=2.0, vbar=0.04, eta=0.55, rho=-0.70, v=0.05),
+        128,
+        24_000,
+        101,
+        id="atm_1y_negative_rho",
+    ),
+    pytest.param(
+        {
+            "S": 100.0,
+            "K": 110.0,
+            "r": 0.02,
+            "q": 0.0,
+            "sigma": 0.2,
+            "T": 0.25,
+            "kind": OptionType.CALL,
+        },
+        HestonParams(kappa=2.0, vbar=0.04, eta=0.65, rho=-0.75, v=0.05),
+        96,
+        24_000,
+        102,
+        id="otm_3m_negative_rho",
+    ),
+    pytest.param(
+        {
+            "S": 100.0,
+            "K": 90.0,
+            "r": 0.02,
+            "q": 0.0,
+            "sigma": 0.2,
+            "T": 2.0,
+            "kind": OptionType.CALL,
+        },
+        HestonParams(kappa=1.25, vbar=0.05, eta=0.70, rho=-0.55, v=0.04),
+        192,
+        24_000,
+        103,
+        id="itm_2y_negative_rho",
+    ),
+    pytest.param(
+        {
+            "S": 100.0,
+            "K": 95.0,
+            "r": 0.01,
+            "q": 0.0,
+            "sigma": 0.2,
+            "T": 0.10,
+            "kind": OptionType.CALL,
+        },
+        HestonParams(kappa=1.5, vbar=0.04, eta=1.20, rho=-0.92, v=0.04),
+        96,
+        24_000,
+        104,
+        id="short_high_xi_negative_rho",
+    ),
+    pytest.param(
+        {
+            "S": 100.0,
+            "K": 85.0,
+            "r": 0.015,
+            "q": 0.0,
+            "sigma": 0.2,
+            "T": 0.75,
+            "kind": OptionType.CALL,
+        },
+        HestonParams(kappa=1.8, vbar=0.035, eta=0.80, rho=0.45, v=0.03),
+        128,
+        24_000,
+        105,
+        id="itm_positive_rho",
+    ),
+)
+
+
+def _qe_call_and_fourier_price(
+    make_inputs,
+    input_kwargs,
+    params: HestonParams,
+    *,
+    n_steps: int,
+    n_paths: int,
+    seed: int,
+) -> tuple[MonteCarloResult, float]:
+    p = make_inputs(**input_kwargs)
+    result = heston_mc_price_call(
+        p,
+        params=params,
+        n_steps=n_steps,
+        scheme="quadratic_exponential",
+        cfg=MCConfig(
+            n_paths=n_paths,
+            antithetic=True,
+            random=RandomConfig(seed=seed),
+        ),
+    )
+    fourier_price = float(
+        heston_price_call_from_ctx(
+            strike=p.K,
+            ctx=p.ctx,
+            tau=p.tau,
+            params=params,
+        )
+    )
+    return result, fourier_price
+
+
+def _assert_qe_matches_fourier(
+    make_inputs,
+    input_kwargs,
+    params: HestonParams,
+    *,
+    n_steps: int,
+    n_paths: int,
+    seed: int,
+    stderr_multiple: float = 5.0,
+) -> MonteCarloResult:
+    result, fourier_price = _qe_call_and_fourier_price(
+        make_inputs,
+        input_kwargs,
+        params,
+        n_steps=n_steps,
+        n_paths=n_paths,
+        seed=seed,
+    )
+
+    assert isinstance(result, MonteCarloResult)
+    assert result.stderr > 0.0
+    assert abs(result.price - fourier_price) <= stderr_multiple * result.stderr
+
+    return result
+
+
+def _mean_qe_call_price(
+    make_inputs,
+    input_kwargs,
+    params: HestonParams,
+    *,
+    n_steps: int,
+    n_paths: int,
+    seeds: tuple[int, ...],
+) -> float:
+    prices = []
+    for seed in seeds:
+        result, _ = _qe_call_and_fourier_price(
+            make_inputs,
+            input_kwargs,
+            params,
+            n_steps=n_steps,
+            n_paths=n_paths,
+            seed=seed,
+        )
+        prices.append(result.price)
+    return float(mean(prices))
 
 
 @pytest.mark.parametrize(
@@ -214,7 +381,13 @@ def test_heston_mc_matches_heston_fourier_within_mc_error(make_inputs) -> None:
     params = HestonParams(kappa=2.0, vbar=0.04, eta=0.55, rho=-0.70, v=0.05)
     cfg = MCConfig(n_paths=40_000, antithetic=True, random=RandomConfig(seed=123))
 
-    result = heston_mc_price_call(p, params=params, n_steps=128, cfg=cfg)
+    result = heston_mc_price_call(
+        p,
+        params=params,
+        n_steps=128,
+        scheme="quadratic_exponential",
+        cfg=cfg,
+    )
     fourier_price = float(
         heston_price_call_from_ctx(
             strike=p.K,
@@ -227,6 +400,130 @@ def test_heston_mc_matches_heston_fourier_within_mc_error(make_inputs) -> None:
     assert isinstance(result, MonteCarloResult)
     assert result.stderr > 0.0
     assert abs(result.price - fourier_price) <= 4.0 * result.stderr
+
+
+@pytest.mark.parametrize(
+    ("input_kwargs", "params", "n_steps", "n_paths", "seed"),
+    _QE_FOURIER_VALIDATION_CASES,
+)
+def test_qe_vanilla_matches_fourier_across_grid(
+    make_inputs,
+    input_kwargs,
+    params: HestonParams,
+    n_steps: int,
+    n_paths: int,
+    seed: int,
+) -> None:
+    _assert_qe_matches_fourier(
+        make_inputs,
+        input_kwargs,
+        params,
+        n_steps=n_steps,
+        n_paths=n_paths,
+        seed=seed,
+    )
+
+
+@pytest.mark.slow
+def test_qe_bias_decreases_with_timestep(make_inputs) -> None:
+    input_kwargs = {
+        "S": 100.0,
+        "K": 100.0,
+        "r": 0.01,
+        "q": 0.0,
+        "sigma": 0.2,
+        "T": 2.0,
+        "kind": OptionType.CALL,
+    }
+    params = HestonParams(kappa=1.0, vbar=0.04, eta=1.25, rho=-0.90, v=0.08)
+    seeds = (30, 31, 32, 33, 34, 35)
+
+    p = make_inputs(**input_kwargs)
+    fourier_price = float(
+        heston_price_call_from_ctx(
+            strike=p.K,
+            ctx=p.ctx,
+            tau=p.tau,
+            params=params,
+        )
+    )
+    coarse_bias = abs(
+        _mean_qe_call_price(
+            make_inputs,
+            input_kwargs,
+            params,
+            n_steps=4,
+            n_paths=20_000,
+            seeds=seeds,
+        )
+        - fourier_price
+    )
+    fine_bias = abs(
+        _mean_qe_call_price(
+            make_inputs,
+            input_kwargs,
+            params,
+            n_steps=32,
+            n_paths=20_000,
+            seeds=seeds,
+        )
+        - fourier_price
+    )
+
+    assert fine_bias < coarse_bias
+
+
+def test_qe_preserves_discounted_forward_martingale() -> None:
+    tau = 1.5
+    market = MarketData(spot=100.0, rate=0.03, dividend_yield=0.01)
+    ctx = market.to_context()
+    params = HestonParams(kappa=2.0, vbar=0.04, eta=0.55, rho=-0.70, v=0.05)
+
+    terminal = simulate_heston_terminal(
+        ctx=ctx,
+        tau=tau,
+        params=params,
+        n_steps=128,
+        cfg=MCConfig(
+            n_paths=60_000,
+            antithetic=True,
+            random=RandomConfig(seed=1234),
+        ),
+        scheme="quadratic_exponential",
+    )
+
+    discounted_mean = float(ctx.df(tau) * terminal.mean())
+    discounted_stderr = float(
+        ctx.df(tau) * terminal.std(ddof=1) / math.sqrt(terminal.size)
+    )
+    target = market.spot * math.exp(-market.dividend_yield * tau)
+
+    assert discounted_stderr > 0.0
+    assert abs(discounted_mean - target) <= 4.0 * discounted_stderr
+
+
+def test_qe_handles_high_xi_negative_rho_short_maturity(make_inputs) -> None:
+    input_kwargs = {
+        "S": 100.0,
+        "K": 95.0,
+        "r": 0.01,
+        "q": 0.0,
+        "sigma": 0.2,
+        "T": 0.10,
+        "kind": OptionType.CALL,
+    }
+    params = HestonParams(kappa=1.5, vbar=0.04, eta=1.20, rho=-0.92, v=0.04)
+
+    result = _assert_qe_matches_fourier(
+        make_inputs,
+        input_kwargs,
+        params,
+        n_steps=96,
+        n_paths=24_000,
+        seed=1_204,
+    )
+
+    assert result.price > 0.0
 
 
 def test_heston_mc_returns_monte_carlo_result_and_tracks_bs_in_near_constant_variance_limit(
