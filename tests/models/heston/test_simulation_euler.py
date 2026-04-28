@@ -4,13 +4,17 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+import option_pricing.models.heston.simulation.euler as euler_module
 from option_pricing.models.heston.params import HestonParams
 from option_pricing.models.heston.simulation import (
     HestonPathSimulator,
     simulate_heston_paths,
     simulate_heston_terminal,
 )
-from option_pricing.models.heston.simulation.euler import simulate_heston_euler_paths
+from option_pricing.models.heston.simulation.euler import (
+    simulate_heston_euler_paths,
+    simulate_heston_euler_terminal,
+)
 from option_pricing.monte_carlo import MCConfig, RandomConfig
 from option_pricing.types import MarketData
 
@@ -399,3 +403,52 @@ def test_euler_metadata_tracks_negative_variance_proposal_rate() -> None:
 
     assert np.all(result.var_paths >= 0.0)
     assert result.metadata["negative_variance_proposal_rate"] == pytest.approx(0.5)
+
+
+def test_simulate_heston_euler_terminal_matches_full_path_terminal(
+    heston_params: HestonParams,
+) -> None:
+    rng = np.random.default_rng(123)
+    shocks = rng.normal(size=(5, 7, 2))
+    drift = rng.normal(scale=0.01, size=7)
+
+    path_result = simulate_heston_euler_paths(
+        params=heston_params,
+        x0=100.0,
+        tau=1.25,
+        n_steps=7,
+        shocks=shocks,
+        log_drift_increments=drift,
+    )
+    terminal = simulate_heston_euler_terminal(
+        params=heston_params,
+        x0=100.0,
+        tau=1.25,
+        n_steps=7,
+        shocks=shocks,
+        log_drift_increments=drift,
+    )
+
+    np.testing.assert_allclose(terminal, path_result.spot_paths[:, -1])
+
+
+def test_simulate_heston_euler_terminal_avoids_full_path_initializer(
+    heston_params: HestonParams,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fail_initialize_paths(**_kwargs):
+        raise AssertionError("full-path allocation should not be used")
+
+    monkeypatch.setattr(euler_module, "_initialize_paths", _fail_initialize_paths)
+
+    terminal = simulate_heston_euler_terminal(
+        params=heston_params,
+        x0=100.0,
+        tau=1.0,
+        n_steps=4,
+        shocks=np.zeros((2, 4, 2), dtype=np.float64),
+        log_drift_increments=np.zeros(4, dtype=np.float64),
+    )
+
+    assert terminal.shape == (2,)
+    assert np.all(np.isfinite(terminal))

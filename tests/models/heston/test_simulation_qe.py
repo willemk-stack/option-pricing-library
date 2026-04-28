@@ -1,6 +1,8 @@
 import numpy as np
 import pytest
 
+import option_pricing.models.heston.simulation.engine as engine_module
+import option_pricing.models.heston.simulation.qe as qe_module
 from option_pricing.models.heston.params import HestonParams
 from option_pricing.models.heston.simulation import (
     HestonPathSimulator,
@@ -15,6 +17,7 @@ from option_pricing.models.heston.simulation.qe import (
     _v_timestep_quadratic,
     _x_timestep_qe,
     simulate_heston_qe_paths,
+    simulate_heston_qe_terminal,
 )
 from option_pricing.monte_carlo import MCConfig, RandomConfig
 from option_pricing.types import MarketData
@@ -382,3 +385,139 @@ def test_x_timestep_qe_martingale_correction_moves_mean_toward_unity() -> None:
 
     assert abs(corrected_mean - 1.0) < abs(uncorrected_mean - 1.0)
     assert abs(corrected_mean - 1.0) < 5e-4
+
+
+def test_simulate_heston_qe_terminal_matches_full_path_terminal(
+    heston_params: HestonParams,
+) -> None:
+    rng = np.random.default_rng(123)
+    shocks = np.empty((5, 7, 3), dtype=np.float64)
+    shocks[:, :, 0] = rng.standard_normal((5, 7))
+    shocks[:, :, 1] = rng.random((5, 7))
+    shocks[:, :, 2] = rng.standard_normal((5, 7))
+    drift = rng.normal(scale=0.01, size=(5, 7))
+
+    path_result = simulate_heston_qe_paths(
+        params=heston_params,
+        x0=100.0,
+        tau=1.25,
+        n_steps=7,
+        shocks=shocks,
+        log_drift_increments=drift,
+    )
+    terminal = simulate_heston_qe_terminal(
+        params=heston_params,
+        x0=100.0,
+        tau=1.25,
+        n_steps=7,
+        shocks=shocks,
+        log_drift_increments=drift,
+    )
+
+    np.testing.assert_allclose(terminal, path_result.spot_paths[:, -1])
+
+
+def test_simulate_heston_qe_terminal_matches_full_path_terminal_when_eta_zero() -> None:
+    params = HestonParams(kappa=1.5, vbar=0.04, eta=0.0, rho=0.0, v=0.08)
+    rng = np.random.default_rng(321)
+    shocks = np.empty((4, 6, 3), dtype=np.float64)
+    shocks[:, :, 0] = rng.standard_normal((4, 6))
+    shocks[:, :, 1] = rng.random((4, 6))
+    shocks[:, :, 2] = rng.standard_normal((4, 6))
+    drift = rng.normal(scale=0.01, size=6)
+
+    path_result = simulate_heston_qe_paths(
+        params=params,
+        x0=100.0,
+        tau=0.75,
+        n_steps=6,
+        shocks=shocks,
+        log_drift_increments=drift,
+    )
+    terminal = simulate_heston_qe_terminal(
+        params=params,
+        x0=100.0,
+        tau=0.75,
+        n_steps=6,
+        shocks=shocks,
+        log_drift_increments=drift,
+    )
+
+    np.testing.assert_allclose(terminal, path_result.spot_paths[:, -1])
+
+
+def test_simulate_heston_qe_terminal_avoids_full_path_initializer(
+    heston_params: HestonParams,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fail_initialize_paths(**_kwargs):
+        raise AssertionError("full-path allocation should not be used")
+
+    monkeypatch.setattr(qe_module, "_initialize_paths", _fail_initialize_paths)
+
+    terminal = simulate_heston_qe_terminal(
+        params=heston_params,
+        x0=100.0,
+        tau=1.0,
+        n_steps=4,
+        shocks=_qe_shocks(n_paths=2, n_steps=4),
+        log_drift_increments=np.zeros(4, dtype=np.float64),
+    )
+
+    assert terminal.shape == (2,)
+    assert np.all(np.isfinite(terminal))
+
+
+@pytest.mark.parametrize("scheme", ["euler_full_truncation", "quadratic_exponential"])
+def test_simulate_heston_terminal_does_not_delegate_to_path_simulator(
+    heston_params: HestonParams,
+    monkeypatch: pytest.MonkeyPatch,
+    scheme: str,
+) -> None:
+    def _fail_simulate_paths(self, *, ctx, tau, cfg):
+        raise AssertionError(
+            "terminal simulation should not delegate to path simulation"
+        )
+
+    monkeypatch.setattr(
+        engine_module.HestonPathSimulator, "simulate_paths", _fail_simulate_paths
+    )
+
+    terminal = simulate_heston_terminal(
+        ctx=_ctx(),
+        tau=1.0,
+        params=heston_params,
+        n_steps=4,
+        cfg=MCConfig(n_paths=4, antithetic=True, random=RandomConfig(seed=23)),
+        scheme=scheme,
+    )
+
+    assert terminal.shape == (4,)
+    assert np.all(np.isfinite(terminal))
+
+
+@pytest.mark.parametrize("scheme", ["euler_full_truncation", "quadratic_exponential"])
+def test_simulate_heston_terminal_matches_full_path_terminal_with_same_seed(
+    heston_params: HestonParams,
+    scheme: str,
+) -> None:
+    cfg = MCConfig(n_paths=6, antithetic=True, random=RandomConfig(seed=37))
+
+    terminal = simulate_heston_terminal(
+        ctx=_ctx(),
+        tau=1.0,
+        params=heston_params,
+        n_steps=8,
+        cfg=cfg,
+        scheme=scheme,
+    )
+    paths = simulate_heston_paths(
+        ctx=_ctx(),
+        tau=1.0,
+        params=heston_params,
+        n_steps=8,
+        cfg=cfg,
+        scheme=scheme,
+    )
+
+    np.testing.assert_allclose(terminal, paths[:, -1])

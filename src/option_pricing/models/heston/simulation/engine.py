@@ -13,9 +13,38 @@ from ....monte_carlo import (
 from ....types import PricingContext
 from ....typing import FloatArray, FloatDType
 from ..params import HestonParams
-from .euler import simulate_heston_euler_paths
-from .qe import simulate_heston_qe_paths
+from .euler import simulate_heston_euler_paths, simulate_heston_euler_terminal
+from .qe import simulate_heston_qe_paths, simulate_heston_qe_terminal
 from .types import HestonScheme
+
+
+def _log_drift_increments_for_ctx(
+    *,
+    ctx: PricingContext,
+    tau: float,
+    n_steps: int,
+) -> FloatArray:
+    if tau <= 0.0:
+        raise ValueError("tau must be positive")
+    if n_steps <= 0:
+        raise ValueError("n_steps must be positive")
+
+    time_grid = np.linspace(
+        0.0,
+        float(tau),
+        int(n_steps) + 1,
+        dtype=FloatDType,
+    )
+
+    fwd_grid = np.array(
+        [ctx.fwd(float(t)) for t in time_grid],
+        dtype=FloatDType,
+    )
+
+    if np.any(fwd_grid <= 0.0):
+        raise ValueError("forward curve must be positive on the time grid")
+
+    return np.diff(np.log(fwd_grid))
 
 
 def _qe_uniforms(
@@ -82,27 +111,11 @@ class HestonPathSimulator:
         tau: float,
         cfg: MCConfig,
     ) -> FloatArray:
-        if tau <= 0.0:
-            raise ValueError("tau must be positive")
-        if self.n_steps <= 0:
-            raise ValueError("n_steps must be positive")
-
-        time_grid = np.linspace(
-            0.0,
-            float(tau),
-            int(self.n_steps) + 1,
-            dtype=FloatDType,
+        log_drift_increments = _log_drift_increments_for_ctx(
+            ctx=ctx,
+            tau=tau,
+            n_steps=self.n_steps,
         )
-
-        fwd_grid = np.array(
-            [ctx.fwd(float(t)) for t in time_grid],
-            dtype=FloatDType,
-        )
-
-        if np.any(fwd_grid <= 0.0):
-            raise ValueError("forward curve must be positive on the time grid")
-
-        log_drift_increments = np.diff(np.log(fwd_grid))
 
         rng = make_rng(cfg)
         n_steps = int(self.n_steps)
@@ -165,12 +178,55 @@ class HestonTerminalSimulator:
         tau: float,
         cfg: MCConfig,
     ) -> FloatArray:
-        paths = HestonPathSimulator(
-            params=self.params,
+        log_drift_increments = _log_drift_increments_for_ctx(
+            ctx=ctx,
+            tau=tau,
             n_steps=self.n_steps,
-            scheme=self.scheme,
-        ).simulate_paths(ctx=ctx, tau=tau, cfg=cfg)
-        return paths[:, -1]
+        )
+
+        rng = make_rng(cfg)
+        n_steps = int(self.n_steps)
+        n_paths = int(cfg.n_paths)
+        antithetic = bool(cfg.antithetic)
+
+        if self.scheme == "euler_full_truncation":
+            shocks = correlated_normals(
+                rng,
+                n_paths=n_paths,
+                sample_shape=(n_steps,),
+                corr=np.array(
+                    [[1.0, self.params.rho], [self.params.rho, 1.0]],
+                    dtype=FloatDType,
+                ),
+                antithetic=antithetic,
+                dtype=np.dtype(FloatDType),
+            )
+            return simulate_heston_euler_terminal(
+                params=self.params,
+                x0=float(ctx.spot),
+                tau=float(tau),
+                n_steps=n_steps,
+                shocks=shocks,
+                log_drift_increments=log_drift_increments,
+            )
+
+        if self.scheme == "quadratic_exponential":
+            shocks = _qe_shocks(
+                rng=rng,
+                n_paths=n_paths,
+                n_steps=n_steps,
+                antithetic=antithetic,
+            )
+            return simulate_heston_qe_terminal(
+                params=self.params,
+                x0=float(ctx.spot),
+                tau=float(tau),
+                n_steps=n_steps,
+                shocks=shocks,
+                log_drift_increments=log_drift_increments,
+            )
+
+        raise ValueError(f"unsupported Heston scheme: {self.scheme}")
 
 
 def simulate_heston_paths(

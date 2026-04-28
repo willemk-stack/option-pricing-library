@@ -551,6 +551,88 @@ def _x_timestep_qe(
     )
 
 
+def simulate_heston_qe_terminal(
+    *,
+    params: HestonParams,
+    x0: float,
+    tau: float,
+    n_steps: int,
+    shocks: FloatArray,
+    log_drift_increments: FloatArray | None = None,
+    psi_c: float = 1.5,
+    gamma1: float = 0.5,
+    gamma2: float = 0.5,
+    martingale_correction: bool = True,
+) -> FloatArray:
+    dt = _validate_time_grid(
+        tau=tau,
+        n_steps=n_steps,
+        allow_zero_tau=False,
+    )
+    x0, v0 = _validate_initial_state(x0=x0, v0=params.v)
+    n_paths, z_v, u_v, z_x = _resolve_qe_shocks(
+        shocks=shocks,
+        n_steps=n_steps,
+    )
+
+    if np.any((u_v < 0.0) | (u_v >= 1.0)):
+        raise ValueError("u_v shocks must be in [0, 1).")
+
+    log_drift_increments_arr = _resolve_log_drift_increments(
+        log_drift_increments=log_drift_increments,
+        n_steps=n_steps,
+        n_paths=n_paths,
+        allow_pathwise=True,
+    )
+
+    log_x_t: FloatArray = np.full(n_paths, np.log(x0), dtype=np.float64)
+    v_t: FloatArray = np.full(n_paths, v0, dtype=np.float64)
+    deterministic_variance = params.eta == 0.0
+
+    for j in range(n_steps):
+        log_drift_step = _drift_step(
+            log_drift_increments=log_drift_increments_arr,
+            step_index=j,
+        )
+
+        if deterministic_variance:
+            v_next = _m(v_t=v_t, params=params, dt=dt)
+            log_x_t = _x_timestep_qe_deterministic_variance(
+                log_x_t=log_x_t,
+                v_t=v_t,
+                params=params,
+                z_x_j=z_x[:, j],
+                dt=dt,
+                log_drift_step=log_drift_step,
+            )
+        else:
+            v_next = _v_timestep_qe(
+                v_t=v_t,
+                params=params,
+                z_v_j=z_v[:, j],
+                u_v_j=u_v[:, j],
+                dt=dt,
+                psi_c=psi_c,
+            )
+            log_x_t = _x_timestep_qe(
+                log_x_t=log_x_t,
+                v_t=v_t,
+                v_next=v_next,
+                params=params,
+                z_x_j=z_x[:, j],
+                dt=dt,
+                log_drift_step=log_drift_step,
+                psi_c=psi_c,
+                gamma1=gamma1,
+                gamma2=gamma2,
+                martingale_correction=martingale_correction,
+            )
+
+        v_t = v_next
+
+    return _as_float_array(np.exp(log_x_t))
+
+
 def simulate_heston_qe_paths(
     *,
     params: HestonParams,

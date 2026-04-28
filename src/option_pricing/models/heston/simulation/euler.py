@@ -44,6 +44,52 @@ def _x_timestep(
     return log_x_next
 
 
+def simulate_heston_euler_terminal(
+    *,
+    params: HestonParams,
+    x0: float,
+    tau: float,
+    n_steps: int,
+    shocks: FloatArray,
+    log_drift_increments: FloatArray | None = None,
+) -> FloatArray:
+    dt = _validate_time_grid(
+        tau=tau,
+        n_steps=n_steps,
+        allow_zero_tau=True,
+    )
+    x0, v0 = _validate_initial_state(x0=x0, v0=params.v)
+
+    n_paths, z_x, z_v = _resolve_shocks(shocks=shocks, n_steps=n_steps)
+    drift = _resolve_log_drift_increments(
+        log_drift_increments=log_drift_increments,
+        n_steps=n_steps,
+        n_paths=n_paths,
+        allow_pathwise=False,
+    )
+
+    log_x_t: FloatArray = np.full(n_paths, np.log(x0), dtype=np.float64)
+    v_t: FloatArray = np.full(n_paths, v0, dtype=np.float64)
+
+    for j in range(n_steps):
+        v_next, _ = _v_timestep(
+            v_t=v_t,
+            params=params,
+            z_v_j=z_v[:, j],
+            dt=dt,
+        )
+        log_x_t = _x_timestep(
+            log_x_t=log_x_t,
+            v_t=v_t,
+            z_x_j=z_x[:, j],
+            dt=dt,
+            log_drift_step=drift[j],
+        )
+        v_t = v_next
+
+    return np.exp(log_x_t)
+
+
 def simulate_heston_euler_paths(
     *,
     params: HestonParams,
