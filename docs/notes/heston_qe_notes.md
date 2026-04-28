@@ -112,7 +112,7 @@ $$
 \widehat V_{t+\Delta} =
 \begin{cases}
 0, & U_V \le p, \\
--\frac{1}{\beta}\log\left(\frac{1-p}{1-U_V}\right), & U_V > p,
+\frac{1}{\beta}\log\left(\frac{1-p}{1-U_V}\right), & U_V > p,
 \end{cases}
 \qquad U_V \sim \mathrm{Unif}(0,1).
 $$
