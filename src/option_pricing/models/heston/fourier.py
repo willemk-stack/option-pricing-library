@@ -20,6 +20,7 @@ from ...numerics.quadrature import (
 )
 from ...typing import ArrayLike, FloatArray
 from .charfunc import (
+    _cui_char_fn_and_param_grad,
     _heston_affine_coeffs,
     _normalize_frequency_grid,
     _restore_frequency_shape,
@@ -193,6 +194,41 @@ def _pj_affine_factor(
     )
 
 
+def _pj_affine_factor_and_param_jac(
+    u: float | np.ndarray,
+    tau: float,
+    params: HestonParams,
+    *,
+    j: HestonProbabilityIndex,
+) -> tuple[complex | ComplexArray, ComplexArray]:
+    u_arr, scalar_input, original_shape = _normalize_frequency_grid(u)
+
+    if j == 0:
+        gradient_frequency = u_arr
+    elif j == 1:
+        gradient_frequency = u_arr - 1j
+    else:
+        raise ValueError("j must be either 0 or 1.")
+
+    # REVIEW: confirm the Phase 3 charfunc helper's x/phase convention before wiring this into production pricing.
+    affine, d_affine = _cui_char_fn_and_param_grad(
+        gradient_frequency,
+        tau,
+        params,
+        x=0.0,
+    )
+    affine_arr = np.asarray(affine, dtype=np.complex128).reshape(-1)
+    d_affine_arr = np.asarray(d_affine, dtype=np.complex128).reshape(-1, 5)
+
+    if scalar_input:
+        return complex(affine_arr[0]), np.asarray(d_affine_arr[0], dtype=np.complex128)
+
+    return (
+        np.asarray(affine_arr.reshape(original_shape), dtype=np.complex128),
+        np.asarray(d_affine_arr.reshape(original_shape + (5,)), dtype=np.complex128),
+    )
+
+
 def _integrand(
     u: ArrayLike,
     x: ArrayLike,
@@ -222,6 +258,67 @@ def _integrand(
         return np.asarray(values_2d[:, 0].reshape(x_shape), dtype=np.float64)
 
     return np.asarray(values_2d.reshape(x_shape + u_shape), dtype=np.float64)
+
+
+def _integrand_and_param_jac(
+    u: ArrayLike,
+    x: ArrayLike,
+    tau: float,
+    params: HestonParams,
+    j: HestonProbabilityIndex,
+) -> tuple[float | RealArray, RealArray]:
+    """Evaluate the real-valued Heston inversion integrand and parameter Jacobian."""
+    x_flat, x_scalar, x_shape = _normalize_x_grid(x)
+    u_flat, u_scalar, u_shape = _normalize_frequency_grid(u)
+
+    affine, d_affine = _pj_affine_factor_and_param_jac(
+        u_flat,
+        tau,
+        params,
+        j=j,
+    )
+    affine_arr = np.asarray(affine, dtype=np.complex128).reshape(-1)
+    d_affine_arr = np.asarray(d_affine, dtype=np.complex128).reshape(-1, 5)
+
+    phase = np.exp(1j * x_flat[:, None] * u_flat[None, :])
+    # REVIEW: formulas assume u != 0; fixed quadrature nodes should exclude zero or a separate limit should be implemented.
+    denom = 1j * u_flat[None, :]
+
+    values_2d = np.real(phase * affine_arr[None, :] / denom)
+
+    jac_values_3d = np.real(
+        phase[:, :, None] * d_affine_arr[None, :, :] / denom[:, :, None]
+    )
+
+    if x_scalar and u_scalar:
+        return (
+            float(values_2d[0, 0]),
+            np.asarray(jac_values_3d[0, 0, :], dtype=np.float64),
+        )
+    if x_scalar:
+        return (
+            np.asarray(values_2d[0, :].reshape(u_shape), dtype=np.float64),
+            np.asarray(
+                jac_values_3d[0, :, :].reshape(u_shape + (5,)),
+                dtype=np.float64,
+            ),
+        )
+    if u_scalar:
+        return (
+            np.asarray(values_2d[:, 0].reshape(x_shape), dtype=np.float64),
+            np.asarray(
+                jac_values_3d[:, 0, :].reshape(x_shape + (5,)),
+                dtype=np.float64,
+            ),
+        )
+
+    return (
+        np.asarray(values_2d.reshape(x_shape + u_shape), dtype=np.float64),
+        np.asarray(
+            jac_values_3d.reshape(x_shape + u_shape + (5,)),
+            dtype=np.float64,
+        ),
+    )
 
 
 def _integrand_scalar(
@@ -736,6 +833,54 @@ def _integrate_pj_fixed_rule(
     )
 
 
+def _integrate_pj_fixed_rule_and_param_jac(
+    x: ArrayLike,
+    tau: float,
+    params: HestonParams,
+    j: HestonProbabilityIndex,
+    rule: CompositeRule,
+) -> tuple[float | RealArray, RealArray]:
+    """Integrate one Heston probability kernel and parameter Jacobian."""
+    x_arr, scalar_input, original_shape = _normalize_x_grid(x)
+
+    values_panel, jac_values_panel = _integrand_and_param_jac(
+        u=rule.u_panel,
+        x=x_arr,
+        tau=tau,
+        params=params,
+        j=j,
+    )
+    values_panel_arr = np.asarray(values_panel, dtype=np.float64)
+    jac_values_panel_arr = np.asarray(jac_values_panel, dtype=np.float64)
+
+    omega = rule.omega_panel.reshape((1,) + rule.omega_panel.shape)
+    weighted_values = values_panel_arr * omega
+    weighted_jac = jac_values_panel_arr * omega[..., None]
+
+    panel_contribs = np.sum(weighted_values, axis=-1)
+    panel_jac_contribs = np.sum(weighted_jac, axis=-2)
+
+    total = np.sum(panel_contribs, axis=-1)
+    total_jac = np.sum(panel_jac_contribs, axis=-2)
+
+    integral = _restore_x_shape(
+        total,
+        scalar_input=scalar_input,
+        original_shape=original_shape,
+    )
+    total_jac_arr = np.asarray(total_jac, dtype=np.float64)
+    if scalar_input:
+        d_integral = np.asarray(total_jac_arr.reshape(-1, 5)[0], dtype=np.float64)
+    else:
+        d_integral = np.asarray(
+            total_jac_arr.reshape(original_shape + (5,)),
+            dtype=np.float64,
+        )
+
+    # REVIEW: diagnostics for panel-level Jacobian contributions are intentionally not added in this phase.
+    return integral, d_integral
+
+
 def _integrate_pj_fixed_rule_with_diagnostics(
     x: float,
     tau: float,
@@ -950,6 +1095,59 @@ def heston_probability(
             scalar_input=scalar_input,
             original_shape=original_shape,
         )
+
+    raise ValueError(f"Unknown backend: {backend}")
+
+
+def heston_probability_and_param_jac(
+    x: ArrayLike,
+    tau: float,
+    params: HestonParams,
+    probability_index: HestonProbabilityIndex,
+    *,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> tuple[float | RealArray, RealArray]:
+    """Evaluate a Heston probability integral and constrained parameter Jacobian."""
+    _, scalar_input, original_shape = _normalize_x_grid(x)
+    j = probability_index
+
+    if backend == "quad":
+        raise NotImplementedError(
+            "Analytic Heston probability Jacobian is currently implemented only "
+            "for backend='gauss_legendre'."
+        )
+
+    if backend == "gauss_legendre":
+        active_rule = _resolve_gauss_rule(quad_cfg=quad_cfg, rule=rule)
+        integral, d_integral_dtheta = _integrate_pj_fixed_rule_and_param_jac(
+            x=x,
+            tau=tau,
+            params=params,
+            j=j,
+            rule=active_rule,
+        )
+
+        probability = _restore_x_shape(
+            _probability_from_integral(integral),
+            scalar_input=scalar_input,
+            original_shape=original_shape,
+        )
+        d_probability_arr = np.asarray(d_integral_dtheta, dtype=np.float64) / np.pi
+        if scalar_input:
+            d_probability_dtheta = np.asarray(
+                d_probability_arr.reshape(-1, 5)[0],
+                dtype=np.float64,
+            )
+        else:
+            d_probability_dtheta = np.asarray(
+                d_probability_arr.reshape(original_shape + (5,)),
+                dtype=np.float64,
+            )
+
+        # REVIEW: this function exposes constrained-parameter derivatives only; unconstrained optimizer chain-rule belongs in the calibration objective phase.
+        return probability, d_probability_dtheta
 
     raise ValueError(f"Unknown backend: {backend}")
 

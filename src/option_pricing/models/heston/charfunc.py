@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
@@ -14,6 +15,21 @@ type ComplexArray = NDArray[np.complex128]
 type BoolArray = NDArray[np.bool_]
 type HestonProbabilityIndex = Literal[0, 1]
 type J = HestonProbabilityIndex
+
+HESTON_CHARFUNC_GRADIENT_PARAM_NAMES = ("kappa", "vbar", "eta", "rho", "v")
+
+
+@dataclass(frozen=True, slots=True)
+class _CuiStableTerms:
+    u: ComplexArray
+    xi: ComplexArray
+    d: ComplexArray
+    A1: ComplexArray
+    A2: ComplexArray
+    A: ComplexArray
+    B: ComplexArray
+    D: ComplexArray
+    exp_neg_d_tau: ComplexArray
 
 
 def _normalize_frequency_grid(
@@ -37,6 +53,16 @@ def _restore_frequency_shape(
     if scalar_input:
         return complex(values[0])
     return values.reshape(original_shape)
+
+
+def _restore_frequency_param_shape(
+    values: ComplexArray, *, scalar_input: bool, original_shape: tuple[int, ...]
+) -> ComplexArray:
+    if scalar_input:
+        return np.asarray(values.reshape(1, -1)[0], dtype=np.complex128)
+    return np.asarray(
+        values.reshape(original_shape + (values.shape[-1],)), dtype=np.complex128
+    )
 
 
 def _validate_tau(tau: float) -> float:
@@ -155,6 +181,225 @@ def _heston_affine_coeffs(
         r_minus * tau - 2.0 * (np.log1p(-g * exp_neg_dt) - np.log1p(-g)) / eta2
     )
     return C, D
+
+
+def _cui_stable_terms(
+    u: np.ndarray,
+    tau: float,
+    params: HestonParams,
+) -> _CuiStableTerms:
+    """Return the Cui stable characteristic-function building blocks."""
+    tau = _validate_tau(tau)
+    u_arr = np.asarray(u, dtype=np.complex128)
+
+    kappa = float(params.kappa)
+    eta = float(params.eta)
+    rho = float(params.rho)
+    iu = 1j * u_arr
+
+    xi = kappa - eta * rho * iu
+    quadratic_term = u_arr * u_arr + iu
+
+    # REVIEW: complex sqrt/log branch behavior should be validated against existing stable implementation before using in production pricing.
+    d = np.sqrt(xi * xi + eta * eta * quadratic_term)
+    half_d_tau = 0.5 * d * tau
+    A1 = quadratic_term * np.sinh(half_d_tau)
+    A2 = d * np.cosh(half_d_tau) + xi * np.sinh(half_d_tau)
+    A = A1 / A2
+    B = d * np.exp(0.5 * kappa * tau) / A2
+    exp_neg_d_tau = np.exp(-d * tau)
+    D = (
+        np.log(d)
+        + 0.5 * (kappa - d) * tau
+        - np.log(0.5 * (d + xi) + 0.5 * (d - xi) * exp_neg_d_tau)
+    )
+
+    return _CuiStableTerms(
+        u=np.asarray(u_arr, dtype=np.complex128),
+        xi=np.asarray(xi, dtype=np.complex128),
+        d=np.asarray(d, dtype=np.complex128),
+        A1=np.asarray(A1, dtype=np.complex128),
+        A2=np.asarray(A2, dtype=np.complex128),
+        A=np.asarray(A, dtype=np.complex128),
+        B=np.asarray(B, dtype=np.complex128),
+        D=np.asarray(D, dtype=np.complex128),
+        exp_neg_d_tau=np.asarray(exp_neg_d_tau, dtype=np.complex128),
+    )
+
+
+def _cui_intermediate_derivatives(
+    terms: _CuiStableTerms,
+    tau: float,
+    params: HestonParams,
+) -> dict[str, ComplexArray]:
+    """Return intermediate Cui derivatives used by the h-vector."""
+    tau = _validate_tau(tau)
+    eta = float(params.eta)
+    rho = float(params.rho)
+    u = terms.u
+    iu = 1j * u
+    quadratic_term = u * u + iu
+    half_d_tau = 0.5 * terms.d * tau
+    sinh_half_d_tau = np.sinh(half_d_tau)
+    cosh_half_d_tau = np.cosh(half_d_tau)
+
+    d_drho = -terms.xi * eta * iu / terms.d
+    A2_drho = -(eta * iu * (2.0 + tau * terms.xi) / (2.0 * terms.d)) * (
+        terms.xi * cosh_half_d_tau + terms.d * sinh_half_d_tau
+    )
+    B_drho = np.exp(0.5 * params.kappa * tau) * (
+        d_drho / terms.A2 - terms.d * A2_drho / (terms.A2 * terms.A2)
+    )
+    A1_drho = (
+        -iu * quadratic_term * tau * terms.xi * eta / (2.0 * terms.d)
+    ) * cosh_half_d_tau
+    A_drho = A1_drho / terms.A2 - terms.A * A2_drho / terms.A2
+
+    A_dkappa = 1j / (eta * u) * A_drho
+    B_dkappa = 1j / (eta * u) * B_drho + 0.5 * tau * terms.B
+
+    d_deta = (rho / eta - 1.0 / terms.xi) * d_drho + eta * u * u / terms.d
+    A1_deta = 0.5 * quadratic_term * tau * d_deta * cosh_half_d_tau
+    A2_deta = (
+        rho / eta * A2_drho
+        - (2.0 + tau * terms.xi) / (iu * tau * terms.xi) * A1_drho
+        + 0.5 * eta * tau * terms.A1
+    )
+    A_deta = A1_deta / terms.A2 - terms.A * A2_deta / terms.A2
+
+    return {
+        "d_drho": np.asarray(d_drho, dtype=np.complex128),
+        "A2_drho": np.asarray(A2_drho, dtype=np.complex128),
+        "B_drho": np.asarray(B_drho, dtype=np.complex128),
+        "A1_drho": np.asarray(A1_drho, dtype=np.complex128),
+        "A_drho": np.asarray(A_drho, dtype=np.complex128),
+        "A_dkappa": np.asarray(A_dkappa, dtype=np.complex128),
+        "B_dkappa": np.asarray(B_dkappa, dtype=np.complex128),
+        "d_deta": np.asarray(d_deta, dtype=np.complex128),
+        "A1_deta": np.asarray(A1_deta, dtype=np.complex128),
+        "A2_deta": np.asarray(A2_deta, dtype=np.complex128),
+        "A_deta": np.asarray(A_deta, dtype=np.complex128),
+    }
+
+
+def _cui_h_vector(
+    terms: _CuiStableTerms,
+    derivs: dict[str, ComplexArray],
+    tau: float,
+    params: HestonParams,
+) -> ComplexArray:
+    """Return h(u) in repo parameter order: kappa, vbar, eta, rho, v."""
+    tau = _validate_tau(tau)
+    kappa = float(params.kappa)
+    vbar = float(params.vbar)
+    eta = float(params.eta)
+    rho = float(params.rho)
+    v = float(params.v)
+    eta2 = eta * eta
+    eta3 = eta * eta2
+    iu = 1j * terms.u
+
+    h_kappa = (
+        v / (eta * iu) * derivs["A_drho"]
+        + 2.0 * vbar / eta2 * terms.D
+        + 2.0 * kappa * vbar / (eta2 * terms.B) * derivs["B_dkappa"]
+        - tau * vbar * rho * iu / eta
+    )
+    h_vbar = 2.0 * kappa / eta2 * terms.D - tau * kappa * rho * iu / eta
+    h_eta = (
+        -v * derivs["A_deta"]
+        - 4.0 * kappa * vbar / eta3 * terms.D
+        + 2.0
+        * kappa
+        * vbar
+        / (eta2 * terms.d)
+        * (derivs["d_deta"] - terms.d / terms.A2 * derivs["A2_deta"])
+        + tau * kappa * vbar * rho * iu / eta2
+    )
+    h_rho = (
+        -v * derivs["A_drho"]
+        + 2.0
+        * kappa
+        * vbar
+        / (eta2 * terms.d)
+        * (derivs["d_drho"] - terms.d / terms.A2 * derivs["A2_drho"])
+        - tau * kappa * vbar * iu / eta
+    )
+    h_v = -terms.A
+
+    return np.asarray(
+        np.stack([h_kappa, h_vbar, h_eta, h_rho, h_v], axis=-1),
+        dtype=np.complex128,
+    )
+
+
+def _cui_char_fn_and_param_grad(
+    u: complex | ArrayLike,
+    tau: float,
+    params: HestonParams,
+    *,
+    x: float = 0.0,
+) -> tuple[complex | ComplexArray, ComplexArray]:
+    """Return the Cui stable characteristic function and parameter gradient."""
+    tau = _validate_tau(tau)
+    if not np.isfinite(float(x)):
+        raise ValueError("x must be finite.")
+
+    # REVIEW: eta near zero is singular for these formulas; do not silently fallback without a separate design decision.
+    if params.eta <= 0.0:
+        raise ValueError("analytic Heston gradient requires eta to be positive.")
+
+    u_arr, scalar_input, original_shape = _normalize_frequency_grid(u)
+
+    if tau == 0.0:
+        phi = np.asarray(np.exp(1j * u_arr * float(x)), dtype=np.complex128)
+        grad_phi = np.zeros(
+            (u_arr.size, len(HESTON_CHARFUNC_GRADIENT_PARAM_NAMES)),
+            dtype=np.complex128,
+        )
+        return (
+            _restore_frequency_shape(
+                phi, scalar_input=scalar_input, original_shape=original_shape
+            ),
+            _restore_frequency_param_shape(
+                grad_phi, scalar_input=scalar_input, original_shape=original_shape
+            ),
+        )
+
+    # REVIEW: formulas assume u != 0; quadrature nodes should exclude zero or handle the limit separately.
+    if np.any(u_arr == 0.0):
+        raise ValueError("analytic Heston gradient formulas require nonzero u.")
+
+    terms = _cui_stable_terms(u_arr, tau, params)
+    derivs = _cui_intermediate_derivatives(terms, tau, params)
+    h = _cui_h_vector(terms, derivs, tau, params)
+
+    kappa = float(params.kappa)
+    vbar = float(params.vbar)
+    eta = float(params.eta)
+    rho = float(params.rho)
+    v = float(params.v)
+    iu = 1j * terms.u
+
+    # REVIEW: confirm this x phase matches the repo pricing convention before wiring into Fourier integration.
+    phi = np.exp(
+        1j * terms.u * float(x)
+        - tau * kappa * vbar * rho * iu / eta
+        - v * terms.A
+        + 2.0 * kappa * vbar / (eta * eta) * terms.D
+    )
+    grad_phi = phi[:, None] * h
+
+    # REVIEW: this kernel is not yet connected to HestonObjective.jac; integration and residual scaling belong in later phases.
+
+    return (
+        _restore_frequency_shape(
+            phi, scalar_input=scalar_input, original_shape=original_shape
+        ),
+        _restore_frequency_param_shape(
+            grad_phi, scalar_input=scalar_input, original_shape=original_shape
+        ),
+    )
 
 
 def heston_char_fn(

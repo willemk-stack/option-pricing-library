@@ -9,6 +9,8 @@ import numpy as np
 _POSITIVE_EPS = 1e-12
 _RHO_CLIP_EPS = 1e-12
 
+HESTON_PARAM_NAMES = ("kappa", "vbar", "eta", "rho", "v")
+
 
 def _softplus(x: float) -> float:
     return float(np.log1p(np.exp(-abs(x))) + max(x, 0.0))
@@ -169,3 +171,28 @@ class HestonParams:
 
     TransformToUnconstrained = transform_to_unconstrained
     TransformToConstrained = transform_to_constrained
+
+    @staticmethod
+    def transform_jac_diag_from_raw(raw: np.ndarray) -> np.ndarray:
+        raw = np.asarray(raw, dtype=np.float64).reshape(-1)
+
+        def sigmoid(x: float) -> float:
+            # stable-ish sigmoid
+            if x >= 0:
+                z = float(np.exp(-x))
+                return float(1.0 / (1.0 + z))
+            z = float(np.exp(x))
+            return float(z / (1.0 + z))
+
+        rho = float(np.tanh(float(raw[3])))
+
+        return np.array(
+            [
+                sigmoid(float(raw[0])),  # d kappa / d raw_kappa
+                sigmoid(float(raw[1])),  # d vbar  / d raw_vbar
+                sigmoid(float(raw[2])),  # d eta   / d raw_eta
+                1.0 - rho * rho,  # d rho   / d raw_rho
+                sigmoid(float(raw[4])),  # d v     / d raw_v
+            ],
+            dtype=np.float64,
+        )
