@@ -10,6 +10,7 @@ from numpy.typing import NDArray
 type FloatArray = NDArray[np.floating]  # typing only
 type ArrayLike = float | np.ndarray | np.floating
 type ScalarFn = Callable[[float], float]
+type BoolArray = NDArray[np.bool_]
 
 # Runtime types
 FloatDType = np.float64  # runtime dtype only
