@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 
-from ....pricers.heston import heston_price_from_ctx
+from ....pricers.heston import (
+    heston_price_and_param_jac_from_ctx,
+    heston_price_from_ctx,
+)
 from ....types import OptionType
 from ....typing import FloatArray
 from ..fourier import HestonBackend, QuadratureConfig
@@ -43,6 +47,42 @@ def _price_heston_quotes(
             )
 
     return prices
+
+
+def _price_and_jac_heston_quotes(
+    quotes: HestonQuoteSet,
+    params: HestonParams,
+    *,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+) -> tuple[FloatArray, FloatArray]:
+    prices = np.empty(quotes.n_quotes, dtype=np.float64)
+    dprice_dtheta = np.empty((quotes.n_quotes, 5), dtype=np.float64)
+
+    for T in np.unique(quotes.expiry):
+        idx_T = np.flatnonzero(quotes.expiry == T)
+
+        for is_call_value, kind in (
+            (True, OptionType.CALL),
+            (False, OptionType.PUT),
+        ):
+            idx = idx_T[quotes.is_call[idx_T] == is_call_value]
+            if idx.size == 0:
+                continue
+
+            price, jac = heston_price_and_param_jac_from_ctx(
+                kind=kind,
+                strike=quotes.strike[idx],
+                tau=float(T),
+                ctx=quotes.ctx,
+                params=params,
+                backend=backend,
+                quad_cfg=quad_cfg,
+            )
+            prices[idx] = np.asarray(price, dtype=np.float64)
+            dprice_dtheta[idx, :] = np.asarray(jac, dtype=np.float64)
+
+    return prices, dprice_dtheta
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,11 +128,20 @@ class HestonObjective:
         return self.effective_sqrt_weights * (model - self.quotes.mid) / scale
 
     def jac(self, u: FloatArray) -> FloatArray:
-        raise NotImplementedError(
-            "Analytic Jacobian is not implemented yet; use finite differences."
+        params = HestonParams.transform_to_constrained(u)
+
+        _, dprice_dtheta = _price_and_jac_heston_quotes(
+            self.quotes,
+            params,
+            backend=self.backend,
+            quad_cfg=self.quad_cfg,
         )
-        # theta = self.transform.decode(u)
-        # prices, dC_dtheta = heston_prices_and_jac(theta, self.quotes)
-        # dtheta_du = self.transform.jacobian(u, theta)
-        # J_raw = dC_dtheta @ dtheta_du
-        # return self._scale_jacobian(J_raw, prices, theta)
+        dtheta_du = HestonParams.transform_jac_diag_from_raw(u)
+        dprice_du = dprice_dtheta * dtheta_du[None, :]
+
+        scale = self.quotes.vega_price_scales(self.vega_floor)
+        scaled_jac = np.asarray(
+            self.effective_sqrt_weights[:, None] * dprice_du / scale[:, None],
+            dtype=np.float64,
+        )
+        return cast(FloatArray, scaled_jac)

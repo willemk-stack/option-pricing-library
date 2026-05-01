@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Literal
 
 import numpy as np
-from scipy.optimize import least_squares
+from scipy.optimize import OptimizeResult, least_squares
 
 from ....exceptions import NoConvergenceError
 from ....typing import FloatArray
@@ -30,8 +30,14 @@ def calibrate_heston(
     backend: HestonBackend = "gauss_legendre",
     quad_cfg: QuadratureConfig | None = None,
     reg: HestonRegConfig | None = None,
-) -> HestonParams:
-
+    use_analytic_jac: bool = True,
+    method: Literal["trf", "dogbox", "lm"] = "trf",
+    max_nfev: int | None = None,
+    ftol: float | None = None,
+    xtol: float | None = None,
+    gtol: float | None = None,
+    return_result: bool = False,
+) -> HestonParams | tuple[HestonParams, OptimizeResult]:
     if parameter_transform != "unconstrained":
         raise ValueError(
             "Only parameter_transform='unconstrained' is currently supported."
@@ -40,6 +46,13 @@ def calibrate_heston(
         raise ValueError(
             "x0_params must be provided until a Heston calibration seed heuristic "
             "is implemented."
+        )
+    # REVIEW: Keep the default optimizer at "trf" because the default
+    # loss="soft_l1" is invalid for SciPy's method="lm"; explicit LM is still
+    # allowed with loss="linear".
+    if method == "lm" and loss != "linear":
+        raise ValueError(
+            "method='lm' requires loss='linear' in scipy.optimize.least_squares."
         )
 
     obj = HestonObjective(
@@ -53,14 +66,65 @@ def calibrate_heston(
         reg=reg,
     )
 
-    res = least_squares(
-        fun=obj.residual,
-        x0=x0_params.transform_to_unconstrained(),
-        loss=loss,
-        x_scale=x_scale,
-    )
+    def analytic_jac(u: np.ndarray, *_args: object, **_kwargs: object) -> FloatArray:
+        return obj.jac(np.asarray(u, dtype=np.float64))
+
+    x0 = x0_params.transform_to_unconstrained()
+    if any(tol is not None for tol in (ftol, xtol, gtol)):
+        if use_analytic_jac:
+            res = least_squares(
+                fun=obj.residual,
+                jac=analytic_jac,
+                x0=x0,
+                loss=loss,
+                x_scale=x_scale,
+                method=method,
+                max_nfev=max_nfev,
+                ftol=ftol,
+                xtol=xtol,
+                gtol=gtol,
+            )
+        else:
+            res = least_squares(
+                fun=obj.residual,
+                jac="2-point",
+                x0=x0,
+                loss=loss,
+                x_scale=x_scale,
+                method=method,
+                max_nfev=max_nfev,
+                ftol=ftol,
+                xtol=xtol,
+                gtol=gtol,
+            )
+    else:
+        if use_analytic_jac:
+            res = least_squares(
+                fun=obj.residual,
+                jac=analytic_jac,
+                x0=x0,
+                loss=loss,
+                x_scale=x_scale,
+                method=method,
+                max_nfev=max_nfev,
+            )
+        else:
+            res = least_squares(
+                fun=obj.residual,
+                jac="2-point",
+                x0=x0,
+                loss=loss,
+                x_scale=x_scale,
+                method=method,
+                max_nfev=max_nfev,
+            )
 
     if not res.success or not np.all(np.isfinite(res.x)):
         raise NoConvergenceError(f"Heston calibration failed: {res.message}")
 
-    return HestonParams.transform_to_constrained(np.asarray(res.x, dtype=np.float64))
+    fitted_params = HestonParams.transform_to_constrained(
+        np.asarray(res.x, dtype=np.float64)
+    )
+    if return_result:
+        return fitted_params, res
+    return fitted_params

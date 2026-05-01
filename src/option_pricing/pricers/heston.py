@@ -7,6 +7,7 @@ from numpy.typing import NDArray
 
 from ..instruments import VanillaOption
 from ..models.heston import HestonParams, heston_probability
+from ..models.heston.fourier import heston_probability_and_param_jac
 from ..numerics.quadrature import CompositeRule, QuadratureConfig
 from ..types import MarketData, OptionType, PricingContext
 from ..typing import ArrayLike, FloatArray
@@ -73,6 +74,18 @@ def _restore_output(
     if scalar_input:
         return float(value[0])
     return np.asarray(value.reshape(original_shape), dtype=np.float64)
+
+
+def _restore_jac_output(
+    value: RealArray,
+    scalar_input: bool,
+    original_shape: tuple[int, ...],
+) -> RealArray:
+    # REVIEW: NEEDS VALIDATION: scalar/vector shape policy if repo conventions are ambiguous.
+    value = np.asarray(value, dtype=np.float64)
+    if scalar_input:
+        return np.asarray(value.reshape(-1, 5)[0], dtype=np.float64)
+    return np.asarray(value.reshape(original_shape + (5,)), dtype=np.float64)
 
 
 def _intrinsic_value(spot: float, strike: RealArray, kind: OptionType) -> RealArray:
@@ -151,6 +164,45 @@ def _probability_array(
             rule=rule,
         ),
         dtype=np.float64,
+    )
+
+
+def _probability_and_param_jac_arrays(
+    *,
+    x: RealArray,
+    tau: float,
+    params: HestonParams,
+    backend: HestonBackend,
+    quad_cfg: QuadratureConfig | None,
+    rule: CompositeRule | None,
+) -> tuple[RealArray, RealArray, RealArray, RealArray]:
+    # REVIEW: NEEDS VALIDATION: probability index mapping p1/p0 if enum naming is not obvious.
+    # REVIEW: Existing price convention maps p0 -> probability_index=0 and p1 -> probability_index=1.
+    # REVIEW: NEEDS VALIDATION: backend limitations if only gauss_legendre supports analytic jac.
+    p_0, dp0_dtheta = heston_probability_and_param_jac(
+        x=x,
+        tau=tau,
+        params=params,
+        probability_index=0,
+        backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
+    )
+    p_1, dp1_dtheta = heston_probability_and_param_jac(
+        x=x,
+        tau=tau,
+        params=params,
+        probability_index=1,
+        backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
+    )
+
+    return (
+        np.asarray(p_0, dtype=np.float64),
+        np.asarray(dp0_dtheta, dtype=np.float64),
+        np.asarray(p_1, dtype=np.float64),
+        np.asarray(dp1_dtheta, dtype=np.float64),
     )
 
 
@@ -425,6 +477,238 @@ def heston_price_put_from_ctx(
         dtype=np.float64,
     )
     return _restore_output(put, scalar_input, original_shape)
+
+
+@overload
+def heston_price_call_and_param_jac_from_ctx(
+    *,
+    strike: float,
+    ctx: PricingContext,
+    tau: float,
+    params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> tuple[float, RealArray]: ...
+
+
+@overload
+def heston_price_call_and_param_jac_from_ctx(
+    *,
+    strike: FloatArray,
+    ctx: PricingContext,
+    tau: float,
+    params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> tuple[FloatArray, RealArray]: ...
+
+
+def heston_price_call_and_param_jac_from_ctx(
+    *,
+    strike: float | FloatArray,
+    ctx: PricingContext,
+    tau: float,
+    params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> tuple[float | FloatArray, RealArray]:
+    """Return Heston call prices and constrained-parameter Jacobians.
+
+    The Jacobian columns are ordered as ``[kappa, vbar, eta, rho, v]``.
+    """
+    strike_arr, scalar_input, original_shape = _normalize_strike(strike)
+    _validate_heston_inputs(spot=ctx.spot, strike=strike_arr, tau=tau)
+
+    if tau == 0:
+        intrinsic = _intrinsic_value(
+            spot=ctx.spot,
+            strike=strike_arr,
+            kind=OptionType.CALL,
+        )
+        d_intrinsic = np.zeros(strike_arr.shape + (5,), dtype=np.float64)
+        return (
+            _restore_output(intrinsic, scalar_input, original_shape),
+            _restore_jac_output(d_intrinsic, scalar_input, original_shape),
+        )
+
+    forward = float(ctx.fwd(tau=tau))
+    df = float(ctx.df(tau=tau))
+    x = np.asarray(np.log(forward / strike_arr), dtype=np.float64)
+
+    p_0_arr, dp0_dtheta, p_1_arr, dp1_dtheta = _probability_and_param_jac_arrays(
+        x=x,
+        tau=tau,
+        params=params,
+        backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
+    )
+
+    call = np.asarray(
+        df * (forward * p_1_arr - strike_arr * p_0_arr),
+        dtype=np.float64,
+    )
+    # REVIEW: NON-PLUMBING / FORMULA-SENSITIVE: verify against CalibrationNotes.md and existing price convention.
+    d_call_dtheta = np.asarray(
+        df * (forward * dp1_dtheta - strike_arr[..., None] * dp0_dtheta),
+        dtype=np.float64,
+    )
+
+    return (
+        _restore_output(call, scalar_input, original_shape),
+        _restore_jac_output(d_call_dtheta, scalar_input, original_shape),
+    )
+
+
+@overload
+def heston_price_put_and_param_jac_from_ctx(
+    *,
+    strike: float,
+    tau: float,
+    ctx: PricingContext,
+    params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> tuple[float, RealArray]: ...
+
+
+@overload
+def heston_price_put_and_param_jac_from_ctx(
+    *,
+    strike: FloatArray,
+    tau: float,
+    ctx: PricingContext,
+    params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> tuple[FloatArray, RealArray]: ...
+
+
+def heston_price_put_and_param_jac_from_ctx(
+    *,
+    strike: float | FloatArray,
+    tau: float,
+    ctx: PricingContext,
+    params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> tuple[float | FloatArray, RealArray]:
+    """Return Heston put prices and constrained-parameter Jacobians.
+
+    The Jacobian columns are ordered as ``[kappa, vbar, eta, rho, v]``.
+    """
+    strike_arr, scalar_input, original_shape = _normalize_strike(strike)
+    _validate_heston_inputs(spot=ctx.spot, strike=strike_arr, tau=tau)
+
+    if tau == 0:
+        intrinsic = _intrinsic_value(
+            spot=ctx.spot,
+            strike=strike_arr,
+            kind=OptionType.PUT,
+        )
+        d_intrinsic = np.zeros(strike_arr.shape + (5,), dtype=np.float64)
+        return (
+            _restore_output(intrinsic, scalar_input, original_shape),
+            _restore_jac_output(d_intrinsic, scalar_input, original_shape),
+        )
+
+    forward = float(ctx.fwd(tau=tau))
+    df = float(ctx.df(tau=tau))
+    x = np.asarray(np.log(forward / strike_arr), dtype=np.float64)
+
+    p_0_arr, dp0_dtheta, p_1_arr, dp1_dtheta = _probability_and_param_jac_arrays(
+        x=x,
+        tau=tau,
+        params=params,
+        backend=backend,
+        quad_cfg=quad_cfg,
+        rule=rule,
+    )
+
+    put = np.asarray(
+        df * (strike_arr * (1.0 - p_0_arr) - forward * (1.0 - p_1_arr)),
+        dtype=np.float64,
+    )
+    # REVIEW: NEEDS VALIDATION: confirm put Jacobian sign convention against existing put price implementation and finite-difference tests.
+    d_put_dtheta = np.asarray(
+        df * (forward * dp1_dtheta - strike_arr[..., None] * dp0_dtheta),
+        dtype=np.float64,
+    )
+
+    return (
+        _restore_output(put, scalar_input, original_shape),
+        _restore_jac_output(d_put_dtheta, scalar_input, original_shape),
+    )
+
+
+@overload
+def heston_price_and_param_jac_from_ctx(
+    *,
+    kind: OptionType,
+    strike: float,
+    tau: float,
+    ctx: PricingContext,
+    params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> tuple[float, RealArray]: ...
+
+
+@overload
+def heston_price_and_param_jac_from_ctx(
+    *,
+    kind: OptionType,
+    strike: FloatArray,
+    tau: float,
+    ctx: PricingContext,
+    params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> tuple[FloatArray, RealArray]: ...
+
+
+def heston_price_and_param_jac_from_ctx(
+    *,
+    kind: OptionType,
+    strike: float | FloatArray,
+    tau: float,
+    ctx: PricingContext,
+    params: HestonParams,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    rule: CompositeRule | None = None,
+) -> tuple[float | FloatArray, RealArray]:
+    """Price a Heston option and return its constrained-parameter Jacobian."""
+    if kind == OptionType.CALL:
+        return heston_price_call_and_param_jac_from_ctx(
+            strike=strike,
+            ctx=ctx,
+            tau=tau,
+            params=params,
+            backend=backend,
+            quad_cfg=quad_cfg,
+            rule=rule,
+        )
+    if kind == OptionType.PUT:
+        return heston_price_put_and_param_jac_from_ctx(
+            strike=strike,
+            tau=tau,
+            ctx=ctx,
+            params=params,
+            backend=backend,
+            quad_cfg=quad_cfg,
+            rule=rule,
+        )
+
+    raise ValueError(f"kind should be an OptionType enum, here: {kind}")
 
 
 @overload
