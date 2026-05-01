@@ -1,0 +1,19 @@
+{
+  "runs": {
+    "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_runs.csv",
+    "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_runs.json"
+  },
+  "summary": {
+    "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_summary.csv",
+    "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_summary.json"
+  },
+  "parameter_recovery": {
+    "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_parameter_recovery.csv",
+    "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_parameter_recovery.json"
+  },
+  "residuals": {
+    "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_residuals.csv",
+    "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_residuals.json"
+  },
+  "meta": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_meta.json"
+}

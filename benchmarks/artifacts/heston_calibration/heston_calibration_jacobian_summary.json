@@ -1,0 +1,28 @@
+[
+  {
+    "mode":"finite_difference",
+    "median_runtime_ms":56.6634999122,
+    "mean_runtime_ms":56.6634999122,
+    "std_runtime_ms":0.0,
+    "median_nfev":5.0,
+    "median_njev":5.0,
+    "median_residual_norm":0.0000000001,
+    "median_max_abs_residual":0.0000000001,
+    "speedup_vs_finite_difference":1.0,
+    "nfev_ratio_vs_finite_difference":1.0,
+    "notes":"finite-difference baseline"
+  },
+  {
+    "mode":"analytic",
+    "median_runtime_ms":32.2009000229,
+    "mean_runtime_ms":32.2009000229,
+    "std_runtime_ms":0.0,
+    "median_nfev":5.0,
+    "median_njev":5.0,
+    "median_residual_norm":0.0000000001,
+    "median_max_abs_residual":0.0000000001,
+    "speedup_vs_finite_difference":1.7596868371,
+    "nfev_ratio_vs_finite_difference":1.0,
+    "notes":"REVIEW: Speedup ratios are smoke-benchmark measurements and environment-dependent."
+  }
+]

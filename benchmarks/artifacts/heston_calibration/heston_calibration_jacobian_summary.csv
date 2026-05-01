@@ -1,0 +1,3 @@
+mode,median_runtime_ms,mean_runtime_ms,std_runtime_ms,median_nfev,median_njev,median_residual_norm,median_max_abs_residual,speedup_vs_finite_difference,nfev_ratio_vs_finite_difference,notes
+finite_difference,56.66349991224706,56.66349991224706,0.0,5.0,5.0,1.1939414480598587e-10,5.1565720504791583e-11,1.0,1.0,finite-difference baseline
+analytic,32.20090002287179,32.20090002287179,0.0,5.0,5.0,1.2174833426378014e-10,5.2977232837643736e-11,1.7596868370759784,1.0,REVIEW: Speedup ratios are smoke-benchmark measurements and environment-dependent.

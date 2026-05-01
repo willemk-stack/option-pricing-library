@@ -1,7 +1,9 @@
 """Public notebook-facing API for Heston diagnostics."""
 
+from .calibration import run_heston_calibration_benchmark_diagnostics
 from .models import (
     HestonBackendComparisonDiagnostics,
+    HestonCalibrationBenchmarkDiagnostics,
     HestonDiagnosticsReport,
     HestonPriceSliceDiagnostics,
     HestonProbabilitySliceDiagnostics,
@@ -29,6 +31,7 @@ from .report import run_heston_slice_diagnostics
 
 __all__ = [
     "HestonBackendComparisonDiagnostics",
+    "HestonCalibrationBenchmarkDiagnostics",
     "HestonDiagnosticsReport",
     "HestonMCComparisonCase",
     "HestonPriceSliceDiagnostics",
@@ -41,6 +44,7 @@ __all__ = [
     "plot_heston_mc_scheme_comparison",
     "price_slice_with_diagnostics",
     "probability_slice_with_diagnostics",
+    "run_heston_calibration_benchmark_diagnostics",
     "run_heston_mc_comparison_sweep",
     "run_heston_pricing_diagnostics",
     "run_heston_slice_diagnostics",

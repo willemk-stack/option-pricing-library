@@ -71,3 +71,65 @@ HESTON_SUMMARY_METRICS: tuple[str, ...] = (
     "max_backend_discrepancy",
     "suspicious_strike_count",
 )
+
+# REVIEW: Calibration benchmark table names and columns are a diagnostics
+# contract distinct from the pricing report topology.
+HESTON_CALIBRATION_BENCHMARK_REQUIRED_TABLES: tuple[str, ...] = (
+    "runs",
+    "summary",
+    "parameter_recovery",
+    "residuals",
+)
+
+HESTON_CALIBRATION_BENCHMARK_RUN_COLUMNS: tuple[str, ...] = (
+    "mode",
+    "use_analytic_jac",
+    "repeat_index",
+    "warmup",
+    "runtime_ms",
+    "nfev",
+    "njev",
+    "cost",
+    "residual_norm",
+    "max_abs_residual",
+    "success",
+    "status",
+    "message",
+    "method",
+    "loss",
+    "backend",
+    "n_quotes",
+)
+
+HESTON_CALIBRATION_BENCHMARK_SUMMARY_COLUMNS: tuple[str, ...] = (
+    "mode",
+    "median_runtime_ms",
+    "mean_runtime_ms",
+    "std_runtime_ms",
+    "median_nfev",
+    "median_njev",
+    "median_residual_norm",
+    "median_max_abs_residual",
+    "speedup_vs_finite_difference",
+    "nfev_ratio_vs_finite_difference",
+    "notes",
+)
+
+HESTON_CALIBRATION_BENCHMARK_PARAMETER_COLUMNS: tuple[str, ...] = (
+    "mode",
+    "parameter",
+    "true",
+    "seed",
+    "fitted",
+    "fit_minus_true",
+    "abs_fit_minus_true",
+)
+
+HESTON_CALIBRATION_BENCHMARK_RESIDUAL_COLUMNS: tuple[str, ...] = (
+    "mode",
+    "quote_index",
+    "expiry",
+    "strike",
+    "log_moneyness",
+    "residual",
+)

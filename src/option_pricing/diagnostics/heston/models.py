@@ -22,6 +22,11 @@ import numpy as np
 import pandas as pd
 
 from .contracts import (
+    HESTON_CALIBRATION_BENCHMARK_PARAMETER_COLUMNS,
+    HESTON_CALIBRATION_BENCHMARK_REQUIRED_TABLES,
+    HESTON_CALIBRATION_BENCHMARK_RESIDUAL_COLUMNS,
+    HESTON_CALIBRATION_BENCHMARK_RUN_COLUMNS,
+    HESTON_CALIBRATION_BENCHMARK_SUMMARY_COLUMNS,
     HESTON_REQUIRED_REPORT_TABLES,
     HESTON_SEVERITY_ORDER,
     HESTON_SLICE_TABLE_COLUMNS,
@@ -196,6 +201,27 @@ def _deserialize_tables(payload: Mapping[str, Any]) -> dict[str, pd.DataFrame]:
     }
 
 
+def _is_matplotlib_object(value: Any) -> bool:
+    module = type(value).__module__
+    return module.startswith("matplotlib")
+
+
+def _reject_plot_objects(value: Any, *, label: str) -> None:
+    if _is_matplotlib_object(value):
+        raise TypeError(
+            f"{label} may not include matplotlib figure, axes, or artist objects."
+        )
+
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            _reject_plot_objects(item, label=f"{label}.{key}")
+        return
+
+    if isinstance(value, (list, tuple)):
+        for idx, item in enumerate(value):
+            _reject_plot_objects(item, label=f"{label}[{idx}]")
+
+
 @dataclass(frozen=True, slots=True)
 class _HestonTableArtifact:
     """Shared runtime container for notebook-facing diagnostics artifacts.
@@ -360,6 +386,108 @@ class HestonIntegrationDiagnosticsBundle:
                 "HestonIntegrationDiagnosticsBundle.tables is missing required "
                 f"table(s): {', '.join(missing_tables)}."
             )
+
+
+@dataclass(frozen=True, slots=True)
+class HestonCalibrationBenchmarkDiagnostics:
+    """Notebook-facing Heston calibration benchmark diagnostics report.
+
+    The report keeps the same lightweight topology used by the Heston pricing
+    diagnostics:
+
+    - ``meta`` for scenario, environment, and provenance fields
+    - ``tables`` for readable ``pandas.DataFrame`` outputs
+    - ``arrays`` for optional dense quote/residual/parameter payloads
+
+    Required tables include ``runs``, ``summary``, ``parameter_recovery``, and
+    ``residuals``. Runtime tables stay as DataFrames until serialization.
+
+    REVIEW: The required tables and canonical column prefixes are a public
+    diagnostics contract for the benchmark surface.
+    """
+
+    meta: dict[str, Any]
+    tables: dict[str, pd.DataFrame]
+    arrays: dict[str, Any]
+
+    def __post_init__(self) -> None:
+        _reject_plot_objects(self.meta, label="meta")
+        _reject_plot_objects(self.arrays, label="arrays")
+
+        object.__setattr__(self, "meta", _normalize_meta(self.meta))
+        object.__setattr__(self, "arrays", _normalize_arrays(self.arrays))
+        object.__setattr__(
+            self,
+            "tables",
+            {str(name): _as_dataframe(table) for name, table in self.tables.items()},
+        )
+
+        missing_tables = [
+            name
+            for name in HESTON_CALIBRATION_BENCHMARK_REQUIRED_TABLES
+            if name not in self.tables
+        ]
+        if missing_tables:
+            raise ValueError(
+                "HestonCalibrationBenchmarkDiagnostics.tables is missing required "
+                f"table(s): {', '.join(missing_tables)}."
+            )
+
+        column_contracts = {
+            "runs": HESTON_CALIBRATION_BENCHMARK_RUN_COLUMNS,
+            "summary": HESTON_CALIBRATION_BENCHMARK_SUMMARY_COLUMNS,
+            "parameter_recovery": HESTON_CALIBRATION_BENCHMARK_PARAMETER_COLUMNS,
+            "residuals": HESTON_CALIBRATION_BENCHMARK_RESIDUAL_COLUMNS,
+        }
+        normalized_tables = dict(self.tables)
+        for table_name, columns in column_contracts.items():
+            normalized_tables[table_name] = _ensure_columns(
+                normalized_tables[table_name],
+                required_columns=columns,
+                label=(
+                    "HestonCalibrationBenchmarkDiagnostics.tables" f"[{table_name!r}]"
+                ),
+            )
+
+        object.__setattr__(self, "tables", normalized_tables)
+
+    def to_dict(self) -> SerializedReport:
+        """Serialize the report into a JSON-friendly plain-data shape."""
+        return {
+            "meta": dict(self.meta),
+            "tables": _serialize_tables(self.tables),
+            "arrays": _serialize_array_value(self.arrays),
+        }
+
+    @classmethod
+    def from_dict(
+        cls,
+        payload: Mapping[str, Any],
+    ) -> HestonCalibrationBenchmarkDiagnostics:
+        keys = set(payload.keys())
+        expected = {"meta", "tables", "arrays"}
+        if keys != expected:
+            raise ValueError(
+                "Serialized HestonCalibrationBenchmarkDiagnostics payload must "
+                "contain exactly 'meta', 'tables', and 'arrays'."
+            )
+
+        tables_payload = payload["tables"]
+        if not isinstance(tables_payload, Mapping):
+            raise TypeError("Serialized report 'tables' must be a mapping.")
+
+        return cls(
+            meta=_normalize_meta(payload.get("meta")),
+            tables=_deserialize_tables(tables_payload),
+            arrays=_normalize_arrays(payload.get("arrays")),
+        )
+
+    def to_json(self, **kwargs: Any) -> str:
+        return json.dumps(self.to_dict(), **kwargs)
+
+    @classmethod
+    def from_json(cls, payload: str) -> HestonCalibrationBenchmarkDiagnostics:
+        return cls.from_dict(json.loads(payload))
 
 
 @dataclass(frozen=True, slots=True)
