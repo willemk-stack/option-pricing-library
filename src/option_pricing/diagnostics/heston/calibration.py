@@ -130,7 +130,7 @@ def _x_scale_for_meta(x_scale: str | np.ndarray | None) -> Any:
     return np.asarray(x_scale, dtype=np.float64).tolist()
 
 
-def _build_synthetic_heston_quotes(
+def build_synthetic_heston_quote_set(
     *,
     market: MarketData | PricingContext | None,
     true_params: HestonParams,
@@ -245,6 +245,9 @@ def _build_synthetic_heston_quotes(
         iv_mid=np.asarray(iv_values, dtype=np.float64),
         labels=tuple(labels),
     )
+
+
+_build_synthetic_heston_quotes = build_synthetic_heston_quote_set
 
 
 def _run_single_calibration(
@@ -485,7 +488,7 @@ def run_heston_calibration_benchmark_diagnostics(
     )
     resolved_quad_cfg = _default_quad_cfg() if quad_cfg is None else quad_cfg
 
-    quotes = _build_synthetic_heston_quotes(
+    quotes = build_synthetic_heston_quote_set(
         market=market,
         true_params=resolved_true_params,
         expiries=expiries,
@@ -618,4 +621,7 @@ def run_heston_calibration_benchmark_diagnostics(
     )
 
 
-__all__ = ["run_heston_calibration_benchmark_diagnostics"]
+__all__ = [
+    "build_synthetic_heston_quote_set",
+    "run_heston_calibration_benchmark_diagnostics",
+]

@@ -187,6 +187,90 @@ This keeps routine calibration affordable while still covering the main weakly
 identified directions. Callers that are doing a dedicated sensitivity study can
 set `max_seeds=None` to inspect every unique proposed start.
 
+## Reading `HestonMultistartResult`
+
+`calibrate_heston_multistart` returns a structured `HestonMultistartResult`
+rather than only the best parameter vector. The result exposes:
+
+- `best_params`: the fitted `HestonParams` from the lowest-cost successful run,
+- `best_run`: the full run record that produced `best_params`,
+- `runs`: every attempted seed, sorted with successful runs first, then by cost,
+  then by original seed index,
+- `successful_runs` and `failed_runs`: convenience views over `runs`,
+- metadata such as `objective_type`, `parameter_transform`, `backend`,
+  `quote_count`, `success_count`, and `failure_count`.
+
+The canonical import path is either the calibration package export or
+`option_pricing.models.heston.calibration.heston_types`. There is no separate
+`calibration.results` dataclass module.
+
+Each `HestonCalibrationRun` keeps the original `seed_index`, `seed_params`, the
+optional `fitted_params`, optimizer diagnostics such as `cost`, `nfev`, `njev`,
+`optimality`, `status`, `message`, and the raw optimizer vector when available.
+
+Failed runs are retained on purpose. A failed seed can reveal a brittle
+transform, an overly tight bound, a bad quote point, or a weakly identified
+direction that deserves diagnosis. Dropping failures would make the final
+calibration look cleaner while hiding exactly the evidence multi-start was
+meant to surface. If every seed fails, calibration raises `NoConvergenceError`
+with a summarized per-seed failure message rather than returning a result with
+no valid `best_run`.
+
+## Synthetic recovery evidence
+
+Clean synthetic recovery builds a small Heston quote surface from known
+parameters, computes Black implied vols and vegas for those quotes, and then
+runs the real `calibrate_heston_multistart` path. A clean recovery test proves
+that, on internally consistent data and fixed numerical settings, the
+calibration pipeline can improve materially over the default seed, produce
+admissible parameters, and reprice the generated surface with small residuals.
+
+It does not prove that Heston parameters are uniquely identified from arbitrary
+market smiles. Even a clean surface can contain shallow directions where
+different combinations of `kappa`, `vbar`, `eta`, `rho`, and `v` fit nearly the
+same prices.
+
+REVIEW: Clean-recovery parameter tolerances are diagnostic guardrails. They
+should remain looser than the deterministic synthetic case currently achieves
+because exact parameter equality can become brittle under modest grid,
+quadrature, or objective changes.
+
+Noisy synthetic recovery perturbs the generated implied vols by a deterministic
+small number of vol basis points, reprices those perturbed vols through
+Black-76, and calibrates to the resulting quote surface. Under noise, the
+primary success metric should be fit quality and stability: successful runs,
+bounded fitted parameters, materially lower cost than the default seed, and
+reasonable repricing or IV residuals. Exact equality to the synthetic truth is
+not required because the quotes no longer come from a single exact Heston
+surface.
+
+REVIEW: The current noisy-recovery noise level and IV residual thresholds are
+capstone smoke thresholds, not market microstructure claims. For final
+calibration evidence, state the chosen noise level and whether repricing error
+or parameter closeness is the primary success metric.
+
+## Interpreting seed sensitivity
+
+A seed-sensitivity table should show one row per attempted seed, including the
+seed parameters, success flag, optimizer message/status, cost, fitted
+parameters, distance to the best fit, and deltas versus synthetic truth when
+truth is known. The table answers different questions than `best_params`:
+
+- Did several seeds converge to the same solution?
+- Did any seeds fail, and why?
+- Did multiple fitted parameter sets produce nearly identical costs?
+- Are the near-best differences economically meaningful or just numerical?
+
+Heston seed sensitivity is a diagnostic, not an embarrassment. Vanilla option
+calibration can be weakly identified, so optimizer success alone should not be
+read as parameter uniqueness. Similar near-best costs should be paired with
+residual plots, repricing error, and stability checks before interpreting the
+parameters economically.
+
+REVIEW: What counts as "near-best" should be specified with the capstone
+evidence table. A fixed absolute cost threshold may be fine for a compact
+synthetic surface, while production quote sets may need a scale-aware threshold.
+
 ## Defensible explanation
 
 The default seed is intentionally simple:

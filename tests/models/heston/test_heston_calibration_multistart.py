@@ -1,13 +1,25 @@
 from __future__ import annotations
 
+import importlib.util
+
 import numpy as np
 import pytest
 from scipy.optimize import OptimizeResult
 
 import option_pricing.models.heston.calibration.calibrate as calibrate_module
 from option_pricing.exceptions import NoConvergenceError
+from option_pricing.models.heston.calibration import (
+    HestonCalibrationRun as ExportedHestonCalibrationRun,
+)
+from option_pricing.models.heston.calibration import (
+    HestonMultistartResult as ExportedHestonMultistartResult,
+)
 from option_pricing.models.heston.calibration.bounds import HestonCalibrationBounds
-from option_pricing.models.heston.calibration.heston_types import HestonQuoteSet
+from option_pricing.models.heston.calibration.heston_types import (
+    HestonCalibrationRun,
+    HestonMultistartResult,
+    HestonQuoteSet,
+)
 from option_pricing.models.heston.params import HestonParams
 from option_pricing.types import MarketData
 
@@ -52,6 +64,15 @@ def _fake_result(
         status=status,
         message=message,
         x=np.zeros(5, dtype=np.float64) if x is None else x,
+    )
+
+
+def test_result_types_have_one_canonical_public_identity() -> None:
+    assert ExportedHestonCalibrationRun is HestonCalibrationRun
+    assert ExportedHestonMultistartResult is HestonMultistartResult
+    assert (
+        importlib.util.find_spec("option_pricing.models.heston.calibration.results")
+        is None
     )
 
 
@@ -111,10 +132,84 @@ def test_failed_seed_is_retained_and_successful_seed_wins(
     assert result.success_count == 1
     assert result.failure_count == 1
     assert len(result.failed_runs) == 1
+    assert result.failed_runs[0].fitted_params is None
+    assert result.failed_runs[0].raw_x is None
+    assert np.isinf(result.failed_runs[0].cost)
     assert "NoConvergenceError" in result.failed_runs[0].message
     assert "bad start" in result.failed_runs[0].message
     assert result.best_run.success
     assert result.best_params == fitted
+
+
+def test_runs_are_sorted_success_cost_then_seed_index(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seeds = [
+        _seed(kappa=1.0),
+        _seed(kappa=2.0),
+        _seed(kappa=3.0),
+        _seed(kappa=4.0),
+    ]
+    costs_by_kappa = {
+        1.0: 1.0,
+        2.0: np.inf,
+        3.0: 0.5,
+        4.0: 0.5,
+    }
+
+    def fake_calibrate_heston(**kwargs: object) -> tuple[HestonParams, OptimizeResult]:
+        seed = kwargs["x0_params"]
+        assert isinstance(seed, HestonParams)
+        cost = costs_by_kappa[seed.kappa]
+        if not np.isfinite(cost):
+            raise NoConvergenceError("seed diverged")
+        return seed, _fake_result(cost=cost)
+
+    monkeypatch.setattr(calibrate_module, "calibrate_heston", fake_calibrate_heston)
+
+    result = calibrate_module.calibrate_heston_multistart(
+        quotes=_quotes(),
+        objective_type="price_rmse",
+        seeds=seeds,
+    )
+
+    assert [run.seed_index for run in result.runs] == [2, 3, 0, 1]
+    assert [run.seed_index for run in result.successful_runs] == [2, 3, 0]
+    assert [run.seed_index for run in result.failed_runs] == [1]
+    assert result.best_run.seed_index == 2
+
+
+def test_result_metadata_fields_are_populated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seeds = [_seed(kappa=1.0), _seed(kappa=2.0)]
+
+    def fake_calibrate_heston(**kwargs: object) -> tuple[HestonParams, OptimizeResult]:
+        seed = kwargs["x0_params"]
+        assert isinstance(seed, HestonParams)
+        if seed.kappa == 1.0:
+            raise RuntimeError("synthetic optimizer failure")
+        return seed, _fake_result(cost=0.125, status=2, message="metadata ok")
+
+    monkeypatch.setattr(calibrate_module, "calibrate_heston", fake_calibrate_heston)
+
+    quotes = _quotes()
+    result = calibrate_module.calibrate_heston_multistart(
+        quotes=quotes,
+        objective_type="relative_price_rmse",
+        seeds=seeds,
+        parameter_transform="bounded",
+        backend="quad",
+    )
+
+    assert result.objective_type == "relative_price_rmse"
+    assert result.parameter_transform == "bounded"
+    assert result.backend == "quad"
+    assert result.quote_count == quotes.n_quotes
+    assert result.success_count == 1
+    assert result.failure_count == 1
+    assert result.best_run.status == 2
+    assert result.best_run.message == "metadata ok"
 
 
 def test_all_seeds_fail_raises_no_convergence_error(
@@ -129,11 +224,20 @@ def test_all_seeds_fail_raises_no_convergence_error(
         calibrate_module.calibrate_heston_multistart(
             quotes=_quotes(),
             objective_type="price_rmse",
-            seeds=[_seed(kappa=1.0), _seed(kappa=2.0)],
+            seeds=[
+                _seed(kappa=1.0),
+                _seed(kappa=2.0),
+                _seed(kappa=3.0),
+                _seed(kappa=4.0),
+            ],
         )
 
     message = str(excinfo.value)
-    assert "all 2 seed" in message
+    assert "all 4 seed" in message
+    assert "seed 0" in message
+    assert "seed 1" in message
+    assert "seed 2" in message
+    assert "1 more failure" in message
     assert "still no fit" in message
 
 

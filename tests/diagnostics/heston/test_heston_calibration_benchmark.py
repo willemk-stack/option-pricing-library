@@ -6,6 +6,7 @@ import pytest
 
 from option_pricing.diagnostics.heston import (
     HestonCalibrationBenchmarkDiagnostics,
+    build_synthetic_heston_quote_set,
     run_heston_calibration_benchmark_diagnostics,
 )
 from option_pricing.diagnostics.heston.contracts import (
@@ -16,6 +17,7 @@ from option_pricing.diagnostics.heston.contracts import (
     HESTON_CALIBRATION_BENCHMARK_SUMMARY_COLUMNS,
 )
 from option_pricing.models.heston.params import HestonParams
+from option_pricing.numerics.quadrature import QuadratureConfig
 
 
 @pytest.fixture(scope="module")
@@ -32,6 +34,32 @@ def test_runner_returns_calibration_benchmark_diagnostics(
     )
     assert calibration_report.meta["benchmark_label"] == "smoke"
     assert calibration_report.meta["objective"].startswith("existing HestonObjective")
+
+
+def test_public_synthetic_quote_builder_returns_calibration_ready_quotes() -> None:
+    quotes = build_synthetic_heston_quote_set(
+        market=None,
+        true_params=HestonParams(
+            kappa=1.5,
+            vbar=0.04,
+            eta=0.45,
+            rho=-0.55,
+            v=0.045,
+        ),
+        expiries=np.array([0.5], dtype=np.float64),
+        log_moneyness=np.array([-0.05, 0.05], dtype=np.float64),
+        backend="gauss_legendre",
+        quad_cfg=QuadratureConfig(u_max=50.0, n_panels=4, nodes_per_panel=4),
+        random_seed=11,
+        noise_vol_bps=0.0,
+    )
+
+    assert quotes.n_quotes == 2
+    assert quotes.iv_mid is not None
+    assert quotes.bs_vega is not None
+    assert np.all(np.isfinite(quotes.mid))
+    assert np.all(quotes.iv_mid > 0.0)
+    assert np.all(quotes.bs_vega >= 0.0)
 
 
 def test_required_tables_exist_and_columns_are_ordered_first(

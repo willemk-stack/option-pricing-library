@@ -1,6 +1,9 @@
 """Public notebook-facing API for Heston diagnostics."""
 
-from .calibration import run_heston_calibration_benchmark_diagnostics
+from .calibration import (
+    build_synthetic_heston_quote_set,
+    run_heston_calibration_benchmark_diagnostics,
+)
 from .models import (
     HestonBackendComparisonDiagnostics,
     HestonCalibrationBenchmarkDiagnostics,
@@ -39,6 +42,7 @@ __all__ = [
     "HestonMCSweepConfig",
     "compare_backend_slice",
     "compare_heston_mc_schemes",
+    "build_synthetic_heston_quote_set",
     "plot_heston_mc_bias_vs_timestep",
     "plot_heston_mc_runtime_vs_error",
     "plot_heston_mc_scheme_comparison",
