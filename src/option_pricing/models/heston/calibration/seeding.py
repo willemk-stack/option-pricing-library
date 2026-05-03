@@ -400,3 +400,141 @@ def default_heston_seed(
         rho=_clip(rho, rho_lo, rho_hi),
         v=_clip(v, v_lo, v_hi),
     )
+
+
+def _clip_params_to_bounds(
+    params: HestonParams,
+    bounds: HestonCalibrationBounds,
+) -> HestonParams:
+    kappa_lo, kappa_hi = bounds.kappa
+    vbar_lo, vbar_hi = bounds.vbar
+    eta_lo, eta_hi = bounds.eta
+    rho_lo, rho_hi = bounds.rho
+    v_lo, v_hi = bounds.v
+
+    return HestonParams(
+        kappa=_clip(params.kappa, kappa_lo, kappa_hi),
+        vbar=_clip(params.vbar, vbar_lo, vbar_hi),
+        eta=_clip(params.eta, eta_lo, eta_hi),
+        rho=_clip(params.rho, rho_lo, rho_hi),
+        v=_clip(params.v, v_lo, v_hi),
+    )
+
+
+def _dedupe_heston_seeds(
+    seeds: list[HestonParams],
+    *,
+    decimals: int = 10,
+) -> tuple[HestonParams, ...]:
+    seen: set[tuple[float, ...]] = set()
+    out: list[HestonParams] = []
+
+    for seed in seeds:
+        key = tuple(np.round(seed.as_array(), decimals=decimals))
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(seed)
+
+    return tuple(out)
+
+
+def heston_seed_grid(
+    quotes: HestonQuoteSet,
+    *,
+    bounds: HestonCalibrationBounds | None = None,
+    fallback_rho: float = 0.0,
+    rho_skew_scale: float = 1.25,
+    kappa_values: tuple[float, ...] = (0.50, 1.50, 3.00, 6.00),
+    eta_multipliers: tuple[float, ...] = (0.60, 1.00, 1.75),
+    vbar_multipliers: tuple[float, ...] = (0.75, 1.00, 1.25),
+    rho_offsets: tuple[float, ...] = (-0.25, 0.0, 0.25),
+    max_seeds: int | None = 12,
+    include_default: bool = True,
+) -> tuple[HestonParams, ...]:
+    """Return deterministic market-aware Heston calibration seeds.
+
+    The grid is intentionally compact. It explores the main weakly identified
+    Heston directions without exploding into a large Cartesian product:
+    mean reversion, vol-of-vol/rho skew tradeoff, and long-run variance level.
+
+    The returned seeds are clipped to practical calibration bounds and
+    deduplicated after clipping.
+    """
+    if max_seeds is not None and max_seeds <= 0:
+        raise ValueError("max_seeds must be positive or None.")
+
+    resolved_bounds = HestonCalibrationBounds() if bounds is None else bounds
+
+    base = default_heston_seed(
+        quotes,
+        bounds=resolved_bounds,
+        fallback_rho=fallback_rho,
+        rho_skew_scale=rho_skew_scale,
+    )
+
+    seeds: list[HestonParams] = []
+
+    def add_seed(
+        *,
+        kappa: float = base.kappa,
+        vbar: float = base.vbar,
+        eta: float = base.eta,
+        rho: float = base.rho,
+        v: float = base.v,
+    ) -> None:
+        seeds.append(
+            _clip_params_to_bounds(
+                HestonParams(
+                    kappa=float(kappa),
+                    vbar=float(vbar),
+                    eta=float(eta),
+                    rho=float(rho),
+                    v=float(v),
+                ),
+                resolved_bounds,
+            )
+        )
+
+    if include_default:
+        add_seed()
+
+    # 1. Mean-reversion spokes.
+    for kappa in kappa_values:
+        add_seed(kappa=kappa)
+
+    # 2. Long-run variance spokes.
+    for mult in vbar_multipliers:
+        add_seed(vbar=base.vbar * float(mult))
+
+    # 3. Vol-of-vol / rho skew tradeoff spokes.
+    for eta_mult in eta_multipliers:
+        add_seed(eta=base.eta * float(eta_mult))
+
+    for rho_offset in rho_offsets:
+        add_seed(rho=base.rho + float(rho_offset))
+
+    # 4. A few combined skew-heavy starts.
+    rho_lo, rho_hi = resolved_bounds.rho
+    skew = _estimate_atm_skew(quotes)
+
+    if skew < -1.0e-10:
+        skew_rhos = (min(base.rho, -0.30), -0.60, -0.80)
+    elif skew > 1.0e-10:
+        skew_rhos = (max(base.rho, 0.20), 0.40, 0.60)
+    else:
+        skew_rhos = (-0.30, 0.0, 0.30)
+
+    for rho in skew_rhos:
+        add_seed(
+            kappa=base.kappa,
+            eta=max(base.eta, 1.00),
+            rho=float(np.clip(rho, rho_lo, rho_hi)),
+        )
+
+    unique = _dedupe_heston_seeds(seeds)
+
+    if max_seeds is not None:
+        return unique[: int(max_seeds)]
+
+    return unique

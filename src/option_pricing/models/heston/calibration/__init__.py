@@ -3,7 +3,7 @@ from .heston_types import (
     HestonObjectiveType,
     HestonParameterTransform,
 )
-from .seeding import default_heston_seed
+from .seeding import default_heston_seed, heston_seed_grid
 
 type ObjectiveKind = HestonObjectiveType
 
@@ -13,4 +13,5 @@ __all__ = [
     "HestonParameterTransform",
     "ObjectiveKind",
     "default_heston_seed",
+    "heston_seed_grid",
 ]

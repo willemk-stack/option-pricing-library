@@ -95,8 +95,8 @@ def test_heston_objective_residual_uses_override_weights(
     assert seen["quad_cfg"] is None
 
 
-def test_calibrate_heston_requires_initial_guess() -> None:
+def test_calibrate_heston_without_initial_guess_requires_iv_mid() -> None:
     quotes = _sample_quotes(bs_vega=np.array([0.3, 0.4], dtype=np.float64))
 
-    with pytest.raises(ValueError, match="x0_params must be provided"):
+    with pytest.raises(ValueError, match="default_heston_seed requires quotes.iv_mid"):
         calibrate_heston(quotes)

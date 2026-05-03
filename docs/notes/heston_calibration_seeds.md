@@ -1,12 +1,13 @@
 # Heston calibration seed design
 
 This note explains the default Heston calibration seed used by
-`default_heston_seed`.
+`default_heston_seed` and the compact diagnostic seed grid exposed by
+`heston_seed_grid`.
 
 The seed is not a parameter estimator. It is a deterministic, market-aware
 starting point for nonlinear least-squares calibration. The final fitted
 parameters should be judged with calibration diagnostics, sensitivity checks,
-and eventually multi-start calibration.
+and multi-start calibration.
 
 ## Inputs
 
@@ -85,13 +86,13 @@ levels more similar.
 The intended workflow is:
 
 1. use a moderate deterministic default seed,
-2. later run multi-start calibration with slow, medium, and fast `kappa` values,
+2. run multi-start calibration with slow, medium, and fast `kappa` values,
 3. report parameter sensitivity.
 
-A reasonable future seed grid would include:
+The compact seed grid therefore includes:
 
 ```text
-kappa in [0.50, 1.50, 3.00]
+kappa in [0.50, 1.50, 3.00, 6.00]
 ```
 
 ## Correlation `rho`
@@ -148,6 +149,44 @@ These bounds are optimizer safeguards, not no-arbitrage guarantees. The Feller
 condition is handled separately through diagnostics or optional soft
 regularization.
 
+## Compact multi-start grid
+
+`heston_seed_grid` is a deterministic extension of the default seed. It is not a
+large Cartesian grid. A full cross-product over `kappa`, `vbar`, `eta`, and
+`rho` would create many starts that mostly repeat the same weakly identified
+tradeoffs while increasing calibration time.
+
+The grid keeps the default seed first and then adds one-dimensional spokes:
+
+- `kappa` values for slow, moderate, fast, and very fast mean reversion,
+- `vbar` multipliers around the market-implied long-run variance proxy,
+- `eta` multipliers around the skew-sensitive vol-of-vol proxy,
+- `rho` offsets around the skew-implied correlation,
+- a few skew-heavy combined starts that pair stronger `eta` with directional
+  `rho` values.
+
+This shape is deliberate. Heston vanilla calibration often has shallow
+directions where different combinations of mean reversion, long-run variance,
+vol-of-vol, and correlation explain similar smile features. The seed grid is
+meant to expose those optimizer sensitivities without pretending the initial
+grid itself identifies the model.
+
+Every proposed start is clipped into `HestonCalibrationBounds` and deduplicated
+after clipping. That matters because tight user bounds can collapse several
+diagnostic spokes to the same feasible point. Returning unique bounded seeds
+keeps multi-start runs compact and makes downstream sensitivity reports easier
+to read.
+
+The default cap is small:
+
+```text
+max_seeds = 12
+```
+
+This keeps routine calibration affordable while still covering the main weakly
+identified directions. Callers that are doing a dedicated sensitivity study can
+set `max_seeds=None` to inspect every unique proposed start.
+
 ## Defensible explanation
 
 The default seed is intentionally simple:
@@ -158,8 +197,8 @@ The default seed is intentionally simple:
 - `rho` uses the sign of near-ATM skew,
 - `eta` starts moderate and increases with skew strength.
 
-The seed is designed to make calibration runnable without hand-picking
-parameters. It is not designed to prove that the resulting parameters are unique
-or economically meaningful. That responsibility belongs to calibration
-diagnostics: residual plots, synthetic recovery, objective slices, and
-multi-start sensitivity.
+The seed and seed grid are designed to make calibration runnable without
+hand-picking parameters. They are not designed to prove that the resulting
+parameters are unique or economically meaningful. That responsibility belongs to
+calibration diagnostics: residual plots, synthetic recovery, objective slices,
+and multi-start sensitivity.
