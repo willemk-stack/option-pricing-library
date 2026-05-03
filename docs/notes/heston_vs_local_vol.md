@@ -1,31 +1,48 @@
 # Heston versus local volatility
 
-`run_heston_vs_local_vol_comparison(...)` compares a fitted Heston model with
-the repo-native eSSVI path on the same vanilla quote target.
+`run_heston_vs_local_vol_comparison(...)` is the Capstone 3 comparison layer
+for a fitted Heston model and the repo-native eSSVI/local-vol-facing vanilla
+surface path. It uses one common `HestonQuoteSet` target, reprices that target
+with both models, and packages the evidence as tables plus metadata notes.
 
-The local-vol side currently uses:
-
-```text
-calibrate_essvi(...) -> ESSVINodalSurface -> implied-price repricing
-```
-
-REVIEW: This is a local-vol-facing implied-surface proxy. It does not run a
-Dupire local-vol PDE repricer. Direct local-vol repricing is heavier and should
-be audited separately when the question is pathwise local-vol pricing rather
-than vanilla-surface fit.
+REVIEW: This comparison uses the repo-native eSSVI nodal implied surface as a
+local-vol-facing proxy. It does not run direct Dupire/PDE local-vol repricing.
+Direct PDE repricing should be audited separately if the capstone conclusion
+depends on pathwise local-vol pricing.
 
 ## What is compared
 
-The comparison table reports, for both models:
+The diagnostic compares:
 
-- market IV and model IV
-- IV residuals in basis points
-- market price and model price when available
-- price residuals
-- expiry, strike, log-moneyness, call/put flag, and train or held-out label
+- the common target quote set or surface nodes
+- fitted Heston repricing on those quotes
+- eSSVI nodal implied-surface repricing on the same quotes
+- optional train versus held-out partitions
+- quote-level price and implied-vol residuals
+- ATM, downside-wing, and upside-wing error buckets
+- qualitative model tradeoffs
 
-The summary table reports RMSE, MAE, and max absolute error for prices and IV
-residual basis points. It also breaks the fit into simple moneyness buckets:
+The final comparison notebook is
+`demos/13_heston_calibration_vs_localvol.ipynb`. It calibrates Heston once,
+calls `run_heston_vs_local_vol_comparison(...)`, and then displays only tables
+plots, and notes already produced by the diagnostic and plot helpers.
+
+## Diagnostic outputs
+
+Use these report fields rather than rebuilding comparison tables in a notebook:
+
+- `comparison.tables["fit_errors"]`: quote-level market/model prices, market
+  and model implied vols, residuals, moneyness bucket, and sample label
+- `comparison.tables["error_summary"]`: RMSE, MAE, and max absolute error by
+  model and by `all`, `atm`, `downside_wing`, and `upside_wing` buckets
+- `comparison.tables["held_out_comparison"]`: train versus held-out errors
+  when a held-out mask is supplied
+- `comparison.tables["tradeoff_summary"]`: concise fit-quality,
+  interpretability, extrapolation, and dynamics notes
+- `comparison.meta["notes"]`: `REVIEW:` limitations that should travel with
+  any capstone artifact
+
+The moneyness buckets are intentionally simple:
 
 - `atm`: `abs(log_moneyness) <= 0.03`
 - `downside_wing`: `log_moneyness < -0.03`
@@ -34,35 +51,23 @@ residual basis points. It also breaks the fit into simple moneyness buckets:
 REVIEW: These bucket thresholds are capstone diagnostics, not universal smile
 region definitions.
 
-If a held-out mask is supplied, the comparison also reports train versus
-held-out errors by model. Conclusions should use those held-out rows separately
-from in-sample fit rows.
+## Reading the result
 
-## Reading the tradeoff
+Heston is preferable when interpretable stochastic-volatility dynamics matter:
+mean reversion, long-run variance, vol-of-vol, spot/variance correlation, and
+initial variance all map to model behavior. That makes it a better candidate
+when the analysis needs dynamics, path-dependent intuition, or forward-looking
+variance scenarios.
 
-Heston can fit smooth skewed smiles when the target is compatible with a
-five-parameter stochastic volatility structure. It also provides interpretable
-dynamics: mean reversion, long-run variance, vol-of-vol, spot/variance
-correlation, and initial variance.
+Local-vol/eSSVI is preferable when the main target is vanilla surface fit. The
+eSSVI side is a flexible implied-surface representation and can often match
+vanilla smiles more tightly at calibrated nodes than a single five-parameter
+Heston fit.
 
-Heston can be too rigid for vanilla-only smile fitting. A market smile with
-localized curvature or maturity-specific shape can require more flexibility
-than a single Heston parameter set provides.
-
-The eSSVI/local-vol proxy can fit vanilla implied-vol targets more tightly at
-the calibrated nodes because it is a surface representation rather than a
-single stochastic variance process. That extra vanilla flexibility does not by
-itself give Heston-style stochastic dynamics.
-
-Local volatility can match vanilla marginals under its surface assumptions, but
-smoothness, extrapolation, Dupire stability, and PDE repricing quality are
-separate evidence items. The existing local-vol and eSSVI tests cover those
-layers; this comparison focuses on the shared vanilla target.
-
-Model comparison conclusions depend on the chosen data target, fit partition,
-weights, and local-vol proxy. A synthetic Heston surface should favor Heston on
-interpretability and may favor Heston on exact repricing; a flexible market
-surface may favor eSSVI/local-vol on vanilla fit quality.
+The comparison does not prove that the local-vol PDE repricer reproduces every
+vanilla price on the fitted surface. Smoothness, extrapolation, Dupire
+stability, and PDE repricing accuracy remain separate evidence items covered by
+the existing local-vol and eSSVI workflows.
 
 ## Minimal usage
 
@@ -75,10 +80,13 @@ from option_pricing.vol.ssvi import ESSVICalibrationConfig
 comparison = run_heston_vs_local_vol_comparison(
     quotes=quotes,
     heston_fit=multistart_result,
-    held_out_mask=held_out_mask,  # optional
+    held_out_mask=held_out_mask,
     essvi_cfg=ESSVICalibrationConfig(max_nfev=1000),
 )
 
+comparison.tables["fit_errors"]
 comparison.tables["error_summary"]
+comparison.tables["held_out_comparison"]
 comparison.tables["tradeoff_summary"]
+comparison.meta["notes"]
 ```

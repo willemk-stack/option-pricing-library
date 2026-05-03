@@ -58,19 +58,43 @@ includes those direct IV residuals when inversion succeeds.
 
 ## Heston versus local volatility
 
+[Open the comparison notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/13_heston_calibration_vs_localvol.ipynb){ .md-button .md-button--primary }
+
+Use the model-comparison diagnostic for the final Heston-vs-local-vol/eSSVI
+layer. The demo should stay thin: calibrate Heston, call the diagnostic, and
+display the packaged tables.
+
 ```python
 from option_pricing.diagnostics.heston import (
     run_heston_vs_local_vol_comparison,
 )
+from option_pricing.vol.ssvi import ESSVICalibrationConfig
 
 comparison = run_heston_vs_local_vol_comparison(
     quotes=quotes,
     heston_fit=result,
     held_out_mask=held_out_mask,
+    essvi_cfg=ESSVICalibrationConfig(max_nfev=1000),
 )
+
+comparison.tables["fit_errors"]
+comparison.tables["error_summary"]
+comparison.tables["held_out_comparison"]
+comparison.tables["tradeoff_summary"]
+comparison.meta["notes"]
 ```
 
 The comparison currently uses the repo-native eSSVI implied surface as a
-local-vol-facing proxy. REVIEW: It does not run a Dupire PDE repricer. Model
-comparison conclusions depend on the target, weighting, train/held-out split,
-and local-vol proxy.
+local-vol-facing proxy.
+
+REVIEW: This comparison uses the repo-native eSSVI nodal implied surface as a
+local-vol-facing proxy. It does not run direct Dupire/PDE local-vol repricing.
+Direct PDE repricing should be audited separately if the capstone conclusion
+depends on pathwise local-vol pricing.
+
+Read Heston as the interpretable stochastic-volatility side: it is useful when
+mean reversion, long-run variance, vol-of-vol, correlation, and initial
+variance dynamics matter. Read eSSVI/local-vol as the vanilla-surface fit side:
+it can often match smile nodes more flexibly, but it does not provide an
+independent stochastic variance process. Model comparison conclusions depend on
+the target, weighting, train/held-out split, and local-vol proxy.

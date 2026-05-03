@@ -33,6 +33,10 @@ from .plot import (
     plot_heston_mc_bias_vs_timestep,
     plot_heston_mc_runtime_vs_error,
     plot_heston_mc_scheme_comparison,
+    plot_heston_model_comparison_error_buckets,
+    plot_heston_model_comparison_iv_residual_heatmap,
+    plot_heston_model_comparison_smile_overlay,
+    plot_heston_model_comparison_train_heldout,
     plot_heston_multistart_cost_summary,
 )
 from .pricing import (
@@ -59,6 +63,10 @@ __all__ = [
     "plot_heston_calibration_iv_residuals",
     "plot_heston_calibration_objective_slice",
     "plot_heston_calibration_smile_overlay",
+    "plot_heston_model_comparison_error_buckets",
+    "plot_heston_model_comparison_iv_residual_heatmap",
+    "plot_heston_model_comparison_smile_overlay",
+    "plot_heston_model_comparison_train_heldout",
     "plot_heston_multistart_cost_summary",
     "plot_heston_mc_bias_vs_timestep",
     "plot_heston_mc_runtime_vs_error",

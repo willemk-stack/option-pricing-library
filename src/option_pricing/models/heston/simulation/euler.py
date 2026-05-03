@@ -41,7 +41,7 @@ def _x_timestep(
         log_x_t + log_drift_step - 0.5 * v_pos * dt + np.sqrt(v_pos * dt) * z_x_j
     )
 
-    return log_x_next
+    return np.asarray(log_x_next, dtype=np.float64)
 
 
 def simulate_heston_euler_terminal(
@@ -87,7 +87,7 @@ def simulate_heston_euler_terminal(
         )
         v_t = v_next
 
-    return np.exp(log_x_t)
+    return np.asarray(np.exp(log_x_t), dtype=np.float64)
 
 
 def simulate_heston_euler_paths(
@@ -122,7 +122,6 @@ def simulate_heston_euler_paths(
     negative_variance_proposal_count = 0
 
     for j in range(n_steps):
-
         # v_step
         z_v_j = z_v[:, j]
         assert z_v_j.shape == (n_paths,)

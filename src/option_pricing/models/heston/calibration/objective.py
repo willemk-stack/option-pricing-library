@@ -198,7 +198,10 @@ class HestonObjective:
         if self.objective_type == "relative_price_rmse":
             # REVIEW: Relative price residuals use market-mid normalization and
             # intentionally avoid model-dependent denominator terms.
-            return np.maximum(np.abs(self.quotes.mid), float(self.price_floor))
+            return np.asarray(
+                np.maximum(np.abs(self.quotes.mid), float(self.price_floor)),
+                dtype=np.float64,
+            )
 
         if self.objective_type == "vega_scaled_price":
             if self.quotes.bs_vega is None:
@@ -220,7 +223,9 @@ class HestonObjective:
                 raise ValueError("bid/ask spread must be nonnegative")
             # REVIEW: Bid/ask-normalized residuals treat the quoted spread as
             # the residual scale and do not otherwise model quote reliability.
-            return np.maximum(spread, float(self.spread_floor))
+            return np.asarray(
+                np.maximum(spread, float(self.spread_floor)), dtype=np.float64
+            )
 
         raise ValueError(f"Unsupported objective_type {self.objective_type!r}")
 
@@ -239,7 +244,7 @@ class HestonObjective:
         reg_residual = heston_regularization_residuals(params, self.reg)
 
         full_residual = np.concatenate([quote_residual, reg_residual])
-        return full_residual
+        return np.asarray(full_residual, dtype=np.float64)
 
     def jac(self, u: FloatArray) -> FloatArray:
         scale = self._price_residual_scale()

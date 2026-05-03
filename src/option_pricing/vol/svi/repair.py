@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.optimize import least_squares
 from scipy.special import ndtr
 
+from ..._scipy_compat import least_squares
 from .diagnostics import check_butterfly_arbitrage
 from .math import (
     EPS,
@@ -397,7 +397,6 @@ def repair_butterfly_raw(
     n_scan: int = 31,
     n_bisect: int = 30,
 ) -> SVIParams:
-
     # 0) If already ok, return unchanged.
     b0 = check_butterfly_arbitrage(
         p_raw,

@@ -4,11 +4,11 @@ Calibration helpers and main object
 
 from __future__ import annotations
 
-from typing import Literal, SupportsFloat, SupportsIndex, SupportsInt, overload
+from typing import Literal, SupportsFloat, SupportsIndex, SupportsInt, cast, overload
 
 import numpy as np
-from scipy.optimize import OptimizeResult, least_squares
 
+from ...._scipy_compat import OptimizeResult, least_squares
 from ....exceptions import NoConvergenceError
 from ....typing import FloatArray
 from ..fourier import HestonBackend, QuadratureConfig
@@ -408,7 +408,7 @@ def calibrate_heston_multistart(
                 seed_params=seed,
                 fitted_params=fitted_params,
                 success=True,
-                cost=float(scipy_result.cost),
+                cost=float(cast(SupportsFloat, scipy_result.cost)),
                 optimality=_optional_finite_float(
                     getattr(scipy_result, "optimality", None)
                 ),

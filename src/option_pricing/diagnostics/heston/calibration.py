@@ -9,8 +9,8 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
-from scipy.optimize import OptimizeResult, least_squares
 
+from ..._scipy_compat import OptimizeResult, least_squares
 from ...models.black_scholes.bs import (
     black76_call_price_vec,
     black76_call_price_vega_vec,

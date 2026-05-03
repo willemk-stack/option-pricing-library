@@ -38,7 +38,7 @@ without rerunning the optimizer:
 - held-out error summaries when a mask is supplied
 - lightweight objective slices around the fitted point
 
-```python
+```py
 from option_pricing.diagnostics.heston import (
     run_heston_calibration_fit_diagnostics,
 )

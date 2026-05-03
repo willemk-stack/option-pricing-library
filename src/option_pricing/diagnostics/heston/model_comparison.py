@@ -36,6 +36,12 @@ from .models import HestonModelComparisonDiagnostics
 
 _HESTON_MODEL_NAME = "Heston"
 _LOCAL_VOL_MODEL_NAME = "ESSVI local-vol proxy"
+_LOCAL_VOL_PROXY_REVIEW_NOTE = (
+    "REVIEW: This comparison uses the repo-native eSSVI nodal implied surface "
+    "as a local-vol-facing proxy. It does not run direct Dupire/PDE local-vol "
+    "repricing. Direct PDE repricing should be audited separately if the "
+    "capstone conclusion depends on pathwise local-vol pricing."
+)
 
 
 def _moneyness_bucket(log_moneyness: FloatArray) -> np.ndarray:
@@ -220,27 +226,29 @@ def _held_out_comparison(
         return table
 
     rows: list[dict[str, Any]] = []
-    for (model_name, sample), group in fit_errors.groupby(
-        ["model", "sample"], sort=False
-    ):
-        row = _summary_row(
-            model_name=str(model_name),
-            bucket=str(sample),
-            group=group,
-        )
-        rows.append(
-            {
-                "model": row["model"],
-                "sample": row["bucket"],
-                "n_quotes": row["n_quotes"],
-                "price_rmse": row["price_rmse"],
-                "price_mae": row["price_mae"],
-                "price_max_abs": row["price_max_abs"],
-                "iv_rmse_bps": row["iv_rmse_bps"],
-                "iv_mae_bps": row["iv_mae_bps"],
-                "iv_max_abs_bps": row["iv_max_abs_bps"],
-            }
-        )
+    model_names = [str(name) for name in fit_errors["model"].drop_duplicates()]
+    for model_name in model_names:
+        model_group = fit_errors.loc[fit_errors["model"] == model_name]
+        for sample_name in ("train", "held_out"):
+            group = model_group.loc[model_group["sample"] == sample_name]
+            row = _summary_row(
+                model_name=model_name,
+                bucket=sample_name,
+                group=group,
+            )
+            rows.append(
+                {
+                    "model": row["model"],
+                    "sample": row["bucket"],
+                    "n_quotes": row["n_quotes"],
+                    "price_rmse": row["price_rmse"],
+                    "price_mae": row["price_mae"],
+                    "price_max_abs": row["price_max_abs"],
+                    "iv_rmse_bps": row["iv_rmse_bps"],
+                    "iv_mae_bps": row["iv_mae_bps"],
+                    "iv_max_abs_bps": row["iv_max_abs_bps"],
+                }
+            )
     return pd.DataFrame(rows, columns=columns)
 
 
@@ -360,8 +368,9 @@ def run_heston_vs_local_vol_comparison(
         ignore_index=True,
     )
     fit_errors.attrs["notes"] = [
+        _LOCAL_VOL_PROXY_REVIEW_NOTE,
         "REVIEW: Moneyness buckets use abs(log_moneyness) <= 0.03 for ATM, "
-        "log_moneyness < -0.03 for downside wing/skew, and > 0.03 for upside wing."
+        "log_moneyness < -0.03 for downside wing/skew, and > 0.03 for upside wing.",
     ]
 
     error_summary = _error_summary(fit_errors)
@@ -371,9 +380,13 @@ def run_heston_vs_local_vol_comparison(
         mask_provided=mask_provided,
     )
 
+    train_quote_count = (
+        int(np.count_nonzero(~mask)) if mask_provided else int(quotes.n_quotes)
+    )
+    held_out_quote_count = int(np.count_nonzero(mask)) if mask_provided else 0
+
     notes = [
-        "REVIEW: Local-vol comparison uses the repo-native eSSVI nodal implied "
-        "surface as a local-vol-facing proxy; direct Dupire/PDE repricing is not run.",
+        _LOCAL_VOL_PROXY_REVIEW_NOTE,
         "REVIEW: Moneyness bucket thresholds are simple capstone diagnostics, "
         "not universal smile-region definitions.",
         "REVIEW: Comparison conclusions depend on the target quotes, fit "
@@ -383,10 +396,16 @@ def run_heston_vs_local_vol_comparison(
         "diagnostic": "heston_vs_local_vol_comparison",
         "models": [_HESTON_MODEL_NAME, _LOCAL_VOL_MODEL_NAME],
         "quote_count": int(quotes.n_quotes),
+        "train_quote_count": train_quote_count,
+        "held_out_quote_count": held_out_quote_count,
         "expiry_count": int(np.unique(quotes.expiry).size),
         "log_moneyness_count": int(np.unique(quotes.log_moneyness).size),
         "held_out_mask_provided": mask_provided,
+        "sample_labels": ["train", "held_out"] if mask_provided else ["fit"],
+        "comparison_target": "same HestonQuoteSet quotes repriced by both models",
+        "local_vol_proxy_kind": "essvi_nodal_implied_surface",
         "local_vol_proxy": "ESSVINodalSurface repricing from calibrate_essvi",
+        "direct_local_vol_pde_repricing": False,
         "local_vol_fit_source": "computed" if local_vol_fit is None else "provided",
         "heston_backend_config": backend_config_meta(
             backend=resolved_backend,

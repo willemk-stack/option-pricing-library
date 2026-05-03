@@ -7,8 +7,8 @@ from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.optimize import least_squares
 
+from ..._scipy_compat import least_squares
 from ...config import ImpliedVolConfig
 from ...market.curves import PricingContext
 from ...types import MarketData, OptionSpec, OptionType

@@ -13,7 +13,11 @@ import numpy as np
 import pandas as pd
 
 from .._mpl import get_plt, pretty_ax, require_columns
-from .models import HestonCalibrationFitDiagnostics, HestonDiagnosticsReport
+from .models import (
+    HestonCalibrationFitDiagnostics,
+    HestonDiagnosticsReport,
+    HestonModelComparisonDiagnostics,
+)
 from .monte_carlo import summarize_bias_vs_timestep, summarize_runtime_vs_error
 
 if TYPE_CHECKING:
@@ -22,6 +26,7 @@ if TYPE_CHECKING:
 
 type SliceTableSource = HestonDiagnosticsReport | pd.DataFrame
 type CalibrationFitTableSource = HestonCalibrationFitDiagnostics | pd.DataFrame
+type ModelComparisonTableSource = HestonModelComparisonDiagnostics | pd.DataFrame
 type MappingSource = HestonDiagnosticsReport | Mapping[str, Any]
 
 _WARNING_SEVERITY_RANK: dict[str, int] = {
@@ -92,6 +97,19 @@ def _calibration_table(
         return source.copy()
     raise TypeError(
         "source must be a HestonCalibrationFitDiagnostics or pandas.DataFrame."
+    )
+
+
+def _model_comparison_table(
+    source: ModelComparisonTableSource,
+    table_name: str,
+) -> pd.DataFrame:
+    if isinstance(source, HestonModelComparisonDiagnostics):
+        return source.tables[table_name].copy()
+    if isinstance(source, pd.DataFrame):
+        return source.copy()
+    raise TypeError(
+        "source must be a HestonModelComparisonDiagnostics or pandas.DataFrame."
     )
 
 
@@ -1139,6 +1157,261 @@ def plot_heston_calibration_objective_slice(
     return fig, resolved_ax
 
 
+def plot_heston_model_comparison_smile_overlay(
+    source: ModelComparisonTableSource,
+    *,
+    expiry: float | None = None,
+    ax: Axes | None = None,
+    title: str = "Heston vs eSSVI Smile Overlay",
+) -> tuple[Figure, Axes]:
+    """Plot market and model IVs for one comparison maturity."""
+
+    table = _model_comparison_table(source, "fit_errors")
+    require_columns(
+        table,
+        ["model", "quote_index", "expiry", "log_moneyness", "market_iv", "model_iv"],
+    )
+    fig, resolved_ax = _ensure_ax(ax, figsize=(8.0, 4.5))
+    resolved_ax.set_title(title)
+    resolved_ax.set_xlabel("Log-moneyness")
+    resolved_ax.set_ylabel("Implied volatility")
+
+    if table.empty:
+        _note_axis(resolved_ax, "No comparison fit-error rows are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    expiry_values = np.sort(table["expiry"].dropna().unique())
+    selected_expiry = float(expiry_values[0]) if expiry is None else float(expiry)
+    slice_table = table.loc[np.isclose(table["expiry"], selected_expiry)].copy()
+    slice_table = slice_table.sort_values(["model", "log_moneyness"], kind="stable")
+
+    if slice_table.empty:
+        _note_axis(resolved_ax, f"No comparison rows for expiry={selected_expiry:g}.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    market_table = (
+        slice_table.drop_duplicates("quote_index")
+        .sort_values("log_moneyness", kind="stable")
+        .copy()
+    )
+    x_market = pd.to_numeric(market_table["log_moneyness"], errors="coerce").to_numpy(
+        dtype=np.float64
+    )
+    market_iv = pd.to_numeric(market_table["market_iv"], errors="coerce").to_numpy(
+        dtype=np.float64
+    )
+    resolved_ax.plot(
+        x_market,
+        market_iv,
+        marker="o",
+        linewidth=2.0,
+        color="black",
+        label="market IV",
+    )
+
+    if "is_held_out" in market_table.columns:
+        held_out = _bool_series(market_table, "is_held_out")
+        if np.any(held_out):
+            resolved_ax.scatter(
+                x_market[held_out],
+                market_iv[held_out],
+                s=95,
+                facecolors="none",
+                edgecolors="tab:red",
+                label="held-out market IV",
+                zorder=4,
+            )
+
+    markers = ("x", "s", "^", "D", "v")
+    for idx, (model_name, group) in enumerate(slice_table.groupby("model", sort=False)):
+        ordered = group.sort_values("log_moneyness", kind="stable")
+        x = pd.to_numeric(ordered["log_moneyness"], errors="coerce").to_numpy(
+            dtype=np.float64
+        )
+        model_iv = pd.to_numeric(ordered["model_iv"], errors="coerce").to_numpy(
+            dtype=np.float64
+        )
+        resolved_ax.plot(
+            x,
+            model_iv,
+            marker=markers[idx % len(markers)],
+            linewidth=1.8,
+            label=f"{model_name} IV",
+        )
+
+    resolved_ax.legend()
+    pretty_ax(resolved_ax)
+    return fig, resolved_ax
+
+
+def plot_heston_model_comparison_iv_residual_heatmap(
+    source: ModelComparisonTableSource,
+    *,
+    model: str | None = None,
+    ax: Axes | None = None,
+    title: str = "Model IV Residuals",
+) -> tuple[Figure, Axes]:
+    """Plot comparison IV residuals for one model as a heatmap."""
+
+    table = _model_comparison_table(source, "fit_errors")
+    require_columns(table, ["model", "expiry", "log_moneyness", "iv_residual_bps"])
+    fig, resolved_ax = _ensure_ax(ax, figsize=(8.0, 4.5))
+    resolved_ax.set_xlabel("Log-moneyness")
+    resolved_ax.set_ylabel("Expiry")
+
+    if table.empty:
+        resolved_ax.set_title(title)
+        _note_axis(resolved_ax, "No comparison residual rows are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    selected_model = str(table["model"].iloc[0]) if model is None else str(model)
+    model_table = table.loc[table["model"].astype(str) == selected_model].copy()
+    resolved_ax.set_title(f"{title}: {selected_model}")
+
+    if model_table.empty:
+        _note_axis(resolved_ax, f"No residual rows for model={selected_model!r}.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    pivot = model_table.pivot_table(
+        index="expiry",
+        columns="log_moneyness",
+        values="iv_residual_bps",
+        aggfunc="mean",
+    ).sort_index()
+    pivot = pivot.reindex(sorted(pivot.columns), axis=1)
+    values = pivot.to_numpy(dtype=np.float64)
+    if values.size == 0 or not np.isfinite(values).any():
+        _note_axis(resolved_ax, "No finite IV residual values are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    image = resolved_ax.imshow(
+        values,
+        aspect="auto",
+        origin="lower",
+        cmap="coolwarm",
+    )
+    resolved_ax.set_xticks(
+        np.arange(len(pivot.columns)),
+        [f"{float(value):+.3f}" for value in pivot.columns],
+        rotation=30,
+        ha="right",
+    )
+    resolved_ax.set_yticks(
+        np.arange(len(pivot.index)),
+        [f"{float(value):g}" for value in pivot.index],
+    )
+    fig.colorbar(image, ax=resolved_ax, label="IV residual (bps)")
+    pretty_ax(resolved_ax)
+    return fig, resolved_ax
+
+
+def plot_heston_model_comparison_error_buckets(
+    source: ModelComparisonTableSource,
+    *,
+    metric: str = "iv_rmse_bps",
+    ax: Axes | None = None,
+    title: str = "Bucketed Model Error",
+) -> tuple[Figure, Axes]:
+    """Plot bucketed comparison errors by model."""
+
+    table = _model_comparison_table(source, "error_summary")
+    require_columns(table, ["model", "bucket", metric])
+    fig, resolved_ax = _ensure_ax(ax, figsize=(8.0, 4.5))
+    resolved_ax.set_title(title)
+    resolved_ax.set_xlabel("Moneyness bucket")
+    resolved_ax.set_ylabel(metric)
+
+    if table.empty:
+        _note_axis(resolved_ax, "No comparison error-summary rows are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    preferred_buckets = ["atm", "downside_wing", "upside_wing"]
+    plot_table = table.loc[table["bucket"].isin(preferred_buckets)].copy()
+    if plot_table.empty:
+        plot_table = table.copy()
+        bucket_order = [str(value) for value in plot_table["bucket"].drop_duplicates()]
+    else:
+        bucket_order = preferred_buckets
+
+    model_names = [str(value) for value in plot_table["model"].drop_duplicates()]
+    x = np.arange(len(bucket_order), dtype=np.float64)
+    width = 0.8 / max(len(model_names), 1)
+
+    for idx, model_name in enumerate(model_names):
+        model_rows = plot_table.loc[plot_table["model"].astype(str) == model_name]
+        values: list[float] = []
+        for bucket in bucket_order:
+            bucket_rows = model_rows.loc[model_rows["bucket"].astype(str) == bucket]
+            if bucket_rows.empty:
+                values.append(np.nan)
+            else:
+                values.append(
+                    float(pd.to_numeric(bucket_rows[metric], errors="coerce").iloc[0])
+                )
+        offset = (idx - (len(model_names) - 1) / 2.0) * width
+        resolved_ax.bar(x + offset, values, width=width, label=model_name)
+
+    resolved_ax.set_xticks(x, bucket_order, rotation=20, ha="right")
+    if model_names:
+        resolved_ax.legend()
+    pretty_ax(resolved_ax)
+    return fig, resolved_ax
+
+
+def plot_heston_model_comparison_train_heldout(
+    source: ModelComparisonTableSource,
+    *,
+    metric: str = "iv_rmse_bps",
+    ax: Axes | None = None,
+    title: str = "Train vs Held-out Model Error",
+) -> tuple[Figure, Axes]:
+    """Plot train and held-out comparison errors by model."""
+
+    table = _model_comparison_table(source, "held_out_comparison")
+    require_columns(table, ["model", "sample", metric])
+    fig, resolved_ax = _ensure_ax(ax, figsize=(8.0, 4.5))
+    resolved_ax.set_title(title)
+    resolved_ax.set_xlabel("Model")
+    resolved_ax.set_ylabel(metric)
+
+    if table.empty:
+        _note_axis(resolved_ax, "No held-out comparison rows are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    sample_order = ["train", "held_out"]
+    model_names = [str(value) for value in table["model"].drop_duplicates()]
+    x = np.arange(len(model_names), dtype=np.float64)
+    width = 0.8 / len(sample_order)
+
+    for idx, sample_name in enumerate(sample_order):
+        values: list[float] = []
+        for model_name in model_names:
+            sample_rows = table.loc[
+                (table["model"].astype(str) == model_name)
+                & (table["sample"].astype(str) == sample_name)
+            ]
+            if sample_rows.empty:
+                values.append(np.nan)
+            else:
+                values.append(
+                    float(pd.to_numeric(sample_rows[metric], errors="coerce").iloc[0])
+                )
+        offset = (idx - (len(sample_order) - 1) / 2.0) * width
+        resolved_ax.bar(x + offset, values, width=width, label=sample_name)
+
+    resolved_ax.set_xticks(x, model_names, rotation=15, ha="right")
+    resolved_ax.legend()
+    pretty_ax(resolved_ax)
+    return fig, resolved_ax
+
+
 __all__ = [
     "plot_backend_difference_by_strike",
     "plot_cancellation_ratio_by_strike",
@@ -1146,6 +1419,10 @@ __all__ = [
     "plot_heston_calibration_iv_residuals",
     "plot_heston_calibration_objective_slice",
     "plot_heston_calibration_smile_overlay",
+    "plot_heston_model_comparison_error_buckets",
+    "plot_heston_model_comparison_iv_residual_heatmap",
+    "plot_heston_model_comparison_smile_overlay",
+    "plot_heston_model_comparison_train_heldout",
     "plot_heston_multistart_cost_summary",
     "plot_heston_mc_bias_vs_timestep",
     "plot_heston_mc_runtime_vs_error",

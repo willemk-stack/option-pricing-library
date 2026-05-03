@@ -13,6 +13,10 @@ from option_pricing.diagnostics.heston.plot import (
     plot_backend_difference_by_strike,
     plot_cancellation_ratio_by_strike,
     plot_config_sweep,
+    plot_heston_model_comparison_error_buckets,
+    plot_heston_model_comparison_iv_residual_heatmap,
+    plot_heston_model_comparison_smile_overlay,
+    plot_heston_model_comparison_train_heldout,
     plot_panel_contributions,
     plot_smile_with_warning_overlay,
     plot_tail_fraction_by_strike,
@@ -132,6 +136,81 @@ def _config_sweep_table() -> pd.DataFrame:
                 dtype=np.float64,
             ),
             "notes": np.array(["", "", ""], dtype=object),
+        }
+    )
+
+
+def _comparison_fit_errors_table() -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for model_name, residual_shift in (
+        ("Heston", 0.0),
+        ("ESSVI local-vol proxy", -2.0),
+    ):
+        for quote_index, log_moneyness in enumerate((-0.08, 0.0, 0.08)):
+            market_iv = 0.2 - 0.1 * log_moneyness
+            iv_residual_bps = residual_shift + 10.0 * log_moneyness
+            rows.append(
+                {
+                    "model": model_name,
+                    "quote_index": quote_index,
+                    "expiry": 1.0,
+                    "strike": 100.0 * np.exp(log_moneyness),
+                    "log_moneyness": log_moneyness,
+                    "moneyness_bucket": (
+                        "atm" if log_moneyness == 0.0 else "downside_wing"
+                    ),
+                    "is_call": True,
+                    "market_iv": market_iv,
+                    "model_iv": market_iv + iv_residual_bps * 1.0e-4,
+                    "iv_residual_bps": iv_residual_bps,
+                    "market_price": 5.0,
+                    "model_price": 5.0 + 0.01 * quote_index,
+                    "price_residual": 0.01 * quote_index,
+                    "is_held_out": quote_index == 2,
+                    "sample": "held_out" if quote_index == 2 else "train",
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def _comparison_error_summary_table() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "model": [
+                "Heston",
+                "Heston",
+                "ESSVI local-vol proxy",
+                "ESSVI local-vol proxy",
+            ],
+            "bucket": ["atm", "downside_wing", "atm", "downside_wing"],
+            "n_quotes": [1, 2, 1, 2],
+            "price_rmse": [0.01, 0.02, 0.015, 0.025],
+            "price_mae": [0.01, 0.02, 0.015, 0.025],
+            "price_max_abs": [0.01, 0.02, 0.015, 0.025],
+            "iv_rmse_bps": [0.5, 1.0, 0.4, 1.5],
+            "iv_mae_bps": [0.5, 1.0, 0.4, 1.5],
+            "iv_max_abs_bps": [0.5, 1.0, 0.4, 1.5],
+        }
+    )
+
+
+def _comparison_held_out_table() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "model": [
+                "Heston",
+                "Heston",
+                "ESSVI local-vol proxy",
+                "ESSVI local-vol proxy",
+            ],
+            "sample": ["train", "held_out", "train", "held_out"],
+            "n_quotes": [2, 1, 2, 1],
+            "price_rmse": [0.01, 0.03, 0.012, 0.04],
+            "price_mae": [0.01, 0.03, 0.012, 0.04],
+            "price_max_abs": [0.01, 0.03, 0.012, 0.04],
+            "iv_rmse_bps": [0.5, 2.0, 0.7, 3.0],
+            "iv_mae_bps": [0.5, 2.0, 0.7, 3.0],
+            "iv_max_abs_bps": [0.5, 2.0, 0.7, 3.0],
         }
     )
 
@@ -328,3 +407,31 @@ def test_plot_smile_overlay_handles_all_clear_slice_readably() -> None:
         assert "no warning" in text.lower()
     finally:
         plt.close(fig)
+
+
+def test_model_comparison_plot_helpers_consume_packaged_tables() -> None:
+    fit_errors = _comparison_fit_errors_table()
+    error_summary = _comparison_error_summary_table()
+    held_out = _comparison_held_out_table()
+
+    fig_smile, ax_smile = plot_heston_model_comparison_smile_overlay(fit_errors)
+    fig_heatmap, ax_heatmap = plot_heston_model_comparison_iv_residual_heatmap(
+        fit_errors,
+        model="Heston",
+    )
+    fig_buckets, ax_buckets = plot_heston_model_comparison_error_buckets(
+        error_summary,
+    )
+    fig_held_out, ax_held_out = plot_heston_model_comparison_train_heldout(
+        held_out,
+    )
+    try:
+        assert len(ax_smile.lines) == 3
+        assert ax_heatmap.images
+        assert len(ax_buckets.patches) == 6
+        assert len(ax_held_out.patches) == 4
+    finally:
+        plt.close(fig_smile)
+        plt.close(fig_heatmap)
+        plt.close(fig_buckets)
+        plt.close(fig_held_out)
