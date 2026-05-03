@@ -1,9 +1,14 @@
-from typing import Literal
+from .heston_types import (
+    HestonCalibrationBounds,
+    HestonObjectiveType,
+    HestonParameterTransform,
+)
 
-type ObjectiveKind = Literal[
-    "price",
-    "vega_price",
-    "bid_ask_price",
-    "iv",
-    "relative_price",
+type ObjectiveKind = HestonObjectiveType
+
+__all__ = [
+    "HestonCalibrationBounds",
+    "HestonObjectiveType",
+    "HestonParameterTransform",
+    "ObjectiveKind",
 ]

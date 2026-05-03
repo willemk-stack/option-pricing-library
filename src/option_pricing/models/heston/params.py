@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from .calibration.bounds import HestonCalibrationBounds
 
 _POSITIVE_EPS = 1e-12
 _RHO_CLIP_EPS = 1e-12
@@ -172,6 +176,26 @@ class HestonParams:
     TransformToUnconstrained = transform_to_unconstrained
     TransformToConstrained = transform_to_constrained
 
+    def transform_to_bounded_unconstrained(
+        self,
+        bounds: HestonCalibrationBounds,
+    ) -> np.ndarray:
+        """Map bounded Heston parameters to a raw calibration vector."""
+        from .calibration.bounds import transform_to_bounded_unconstrained
+
+        return transform_to_bounded_unconstrained(self, bounds)
+
+    @classmethod
+    def transform_to_bounded_constrained(
+        cls,
+        raw: np.ndarray | list[float] | tuple[float, ...],
+        bounds: HestonCalibrationBounds,
+    ) -> HestonParams:
+        """Map a raw vector into finite bounded Heston calibration parameters."""
+        from .calibration.bounds import transform_to_bounded_constrained
+
+        return transform_to_bounded_constrained(raw, bounds)
+
     @staticmethod
     def transform_jac_diag_from_raw(raw: np.ndarray) -> np.ndarray:
         raw = np.asarray(raw, dtype=np.float64).reshape(-1)
@@ -196,3 +220,13 @@ class HestonParams:
             ],
             dtype=np.float64,
         )
+
+    @staticmethod
+    def bounded_transform_jac_diag_from_raw(
+        raw: np.ndarray | list[float] | tuple[float, ...],
+        bounds: HestonCalibrationBounds,
+    ) -> np.ndarray:
+        """Return bounded transform diagonal for analytic Jacobian chaining."""
+        from .calibration.bounds import bounded_transform_jac_diag_from_raw
+
+        return bounded_transform_jac_diag_from_raw(raw, bounds)

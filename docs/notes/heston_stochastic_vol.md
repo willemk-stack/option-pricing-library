@@ -308,6 +308,22 @@ Useful checks include:
 
 The Feller condition is an important process-quality diagnostic, but violating it does not by itself make the model unusable for vanilla pricing.
 
+### Calibration parameter transforms
+
+The calibration entrypoint supports two raw-optimizer parameter transforms.
+
+`parameter_transform="unconstrained"` keeps the original admissibility transform: softplus for positive parameters \((\kappa,\theta,\xi,v_0)\) and tanh for \(\rho\). This guarantees mathematical admissibility, but it does not encode a finite practical calibration box.
+
+`parameter_transform="bounded"` maps each raw optimizer variable through a sigmoid into configured finite bounds:
+
+\[
+p = p_{\min} + (p_{\max} - p_{\min})\,\sigma(u).
+\]
+
+This keeps the optimizer unconstrained in raw space while the transform guarantees the fitted Heston parameters remain inside the practical interval for all five parameters. No SciPy optimizer-side bounds are needed in this mode.
+
+The bounded transform is useful for generic unconstrained optimizers, multi-start raw seed grids, and calibration setups where the permitted domain should live in the transform itself. The trade-off is that sigmoid gradients vanish near the configured bounds, so near-bound diagnostics remain important.
+
 ## Summary
 
 The Heston model is an affine stochastic-volatility extension of Black–Scholes in which variance mean reverts, spot and variance shocks are correlated, and European vanilla prices are recovered from characteristic functions through a Black–Scholes-like decomposition.

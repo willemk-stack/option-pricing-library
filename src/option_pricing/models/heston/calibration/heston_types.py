@@ -1,11 +1,33 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 
 from ....types import MarketData, PricingContext
 from ....typing import BoolArray, FloatArray
+
+type HestonObjectiveType = Literal[
+    "price_rmse",
+    "relative_price_rmse",
+    "vega_scaled_price",
+    "bid_ask_normalized",
+]
+
+HESTON_OBJECTIVE_TYPES: tuple[HestonObjectiveType, ...] = (
+    "price_rmse",
+    "relative_price_rmse",
+    "vega_scaled_price",
+    "bid_ask_normalized",
+)
+
+type HestonParameterTransform = Literal["unconstrained", "bounded"]
+
+HESTON_PARAMETER_TRANSFORMS: tuple[HestonParameterTransform, ...] = (
+    "unconstrained",
+    "bounded",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,9 +99,14 @@ class HestonQuoteSet:
         if np.any(self.mid < 0.0):
             raise ValueError("mid prices must be nonnegative")
 
+        for name, optional_arr in {"bid": self.bid, "ask": self.ask}.items():
+            if optional_arr is not None:
+                if not np.all(np.isfinite(optional_arr)):
+                    raise ValueError(f"{name} prices must be finite")
+                if np.any(optional_arr < 0.0):
+                    raise ValueError(f"{name} prices must be nonnegative")
+
         if self.bid is not None and self.ask is not None:
-            if np.any(self.bid < 0.0):
-                raise ValueError("bid prices must be nonnegative")
             if np.any(self.ask < self.bid):
                 raise ValueError("ask must be >= bid")
 
@@ -133,9 +160,11 @@ class HestonQuoteSet:
         return self.sqrt_weights
 
     def vega_price_scales(self, vega_floor: float = 1e-6) -> FloatArray:
+        if not np.isfinite(float(vega_floor)) or float(vega_floor) <= 0.0:
+            raise ValueError("vega_floor must be positive and finite")
         if self.bs_vega is None:
             raise ValueError(
-                "bs_vega is required for objective='vega_price'. "
+                "bs_vega is required for objective_type='vega_scaled_price'. "
                 "Compute it once from market IVs before calibration."
             )
         return np.maximum(self.bs_vega, float(vega_floor))
@@ -187,4 +216,41 @@ class HestonQuoteSet:
 
 
 @dataclass(frozen=True, slots=True)
-class HestonRegConfig: ...
+class HestonRegConfig:
+    """Soft regularization configuration for Heston calibration.
+
+    The weights are least-squares residual weights. A regularization residual is
+    generally constructed as:
+
+        sqrt(weight) * normalized_violation
+
+    so the least-squares objective contributes roughly:
+
+        0.5 * weight * normalized_violation**2
+
+    Defaults are deliberately zero: regularization should be opt-in.
+    """
+
+    feller_penalty_weight: float = 0.0
+    rho_boundary_weight: float = 0.0
+    variance_level_weight: float = 0.0
+    vol_of_vol_weight: float = 0.0
+
+    feller_ratio_target: float = 1.0
+
+    # Soft threshold for |rho|. No penalty below this value.
+    rho_abs_soft_limit: float = 0.95
+
+    # Soft upper levels for variance parameters. These are variance levels,
+    # not volatility levels. A value of 1.0 corresponds to 100% volatility.
+    vbar_soft_max: float = 1.0
+    v0_soft_max: float = 1.0
+
+    # Soft upper level for vol-of-vol eta.
+    eta_soft_max: float = 3.0
+
+    # Numerical floor to avoid division by zero in normalized violations.
+    eps: float = 1e-12
+
+
+from .bounds import HestonCalibrationBounds as HestonCalibrationBounds  # noqa: E402

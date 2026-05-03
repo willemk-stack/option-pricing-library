@@ -165,6 +165,7 @@ def test_calibrate_heston_forwards_optimizer_options(
 
     calibrate_module.calibrate_heston(
         quotes=_quotes(),
+        objective_type="relative_price_rmse",
         x0_params=_seed_params(),
         loss="huber",
         x_scale=x_scale,
@@ -184,3 +185,4 @@ def test_calibrate_heston_forwards_optimizer_options(
     np.testing.assert_allclose(captured["x_scale"], x_scale, rtol=0.0, atol=0.0)
     assert captured["loss"] == "huber"
     assert captured["jac"] == "2-point"
+    assert captured["fun"].__self__.objective_type == "relative_price_rmse"
