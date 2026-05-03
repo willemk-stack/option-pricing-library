@@ -21,8 +21,57 @@ flow is:
 - keep the actual numerical source of truth under
   `option_pricing.models.heston.fourier`
 
-It does **not** prove price correctness, prove economic smile validity, or cover
-calibration, optimizer, or Monte Carlo diagnostics.
+It does **not** prove price correctness or prove economic smile validity. For
+calibration evidence, use `run_heston_calibration_fit_diagnostics(...)`; for
+Monte Carlo evidence, use the Heston MC diagnostics.
+
+## Calibration fit diagnostics
+
+`run_heston_calibration_fit_diagnostics(...)` packages fitted Heston evidence
+without rerunning the optimizer:
+
+- quote-level price and implied-vol residuals
+- smile overlay data by maturity
+- long-form IV residual grids
+- parameter recovery when synthetic truth is supplied
+- multistart run metadata when a `HestonMultistartResult` is supplied
+- held-out error summaries when a mask is supplied
+- lightweight objective slices around the fitted point
+
+```python
+from option_pricing.diagnostics.heston import (
+    run_heston_calibration_fit_diagnostics,
+)
+
+fit_report = run_heston_calibration_fit_diagnostics(
+    quotes=quotes,
+    fit=multistart_result,
+    true_params=true_params,
+    held_out_mask=held_out_mask,
+    quad_cfg=quad_cfg,
+)
+
+fit_report.tables["residuals"].head()
+fit_report.tables["held_out_errors"]
+```
+
+Heston calibration may be weakly identifiable from vanilla quotes. Multistart is
+diagnostic, not magic: it exposes initialization sensitivity and failed seeds,
+but it does not prove parameter uniqueness.
+
+Vega-scaled price residuals can act as an IV-like optimization proxy, but they
+are not direct IV RMSE unless model prices are inverted and IV residuals are
+reported. The calibration-fit diagnostics report both price residuals and
+direct IV residuals when possible.
+
+## Heston versus local-vol comparison
+
+`run_heston_vs_local_vol_comparison(...)` compares Heston with the existing
+eSSVI/local-vol-facing path on the same vanilla target.
+
+REVIEW: The current local-vol side uses eSSVI implied-surface repricing as a
+proxy and does not run a full Dupire PDE repricer. Conclusions depend on the
+target quotes, weights, held-out partition, and local-vol proxy.
 
 ## One-call report
 

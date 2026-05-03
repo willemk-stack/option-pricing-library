@@ -133,3 +133,92 @@ HESTON_CALIBRATION_BENCHMARK_RESIDUAL_COLUMNS: tuple[str, ...] = (
     "log_moneyness",
     "residual",
 )
+
+# REVIEW: Calibration-fit evidence is a production-facing diagnostics contract,
+# distinct from the analytic-Jacobian benchmark contract above.
+HESTON_CALIBRATION_FIT_REQUIRED_TABLES: tuple[str, ...] = (
+    "residuals",
+    "smile_fit",
+    "iv_residual_grid",
+    "parameter_recovery",
+    "multistart_runs",
+    "held_out_errors",
+    "objective_slices",
+)
+
+HESTON_CALIBRATION_FIT_RESIDUAL_COLUMNS: tuple[str, ...] = (
+    "quote_index",
+    "expiry",
+    "strike",
+    "log_moneyness",
+    "is_call",
+    "market_price",
+    "model_price",
+    "price_residual",
+    "market_iv",
+    "model_iv",
+    "iv_residual",
+    "iv_residual_bps",
+    "bs_vega",
+    "sqrt_weight",
+    "is_held_out",
+    "sample",
+)
+
+HESTON_CALIBRATION_FIT_SMILE_COLUMNS: tuple[str, ...] = (
+    "quote_index",
+    "expiry",
+    "strike",
+    "log_moneyness",
+    "is_call",
+    "market_iv",
+    "model_iv",
+    "iv_residual_bps",
+    "is_held_out",
+)
+
+HESTON_CALIBRATION_FIT_IV_GRID_COLUMNS: tuple[str, ...] = (
+    "quote_index",
+    "expiry",
+    "strike",
+    "log_moneyness",
+    "iv_residual_bps",
+    "grid_kind",
+)
+
+HESTON_MODEL_COMPARISON_REQUIRED_TABLES: tuple[str, ...] = (
+    "fit_errors",
+    "error_summary",
+    "tradeoff_summary",
+    "held_out_comparison",
+)
+
+HESTON_MODEL_COMPARISON_FIT_ERROR_COLUMNS: tuple[str, ...] = (
+    "model",
+    "quote_index",
+    "expiry",
+    "strike",
+    "log_moneyness",
+    "moneyness_bucket",
+    "is_call",
+    "market_iv",
+    "model_iv",
+    "iv_residual_bps",
+    "market_price",
+    "model_price",
+    "price_residual",
+    "is_held_out",
+    "sample",
+)
+
+HESTON_MODEL_COMPARISON_ERROR_SUMMARY_COLUMNS: tuple[str, ...] = (
+    "model",
+    "bucket",
+    "n_quotes",
+    "price_rmse",
+    "price_mae",
+    "price_max_abs",
+    "iv_rmse_bps",
+    "iv_mae_bps",
+    "iv_max_abs_bps",
+)

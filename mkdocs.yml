@@ -120,6 +120,7 @@ nav:
       - Binomial CRR: user_guides/binomial_crr.md
       - PDE pricing: user_guides/pde_pricing.md
       - Diagnostics: user_guides/diagnostics.md
+      - Heston: user_guides/heston.md
       - Heston diagnostics: user_guides/heston_diagnostics.md
       - Implied volatility: user_guides/implied_vol.md
       - Volatility surface: user_guides/vol_surface.md
@@ -159,8 +160,10 @@ nav:
           - Pricing conventions: notes/heston_pricing_conventions.md
           - Fourier diagnostics: notes/heston_fourier_diagnostics.md
           - Quadrature policy: notes/heston_quadrature_policy.md
+          - Calibration evidence: notes/heston_calibration.md
           - Calibration seeds: notes/heston_calibration_seeds.md
           - Calibration benchmark diagnostics: notes/heston_calibration_benchmark_diagnostics.md
+          - Heston vs local vol: notes/heston_vs_local_vol.md
           - Monte Carlo diagnostics: notes/heston_monte_carlo.md
           - Andersen QE scheme: notes/heston_qe_notes.md
       - Interpolation: notes/interpolation.md

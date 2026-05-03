@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 from .._mpl import get_plt, pretty_ax, require_columns
-from .models import HestonDiagnosticsReport
+from .models import HestonCalibrationFitDiagnostics, HestonDiagnosticsReport
 from .monte_carlo import summarize_bias_vs_timestep, summarize_runtime_vs_error
 
 if TYPE_CHECKING:
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from matplotlib.figure import Figure
 
 type SliceTableSource = HestonDiagnosticsReport | pd.DataFrame
+type CalibrationFitTableSource = HestonCalibrationFitDiagnostics | pd.DataFrame
 type MappingSource = HestonDiagnosticsReport | Mapping[str, Any]
 
 _WARNING_SEVERITY_RANK: dict[str, int] = {
@@ -79,6 +80,19 @@ def _slice_table(source: SliceTableSource) -> pd.DataFrame:
     if isinstance(source, pd.DataFrame):
         return source.copy()
     raise TypeError("source must be a HestonDiagnosticsReport or pandas.DataFrame.")
+
+
+def _calibration_table(
+    source: CalibrationFitTableSource,
+    table_name: str,
+) -> pd.DataFrame:
+    if isinstance(source, HestonCalibrationFitDiagnostics):
+        return source.tables[table_name].copy()
+    if isinstance(source, pd.DataFrame):
+        return source.copy()
+    raise TypeError(
+        "source must be a HestonCalibrationFitDiagnostics or pandas.DataFrame."
+    )
 
 
 def _backend_compare_table(source: SliceTableSource) -> pd.DataFrame:
@@ -900,10 +914,239 @@ def plot_heston_mc_scheme_comparison(
     return fig, resolved_ax
 
 
+def plot_heston_calibration_smile_overlay(
+    source: CalibrationFitTableSource,
+    *,
+    expiry: float | None = None,
+    ax: Axes | None = None,
+    title: str = "Heston Calibration Smile Fit",
+) -> tuple[Figure, Axes]:
+    """Plot market and fitted model IVs for one calibration maturity."""
+
+    table = _calibration_table(source, "smile_fit")
+    require_columns(
+        table,
+        ["expiry", "log_moneyness", "market_iv", "model_iv", "is_held_out"],
+    )
+    fig, resolved_ax = _ensure_ax(ax, figsize=(8.0, 4.5))
+    resolved_ax.set_title(title)
+    resolved_ax.set_xlabel("Log-moneyness")
+    resolved_ax.set_ylabel("Implied volatility")
+
+    if table.empty:
+        _note_axis(resolved_ax, "No smile-fit rows are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    expiry_values = np.sort(table["expiry"].dropna().unique())
+    selected_expiry = float(expiry_values[0]) if expiry is None else float(expiry)
+    slice_table = table.loc[np.isclose(table["expiry"], selected_expiry)].copy()
+    slice_table = slice_table.sort_values("log_moneyness", kind="stable")
+
+    if slice_table.empty:
+        _note_axis(resolved_ax, f"No smile rows for expiry={selected_expiry:g}.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    x = pd.to_numeric(slice_table["log_moneyness"], errors="coerce").to_numpy(
+        dtype=np.float64
+    )
+    market_iv = pd.to_numeric(slice_table["market_iv"], errors="coerce").to_numpy(
+        dtype=np.float64
+    )
+    model_iv = pd.to_numeric(slice_table["model_iv"], errors="coerce").to_numpy(
+        dtype=np.float64
+    )
+    resolved_ax.plot(x, market_iv, marker="o", linewidth=2.0, label="market IV")
+    resolved_ax.plot(x, model_iv, marker="x", linewidth=2.0, label="Heston IV")
+
+    held_out = _bool_series(slice_table, "is_held_out")
+    if np.any(held_out):
+        resolved_ax.scatter(
+            x[held_out],
+            market_iv[held_out],
+            s=90,
+            facecolors="none",
+            edgecolors="tab:red",
+            label="held-out market IV",
+            zorder=4,
+        )
+
+    resolved_ax.legend()
+    pretty_ax(resolved_ax)
+    return fig, resolved_ax
+
+
+def plot_heston_calibration_iv_residuals(
+    source: CalibrationFitTableSource,
+    *,
+    ax: Axes | None = None,
+    title: str = "Heston IV Residuals",
+) -> tuple[Figure, Axes]:
+    """Plot the long-form calibration IV residual grid as a heatmap."""
+
+    table = _calibration_table(source, "iv_residual_grid")
+    require_columns(table, ["expiry", "log_moneyness", "iv_residual_bps"])
+    fig, resolved_ax = _ensure_ax(ax, figsize=(8.0, 4.5))
+    resolved_ax.set_title(title)
+    resolved_ax.set_xlabel("Log-moneyness")
+    resolved_ax.set_ylabel("Expiry")
+
+    if table.empty:
+        _note_axis(resolved_ax, "No IV residual rows are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    pivot = table.pivot_table(
+        index="expiry",
+        columns="log_moneyness",
+        values="iv_residual_bps",
+        aggfunc="mean",
+    ).sort_index()
+    pivot = pivot.reindex(sorted(pivot.columns), axis=1)
+    values = pivot.to_numpy(dtype=np.float64)
+    if values.size == 0 or not np.isfinite(values).any():
+        _note_axis(resolved_ax, "No finite IV residual values are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    image = resolved_ax.imshow(
+        values,
+        aspect="auto",
+        origin="lower",
+        cmap="coolwarm",
+    )
+    resolved_ax.set_xticks(
+        np.arange(len(pivot.columns)),
+        [f"{float(value):+.3f}" for value in pivot.columns],
+        rotation=30,
+        ha="right",
+    )
+    resolved_ax.set_yticks(
+        np.arange(len(pivot.index)),
+        [f"{float(value):g}" for value in pivot.index],
+    )
+    fig.colorbar(image, ax=resolved_ax, label="IV residual (bps)")
+    pretty_ax(resolved_ax)
+    return fig, resolved_ax
+
+
+def plot_heston_multistart_cost_summary(
+    source: CalibrationFitTableSource,
+    *,
+    ax: Axes | None = None,
+    title: str = "Heston Multistart Costs",
+) -> tuple[Figure, Axes]:
+    """Plot optimizer cost by seed for packaged multistart diagnostics."""
+
+    table = _calibration_table(source, "multistart_runs")
+    require_columns(table, ["seed_index", "cost", "success", "best_run"])
+    fig, resolved_ax = _ensure_ax(ax, figsize=(8.0, 4.5))
+    resolved_ax.set_title(title)
+    resolved_ax.set_xlabel("Seed index")
+    resolved_ax.set_ylabel("Cost")
+
+    if table.empty:
+        _note_axis(resolved_ax, "No multistart runs are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    seed_index = pd.to_numeric(table["seed_index"], errors="coerce").to_numpy(
+        dtype=np.float64
+    )
+    cost = pd.to_numeric(table["cost"], errors="coerce").to_numpy(dtype=np.float64)
+    success = _bool_series(table, "success")
+    best = _bool_series(table, "best_run")
+    colors = np.where(success, "tab:blue", "tab:red")
+    colors = np.where(best, "tab:green", colors)
+    resolved_ax.bar(seed_index, cost, color=colors)
+    if np.isfinite(cost).any() and np.nanmax(cost) / max(np.nanmin(cost), 1.0e-16) > 50:
+        resolved_ax.set_yscale("log")
+    _status_note(resolved_ax, "green=best, blue=success, red=failed")
+    pretty_ax(resolved_ax)
+    return fig, resolved_ax
+
+
+def plot_heston_calibration_objective_slice(
+    source: CalibrationFitTableSource,
+    *,
+    slice_name: str | None = None,
+    ax: Axes | None = None,
+    title: str = "Heston Objective Slice",
+) -> tuple[Figure, Axes]:
+    """Plot one packaged 2D objective slice around the fitted point."""
+
+    table = _calibration_table(source, "objective_slices")
+    require_columns(
+        table,
+        [
+            "slice_name",
+            "parameter_x",
+            "parameter_y",
+            "value_x",
+            "value_y",
+            "delta_cost",
+            "fitted_x",
+            "fitted_y",
+        ],
+    )
+    fig, resolved_ax = _ensure_ax(ax, figsize=(8.0, 4.5))
+    resolved_ax.set_title(title)
+
+    if table.empty:
+        _note_axis(resolved_ax, "No objective-slice rows are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    selected_slice = (
+        str(table["slice_name"].iloc[0]) if slice_name is None else str(slice_name)
+    )
+    slice_table = table.loc[table["slice_name"].astype(str) == selected_slice].copy()
+    if slice_table.empty:
+        _note_axis(resolved_ax, f"No objective slice named {selected_slice!r}.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    parameter_x = str(slice_table["parameter_x"].iloc[0])
+    parameter_y = str(slice_table["parameter_y"].iloc[0])
+    resolved_ax.set_xlabel(parameter_x)
+    resolved_ax.set_ylabel(parameter_y)
+
+    pivot = slice_table.pivot_table(
+        index="value_y",
+        columns="value_x",
+        values="delta_cost",
+        aggfunc="mean",
+    ).sort_index()
+    pivot = pivot.reindex(sorted(pivot.columns), axis=1)
+    values = pivot.to_numpy(dtype=np.float64)
+    if values.size == 0 or not np.isfinite(values).any():
+        _note_axis(resolved_ax, "No finite objective values are available.")
+        pretty_ax(resolved_ax)
+        return fig, resolved_ax
+
+    x_values = np.asarray([float(value) for value in pivot.columns], dtype=np.float64)
+    y_values = np.asarray([float(value) for value in pivot.index], dtype=np.float64)
+    mesh_x, mesh_y = np.meshgrid(x_values, y_values)
+    contour = resolved_ax.contourf(mesh_x, mesh_y, values, levels=12, cmap="viridis")
+    fig.colorbar(contour, ax=resolved_ax, label="Delta cost")
+    fitted_x = float(pd.to_numeric(slice_table["fitted_x"], errors="coerce").iloc[0])
+    fitted_y = float(pd.to_numeric(slice_table["fitted_y"], errors="coerce").iloc[0])
+    resolved_ax.scatter(
+        [fitted_x], [fitted_y], color="white", edgecolor="black", zorder=4
+    )
+    pretty_ax(resolved_ax)
+    return fig, resolved_ax
+
+
 __all__ = [
     "plot_backend_difference_by_strike",
     "plot_cancellation_ratio_by_strike",
     "plot_config_sweep",
+    "plot_heston_calibration_iv_residuals",
+    "plot_heston_calibration_objective_slice",
+    "plot_heston_calibration_smile_overlay",
+    "plot_heston_multistart_cost_summary",
     "plot_heston_mc_bias_vs_timestep",
     "plot_heston_mc_runtime_vs_error",
     "plot_heston_mc_scheme_comparison",
