@@ -22,6 +22,7 @@ from .heston_types import (
     HestonRegConfig,
 )
 from .objective import HestonObjective
+from .seeding import default_heston_seed
 
 
 def calibrate_heston(
@@ -56,9 +57,9 @@ def calibrate_heston(
     if parameter_transform == "unconstrained" and bounds is not None:
         raise ValueError("bounds are only used with parameter_transform='bounded'.")
     if x0_params is None:
-        raise ValueError(
-            "x0_params must be provided until a Heston calibration seed heuristic "
-            "is implemented."
+        x0_params = default_heston_seed(
+            quotes,
+            bounds=bounds if bounds is not None else HestonCalibrationBounds(),
         )
     # REVIEW: Keep the default optimizer at "trf" because the default
     # loss="soft_l1" is invalid for SciPy's method="lm"; explicit LM is still
