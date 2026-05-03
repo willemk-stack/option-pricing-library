@@ -11,7 +11,7 @@ flow is:
 3. review convergence, smoothness, continuity, and visible failure modes with
    the frozen plot set
 
-[Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/11_heston_diagnostics_review.ipynb){ .md-button .md-button--primary }
+[Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/Feature/heston/demos/11_heston_diagnostics_review.ipynb){ .md-button .md-button--primary }
 
 ## What this report is for
 
