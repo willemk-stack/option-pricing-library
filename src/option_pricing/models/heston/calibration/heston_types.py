@@ -7,6 +7,8 @@ import numpy as np
 
 from ....types import MarketData, PricingContext
 from ....typing import BoolArray, FloatArray
+from ..fourier import HestonBackend
+from ..params import HestonParams
 
 type HestonObjectiveType = Literal[
     "price_rmse",
@@ -28,6 +30,48 @@ HESTON_PARAMETER_TRANSFORMS: tuple[HestonParameterTransform, ...] = (
     "unconstrained",
     "bounded",
 )
+
+
+# REVIEW: Store multistart result dataclasses in heston_types.py so downstream
+# diagnostics can import them without importing scipy.optimize-heavy calibrate.py.
+@dataclass(frozen=True, slots=True)
+class HestonCalibrationRun:
+    seed_index: int
+    seed_params: HestonParams
+    fitted_params: HestonParams | None
+    success: bool
+    cost: float
+    optimality: float | None
+    nfev: int | None
+    njev: int | None
+    status: int | None
+    message: str
+    raw_x: FloatArray | None = None
+
+    @property
+    def failed(self) -> bool:
+        return not self.success
+
+
+@dataclass(frozen=True, slots=True)
+class HestonMultistartResult:
+    best_params: HestonParams
+    best_run: HestonCalibrationRun
+    runs: tuple[HestonCalibrationRun, ...]
+    objective_type: HestonObjectiveType
+    parameter_transform: HestonParameterTransform
+    backend: HestonBackend
+    quote_count: int
+    success_count: int
+    failure_count: int
+
+    @property
+    def successful_runs(self) -> tuple[HestonCalibrationRun, ...]:
+        return tuple(run for run in self.runs if run.success)
+
+    @property
+    def failed_runs(self) -> tuple[HestonCalibrationRun, ...]:
+        return tuple(run for run in self.runs if run.failed)
 
 
 @dataclass(frozen=True, slots=True)
