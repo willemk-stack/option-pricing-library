@@ -35,12 +35,12 @@ def _summary_table() -> pd.DataFrame:
             "value": np.array([100.0, 1, 0.06, 12.0, 2.0e-4, 1], dtype=object),
             "notes": np.array(
                 [
-                    "Largest provisional concern.",
+                    "Largest flagged concern.",
                     "Sum of warnings.",
                     "Tail fraction max.",
                     "Cancellation ratio max.",
                     "Primary vs comparison backend diff.",
-                    "Approval required before finalizing suspicious-strike thresholds.",
+                    "Release acceptance policy: suspicious-strike thresholds are frozen for this report.",
                 ],
                 dtype=object,
             ),

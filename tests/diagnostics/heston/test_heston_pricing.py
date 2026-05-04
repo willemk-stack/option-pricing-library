@@ -98,6 +98,7 @@ def test_run_heston_pricing_diagnostics_returns_required_tables_and_slice_contra
         "primary_backend_config",
         "comparison_backend_config",
         "parameter_perturbation_backend_config",
+        "acceptance_policy",
         "provisional_policy",
     } <= set(report.meta)
     assert {"slice", "parameter_perturbation_table"} <= set(report.arrays)
@@ -109,7 +110,7 @@ def test_run_heston_pricing_diagnostics_returns_required_tables_and_slice_contra
 def test_perturbation_instability_mask_requires_relative_and_absolute_thresholds() -> (
     None
 ):
-    policy = heston_pricing._DEFAULT_PROVISIONAL_POLICY
+    policy = heston_pricing._DEFAULT_ACCEPTANCE_POLICY
 
     mask = heston_pricing._perturbation_instability_mask(
         perturbation_abs_price_change=np.array(

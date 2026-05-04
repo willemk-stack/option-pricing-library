@@ -65,12 +65,12 @@ class _ResolvedBackendConfig:
 
 
 @dataclass(frozen=True, slots=True)
-class _ProvisionalStrikePolicy:
-    """Approval-gated Step 3 thresholds.
+class _AcceptanceStrikePolicy:
+    """Release acceptance Step 6 thresholds.
 
-    These values are intentionally centralized and provisional. They are useful
-    for boolean review columns and ranked summaries, but they should not be
-    treated as final semantics without owner approval.
+    These values stay centralized so suspiciousness flags, ranked summaries,
+    and the frozen acceptance slices all use the same release acceptance
+    semantics.
     """
 
     backend_price_diff_abs: float = 1.0e-4
@@ -84,7 +84,7 @@ class _ProvisionalStrikePolicy:
     rho_absolute_bump: float = 0.01
 
 
-_DEFAULT_PROVISIONAL_POLICY = _ProvisionalStrikePolicy()
+_DEFAULT_ACCEPTANCE_POLICY = _AcceptanceStrikePolicy()
 
 
 def _coerce_columns(columns: Mapping[str, Any], *, label: str) -> pd.DataFrame:
@@ -322,7 +322,7 @@ def _perturbation_instability_mask(
     *,
     perturbation_abs_price_change: np.ndarray,
     perturbation_rel_price_change: np.ndarray,
-    policy: _ProvisionalStrikePolicy,
+    policy: _AcceptanceStrikePolicy,
 ) -> np.ndarray:
     return np.asarray(
         (perturbation_rel_price_change > policy.perturbation_relative_price_change)
@@ -335,7 +335,7 @@ def _continuity_signals(
     *,
     strike: np.ndarray,
     implied_vol: np.ndarray,
-    policy: _ProvisionalStrikePolicy,
+    policy: _AcceptanceStrikePolicy,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     smoothness = np.full(strike.shape, np.nan, dtype=np.float64)
     discontinuity = np.full(strike.shape, np.nan, dtype=np.float64)
@@ -486,7 +486,7 @@ def _default_config_sweep_cases(
 def _parameter_perturbation_cases(
     *,
     params: HestonParams,
-    policy: _ProvisionalStrikePolicy,
+    policy: _AcceptanceStrikePolicy,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
 
@@ -725,14 +725,15 @@ def run_heston_pricing_diagnostics(
     It is intentionally conservative about claims. The report does not prove
     prices are correct, does not validate economic smile realism, and does not
     cover calibration, optimizer, or Monte Carlo diagnostics. Thresholds used
-    for suspiciousness and continuity flags remain provisional and are surfaced
-    in ``report.meta["provisional_policy"]`` rather than hidden in the docs.
+    for suspiciousness and continuity flags are part of the release acceptance
+    policy and are surfaced in ``report.meta["acceptance_policy"]``.
+    ``report.meta["provisional_policy"]`` is retained as a compatibility alias.
     """
 
     if tau <= 0.0:
         raise ValueError("tau must be > 0 for pricing diagnostics.")
 
-    policy = _DEFAULT_PROVISIONAL_POLICY
+    policy = _DEFAULT_ACCEPTANCE_POLICY
     ctx = _to_ctx(market)
     strike_arr = _normalize_strike_slice(strike)
     forward = float(ctx.fwd(tau))
@@ -953,7 +954,10 @@ def run_heston_pricing_diagnostics(
                 ],
                 "max_abs_price_change": float(np.nanmax(abs_diff)),
                 "max_relative_price_change": float(np.nanmax(rel_diff)),
-                "notes": "Provisional perturbation magnitudes; owner approval required.",
+                "notes": (
+                    "Release acceptance policy: perturbation magnitudes use "
+                    "frozen acceptance thresholds."
+                ),
             }
         )
 
@@ -1233,8 +1237,9 @@ def run_heston_pricing_diagnostics(
     summary_lookup["suspicious_strike_count"] = {
         "value": suspicious_count,
         "notes": (
-            "Provisional policy block used for backend diff, continuity, and "
-            "config sweep thresholds; owner approval required."
+            "Release acceptance policy block used for backend diff, "
+            "continuity, and config sweep thresholds across the frozen "
+            "acceptance slices."
         ),
         "severity": "warning" if suspicious_count > 0 else "ok",
     }
@@ -1258,7 +1263,7 @@ def run_heston_pricing_diagnostics(
             "comparison_backend": resolved_comparison_backend,
             "backend_config": primary_config_meta,
             "comparison_backend_config": comparison_config_meta,
-            "policy": "provisional_owner_approval_required",
+            "policy": "release_acceptance_policy",
         },
         arrays={
             "primary_price": primary.price,
@@ -1301,6 +1306,7 @@ def run_heston_pricing_diagnostics(
             "primary_backend_config": primary_config_meta,
             "comparison_backend_config": comparison_config_meta,
             "parameter_perturbation_backend_config": perturbation_config_meta,
+            "acceptance_policy": asdict(policy),
             "provisional_policy": asdict(policy),
             "config_sweep_labels": [str(case["label"]) for case in config_sweep_cases],
             "parameter_perturbations": [

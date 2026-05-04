@@ -15,7 +15,7 @@ from option_pricing.models.heston.params import HestonParams
 
 @pytest.fixture(scope="module")
 def heston_calibration_smoke_setup() -> tuple[HestonObjective, HestonParams]:
-    # REVIEW: Grid and quadrature settings are smoke-benchmark choices, sized
+    # NOTE: Grid and quadrature settings are smoke-benchmark choices, sized
     # for deterministic pytest-benchmark collection rather than production runs.
     quad_cfg = _default_quad_cfg()
     quotes = _build_synthetic_heston_quotes(

@@ -266,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         for profile_name in _selected_profiles(args.profile)
     }
-    # REVIEW: Timing artifact files are generated on demand because their
+    # NOTE: Timing artifact files are generated on demand because their
     # numeric contents are environment-dependent.
     index_path = _write_json(
         outputs,

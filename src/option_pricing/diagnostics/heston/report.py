@@ -132,7 +132,10 @@ def _default_summary_table() -> pd.DataFrame:
     for metric in HESTON_SUMMARY_METRICS:
         notes = "Populate from downstream orchestration."
         if metric == "suspicious_strike_count":
-            notes = "Approval required before finalizing suspicious-strike thresholds."
+            notes = (
+                "Release acceptance policy: suspicious-strike thresholds are "
+                "frozen for this report."
+            )
         rows.append(
             {
                 "metric": metric,

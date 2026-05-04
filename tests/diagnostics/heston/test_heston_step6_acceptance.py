@@ -345,9 +345,9 @@ def test_step6_stressed_regime_reports_preserve_contract_and_summary_consistency
         assert _count_true(slice_table["suspicious_flag"]) > 0
 
 
-def test_step6_provisional_policy_and_owner_review_notes_stay_explicit() -> None:
+def test_step6_release_acceptance_policy_notes_stay_explicit() -> None:
     report = build_pricing_report(provisional_stress_case("normal_case"))
-    policy = report.meta["provisional_policy"]
+    policy = report.meta["acceptance_policy"]
     suspicious_row = (
         report.tables["summary"]
         .loc[report.tables["summary"]["metric"] == "suspicious_strike_count"]
@@ -366,10 +366,13 @@ def test_step6_provisional_policy_and_owner_review_notes_stay_explicit() -> None
         "perturbation_relative_price_change",
         "perturbation_absolute_price_change",
     } <= set(policy)
-    assert report.meta["price"]["policy"] == "provisional_owner_approval_required"
+    assert report.meta["provisional_policy"] == policy
+    assert report.meta["price"]["policy"] == "release_acceptance_policy"
     assert report.meta["backend_comparison"]["primary_metric"] == "price difference"
-    assert "approval required" in str(suspicious_row["notes"]).lower()
-    assert all("owner approval required" in note for note in perturbation_notes)
+    assert "release acceptance policy" in str(suspicious_row["notes"]).lower()
+    assert "frozen acceptance slices" in str(suspicious_row["notes"]).lower()
+    assert all("release acceptance policy" in note for note in perturbation_notes)
+    assert all("frozen acceptance thresholds" in note for note in perturbation_notes)
 
 
 @pytest.mark.parametrize(
