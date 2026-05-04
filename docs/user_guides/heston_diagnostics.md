@@ -59,18 +59,19 @@ Heston calibration may be weakly identifiable from vanilla quotes. Multistart is
 diagnostic, not magic: it exposes initialization sensitivity and failed seeds,
 but it does not prove parameter uniqueness.
 
-Vega-scaled price residuals can act as an IV-like optimization proxy, but they
-are not direct IV RMSE unless model prices are inverted and IV residuals are
-reported. The calibration-fit diagnostics report both price residuals and
+Vega-scaled price residuals are the optimization proxy used for calibration on
+this branch, but they are not direct IV RMSE unless model prices are inverted
+and IV residuals are reported. Calibration optimizes vega-scaled price
+residuals; the calibration-fit diagnostics report both price residuals and
 direct IV residuals when possible.
 
 ## Heston versus local-vol comparison
 
-`run_heston_vs_local_vol_comparison(...)` compares Heston with eSSVI
-implied-surface repricing and a small direct local-vol PDE validation grid on
-the same vanilla target. The eSSVI row is retained as a supporting proxy; the
-`direct_local_vol_pde` table carries the Dupire/PDE repricing evidence, status,
-runtime, and grid metadata.
+`run_heston_vs_local_vol_comparison(...)` compares Heston with an eSSVI
+implied-surface repricing layer and a small direct local-vol PDE validation
+grid on the same vanilla target. The eSSVI row is the flexible vanilla-surface
+comparison layer; the `direct_local_vol_pde` table carries the separate
+Dupire/PDE repricing evidence, status, runtime, and grid metadata.
 
 LIMITATION: Conclusions depend on the target quotes, weights, held-out
 partition, eSSVI projection, local-vol PDE grid, and boundary policy.

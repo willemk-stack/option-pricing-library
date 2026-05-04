@@ -37,8 +37,8 @@ from ._step6_policy import (
     PROVISIONAL_MARKET,
     PROVISIONAL_STRESS_CASES,
     PROVISIONAL_STRIKE_GRID,
+    STEP6_ACCEPTANCE_POLICY_NOTE,
     STEP6_FROZEN_ACCEPTANCE_NOTE,
-    STEP6_OWNER_APPROVAL_NOTE,
     build_frozen_acceptance_report,
     build_pricing_report,
     provisional_stress_case,
@@ -112,7 +112,8 @@ def test_step6_public_api_surface_exports_contract_entrypoints() -> None:
         "run_heston_pricing_diagnostics",
     }
 
-    assert "Owner review required" in STEP6_OWNER_APPROVAL_NOTE
+    assert "release acceptance policy" in STEP6_ACCEPTANCE_POLICY_NOTE.lower()
+    assert "frozen acceptance slices" in STEP6_ACCEPTANCE_POLICY_NOTE.lower()
     assert "frozen acceptance slices" in STEP6_FROZEN_ACCEPTANCE_NOTE
     assert expected_callables <= set(public_heston.__all__)
     for name in expected_callables:

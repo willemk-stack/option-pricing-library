@@ -260,10 +260,11 @@ The currently supported objective types are:
 - `"bid_ask_normalized"`
 
 There is no direct IV-RMSE calibration objective on this branch. If you
-calibrate with vega-scaled price residuals, treat them as a price-space proxy
-for IV fit, not as the same thing as direct implied-vol RMSE. Direct IV
-residuals are reported later by the fit diagnostics after repricing and Black
-inversion.
+calibrate with vega-scaled price residuals, treat them as the optimizer's
+price-space proxy for IV fit, not as the same thing as direct implied-vol
+RMSE. Calibration optimizes vega-scaled price residuals; direct IV residuals
+and IV RMSE are reported later by the fit diagnostics after repricing and
+Black inversion.
 
 For starting points, use `default_heston_seed(...)` when you want one
 market-aware seed and `heston_seed_grid(...)` when you want the deterministic
@@ -304,7 +305,7 @@ The main report families are:
 - Monte Carlo comparison: `run_heston_mc_comparison_sweep(...)`,
     `summarize_bias_vs_timestep(...)`, `summarize_runtime_vs_error(...)`, and
     `compare_heston_mc_schemes(...)`;
-- synthetic benchmark and Jacobian smoke coverage:
+- synthetic benchmark and Jacobian smoke or release coverage:
     `build_synthetic_heston_quote_set(...)` and
     `run_heston_calibration_benchmark_diagnostics(...)`;
 - deterministic model-comparison fixture:
@@ -313,7 +314,9 @@ The main report families are:
 
 Use benchmark diagnostics as smoke, regression, or synthetic-recovery evidence.
 Do not present them as the same thing as final calibration quality on live
-quotes.
+quotes. The artifact builder emits separate smoke and release manifests under
+`benchmarks/artifacts/heston_calibration/` so the lightweight wiring benchmark
+and the stronger release benchmark stay distinguishable.
 
 The detailed notebook-oriented walkthrough is in the
 [Heston diagnostics guide](heston_diagnostics.md).

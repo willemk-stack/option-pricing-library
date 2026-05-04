@@ -67,12 +67,13 @@ initial variance all map to model behavior. That makes it a better candidate
 when the analysis needs dynamics, path-dependent intuition, or forward-looking
 variance scenarios.
 
-Local-vol/eSSVI is preferable when the main target is vanilla surface fit. The
-eSSVI side is a flexible implied-surface representation and can often match
+The eSSVI surface side is preferable when the main target is vanilla surface
+fit. It is a flexible implied-surface representation and can often match
 vanilla smiles more tightly at calibrated nodes than a single five-parameter
-Heston fit. The direct PDE rows audit whether the Dupire handoff and PDE grid
-reprice selected quotes consistently; they do not globally prove local-vol
-accuracy across all strikes, maturities, boundaries, or extrapolation regimes.
+Heston fit. The direct local-vol PDE rows are a separate audit of whether the
+Dupire handoff and PDE grid reprice selected quotes consistently; they do not
+globally prove local-vol accuracy across all strikes, maturities, boundaries,
+or extrapolation regimes.
 
 ## Minimal Usage
 

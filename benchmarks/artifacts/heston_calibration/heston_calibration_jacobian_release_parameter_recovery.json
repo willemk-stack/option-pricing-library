@@ -4,9 +4,10 @@
     "parameter":"kappa",
     "true":1.5,
     "seed":1.1,
-    "fitted":1.4999999995,
-    "fit_minus_true":-0.0000000005,
-    "abs_fit_minus_true":0.0000000005
+    "fitted":1.5,
+    "fit_minus_true":0.0,
+    "abs_fit_minus_true":0.0,
+    "benchmark_label":"release"
   },
   {
     "mode":"finite_difference",
@@ -15,16 +16,18 @@
     "seed":0.035,
     "fitted":0.04,
     "fit_minus_true":-0.0,
-    "abs_fit_minus_true":0.0
+    "abs_fit_minus_true":0.0,
+    "benchmark_label":"release"
   },
   {
     "mode":"finite_difference",
     "parameter":"eta",
     "true":0.45,
     "seed":0.35,
-    "fitted":0.4499999999,
-    "fit_minus_true":-0.0000000001,
-    "abs_fit_minus_true":0.0000000001
+    "fitted":0.4500000001,
+    "fit_minus_true":0.0000000001,
+    "abs_fit_minus_true":0.0000000001,
+    "benchmark_label":"release"
   },
   {
     "mode":"finite_difference",
@@ -33,7 +36,8 @@
     "seed":-0.35,
     "fitted":-0.5499999999,
     "fit_minus_true":0.0000000001,
-    "abs_fit_minus_true":0.0000000001
+    "abs_fit_minus_true":0.0000000001,
+    "benchmark_label":"release"
   },
   {
     "mode":"finite_difference",
@@ -42,16 +46,18 @@
     "seed":0.04,
     "fitted":0.045,
     "fit_minus_true":-0.0,
-    "abs_fit_minus_true":0.0
+    "abs_fit_minus_true":0.0,
+    "benchmark_label":"release"
   },
   {
     "mode":"analytic",
     "parameter":"kappa",
     "true":1.5,
     "seed":1.1,
-    "fitted":1.5000000007,
-    "fit_minus_true":0.0000000007,
-    "abs_fit_minus_true":0.0000000007
+    "fitted":1.4999999998,
+    "fit_minus_true":-0.0000000002,
+    "abs_fit_minus_true":0.0000000002,
+    "benchmark_label":"release"
   },
   {
     "mode":"analytic",
@@ -60,25 +66,28 @@
     "seed":0.035,
     "fitted":0.04,
     "fit_minus_true":-0.0,
-    "abs_fit_minus_true":0.0
+    "abs_fit_minus_true":0.0,
+    "benchmark_label":"release"
   },
   {
     "mode":"analytic",
     "parameter":"eta",
     "true":0.45,
     "seed":0.35,
-    "fitted":0.4499999999,
-    "fit_minus_true":-0.0000000001,
-    "abs_fit_minus_true":0.0000000001
+    "fitted":0.45,
+    "fit_minus_true":0.0,
+    "abs_fit_minus_true":0.0,
+    "benchmark_label":"release"
   },
   {
     "mode":"analytic",
     "parameter":"rho",
     "true":-0.55,
     "seed":-0.35,
-    "fitted":-0.55,
-    "fit_minus_true":0.0,
-    "abs_fit_minus_true":0.0
+    "fitted":-0.5499999999,
+    "fit_minus_true":0.0000000001,
+    "abs_fit_minus_true":0.0000000001,
+    "benchmark_label":"release"
   },
   {
     "mode":"analytic",
@@ -87,6 +96,7 @@
     "seed":0.04,
     "fitted":0.045,
     "fit_minus_true":-0.0,
-    "abs_fit_minus_true":0.0
+    "abs_fit_minus_true":0.0,
+    "benchmark_label":"release"
   }
 ]

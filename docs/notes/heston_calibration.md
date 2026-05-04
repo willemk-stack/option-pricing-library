@@ -66,11 +66,12 @@ converge to the same basin, whether some starts fail, and whether near-best
 solutions have similar costs. It cannot make a weakly identified calibration
 unique.
 
-Vega-scaled price residuals may be useful as an IV-like proxy during
-optimization, but they are not direct IV RMSE unless model prices are explicitly
-inverted back to implied volatilities and those IV residuals are reported. The
-fit diagnostics do perform that inversion where possible and report IV residuals
-separately from price residuals.
+Calibration optimizes vega-scaled price residuals as a robust proxy for IV
+error; it does not optimize direct IV RMSE on this branch. Those residuals are
+not direct IV RMSE unless model prices are explicitly inverted back to implied
+volatilities and the IV residuals are then reported. The fit diagnostics do
+perform that inversion where possible and report IV residuals separately from
+price residuals.
 
 Analytic Jacobians are default-on only on the guarded fixed Gauss-Legendre
 calibration path with `eta >= HESTON_ANALYTIC_JAC_ETA_MIN` (`1e-6`) and bounded

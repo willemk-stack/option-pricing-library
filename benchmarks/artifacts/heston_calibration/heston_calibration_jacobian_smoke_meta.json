@@ -38,9 +38,27 @@
     "cluster_strength": 2.0
   },
   "notes": [
-    "REVIEW: Synthetic quote grid and quadrature settings are smoke-benchmark choices.",
-    "REVIEW: Optimizer method/loss choices determine benchmark comparability.",
-    "REVIEW: Residuals use the repo's existing vega-scaled price objective.",
-    "REVIEW: Timing and speedup ratios are environment-dependent."
-  ]
+    "NOTE: Smoke benchmark keeps a small synthetic quote grid and cheap quadrature so analytic-vs-finite-difference coverage stays fast enough for regression workflows.",
+    "NOTE: Smoke timings are directional only and should not be treated as release-grade speed estimates.",
+    "NOTE: Optimizer method and loss choices determine benchmark comparability.",
+    "NOTE: Residuals use the repo's existing vega-scaled price objective.",
+    "NOTE: Timing and speedup ratios are environment-dependent."
+  ],
+  "scenario": "Small deterministic synthetic grid for smoke and wiring coverage.",
+  "quote_grid": {
+    "expiries": [
+      0.5,
+      1.0
+    ],
+    "log_moneyness": [
+      -0.08,
+      0.0,
+      0.08
+    ]
+  },
+  "quadrature": {
+    "u_max": 50.0,
+    "n_panels": 6,
+    "nodes_per_panel": 6
+  }
 }

@@ -1,0 +1,13 @@
+mode,use_analytic_jac,repeat_index,warmup,runtime_ms,nfev,njev,cost,residual_norm,max_abs_residual,success,status,message,method,loss,backend,n_quotes,benchmark_label
+finite_difference,False,-1,True,69.82370000332594,5,5,2.5069540290849474e-22,2.2391757541939165e-11,7.056590906514689e-12,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,20,release
+finite_difference,False,0,False,96.50589991360903,5,5,2.5069540290849474e-22,2.2391757541939165e-11,7.056590906514689e-12,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,20,release
+finite_difference,False,1,False,62.1034000068903,5,5,2.5069540290849474e-22,2.2391757541939165e-11,7.056590906514689e-12,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,20,release
+finite_difference,False,2,False,63.734599854797125,5,5,2.5069540290849474e-22,2.2391757541939165e-11,7.056590906514689e-12,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,20,release
+finite_difference,False,3,False,64.89769998006523,5,5,2.5069540290849474e-22,2.2391757541939165e-11,7.056590906514689e-12,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,20,release
+finite_difference,False,4,False,75.38020005449653,5,5,2.5069540290849474e-22,2.2391757541939165e-11,7.056590906514689e-12,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,20,release
+analytic,True,-1,True,39.00299989618361,5,5,2.7456338162682155e-22,2.3433453933503765e-11,6.327761188694786e-12,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,20,release
+analytic,True,0,False,36.571400007233024,5,5,2.7456338162682155e-22,2.3433453933503765e-11,6.327761188694786e-12,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,20,release
+analytic,True,1,False,36.4739999640733,5,5,2.7456338162682155e-22,2.3433453933503765e-11,6.327761188694786e-12,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,20,release
+analytic,True,2,False,37.485399981960654,5,5,2.7456338162682155e-22,2.3433453933503765e-11,6.327761188694786e-12,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,20,release
+analytic,True,3,False,36.40470001846552,5,5,2.7456338162682155e-22,2.3433453933503765e-11,6.327761188694786e-12,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,20,release
+analytic,True,4,False,35.24790005758405,5,5,2.7456338162682155e-22,2.3433453933503765e-11,6.327761188694786e-12,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,20,release

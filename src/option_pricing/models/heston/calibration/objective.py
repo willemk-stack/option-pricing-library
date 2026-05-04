@@ -133,9 +133,11 @@ class HestonObjective:
     Supported objective types are all price-residual-family objectives:
     ``price_rmse``, ``relative_price_rmse``, ``vega_scaled_price``, and
     ``bid_ask_normalized``. ``vega_scaled_price`` approximates IV-error
-    behavior without repeated implied-vol inversion. ``iv_rmse`` is
-    intentionally not implemented because it requires implied-vol inversion
-    and additional Jacobian/robustness handling.
+    behavior without repeated implied-vol inversion. Calibration optimizes
+    vega-scaled price residuals as a robust proxy for IV error; IV RMSE is
+    reported diagnostically after repricing and Black inversion, not optimized
+    directly. ``iv_rmse`` is intentionally not implemented because it requires
+    implied-vol inversion and additional Jacobian and robustness handling.
     """
 
     quotes: HestonQuoteSet
@@ -147,8 +149,8 @@ class HestonObjective:
     quad_cfg: QuadratureConfig | None = None
     reg: HestonRegConfig | None = None
     # NOTE: vega_scaled_price remains the default to preserve legacy
-    # calibration behavior; it is not a blanket recommendation for every
-    # surface.
+    # calibration behavior while keeping optimization in price-residual space.
+    # IV RMSE remains a reported diagnostic, not a direct optimizer target.
     objective_type: HestonObjectiveType = "vega_scaled_price"
     parameter_transform: HestonParameterTransform = "unconstrained"
     bounds: HestonCalibrationBounds | None = None

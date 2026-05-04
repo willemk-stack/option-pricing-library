@@ -31,12 +31,37 @@ Build CSV and JSON artifacts on demand:
 python scripts/build_heston_calibration_benchmark_artifacts.py
 ```
 
+The artifact builder now writes two clearly separated profiles under
+`benchmarks/artifacts/heston_calibration/` and indexes them in
+`heston_calibration_jacobian_artifacts.json`:
+
+- `smoke`: the default lightweight regression artifact, using the small
+    synthetic grid, `repeat=1`, `warmup=0`, and cheap quadrature so wiring and
+    analytics coverage stay fast.
+- `release`: a stronger deterministic benchmark artifact, using a larger quote
+    grid, `repeat=5`, `warmup=1`, and more production-like Gauss-Legendre
+    quadrature.
+
+Build one profile explicitly when needed:
+
+```bash
+python scripts/build_heston_calibration_benchmark_artifacts.py --profile smoke
+python scripts/build_heston_calibration_benchmark_artifacts.py --profile release
+```
+
 NOTE: The default synthetic quote grid and quadrature settings are smoke
 benchmark choices, not a production calibration benchmark.
 
-NOTE: Timings are environment-dependent. Treat speedups as directional for
-the configured scenario, not universal guarantees.
+NOTE: The release artifact is stronger than the smoke artifact for this
+configured scenario, but both timing sets remain environment-dependent.
+Treat speedups as directional for the configured scenario, not universal
+guarantees.
 
 NOTE: This diagnostic mirrors the paper's analytic-vs-numerical-gradient
 motivation, but it uses this repo's current vega-scaled price residual and
 optimizer defaults unless those inputs are explicitly changed.
+
+NOTE: The benchmark objective remains the repo's current vega-scaled price
+residual. Reported IV-style fit metrics stay diagnostic; the benchmark does not
+prove universal analytic-Jacobian performance and does not change the default
+calibration objective.

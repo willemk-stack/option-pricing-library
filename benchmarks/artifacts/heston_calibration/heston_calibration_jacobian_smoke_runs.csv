@@ -1,0 +1,3 @@
+mode,use_analytic_jac,repeat_index,warmup,runtime_ms,nfev,njev,cost,residual_norm,max_abs_residual,success,status,message,method,loss,backend,n_quotes,benchmark_label
+finite_difference,False,0,False,21.47249993868172,5,5,7.12748090697636e-21,1.1939414480598587e-10,5.1565720504791583e-11,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,6,smoke
+analytic,True,0,False,16.581400064751506,5,5,7.411328448002572e-21,1.2174833426378014e-10,5.2977232837643736e-11,True,1,`gtol` termination condition is satisfied.,trf,linear,gauss_legendre,6,smoke

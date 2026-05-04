@@ -1,19 +1,44 @@
 {
-  "runs": {
-    "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_runs.csv",
-    "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_runs.json"
+  "smoke": {
+    "benchmark_label": "smoke",
+    "scenario": "Small deterministic synthetic grid for smoke and wiring coverage.",
+    "runs": {
+      "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_smoke_runs.csv",
+      "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_smoke_runs.json"
+    },
+    "summary": {
+      "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_smoke_summary.csv",
+      "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_smoke_summary.json"
+    },
+    "parameter_recovery": {
+      "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_smoke_parameter_recovery.csv",
+      "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_smoke_parameter_recovery.json"
+    },
+    "residuals": {
+      "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_smoke_residuals.csv",
+      "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_smoke_residuals.json"
+    },
+    "meta": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_smoke_meta.json"
   },
-  "summary": {
-    "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_summary.csv",
-    "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_summary.json"
-  },
-  "parameter_recovery": {
-    "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_parameter_recovery.csv",
-    "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_parameter_recovery.json"
-  },
-  "residuals": {
-    "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_residuals.csv",
-    "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_residuals.json"
-  },
-  "meta": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_meta.json"
+  "release": {
+    "benchmark_label": "release",
+    "scenario": "Release benchmark with a larger deterministic quote grid, warmup, repeated measurements, and more production-like Gauss-Legendre quadrature.",
+    "runs": {
+      "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_release_runs.csv",
+      "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_release_runs.json"
+    },
+    "summary": {
+      "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_release_summary.csv",
+      "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_release_summary.json"
+    },
+    "parameter_recovery": {
+      "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_release_parameter_recovery.csv",
+      "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_release_parameter_recovery.json"
+    },
+    "residuals": {
+      "csv": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_release_residuals.csv",
+      "json": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_release_residuals.json"
+    },
+    "meta": "benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_release_meta.json"
+  }
 }

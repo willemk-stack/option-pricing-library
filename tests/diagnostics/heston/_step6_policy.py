@@ -11,10 +11,10 @@ from option_pricing.models.heston.params import HestonParams
 from option_pricing.numerics.quadrature import QuadratureConfig
 from option_pricing.types import MarketData, OptionType
 
-# Owner review required before treating this helper as frozen regression policy.
-# These seeds, strike grids, and broad stress expectations are intentionally
-# centralized here so Step 6 does not bury approval-gated choices in scattered
-# asserts.
+# Release acceptance policy: this helper is part of the frozen Step 6
+# regression harness. These seeds, strike grids, and broad stress expectations
+# stay centralized here so the frozen acceptance semantics remain explicit
+# instead of being scattered across individual asserts.
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,10 +41,10 @@ class FrozenAcceptanceSlice:
     use_recommended_cfg: bool = True
 
 
-STEP6_OWNER_APPROVAL_NOTE = (
-    "Owner review required before freezing Step 6 acceptance semantics for "
-    "these parameter sets, strike grids, perturbation bumps, and broad stress "
-    "expectation flags."
+STEP6_ACCEPTANCE_POLICY_NOTE = (
+    "Release acceptance policy: Step 6 freezes these parameter sets, strike "
+    "grids, perturbation bumps, and broad stress expectation flags as part of "
+    "the final frozen acceptance slices."
 )
 
 STEP6_FROZEN_ACCEPTANCE_NOTE = (
@@ -105,13 +105,19 @@ PROVISIONAL_STRESS_CASES: tuple[Step6StressCase, ...] = (
         label="slow_mean_reversion",
         params=HestonParams(kappa=0.35, vbar=0.04, eta=0.55, rho=-0.70, v=0.05),
         tau=0.75,
-        review_note="Slow mean reversion seed kept for explicit owner review.",
+        review_note=(
+            "Slow mean reversion seed retained as a release acceptance policy "
+            "stress case."
+        ),
     ),
     Step6StressCase(
         label="small_v0",
         params=HestonParams(kappa=2.0, vbar=0.04, eta=0.55, rho=-0.70, v=0.005),
         tau=0.75,
-        review_note="Small initial variance seed kept for explicit owner review.",
+        review_note=(
+            "Small initial variance seed retained as a release acceptance "
+            "policy stress case."
+        ),
     ),
 )
 
