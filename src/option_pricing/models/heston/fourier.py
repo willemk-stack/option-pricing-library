@@ -210,12 +210,10 @@ def _pj_affine_factor_and_param_jac(
     else:
         raise ValueError("j must be either 0 or 1.")
 
-    # REVIEW: confirm the Phase 3 charfunc helper's x/phase convention before wiring this into production pricing.
     affine, d_affine = _cui_char_fn_and_param_grad(
         gradient_frequency,
         tau,
         params,
-        x=0.0,
     )
     affine_arr = np.asarray(affine, dtype=np.complex128).reshape(-1)
     d_affine_arr = np.asarray(d_affine, dtype=np.complex128).reshape(-1, 5)
@@ -271,6 +269,11 @@ def _integrand_and_param_jac(
     x_flat, x_scalar, x_shape = _normalize_x_grid(x)
     u_flat, u_scalar, u_shape = _normalize_frequency_grid(u)
 
+    if np.any(u_flat == 0.0):
+        raise ValueError(
+            "analytic Heston integrand Jacobian requires nonzero frequencies."
+        )
+
     affine, d_affine = _pj_affine_factor_and_param_jac(
         u_flat,
         tau,
@@ -281,7 +284,6 @@ def _integrand_and_param_jac(
     d_affine_arr = np.asarray(d_affine, dtype=np.complex128).reshape(-1, 5)
 
     phase = np.exp(1j * x_flat[:, None] * u_flat[None, :])
-    # REVIEW: formulas assume u != 0; fixed quadrature nodes should exclude zero or a separate limit should be implemented.
     denom = 1j * u_flat[None, :]
 
     values_2d = np.real(phase * affine_arr[None, :] / denom)
@@ -1109,14 +1111,20 @@ def heston_probability_and_param_jac(
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
 ) -> tuple[float | RealArray, RealArray]:
-    """Evaluate a Heston probability integral and constrained parameter Jacobian."""
+    """Evaluate a Heston probability integral and constrained parameter Jacobian.
+
+    Analytic Heston parameter Jacobians currently support only
+    ``backend="gauss_legendre"``. The Jacobian columns are ordered as
+    ``[kappa, vbar, eta, rho, v]``; scalar ``x`` returns shape ``(5,)`` and
+    array ``x`` returns ``x.shape + (5,)``.
+    """
     _, scalar_input, original_shape = _normalize_x_grid(x)
     j = probability_index
 
     if backend == "quad":
         raise NotImplementedError(
-            "Analytic Heston probability Jacobian is currently implemented only "
-            "for backend='gauss_legendre'."
+            "Analytic Heston parameter Jacobians currently support only "
+            "backend='gauss_legendre'."
         )
 
     if backend == "gauss_legendre":

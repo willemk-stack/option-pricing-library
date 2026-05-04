@@ -128,12 +128,12 @@ The production code should avoid any convention where the log-moneyness phase is
 
 ## 5. Probability-index convention
 
-The repository uses two Heston probabilities:
+The repository uses two semantic Heston probabilities:
 
 \[
-P_0(K,T)
+P_K(K,T)
 \quad\text{and}\quad
-P_1(K,T).
+P_F(K,T).
 \]
 
 The public call formula is
@@ -141,20 +141,21 @@ The public call formula is
 \[
 C(K,T)
 =
-D(0,T)\left(F(0,T)P_1(K,T) - K P_0(K,T)\right).
+D(0,T)\left(F(0,T)P_F(K,T) - K P_K(K,T)\right).
 \]
 
 Therefore:
 
-- `p0` / probability index `0` multiplies the strike term.
-- `p1` / probability index `1` multiplies the forward term.
+- `P_K` / probability index `0` multiplies the strike/cash term.
+- `P_F` / probability index `1` multiplies the forward/asset term.
+- `p0`, `p1`, `P_0`, and `P_1` are legacy aliases for the same public convention.
 
 Equivalently:
 
 | Repository probability | Formula role |
 |---|---|
-| `p0`, `probability_index=0` | strike-discount term |
-| `p1`, `probability_index=1` | forward-discount term |
+| `P_K`, `p0`, `probability_index=0` | strike-discount term |
+| `P_F`, `p1`, `probability_index=1` | forward-discount term |
 
 This naming should be treated as part of the public implementation contract.
 
@@ -167,13 +168,13 @@ For a European call with strike \(K\) and maturity \(T\):
 \[
 C(K,T)
 =
-D(0,T)\left(F(0,T)P_1(K,T) - K P_0(K,T)\right).
+D(0,T)\left(F(0,T)P_F(K,T) - K P_K(K,T)\right).
 \]
 
 In implementation terms:
 
 ```python
-call = df * (forward * p1 - strike * p0)
+call = df * (forward * P_F - strike * P_K)
 ```
 
 where
@@ -182,8 +183,8 @@ where
 forward = ctx.fwd(tau)
 df = ctx.df(tau)
 x = log(forward / strike)
-p0 = heston_probability(x=x, tau=tau, params=params, probability_index=0)
-p1 = heston_probability(x=x, tau=tau, params=params, probability_index=1)
+P_K = heston_probability(x=x, tau=tau, params=params, probability_index=0)
+P_F = heston_probability(x=x, tau=tau, params=params, probability_index=1)
 ```
 
 For zero maturity, the public pricer should bypass Fourier integration and return intrinsic value:
@@ -201,13 +202,13 @@ The put price is implemented using the same probabilities and put-call parity:
 \[
 P(K,T)
 =
-D(0,T)\left(K(1-P_0(K,T)) - F(0,T)(1-P_1(K,T))\right).
+D(0,T)\left(K(1-P_K(K,T)) - F(0,T)(1-P_F(K,T))\right).
 \]
 
 In implementation terms:
 
 ```python
-put = df * (strike * (1.0 - p0) - forward * (1.0 - p1))
+put = df * (strike * (1.0 - P_K) - forward * (1.0 - P_F))
 ```
 
 For zero maturity, the public pricer should bypass Fourier integration and return intrinsic value:
@@ -234,11 +235,11 @@ Using the repository formulas:
 \begin{aligned}
 C - P
 &=
-D\left(FP_1 - KP_0\right)
+D\left(FP_F - KP_K\right)
 -
-D\left(K(1-P_0) - F(1-P_1)\right) \\
+D\left(K(1-P_K) - F(1-P_F)\right) \\
 &=
-D\left(FP_1 - KP_0 - K + KP_0 + F - FP_1\right) \\
+D\left(FP_F - KP_K - K + KP_K + F - FP_F\right) \\
 &=
 D(F-K).
 \end{aligned}
@@ -291,7 +292,18 @@ This is one of the most important correctness tests because it checks:
 - probability-index mapping,
 - zero-vol-of-vol handling.
 
-The near-deterministic case \(\eta \approx 0\) should also remain numerically close to the Black-76 limit, but tolerances may need to be looser because the generic Heston Fourier formula can become ill-conditioned near singular parameter regimes.
+The pricing implementation uses an explicit deterministic-variance fallback
+when
+
+```python
+abs(params.eta) <= HESTON_ETA_DETERMINISTIC_THRESHOLD  # 1e-8
+```
+
+or when `tau == 0`. This keeps vanilla prices stable in the singular
+near-zero-vol-of-vol regime. The analytic parameter-Jacobian formulas are not
+the deterministic fallback; they remain the stochastic-volatility formulas and
+therefore require positive nonzero Fourier frequencies and a positive
+vol-of-vol input.
 
 ---
 
@@ -305,6 +317,12 @@ The repository supports two probability integration backends:
 | `quad` | Reference/comparison backend using SciPy adaptive integration |
 
 The intended default is `gauss_legendre`, because it is vectorizable and gives better control over diagnostics. The `quad` backend is useful as an independent comparison path, especially during validation.
+
+Analytic Heston parameter Jacobians currently support only
+`backend="gauss_legendre"`. Ordinary non-Jacobian prices may still use
+`backend="quad"` for reference checks. Users who need `quad`-based Jacobians
+should compute finite differences explicitly until a separate analytic limit
+or adaptive-integral Jacobian path is implemented.
 
 A production pricing run should record:
 
@@ -361,9 +379,9 @@ The price Jacobian convention follows the call formula:
 =
 D(0,T)
 \left(
-F(0,T)\frac{\partial P_1}{\partial \theta_i}
+F(0,T)\frac{\partial P_F}{\partial \theta_i}
 -
-K\frac{\partial P_0}{\partial \theta_i}
+K\frac{\partial P_K}{\partial \theta_i}
 \right).
 \]
 
@@ -374,13 +392,17 @@ For puts, because the constants vanish under differentiation,
 =
 D(0,T)
 \left(
-F(0,T)\frac{\partial P_1}{\partial \theta_i}
+F(0,T)\frac{\partial P_F}{\partial \theta_i}
 -
-K\frac{\partial P_0}{\partial \theta_i}
+K\frac{\partial P_K}{\partial \theta_i}
 \right).
 \]
 
 Thus, under this convention, call and put parameter Jacobians have the same Heston-parameter derivative expression for the same strike and maturity.
+
+The public price/Jacobian helpers return columns in the order
+`[kappa, vbar, eta, rho, v]`. A scalar strike returns Jacobian shape `(5,)`;
+an array strike returns `strike.shape + (5,)`.
 
 This should be checked against finite differences.
 
@@ -422,14 +444,15 @@ The following tests should remain in the project permanently.
 
 ### Pricing convention tests
 
-- Call formula uses `forward * p1 - strike * p0`.
-- Put formula uses `strike * (1 - p0) - forward * (1 - p1)`.
+- Call formula uses `forward * P_F - strike * P_K`.
+- Put formula uses `strike * (1 - P_K) - forward * (1 - P_F)`.
 - Put-call parity holds across representative strikes.
 - `x = log(forward / strike)` is used consistently.
 
 ### Limit tests
 
-- \(\eta = 0\) deterministic-variance Heston matches Black-76.
+- \(\eta = 0\) and \(\eta\) below the deterministic threshold match the
+  deterministic-variance Black-76 limit.
 - Near-zero \(\eta\) remains close to Black-76 within a documented tolerance.
 - Zero maturity returns intrinsic value.
 
@@ -500,13 +523,16 @@ p1 = heston_probability(
     probability_index=1,
 )
 
-call = df * (forward * p1 - strike * p0)
+P_K = p0  # legacy alias: probability_index=0
+P_F = p1  # legacy alias: probability_index=1
+
+call = df * (forward * P_F - strike * P_K)
 ```
 
 The put should be computed as:
 
 ```python
-put = df * (strike * (1.0 - p0) - forward * (1.0 - p1))
+put = df * (strike * (1.0 - P_K) - forward * (1.0 - P_F))
 ```
 
 And the parity error should be approximately zero:
@@ -540,20 +566,23 @@ x = \log(F/K),
 \]
 
 \[
-C = D(FP_1 - KP_0),
+C = D(FP_F - KP_K),
 \]
 
 \[
-P = D(K(1-P_0) - F(1-P_1)).
+P = D(K(1-P_K) - F(1-P_F)).
 \]
 
 where:
 
-- `probability_index=0` corresponds to \(P_0\), the strike-term probability,
-- `probability_index=1` corresponds to \(P_1\), the forward-term probability,
+- `probability_index=0` corresponds to \(P_K\), the strike-term probability,
+- `probability_index=1` corresponds to \(P_F\), the forward-term probability,
 - the Fourier phase \(e^{iux}\) is applied exactly once,
 - `gauss_legendre` is the production/default backend,
 - `quad` is the independent comparison backend,
+- analytic parameter Jacobians support only `gauss_legendre`,
+- the price path uses the deterministic variance fallback for
+  `abs(params.eta) <= 1e-8`,
 - diagnostic warnings must be surfaced, not hidden.
 
 Any future pricing, calibration, diagnostics, or Monte Carlo validation code should preserve this contract.

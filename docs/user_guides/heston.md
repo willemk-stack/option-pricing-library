@@ -86,6 +86,12 @@ production-oriented path for ordinary pricing and calibration because it is
 deterministic and vectorized across strike slices. The `quad` backend is still
 available as an adaptive scalar cross-check.
 
+Analytic parameter-Jacobian helpers currently support only
+`backend="gauss_legendre"` and return columns in the order
+`[kappa, vbar, eta, rho, v]`. Scalar strikes return Jacobian shape `(5,)`;
+array-valued strikes return `strike.shape + (5,)`. Ordinary price-only helpers
+continue to support both `gauss_legendre` and `quad`.
+
 ```python
 import numpy as np
 
@@ -111,8 +117,8 @@ arrays for API consistency but still loops over scalar integrals under the
 hood.
 
 See the [pricing convention note](../notes/heston_pricing_conventions.md) for
-the exact `log(F / K)` convention, probability-index mapping, and call/put
-formulas.
+the exact `log(F / K)` convention, semantic `P_K`/`P_F` probability-index
+mapping, eta-near-zero deterministic fallback, and call/put formulas.
 
 ## Implied-vol smile workflow
 

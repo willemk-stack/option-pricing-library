@@ -16,6 +16,14 @@ type RealArray = NDArray[np.float64]
 type HestonBackend = Literal["gauss_legendre", "quad"]
 type HestonProbabilityIndex = Literal[0, 1]
 
+# Semantic probability indices used by the pricing formula.
+HESTON_PROBABILITY_INDEX_K: HestonProbabilityIndex = 0
+HESTON_PROBABILITY_INDEX_F: HestonProbabilityIndex = 1
+HESTON_PARAM_JAC_BACKEND_ERROR = (
+    "Analytic Heston parameter Jacobians currently support only "
+    "backend='gauss_legendre'."
+)
+
 
 def _to_ctx(market: MarketData | PricingContext) -> PricingContext:
     """Normalize flat MarketData or an already-curves-first PricingContext."""
@@ -81,11 +89,15 @@ def _restore_jac_output(
     scalar_input: bool,
     original_shape: tuple[int, ...],
 ) -> RealArray:
-    # REVIEW: NEEDS VALIDATION: scalar/vector shape policy if repo conventions are ambiguous.
     value = np.asarray(value, dtype=np.float64)
     if scalar_input:
         return np.asarray(value.reshape(-1, 5)[0], dtype=np.float64)
     return np.asarray(value.reshape(original_shape + (5,)), dtype=np.float64)
+
+
+def _validate_analytic_jac_backend(backend: HestonBackend) -> None:
+    if backend != "gauss_legendre":
+        raise NotImplementedError(HESTON_PARAM_JAC_BACKEND_ERROR)
 
 
 def _intrinsic_value(spot: float, strike: RealArray, kind: OptionType) -> RealArray:
@@ -176,33 +188,32 @@ def _probability_and_param_jac_arrays(
     quad_cfg: QuadratureConfig | None,
     rule: CompositeRule | None,
 ) -> tuple[RealArray, RealArray, RealArray, RealArray]:
-    # REVIEW: NEEDS VALIDATION: probability index mapping p1/p0 if enum naming is not obvious.
-    # REVIEW: Existing price convention maps p0 -> probability_index=0 and p1 -> probability_index=1.
-    # REVIEW: NEEDS VALIDATION: backend limitations if only gauss_legendre supports analytic jac.
-    p_0, dp0_dtheta = heston_probability_and_param_jac(
+    _validate_analytic_jac_backend(backend)
+
+    P_K, dP_K_dtheta = heston_probability_and_param_jac(
         x=x,
         tau=tau,
         params=params,
-        probability_index=0,
+        probability_index=HESTON_PROBABILITY_INDEX_K,
         backend=backend,
         quad_cfg=quad_cfg,
         rule=rule,
     )
-    p_1, dp1_dtheta = heston_probability_and_param_jac(
+    P_F, dP_F_dtheta = heston_probability_and_param_jac(
         x=x,
         tau=tau,
         params=params,
-        probability_index=1,
+        probability_index=HESTON_PROBABILITY_INDEX_F,
         backend=backend,
         quad_cfg=quad_cfg,
         rule=rule,
     )
 
     return (
-        np.asarray(p_0, dtype=np.float64),
-        np.asarray(dp0_dtheta, dtype=np.float64),
-        np.asarray(p_1, dtype=np.float64),
-        np.asarray(dp1_dtheta, dtype=np.float64),
+        np.asarray(P_K, dtype=np.float64),
+        np.asarray(dP_K_dtheta, dtype=np.float64),
+        np.asarray(P_F, dtype=np.float64),
+        np.asarray(dP_F_dtheta, dtype=np.float64),
     )
 
 
@@ -263,8 +274,9 @@ def heston_price_call_from_ctx(
     params : HestonParams
         Heston parameter set.
     p0, p1 : float or array-like, optional
-        Optional probability overrides. Each override must be scalar or
-        broadcastable to ``strike.shape``.
+        Optional legacy probability overrides. ``p0`` is ``P_K`` and multiplies
+        the strike/cash leg; ``p1`` is ``P_F`` and multiplies the forward/asset
+        leg. Each override must be scalar or broadcastable to ``strike.shape``.
     backend : {"gauss_legendre", "quad"}, default "gauss_legendre"
         Probability integration backend.
     quad_cfg : QuadratureConfig, optional
@@ -316,29 +328,29 @@ def heston_price_call_from_ctx(
     df = float(ctx.df(tau=tau))
 
     x = np.asarray(np.log(forward / strike_arr), dtype=np.float64)
-    p_0_arr = _probability_array(
+    P_K = _probability_array(
         probability_override=p0,
         x=x,
         tau=tau,
         params=params,
-        j=0,
+        j=HESTON_PROBABILITY_INDEX_K,
         backend=backend,
         quad_cfg=quad_cfg,
         rule=rule,
     )
-    p_1_arr = _probability_array(
+    P_F = _probability_array(
         probability_override=p1,
         x=x,
         tau=tau,
         params=params,
-        j=1,
+        j=HESTON_PROBABILITY_INDEX_F,
         backend=backend,
         quad_cfg=quad_cfg,
         rule=rule,
     )
 
     call = np.asarray(
-        df * (forward * p_1_arr - strike_arr * p_0_arr),
+        df * (forward * P_F - strike_arr * P_K),
         dtype=np.float64,
     )
 
@@ -402,8 +414,9 @@ def heston_price_put_from_ctx(
     params : HestonParams
         Heston parameter set.
     p0, p1 : float or array-like, optional
-        Optional probability overrides. Each override must be scalar or
-        broadcastable to ``strike.shape``.
+        Optional legacy probability overrides. ``p0`` is ``P_K`` and multiplies
+        the strike/cash leg; ``p1`` is ``P_F`` and multiplies the forward/asset
+        leg. Each override must be scalar or broadcastable to ``strike.shape``.
     backend : {"gauss_legendre", "quad"}, default "gauss_legendre"
         Probability integration backend.
     quad_cfg : QuadratureConfig, optional
@@ -451,29 +464,29 @@ def heston_price_put_from_ctx(
     df = float(ctx.df(tau=tau))
     x = np.asarray(np.log(forward / strike_arr), dtype=np.float64)
 
-    p_0_arr = _probability_array(
+    P_K = _probability_array(
         probability_override=p0,
         x=x,
         tau=tau,
         params=params,
-        j=0,
+        j=HESTON_PROBABILITY_INDEX_K,
         backend=backend,
         quad_cfg=quad_cfg,
         rule=rule,
     )
-    p_1_arr = _probability_array(
+    P_F = _probability_array(
         probability_override=p1,
         x=x,
         tau=tau,
         params=params,
-        j=1,
+        j=HESTON_PROBABILITY_INDEX_F,
         backend=backend,
         quad_cfg=quad_cfg,
         rule=rule,
     )
 
     put = np.asarray(
-        df * (strike_arr * (1.0 - p_0_arr) - forward * (1.0 - p_1_arr)),
+        df * (strike_arr * (1.0 - P_K) - forward * (1.0 - P_F)),
         dtype=np.float64,
     )
     return _restore_output(put, scalar_input, original_shape)
@@ -518,7 +531,11 @@ def heston_price_call_and_param_jac_from_ctx(
     """Return Heston call prices and constrained-parameter Jacobians.
 
     The Jacobian columns are ordered as ``[kappa, vbar, eta, rho, v]``.
+    Scalar strikes return a Jacobian with shape ``(5,)``; array strikes return
+    ``strike.shape + (5,)``. Analytic parameter Jacobians currently support
+    only ``backend="gauss_legendre"``.
     """
+    _validate_analytic_jac_backend(backend)
     strike_arr, scalar_input, original_shape = _normalize_strike(strike)
     _validate_heston_inputs(spot=ctx.spot, strike=strike_arr, tau=tau)
 
@@ -538,7 +555,7 @@ def heston_price_call_and_param_jac_from_ctx(
     df = float(ctx.df(tau=tau))
     x = np.asarray(np.log(forward / strike_arr), dtype=np.float64)
 
-    p_0_arr, dp0_dtheta, p_1_arr, dp1_dtheta = _probability_and_param_jac_arrays(
+    P_K, dP_K_dtheta, P_F, dP_F_dtheta = _probability_and_param_jac_arrays(
         x=x,
         tau=tau,
         params=params,
@@ -548,12 +565,11 @@ def heston_price_call_and_param_jac_from_ctx(
     )
 
     call = np.asarray(
-        df * (forward * p_1_arr - strike_arr * p_0_arr),
+        df * (forward * P_F - strike_arr * P_K),
         dtype=np.float64,
     )
-    # REVIEW: NON-PLUMBING / FORMULA-SENSITIVE: verify against CalibrationNotes.md and existing price convention.
     d_call_dtheta = np.asarray(
-        df * (forward * dp1_dtheta - strike_arr[..., None] * dp0_dtheta),
+        df * (forward * dP_F_dtheta - strike_arr[..., None] * dP_K_dtheta),
         dtype=np.float64,
     )
 
@@ -602,7 +618,11 @@ def heston_price_put_and_param_jac_from_ctx(
     """Return Heston put prices and constrained-parameter Jacobians.
 
     The Jacobian columns are ordered as ``[kappa, vbar, eta, rho, v]``.
+    Scalar strikes return a Jacobian with shape ``(5,)``; array strikes return
+    ``strike.shape + (5,)``. Analytic parameter Jacobians currently support
+    only ``backend="gauss_legendre"``.
     """
+    _validate_analytic_jac_backend(backend)
     strike_arr, scalar_input, original_shape = _normalize_strike(strike)
     _validate_heston_inputs(spot=ctx.spot, strike=strike_arr, tau=tau)
 
@@ -622,7 +642,7 @@ def heston_price_put_and_param_jac_from_ctx(
     df = float(ctx.df(tau=tau))
     x = np.asarray(np.log(forward / strike_arr), dtype=np.float64)
 
-    p_0_arr, dp0_dtheta, p_1_arr, dp1_dtheta = _probability_and_param_jac_arrays(
+    P_K, dP_K_dtheta, P_F, dP_F_dtheta = _probability_and_param_jac_arrays(
         x=x,
         tau=tau,
         params=params,
@@ -632,12 +652,12 @@ def heston_price_put_and_param_jac_from_ctx(
     )
 
     put = np.asarray(
-        df * (strike_arr * (1.0 - p_0_arr) - forward * (1.0 - p_1_arr)),
+        df * (strike_arr * (1.0 - P_K) - forward * (1.0 - P_F)),
         dtype=np.float64,
     )
     # REVIEW: NEEDS VALIDATION: confirm put Jacobian sign convention against existing put price implementation and finite-difference tests.
     d_put_dtheta = np.asarray(
-        df * (forward * dp1_dtheta - strike_arr[..., None] * dp0_dtheta),
+        df * (forward * dP_F_dtheta - strike_arr[..., None] * dP_K_dtheta),
         dtype=np.float64,
     )
 
@@ -686,7 +706,13 @@ def heston_price_and_param_jac_from_ctx(
     quad_cfg: QuadratureConfig | None = None,
     rule: CompositeRule | None = None,
 ) -> tuple[float | FloatArray, RealArray]:
-    """Price a Heston option and return its constrained-parameter Jacobian."""
+    """Price a Heston option and return its constrained-parameter Jacobian.
+
+    The Jacobian columns are ordered as ``[kappa, vbar, eta, rho, v]``.
+    Scalar strikes return shape ``(5,)``; array strikes return
+    ``strike.shape + (5,)``. Analytic parameter Jacobians currently support
+    only ``backend="gauss_legendre"``.
+    """
     if kind == OptionType.CALL:
         return heston_price_call_and_param_jac_from_ctx(
             strike=strike,

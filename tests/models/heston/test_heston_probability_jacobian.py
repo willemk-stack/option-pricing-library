@@ -4,11 +4,18 @@ import numpy as np
 import pytest
 
 from option_pricing.models.heston.fourier import (
+    _build_heston_gauss_rule,
+    _default_heston_quadrature_config,
+    _integrand_and_param_jac,
+    _pj_affine_factor_and_param_jac,
     heston_probability,
     heston_probability_and_param_jac,
 )
 from option_pricing.models.heston.params import HestonParams
-from option_pricing.numerics.quadrature import QuadratureConfig
+from option_pricing.numerics.quadrature import (
+    QuadratureConfig,
+    build_gauss_legendre_rule,
+)
 
 RTOL = 5.0e-4
 ATOL = 1.0e-6
@@ -136,9 +143,11 @@ def test_probability_jac_matches_finite_difference_vector_x(
 
 
 def test_probability_jac_quad_backend_is_not_implemented() -> None:
-    # REVIEW: Probability Jacobian tests currently cover gauss_legendre only
-    # because analytic Jacobian support is limited to that backend.
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(
+        NotImplementedError,
+        match="Analytic Heston parameter Jacobians currently support only "
+        "backend='gauss_legendre'",
+    ):
         heston_probability_and_param_jac(
             x=0.05,
             tau=0.75,
@@ -146,3 +155,69 @@ def test_probability_jac_quad_backend_is_not_implemented() -> None:
             probability_index=0,
             backend="quad",
         )
+
+
+def test_integrand_param_jac_rejects_zero_frequency() -> None:
+    with pytest.raises(ValueError, match="nonzero frequencies"):
+        _integrand_and_param_jac(
+            u=0.0,
+            x=0.05,
+            tau=0.75,
+            params=BASE_PARAMS,
+            j=0,
+        )
+
+
+def test_integrand_param_jac_rejects_array_containing_zero_frequency() -> None:
+    with pytest.raises(ValueError, match="nonzero frequencies"):
+        _integrand_and_param_jac(
+            u=np.array([0.1, 0.0, 1.0], dtype=float),
+            x=0.05,
+            tau=0.75,
+            params=BASE_PARAMS,
+            j=1,
+        )
+
+
+def test_integrand_param_jac_applies_phase_outside_affine_helper() -> None:
+    u = np.array([0.25, 0.7, 1.3], dtype=float)
+    x = np.array([-0.2, 0.15], dtype=float)
+    tau = 0.75
+
+    for probability_index in (0, 1):
+        values, jac_values = _integrand_and_param_jac(
+            u=u,
+            x=x,
+            tau=tau,
+            params=BASE_PARAMS,
+            j=probability_index,
+        )
+        affine, d_affine = _pj_affine_factor_and_param_jac(
+            u,
+            tau,
+            BASE_PARAMS,
+            j=probability_index,
+        )
+        affine_arr = np.asarray(affine, dtype=np.complex128).reshape(-1)
+        d_affine_arr = np.asarray(d_affine, dtype=np.complex128).reshape(-1, 5)
+        phase = np.exp(1j * x[:, None] * u[None, :])
+        denom = 1j * u[None, :]
+
+        expected_values = np.real(phase * affine_arr[None, :] / denom)
+        expected_jac = np.real(
+            phase[:, :, None] * d_affine_arr[None, :, :] / denom[:, :, None]
+        )
+
+        np.testing.assert_allclose(values, expected_values, atol=0.0, rtol=0.0)
+        np.testing.assert_allclose(jac_values, expected_jac, atol=0.0, rtol=0.0)
+
+
+def test_heston_fixed_gauss_rule_nodes_are_strictly_positive() -> None:
+    cfg = _default_heston_quadrature_config()
+    generic_rule = build_gauss_legendre_rule(cfg)
+    heston_rule = _build_heston_gauss_rule(cfg)
+
+    assert np.all(generic_rule.u_flat > 0.0)
+    assert np.all(generic_rule.u_panel > 0.0)
+    assert np.all(heston_rule.u_flat > 0.0)
+    assert np.all(heston_rule.u_panel > 0.0)

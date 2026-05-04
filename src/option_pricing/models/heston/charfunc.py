@@ -17,6 +17,8 @@ type HestonProbabilityIndex = Literal[0, 1]
 type J = HestonProbabilityIndex
 
 HESTON_CHARFUNC_GRADIENT_PARAM_NAMES = ("kappa", "vbar", "eta", "rho", "v")
+# Vol-of-vol threshold below which pricing uses deterministic variance.
+HESTON_ETA_DETERMINISTIC_THRESHOLD = 1.0e-8
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,12 +159,15 @@ def _heston_affine_coeffs(
     Notes
     -----
     The implementation follows a numerically stable Gatheral-style branch
-    selection via :func:`_stable_discriminant`.
+    selection via :func:`_stable_discriminant`. For ``abs(params.eta) <=
+    HESTON_ETA_DETERMINISTIC_THRESHOLD``, pricing uses the deterministic
+    variance limit because the stochastic-volatility formula is singular as
+    vol-of-vol tends to zero.
     """
     tau = _validate_tau(tau)
     j = _validate_probability_index(j)
 
-    if tau == 0.0 or params.eta == 0.0:  # TODO: Fallback if eta near 0.0
+    if tau == 0.0 or abs(params.eta) <= HESTON_ETA_DETERMINISTIC_THRESHOLD:
         return _deterministic_affine_coeffs(u, tau, params, j=j)
 
     eta2 = params.eta * params.eta
@@ -337,13 +342,14 @@ def _cui_char_fn_and_param_grad(
     u: complex | ArrayLike,
     tau: float,
     params: HestonParams,
-    *,
-    x: float = 0.0,
 ) -> tuple[complex | ComplexArray, ComplexArray]:
-    """Return the Cui stable characteristic function and parameter gradient."""
+    """Return the zero-shift Cui affine factor and parameter gradient.
+
+    The Fourier integrand owns the log-moneyness phase ``exp(i u x)``. This
+    helper returns only the affine transform factor in parameter order
+    ``[kappa, vbar, eta, rho, v]``.
+    """
     tau = _validate_tau(tau)
-    if not np.isfinite(float(x)):
-        raise ValueError("x must be finite.")
 
     # REVIEW: eta near zero is singular for these formulas; do not silently fallback without a separate design decision.
     if params.eta <= 0.0:
@@ -352,7 +358,7 @@ def _cui_char_fn_and_param_grad(
     u_arr, scalar_input, original_shape = _normalize_frequency_grid(u)
 
     if tau == 0.0:
-        phi = np.asarray(np.exp(1j * u_arr * float(x)), dtype=np.complex128)
+        phi = np.ones(u_arr.shape, dtype=np.complex128)
         grad_phi = np.zeros(
             (u_arr.size, len(HESTON_CHARFUNC_GRADIENT_PARAM_NAMES)),
             dtype=np.complex128,
@@ -366,7 +372,7 @@ def _cui_char_fn_and_param_grad(
             ),
         )
 
-    # REVIEW: formulas assume u != 0; quadrature nodes should exclude zero or handle the limit separately.
+    # The analytic formulas are singular at u=0; fixed production nodes exclude it.
     if np.any(u_arr == 0.0):
         raise ValueError("analytic Heston gradient formulas require nonzero u.")
 
@@ -381,16 +387,12 @@ def _cui_char_fn_and_param_grad(
     v = float(params.v)
     iu = 1j * terms.u
 
-    # REVIEW: confirm this x phase matches the repo pricing convention before wiring into Fourier integration.
     phi = np.exp(
-        1j * terms.u * float(x)
-        - tau * kappa * vbar * rho * iu / eta
+        -tau * kappa * vbar * rho * iu / eta
         - v * terms.A
         + 2.0 * kappa * vbar / (eta * eta) * terms.D
     )
     grad_phi = phi[:, None] * h
-
-    # REVIEW: this kernel is not yet connected to HestonObjective.jac; integration and residual scaling belong in later phases.
 
     return (
         _restore_frequency_shape(

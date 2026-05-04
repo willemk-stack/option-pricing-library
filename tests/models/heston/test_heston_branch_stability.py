@@ -14,6 +14,11 @@ CTX = MARKET.to_context()
 
 # Dense enough to reveal branch/log discontinuities, but still practical for CI.
 BRANCH_GUARD_QUAD_CFG = QuadratureConfig(u_max=260.0, n_panels=56, nodes_per_panel=32)
+EXTREME_BRANCH_GUARD_QUAD_CFG = QuadratureConfig(
+    u_max=1200.0,
+    n_panels=300,
+    nodes_per_panel=64,
+)
 
 
 BRANCH_GUARD_PARAMS = HestonParams(
@@ -30,6 +35,7 @@ def _call_slice(
     params: HestonParams,
     strikes: np.ndarray,
     tau: float,
+    quad_cfg: QuadratureConfig = BRANCH_GUARD_QUAD_CFG,
 ) -> np.ndarray:
     return np.asarray(
         heston_price_call_from_ctx(
@@ -38,7 +44,7 @@ def _call_slice(
             tau=tau,
             params=params,
             backend="gauss_legendre",
-            quad_cfg=BRANCH_GUARD_QUAD_CFG,
+            quad_cfg=quad_cfg,
         ),
         dtype=np.float64,
     )
@@ -160,7 +166,12 @@ def test_heston_branch_guard_extreme_but_admissible_negative_rho_slice_is_finite
     tau = 0.35
     strikes = np.linspace(75.0, 130.0, 45)
     params = HestonParams(kappa=0.85, vbar=0.055, eta=1.15, rho=-0.94, v=0.025)
-    calls = _call_slice(params=params, strikes=strikes, tau=tau)
+    calls = _call_slice(
+        params=params,
+        strikes=strikes,
+        tau=tau,
+        quad_cfg=EXTREME_BRANCH_GUARD_QUAD_CFG,
+    )
 
     assert np.all(np.isfinite(calls))
     assert np.all(calls >= -1.0e-9)

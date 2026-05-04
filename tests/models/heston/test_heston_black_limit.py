@@ -4,6 +4,8 @@ import numpy as np
 
 from option_pricing.models.black_scholes.bs import black76_call_price
 from option_pricing.models.heston import HestonParams
+from option_pricing.models.heston.charfunc import HESTON_ETA_DETERMINISTIC_THRESHOLD
+from option_pricing.numerics.quadrature import QuadratureConfig
 from option_pricing.pricers.heston import (
     heston_price_call_from_ctx,
     heston_price_put_from_ctx,
@@ -216,3 +218,67 @@ def test_heston_near_deterministic_variance_limit_is_close_to_black76() -> None:
             tau=tau,
         )
     )
+
+
+def test_heston_eta_threshold_prices_converge_smoothly_to_deterministic_limit() -> None:
+    market = MarketData(spot=100.0, rate=0.02, dividend_yield=0.005)
+    ctx = market.to_context()
+    tau = 1.25
+    strikes = np.array([80.0, 100.0, 120.0], dtype=float)
+    eta_grid = np.array([1.0e-2, 1.0e-4, 1.0e-6, 1.0e-8], dtype=float)
+    quad_cfg = QuadratureConfig(u_max=240.0, n_panels=48, nodes_per_panel=24)
+
+    def params_for_eta(eta: float) -> HestonParams:
+        return HestonParams(
+            kappa=1.7,
+            vbar=0.04,
+            eta=float(eta),
+            rho=-0.55,
+            v=0.06,
+        )
+
+    call_prices = np.asarray(
+        [
+            heston_price_call_from_ctx(
+                strike=strikes,
+                ctx=ctx,
+                tau=tau,
+                params=params_for_eta(float(eta)),
+                quad_cfg=quad_cfg,
+            )
+            for eta in eta_grid
+        ],
+        dtype=float,
+    )
+    put_prices = np.asarray(
+        [
+            heston_price_put_from_ctx(
+                strike=strikes,
+                ctx=ctx,
+                tau=tau,
+                params=params_for_eta(float(eta)),
+                quad_cfg=quad_cfg,
+            )
+            for eta in eta_grid
+        ],
+        dtype=float,
+    )
+    deterministic_calls = np.asarray(
+        heston_price_call_from_ctx(
+            strike=strikes,
+            ctx=ctx,
+            tau=tau,
+            params=params_for_eta(0.0),
+            quad_cfg=quad_cfg,
+        ),
+        dtype=float,
+    )
+
+    call_diffs = np.max(np.abs(np.diff(call_prices, axis=0)), axis=1)
+
+    assert HESTON_ETA_DETERMINISTIC_THRESHOLD == 1.0e-8
+    assert np.all(np.isfinite(call_prices))
+    assert np.all(np.isfinite(put_prices))
+    assert call_diffs[1] < 0.05 * call_diffs[0]
+    assert call_diffs[2] < 1.0e-3
+    np.testing.assert_allclose(call_prices[-1], deterministic_calls, atol=1.0e-10)
