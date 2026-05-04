@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from ..charfunc import HESTON_ANALYTIC_JAC_ETA_MIN
 from ..params import HESTON_PARAM_NAMES, HestonParams
 
 BoundsPair = tuple[float, float]
@@ -106,6 +107,24 @@ class HestonCalibrationBounds:
     def raw_bounds(self) -> tuple[np.ndarray, np.ndarray]:
         """Return optimizer bounds in raw/transformed coordinates."""
         return raw_bounds_from_constrained_bounds(self)
+
+    def require_analytic_jacobian_compatible(self) -> HestonCalibrationBounds:
+        """Raise if these bounds allow unsupported analytic-Jacobian eta.
+
+        The eta floor is a numerical policy for the Cui analytic-gradient
+        formulas, not a financial admissibility condition. Price-only Heston
+        diagnostics may still evaluate deterministic-limit prices below this
+        floor.
+        """
+        eta_lo, _ = self.eta
+        if float(eta_lo) < HESTON_ANALYTIC_JAC_ETA_MIN:
+            raise ValueError(
+                "Analytic Heston calibration Jacobians require eta lower bound "
+                f">= {HESTON_ANALYTIC_JAC_ETA_MIN:g}. Price-only deterministic-limit "
+                "pricing near eta=0 is separate; pass use_analytic_jac=False or "
+                "raise the bounded calibration eta lower bound."
+            )
+        return self
 
 
 def _as_raw_vector(raw: np.ndarray | list[float] | tuple[float, ...]) -> np.ndarray:

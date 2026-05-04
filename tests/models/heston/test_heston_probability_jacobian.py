@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from option_pricing.models.heston.charfunc import HESTON_ANALYTIC_JAC_ETA_MIN
 from option_pricing.models.heston.fourier import (
     _build_heston_gauss_rule,
     _default_heston_quadrature_config,
@@ -154,6 +155,26 @@ def test_probability_jac_quad_backend_is_not_implemented() -> None:
             params=BASE_PARAMS,
             probability_index=0,
             backend="quad",
+        )
+
+
+def test_probability_jac_rejects_eta_below_analytic_floor() -> None:
+    params = HestonParams(
+        kappa=1.6,
+        vbar=0.04,
+        eta=0.5 * HESTON_ANALYTIC_JAC_ETA_MIN,
+        rho=-0.65,
+        v=0.05,
+    )
+
+    with pytest.raises(ValueError, match="probability Jacobians require eta"):
+        heston_probability_and_param_jac(
+            x=0.05,
+            tau=0.75,
+            params=params,
+            probability_index=0,
+            backend="gauss_legendre",
+            quad_cfg=QUAD_CFG,
         )
 
 

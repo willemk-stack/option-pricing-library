@@ -126,8 +126,8 @@ def test_heston_branch_guard_implied_vol_smile_has_no_jagged_branch_artifact() -
     assert np.all(np.isfinite(vols))
     assert np.all(vols > 0.0)
 
-    # REVIEW: This threshold is a numerical-regression guard, not a model-law.
-    # Re-tune after the final quadrature policy and reference cases are frozen.
+    # NOTE: This threshold is a numerical-regression guard, not a model-law.
+    # It is scoped to the fixed quadrature reference cases used here.
     assert float(np.max(np.abs(np.diff(vols)))) < 0.025
     _assert_no_large_local_spike(vols, max_spike_ratio=2.75)
 
@@ -154,7 +154,7 @@ def test_heston_branch_guard_prices_move_continuously_under_parameter_perturbati
         rel_move = (moved - base) / price_floor
 
         assert np.all(np.isfinite(moved))
-        # REVIEW: This guards against local jaggedness in the perturbation
+        # NOTE: This guards against local jaggedness in the perturbation
         # response, not the magnitude of legitimate smooth Heston sensitivity.
         _assert_no_large_local_spike(rel_move, max_spike_ratio=2.25)
 

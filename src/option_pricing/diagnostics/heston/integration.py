@@ -16,6 +16,7 @@ from ...models.heston.fourier import (
     HestonPanelReason,
     heston_probability_batch_with_diagnostics,
     heston_probability_with_diagnostics,
+    heston_warning_calibration_action,
 )
 from ...models.heston.params import HestonParams
 from ...numerics.quadrature import CompositeRule, QuadratureConfig
@@ -229,6 +230,10 @@ def _augment_probability_table(table: pd.DataFrame) -> pd.DataFrame:
             [_severity_rank(severity) for severity in severities],
             dtype=np.int64,
         )
+    if "calibration_action" not in enriched.columns:
+        enriched["calibration_action"] = [
+            heston_warning_calibration_action(int(flag)) for flag in flags
+        ]
 
     return enriched
 
@@ -650,6 +655,7 @@ def _build_warning_summary(points: pd.DataFrame) -> pd.DataFrame:
                 "warning_name": _member_name(warning),
                 "warning_label": _WARNING_LABELS.get(warning, _member_name(warning)),
                 "severity": _WARNING_SEVERITY.get(warning, "warning"),
+                "calibration_action": heston_warning_calibration_action(int(warning)),
                 "count": count,
                 "point_fraction": (
                     0.0 if len(points) == 0 else float(count) / float(len(points))
@@ -665,6 +671,7 @@ def _build_warning_summary(points: pd.DataFrame) -> pd.DataFrame:
                 "warning_name": "none",
                 "warning_label": "no warnings",
                 "severity": "ok",
+                "calibration_action": "ok",
                 "count": 0,
                 "point_fraction": 0.0,
                 "point_indices": "",

@@ -409,7 +409,7 @@ class HestonCalibrationBenchmarkDiagnostics:
     Required tables include ``runs``, ``summary``, ``parameter_recovery``, and
     ``residuals``. Runtime tables stay as DataFrames until serialization.
 
-    REVIEW: The required tables and canonical column prefixes are a public
+    NOTE: The required tables and canonical column prefixes are a public
     diagnostics contract for the benchmark surface.
     """
 
@@ -510,7 +510,7 @@ class HestonCalibrationFitDiagnostics:
     - held-out error summaries when a mask is supplied
     - lightweight objective slices around the fitted point
 
-    REVIEW: The tables are descriptive calibration evidence. They do not prove
+    NOTE: The tables are descriptive calibration evidence. They do not prove
     parameter uniqueness or economic validity of the fitted Heston dynamics.
     """
 
@@ -599,7 +599,8 @@ class HestonModelComparisonDiagnostics:
     bucketed summaries, and qualitative tradeoff notes together without
     embedding plotting objects or rerunning pricing during serialization.
 
-    REVIEW: Conclusions depend on the chosen target surface and local-vol proxy.
+    LIMITATION: Conclusions depend on the chosen target quotes, eSSVI
+    projection, local-vol PDE grid, and model-comparison partition.
     """
 
     meta: dict[str, Any]

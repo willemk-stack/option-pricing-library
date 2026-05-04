@@ -6,9 +6,11 @@ set or `HestonMultistartResult` into plain evidence tables.
 
 The report has the standard diagnostics shape:
 
-- `meta`: objective, backend, quadrature, quote counts, and review notes
+- `meta`: objective, backend, quadrature, quote counts, Feller status, quote
+  policy counts, and notes
 - `tables`: residuals, smile fit, IV residual grid, parameter recovery,
-  multistart runs, held-out errors, and objective slices
+  constraint diagnostics, quote policy, multistart runs, held-out errors, and
+  objective slices
 - `arrays`: aligned quote vectors, model prices, model IVs, and parameter arrays
 
 ## What is reported
@@ -39,7 +41,17 @@ and held-out errors should be reported separately.
 fitted point, currently including `kappa` versus `vbar`, `eta` versus `rho`, and
 `v` versus `vbar`.
 
-REVIEW: Objective slices are local diagnostic approximations. They can be
+`constraint_diagnostics` reports the Feller ratio, margin, and status. The
+policy is reported-not-hard-enforced by default; optional soft regularization
+can penalize violations without blocking them.
+
+`quote_policy` and `quote_policy_summary` map integration diagnostics to
+calibration actions: `block`, `quarantine`, `review`, or `ok`. Hard failures
+such as non-finite integrals or non-finite probabilities should not silently
+enter calibration. Review warnings such as high tail fraction or cancellation
+should be documented when retained.
+
+LIMITATION: Objective slices are local diagnostic approximations. They can be
 runtime-dependent and coordinate-convention-dependent, and they do not prove
 global identifiability.
 
@@ -59,6 +71,12 @@ optimization, but they are not direct IV RMSE unless model prices are explicitly
 inverted back to implied volatilities and those IV residuals are reported. The
 fit diagnostics do perform that inversion where possible and report IV residuals
 separately from price residuals.
+
+Analytic Jacobians are default-on only on the guarded fixed Gauss-Legendre
+calibration path with `eta >= HESTON_ANALYTIC_JAC_ETA_MIN` (`1e-6`) and bounded
+parameter ranges. Price-only deterministic-limit checks near `eta=0` remain
+valid pricing diagnostics, but they do not validate the Cui analytic-gradient
+formula near zero vol-of-vol.
 
 Held-out errors should not be mixed with fit errors. If a mask is supplied, the
 diagnostics summarize train and held-out rows separately. If no mask is
@@ -81,6 +99,8 @@ report = run_heston_calibration_fit_diagnostics(
 )
 
 report.tables["residuals"].head()
+report.tables["constraint_diagnostics"]
+report.tables["quote_policy_summary"]
 report.tables["held_out_errors"]
 report.tables["objective_slices"].head()
 ```

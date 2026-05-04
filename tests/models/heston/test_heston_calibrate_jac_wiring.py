@@ -5,9 +5,11 @@ import pytest
 from scipy.optimize import OptimizeResult
 
 import option_pricing.models.heston.calibration.calibrate as calibrate_module
+from option_pricing.models.heston.calibration.bounds import HestonCalibrationBounds
 from option_pricing.models.heston.calibration.calibrate import calibrate_heston
 from option_pricing.models.heston.calibration.heston_types import HestonQuoteSet
 from option_pricing.models.heston.calibration.objective import HestonObjective
+from option_pricing.models.heston.charfunc import HESTON_ANALYTIC_JAC_ETA_MIN
 from option_pricing.models.heston.params import HestonParams
 from option_pricing.numerics.quadrature import QuadratureConfig
 from option_pricing.types import MarketData
@@ -144,6 +146,52 @@ def test_calibrate_heston_return_result_true_returns_result(
     assert isinstance(fit, HestonParams)
     assert hasattr(result, "x")
     assert hasattr(result, "cost")
+    assert result["heston_jacobian_mode"] == "analytic"
+    assert result["heston_analytic_jacobian_eta_min"] == HESTON_ANALYTIC_JAC_ETA_MIN
+    assert "fixed Gauss-Legendre" in result["heston_analytic_jacobian_supported_domain"]
+
+
+def test_calibrate_heston_analytic_jac_rejects_unsupported_backend() -> None:
+    with pytest.raises(NotImplementedError, match="backend='gauss_legendre'"):
+        calibrate_heston(
+            quotes=_quotes(),
+            x0_params=_seed_params(),
+            backend="quad",
+            use_analytic_jac=True,
+            max_nfev=1,
+        )
+
+
+def test_calibrate_heston_analytic_jac_rejects_eta_floor_bounds() -> None:
+    bounds = HestonCalibrationBounds(eta=(0.0, 5.0))
+
+    with pytest.raises(ValueError, match="eta lower bound"):
+        calibrate_heston(
+            quotes=_quotes(),
+            x0_params=_seed_params(),
+            bounds=bounds,
+            parameter_transform="bounded",
+            use_analytic_jac=True,
+            max_nfev=1,
+        )
+
+
+def test_calibrate_heston_analytic_jac_rejects_seed_below_eta_floor() -> None:
+    seed = HestonParams(
+        kappa=1.2,
+        vbar=0.035,
+        eta=0.5 * HESTON_ANALYTIC_JAC_ETA_MIN,
+        rho=-0.45,
+        v=0.04,
+    )
+
+    with pytest.raises(ValueError, match="initial eta"):
+        calibrate_heston(
+            quotes=_quotes(),
+            x0_params=seed,
+            use_analytic_jac=True,
+            max_nfev=1,
+        )
 
 
 def test_calibrate_heston_forwards_optimizer_options(

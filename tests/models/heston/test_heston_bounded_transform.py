@@ -10,6 +10,7 @@ from option_pricing.models.heston.calibration.bounds import (
     bounded_transform_jac_diag_from_raw,
     transform_to_bounded_constrained,
 )
+from option_pricing.models.heston.charfunc import HESTON_ANALYTIC_JAC_ETA_MIN
 from option_pricing.models.heston.params import HestonParams
 
 
@@ -41,6 +42,8 @@ def test_default_heston_calibration_bounds_validate() -> None:
     assert np.all(np.isfinite(lower))
     assert np.all(np.isfinite(upper))
     assert np.all(lower < upper)
+    assert bounds.eta[0] >= HESTON_ANALYTIC_JAC_ETA_MIN
+    assert bounds.require_analytic_jacobian_compatible() is bounds
 
 
 @pytest.mark.parametrize(
@@ -125,3 +128,10 @@ def test_bounded_inverse_rejects_seed_outside_bounds() -> None:
 
     with pytest.raises(ValueError, match="kappa.*outside bounded calibration"):
         params.transform_to_bounded_unconstrained(bounds)
+
+
+def test_analytic_jacobian_bounds_reject_eta_below_floor() -> None:
+    bounds = HestonCalibrationBounds(eta=(0.0, 5.0))
+
+    with pytest.raises(ValueError, match="eta lower bound"):
+        bounds.require_analytic_jacobian_compatible()

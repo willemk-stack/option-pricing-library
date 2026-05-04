@@ -21,7 +21,7 @@ HESTON_PROBABILITY_INDEX_K: HestonProbabilityIndex = 0
 HESTON_PROBABILITY_INDEX_F: HestonProbabilityIndex = 1
 HESTON_PARAM_JAC_BACKEND_ERROR = (
     "Analytic Heston parameter Jacobians currently support only "
-    "backend='gauss_legendre'."
+    "backend='gauss_legendre' on the fixed-rule production quadrature domain."
 )
 
 
@@ -533,7 +533,8 @@ def heston_price_call_and_param_jac_from_ctx(
     The Jacobian columns are ordered as ``[kappa, vbar, eta, rho, v]``.
     Scalar strikes return a Jacobian with shape ``(5,)``; array strikes return
     ``strike.shape + (5,)``. Analytic parameter Jacobians currently support
-    only ``backend="gauss_legendre"``.
+    only ``backend="gauss_legendre"`` on the fixed-rule production quadrature
+    domain.
     """
     _validate_analytic_jac_backend(backend)
     strike_arr, scalar_input, original_shape = _normalize_strike(strike)
@@ -620,7 +621,8 @@ def heston_price_put_and_param_jac_from_ctx(
     The Jacobian columns are ordered as ``[kappa, vbar, eta, rho, v]``.
     Scalar strikes return a Jacobian with shape ``(5,)``; array strikes return
     ``strike.shape + (5,)``. Analytic parameter Jacobians currently support
-    only ``backend="gauss_legendre"``.
+    only ``backend="gauss_legendre"`` on the fixed-rule production quadrature
+    domain.
     """
     _validate_analytic_jac_backend(backend)
     strike_arr, scalar_input, original_shape = _normalize_strike(strike)
@@ -655,7 +657,8 @@ def heston_price_put_and_param_jac_from_ctx(
         df * (strike_arr * (1.0 - P_K) - forward * (1.0 - P_F)),
         dtype=np.float64,
     )
-    # REVIEW: NEEDS VALIDATION: confirm put Jacobian sign convention against existing put price implementation and finite-difference tests.
+    # Put and call Heston-parameter Jacobians share the same expression because
+    # put-call parity removes all parameter-independent terms.
     d_put_dtheta = np.asarray(
         df * (forward * dP_F_dtheta - strike_arr[..., None] * dP_K_dtheta),
         dtype=np.float64,
@@ -711,7 +714,8 @@ def heston_price_and_param_jac_from_ctx(
     The Jacobian columns are ordered as ``[kappa, vbar, eta, rho, v]``.
     Scalar strikes return shape ``(5,)``; array strikes return
     ``strike.shape + (5,)``. Analytic parameter Jacobians currently support
-    only ``backend="gauss_legendre"``.
+    only ``backend="gauss_legendre"`` on the fixed-rule production quadrature
+    domain.
     """
     if kind == OptionType.CALL:
         return heston_price_call_and_param_jac_from_ctx(

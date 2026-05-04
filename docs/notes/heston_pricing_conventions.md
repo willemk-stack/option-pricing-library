@@ -36,13 +36,16 @@ The parameter object validates basic admissibility:
 - \(v_0 \ge 0\)
 - \(\rho \in [-1, 1]\)
 
-The implementation does **not** require the Feller condition
+The implementation does **not** hard-enforce the Feller condition
 
 \[
 2\kappa\bar v \ge \eta^2.
 \]
 
-This is intentional. The Heston model can be priced outside the Feller region, but calibration diagnostics should report whether a fitted parameter set violates it.
+This is intentional. The Heston model can be priced outside the Feller region.
+Calibration diagnostics report the Feller value/margin and whether the fitted
+parameter set violates it. A soft Feller penalty can be enabled through
+regularization configuration, but violation is not blocked by default.
 
 ---
 
@@ -302,8 +305,9 @@ abs(params.eta) <= HESTON_ETA_DETERMINISTIC_THRESHOLD  # 1e-8
 or when `tau == 0`. This keeps vanilla prices stable in the singular
 near-zero-vol-of-vol regime. The analytic parameter-Jacobian formulas are not
 the deterministic fallback; they remain the stochastic-volatility formulas and
-therefore require positive nonzero Fourier frequencies and a positive
-vol-of-vol input.
+therefore require positive nonzero Fourier frequencies and
+`eta >= HESTON_ANALYTIC_JAC_ETA_MIN` (`1e-6`). This floor is a numerical
+safeguard for the Cui-style analytic gradients, not a financial lower bound.
 
 ---
 
@@ -318,11 +322,18 @@ The repository supports two probability integration backends:
 
 The intended default is `gauss_legendre`, because it is vectorizable and gives better control over diagnostics. The `quad` backend is useful as an independent comparison path, especially during validation.
 
-Analytic Heston parameter Jacobians currently support only
-`backend="gauss_legendre"`. Ordinary non-Jacobian prices may still use
-`backend="quad"` for reference checks. Users who need `quad`-based Jacobians
-should compute finite differences explicitly until a separate analytic limit
-or adaptive-integral Jacobian path is implemented.
+Analytic Heston parameter Jacobians are default-on only for the production
+fixed Gauss-Legendre path:
+
+- `backend="gauss_legendre"`,
+- nonzero fixed-rule quadrature nodes,
+- `eta >= HESTON_ANALYTIC_JAC_ETA_MIN`,
+- parameters inside the documented bounded calibration ranges.
+
+Ordinary non-Jacobian prices may still use `backend="quad"` for reference
+checks. Unsupported analytic-Jacobian calibration requests raise clearly rather
+than silently falling back. Users who need another backend should request
+finite differences explicitly with `use_analytic_jac=False`.
 
 A production pricing run should record:
 
@@ -340,19 +351,19 @@ A production pricing run should record:
 
 Fourier pricing should not be treated as trustworthy merely because it returned a finite value.
 
-A pricing result deserves review if diagnostics show:
+Calibration quote policy separates hard invalidation from review:
 
-- non-finite integrand values,
-- non-finite total integral,
-- probability outside \([0,1]\) beyond tolerance,
-- large tail contribution,
-- excessive cancellation,
-- too many bad panels,
-- large disagreement between `gauss_legendre` and `quad`,
-- material price movement under denser quadrature settings,
-- jagged implied-vol behavior across neighboring strikes.
+- `block`: non-finite total integral or non-finite probability;
+- `quarantine`: probability materially outside \([0,1]\) or persistent backend
+  disagreement after robust/diagnostics rerun;
+- `review`: high tail fraction, cancellation warnings, isolated oscillation
+  spikes, near-origin underresolution, too many bad panels, or large quadrature
+  error estimates;
+- `ok`: no diagnostic warning.
 
-A severe diagnostic warning does not automatically mean the price is unusable. It means the point should be rerun, compared across backends/configurations, and documented if retained.
+Blocked and quarantined quotes should not silently enter calibration. Reviewed
+quotes may be retained, but calibration summaries should report the count and
+reason categories.
 
 ---
 
@@ -365,12 +376,13 @@ Calibration diagnostics should therefore report:
 - objective function,
 - backend and quadrature settings,
 - fitted parameters,
-- Feller condition status,
+- Feller condition value, margin, and status,
 - in-sample residuals,
 - held-out residuals when available,
 - multi-start dispersion,
 - parameter sensitivity,
-- whether any quotes were priced with diagnostic warnings.
+- blocked/quarantined/review quote counts,
+- whether the fit used all supplied quotes or a filtered quote set.
 
 The price Jacobian convention follows the call formula:
 
@@ -543,17 +555,32 @@ parity_error = (call - put) - df * (forward - strike)
 
 ---
 
-## 16. Open implementation decisions
+## 16. Resolved implementation policies
 
-These are allowed to remain open during development, but should be resolved before final Capstone 3 submission.
+The final Capstone 3 policy is:
 
-1. Whether the root package should export Heston helpers directly or keep them under `option_pricing.models.heston` and `option_pricing.pricers.heston`.
-2. Whether calibration should enforce the Feller condition, penalize violations, or only report violations.
-3. Which objective should be the default calibration objective.
-4. Which quadrature quality level should be used in final calibration notebooks.
-5. Which warning flags should block calibration quotes automatically.
-6. Whether analytic Jacobians should be default-on after finite-difference validation is complete.
-7. Whether local-vol comparison should use a synthetic eSSVI surface, a market-like fixture, or a Heston-generated surface.
+1. Keep Heston helpers namespaced under submodules such as
+   `option_pricing.models.heston`, `option_pricing.pricers.heston`, and
+   `option_pricing.diagnostics.heston`; do not add broad root-package exports
+   for advanced Heston helpers.
+2. Enforce positivity/correlation bounds, report Feller diagnostics by default,
+   and allow an optional soft Feller penalty. Do not hard-block Feller
+   violations by default.
+3. Keep `vega_scaled_price` as the backward-compatible calibration default while
+   documenting the objective in calibration metadata.
+4. Use `robust` quadrature for final capstone reporting tables and plots, with a
+   `diagnostics` rerun for headline fitted parameters. Lighter settings are for
+   quick interactive exploration only.
+5. Block or quarantine hard integration failures as calibration input, and
+   soft-review tail/cancellation/oscillation/near-origin warnings.
+6. Keep analytic Jacobians default-on only on the guarded fixed
+   Gauss-Legendre, eta-floor, bounded-parameter domain. Unsupported requests
+   raise or require explicit finite differences.
+7. Use a version-controlled deterministic market-like synthetic fixture for the
+   Heston-vs-local-vol comparison target. It is not market data and is not
+   generated from the fitted Heston model.
+8. Include direct Dupire/PDE local-vol repricing on a small validation grid, with
+   the eSSVI implied-surface repricing retained only as a supporting proxy.
 
 ---
 
@@ -580,9 +607,12 @@ where:
 - the Fourier phase \(e^{iux}\) is applied exactly once,
 - `gauss_legendre` is the production/default backend,
 - `quad` is the independent comparison backend,
-- analytic parameter Jacobians support only `gauss_legendre`,
+- analytic parameter Jacobians support only the guarded fixed
+  Gauss-Legendre production domain with `eta >= 1e-6`,
 - the price path uses the deterministic variance fallback for
   `abs(params.eta) <= 1e-8`,
-- diagnostic warnings must be surfaced, not hidden.
+- diagnostic warnings must be surfaced, not hidden,
+- final Heston-vs-local-vol reporting uses the deterministic market-like
+  synthetic fixture and includes a direct local-vol PDE repricing audit.
 
 Any future pricing, calibration, diagnostics, or Monte Carlo validation code should preserve this contract.

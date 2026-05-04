@@ -72,7 +72,7 @@ HESTON_SUMMARY_METRICS: tuple[str, ...] = (
     "suspicious_strike_count",
 )
 
-# REVIEW: Calibration benchmark table names and columns are a diagnostics
+# NOTE: Calibration benchmark table names and columns are a diagnostics
 # contract distinct from the pricing report topology.
 HESTON_CALIBRATION_BENCHMARK_REQUIRED_TABLES: tuple[str, ...] = (
     "runs",
@@ -134,7 +134,7 @@ HESTON_CALIBRATION_BENCHMARK_RESIDUAL_COLUMNS: tuple[str, ...] = (
     "residual",
 )
 
-# REVIEW: Calibration-fit evidence is a production-facing diagnostics contract,
+# NOTE: Calibration-fit evidence is a production-facing diagnostics contract,
 # distinct from the analytic-Jacobian benchmark contract above.
 HESTON_CALIBRATION_FIT_REQUIRED_TABLES: tuple[str, ...] = (
     "residuals",

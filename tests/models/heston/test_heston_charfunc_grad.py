@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from option_pricing.models.heston.charfunc import (
+    HESTON_ANALYTIC_JAC_ETA_MIN,
     HESTON_CHARFUNC_GRADIENT_PARAM_NAMES,
     _cui_char_fn_and_param_grad,
 )
@@ -99,11 +100,34 @@ def test_cui_charfunc_gradient_kernel_no_longer_accepts_x_phase() -> None:
         _cui_char_fn_and_param_grad(0.7, 0.75, _sample_params(), x=0.3)
 
 
-def test_cui_charfunc_gradient_kernel_rejects_zero_eta() -> None:
-    params = HestonParams(kappa=1.6, vbar=0.04, eta=0.0, rho=-0.65, v=0.05)
+def test_cui_charfunc_gradient_kernel_rejects_eta_below_analytic_floor() -> None:
+    params = HestonParams(
+        kappa=1.6,
+        vbar=0.04,
+        eta=0.5 * HESTON_ANALYTIC_JAC_ETA_MIN,
+        rho=-0.65,
+        v=0.05,
+    )
 
-    with pytest.raises(ValueError, match="eta"):
+    with pytest.raises(ValueError, match="handled separately"):
         _cui_char_fn_and_param_grad(1.0, 0.75, params)
+
+
+def test_cui_charfunc_gradient_kernel_accepts_eta_at_analytic_floor() -> None:
+    params = HestonParams(
+        kappa=1.6,
+        vbar=0.04,
+        eta=HESTON_ANALYTIC_JAC_ETA_MIN,
+        rho=-0.65,
+        v=0.05,
+    )
+
+    phi, grad = _cui_char_fn_and_param_grad(1.0, 0.75, params)
+
+    assert np.isfinite(complex(phi).real)
+    assert np.isfinite(complex(phi).imag)
+    assert np.all(np.isfinite(np.asarray(grad).real))
+    assert np.all(np.isfinite(np.asarray(grad).imag))
 
 
 @pytest.mark.parametrize(

@@ -11,8 +11,9 @@ from ....pricers.heston import (
 )
 from ....types import OptionType
 from ....typing import FloatArray
+from ..charfunc import HESTON_ANALYTIC_JAC_ETA_MIN
 from ..fourier import HestonBackend, QuadratureConfig
-from ..params import HestonParams
+from ..params import HESTON_PARAM_NAMES, HestonParams
 from .bounds import (
     HestonCalibrationBounds,
     bounded_transform_jac_diag_from_raw,
@@ -27,6 +28,33 @@ from .heston_types import (
     HestonRegConfig,
 )
 from .regulate import heston_regularization_jacobian, heston_regularization_residuals
+
+
+def _validate_analytic_jacobian_params(
+    params: HestonParams,
+    bounds: HestonCalibrationBounds,
+) -> None:
+    """Validate the supported analytic-Jacobian calibration domain."""
+    if params.eta < HESTON_ANALYTIC_JAC_ETA_MIN:
+        raise ValueError(
+            "Analytic Heston calibration Jacobians require eta >= "
+            f"{HESTON_ANALYTIC_JAC_ETA_MIN:g}. Price-only deterministic-limit "
+            "pricing near eta=0 is separate; use finite-difference calibration "
+            "or choose an eta floor above the analytic-Jacobian threshold."
+        )
+
+    lower = bounds.lower_array()
+    upper = bounds.upper_array()
+    values = params.as_array()
+    outside = (values < lower) | (values > upper)
+    if np.any(outside):
+        idx = int(np.flatnonzero(outside)[0])
+        name = HESTON_PARAM_NAMES[idx]
+        raise ValueError(
+            "Analytic Heston calibration Jacobians are supported only inside "
+            f"the documented calibration bounds. {name}={values[idx]} is outside "
+            f"[{lower[idx]}, {upper[idx]}]."
+        )
 
 
 def _price_heston_quotes(
@@ -118,7 +146,7 @@ class HestonObjective:
     backend: HestonBackend = "gauss_legendre"
     quad_cfg: QuadratureConfig | None = None
     reg: HestonRegConfig | None = None
-    # REVIEW: vega_scaled_price remains the default to preserve legacy
+    # NOTE: vega_scaled_price remains the default to preserve legacy
     # calibration behavior; it is not a blanket recommendation for every
     # surface.
     objective_type: HestonObjectiveType = "vega_scaled_price"
@@ -166,7 +194,10 @@ class HestonObjective:
 
     @property
     def supports_analytic_jac(self) -> bool:
-        return self.objective_type in HESTON_OBJECTIVE_TYPES
+        return (
+            self.backend == "gauss_legendre"
+            and self.objective_type in HESTON_OBJECTIVE_TYPES
+        )
 
     def _resolved_bounds(self) -> HestonCalibrationBounds:
         if self.bounds is None:
@@ -196,7 +227,7 @@ class HestonObjective:
             return np.ones(self.quotes.n_quotes, dtype=np.float64)
 
         if self.objective_type == "relative_price_rmse":
-            # REVIEW: Relative price residuals use market-mid normalization and
+            # NOTE: Relative price residuals use market-mid normalization and
             # intentionally avoid model-dependent denominator terms.
             return np.asarray(
                 np.maximum(np.abs(self.quotes.mid), float(self.price_floor)),
@@ -221,7 +252,7 @@ class HestonObjective:
                 raise ValueError("bid/ask spread must be finite")
             if np.any(spread < 0.0):
                 raise ValueError("bid/ask spread must be nonnegative")
-            # REVIEW: Bid/ask-normalized residuals treat the quoted spread as
+            # NOTE: Bid/ask-normalized residuals treat the quoted spread as
             # the residual scale and do not otherwise model quote reliability.
             return np.asarray(
                 np.maximum(spread, float(self.spread_floor)), dtype=np.float64
@@ -249,6 +280,9 @@ class HestonObjective:
     def jac(self, u: FloatArray) -> FloatArray:
         scale = self._price_residual_scale()
         params = self._params_from_raw(u)
+        bounds = self._resolved_bounds()
+        bounds.require_analytic_jacobian_compatible()
+        _validate_analytic_jacobian_params(params, bounds)
 
         _, dprice_dtheta = _price_and_jac_heston_quotes(
             self.quotes,

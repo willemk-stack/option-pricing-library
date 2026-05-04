@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 
@@ -32,7 +33,7 @@ HESTON_PARAMETER_TRANSFORMS: tuple[HestonParameterTransform, ...] = (
 )
 
 
-# REVIEW: Store multistart result dataclasses in heston_types.py so downstream
+# NOTE: Store multistart result dataclasses in heston_types.py so downstream
 # diagnostics can import them without importing scipy.optimize-heavy calibrate.py.
 @dataclass(frozen=True, slots=True)
 class HestonCalibrationRun:
@@ -64,6 +65,8 @@ class HestonMultistartResult:
     quote_count: int
     success_count: int
     failure_count: int
+    jacobian_mode: str = "analytic"
+    analytic_jacobian_eta_min: float | None = None
 
     @property
     def successful_runs(self) -> tuple[HestonCalibrationRun, ...]:
@@ -87,6 +90,7 @@ class HestonQuoteSet:
     ask: FloatArray | None = None
     iv_mid: FloatArray | None = None
     labels: tuple[str, ...] | None = None
+    metadata: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         n = self.strike.size
@@ -228,6 +232,7 @@ class HestonQuoteSet:
         iv_mid: FloatArray | None = None,
         sqrt_weights: FloatArray | None = None,
         labels: tuple[str, ...] | None = None,
+        metadata: Mapping[str, Any] | None = None,
     ) -> HestonQuoteSet:
         strike = np.asarray(strike, dtype=np.float64).reshape(-1)
         expiry = np.asarray(expiry, dtype=np.float64).reshape(-1)
@@ -256,6 +261,7 @@ class HestonQuoteSet:
                 else np.asarray(sqrt_weights, dtype=np.float64).reshape(-1)
             ),
             labels=labels,
+            metadata=metadata,
         )
 
 

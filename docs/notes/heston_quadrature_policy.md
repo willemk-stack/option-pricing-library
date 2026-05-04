@@ -38,8 +38,9 @@ Rationale:
 default calibration backend because it evaluates scalar integrals and is much
 more expensive across strikes, maturities, and optimizer iterations.
 
-REVIEW: This default is a performance/numerical-policy decision. Revisit it
-after the reference-price and branch-stability test suites are frozen.
+NOTE: This default is a performance and numerical-policy decision. The
+branch-stability and reference-price tests validate the supported production
+real-frequency grid, not every possible complex-plane path.
 
 ## Configuration tiers
 
@@ -58,7 +59,8 @@ these tiers. Tests should not assume that all regimes use the same raw rule.
 
 ## Suggested baseline values
 
-These values are intentionally conservative starting points, not final law.
+These values are conservative policy defaults rather than financial
+assumptions.
 
 ```python
 fast        = QuadratureConfig(u_max=125.0, n_panels=20, nodes_per_panel=12)
@@ -67,8 +69,9 @@ robust      = QuadratureConfig(u_max=220.0, n_panels=44, nodes_per_panel=24)
 diagnostics = QuadratureConfig(u_max=260.0, n_panels=56, nodes_per_panel=32)
 ```
 
-REVIEW: Bless these values only after running backend-agreement, reference-price,
-and branch-stability tests across the frozen case grid.
+NOTE: Backend-agreement, reference-price, and branch-stability tests protect the
+supported case grid. Future changes to the raw values should update those tests
+and the reported policy together.
 
 ## When to use each tier
 
@@ -123,31 +126,31 @@ with the case, not hidden in a single global magic number.
 
 ## Warning interpretation
 
-Diagnostics should distinguish between warnings that require rerunning with a
-denser rule and warnings that should cause the result to be rejected.
+Diagnostics distinguish between warnings that require review and warnings that
+block or quarantine calibration input.
 
 ### Rerun with denser quadrature
 
-Rerun with `robust` or `diagnostics` if diagnostics show:
+Soft-review and usually rerun with `robust` or `diagnostics` if diagnostics
+show:
 
 - large tail contribution;
 - under-resolved tail panels;
 - excessive cancellation;
 - isolated panel spikes;
-- backend disagreement slightly above tolerance.
+- near-origin underresolution.
 
 ### Reject or quarantine the result
 
-Reject, quarantine, or clearly label the result if diagnostics show:
+Block or quarantine the calibration quote if diagnostics show:
 
-- non-finite integrands;
 - non-finite total integral;
+- non-finite probability;
 - probabilities materially outside `[0, 1]`;
-- persistent backend disagreement after using the diagnostics tier;
-- jagged implied-vol smiles that survive denser quadrature.
+- persistent backend disagreement after using the robust/diagnostics tier.
 
-REVIEW: The exact warning thresholds should be empirical and tied to the frozen
-reference grid. Do not tune them to make one demo pass.
+NOTE: Thresholds are empirical numerical policy tied to the frozen reference
+grid. Do not tune them to make one demo pass.
 
 ## Calibration policy
 
@@ -156,16 +159,16 @@ can exploit numerical noise, especially in weakly identified Heston regimes.
 
 Recommended policy:
 
-- use `robust` for final calibration runs;
+- use `robust` for final calibration tables and plots;
 - use `balanced` only for exploratory initialization or smoke tests;
-- rerun final fitted parameters with `diagnostics` for verification;
+- rerun headline fitted parameters with `diagnostics` for verification;
 - report backend agreement for final fits;
 - treat large backend disagreement as a calibration-quality issue, not merely a
   pricing issue.
 
-REVIEW: The final capstone should state whether calibration residuals are driven
-by model misspecification or by numerical integration error. The quadrature
-policy exists to make that distinction visible.
+Final capstone artifacts should state whether calibration residuals appear to be
+driven by model misspecification or by numerical integration error. The
+quadrature policy exists to make that distinction visible.
 
 ## Reference tests expected from this policy
 

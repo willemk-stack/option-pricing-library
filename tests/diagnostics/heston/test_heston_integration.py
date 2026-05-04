@@ -105,6 +105,7 @@ def test_integration_diagnostics_decodes_warning_and_reason_counts_for_stressed_
 
     warning_summary = artifact.tables["warning_summary"]
     assert "large_tail_fraction" in set(warning_summary["warning_name"])
+    assert "review" in set(warning_summary["calibration_action"])
 
     reason_counts = artifact.tables["reason_counts"]
     assert {"underresolved_tail", "tail_too_large"} & set(reason_counts["reason_name"])

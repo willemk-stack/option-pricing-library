@@ -19,6 +19,10 @@ type J = HestonProbabilityIndex
 HESTON_CHARFUNC_GRADIENT_PARAM_NAMES = ("kappa", "vbar", "eta", "rho", "v")
 # Vol-of-vol threshold below which pricing uses deterministic variance.
 HESTON_ETA_DETERMINISTIC_THRESHOLD = 1.0e-8
+# Numerical floor for the Cui analytic-gradient formulas. Price-only Heston
+# pricing has a deterministic-variance limit below this region; analytic
+# parameter Jacobians do not.
+HESTON_ANALYTIC_JAC_ETA_MIN = 1.0e-6
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,11 +162,17 @@ def _heston_affine_coeffs(
 
     Notes
     -----
-    The implementation follows a numerically stable Gatheral-style branch
-    selection via :func:`_stable_discriminant`. For ``abs(params.eta) <=
-    HESTON_ETA_DETERMINISTIC_THRESHOLD``, pricing uses the deterministic
-    variance limit because the stochastic-volatility formula is singular as
-    vol-of-vol tends to zero.
+    The production price path follows a numerically stable Gatheral-style
+    branch selection via :func:`_stable_discriminant`. For ``abs(params.eta) <=
+    HESTON_ETA_DETERMINISTIC_THRESHOLD``, price-only evaluation uses the
+    deterministic variance limit because the stochastic-volatility formula is
+    singular as vol-of-vol tends to zero.
+
+    Analytic parameter gradients are computed separately with a Cui-style
+    expression and are supported only on the production quadrature domain:
+    nonzero real fixed-rule frequencies, positive maturities, eta at least
+    ``HESTON_ANALYTIC_JAC_ETA_MIN``, and bounded calibration parameters. No
+    global complex-plane branch-continuity guarantee is claimed.
     """
     tau = _validate_tau(tau)
     j = _validate_probability_index(j)
@@ -193,7 +203,13 @@ def _cui_stable_terms(
     tau: float,
     params: HestonParams,
 ) -> _CuiStableTerms:
-    """Return the Cui stable characteristic-function building blocks."""
+    """Return Cui-style characteristic-function gradient building blocks.
+
+    These expressions back the analytic parameter-Jacobian path. They are
+    regression-tested against the production stable affine pricing path on
+    stressed real-frequency grids used by fixed-rule calibration. They are not
+    a general-purpose complex-plane branch-continuity contract.
+    """
     tau = _validate_tau(tau)
     u_arr = np.asarray(u, dtype=np.complex128)
 
@@ -205,7 +221,10 @@ def _cui_stable_terms(
     xi = kappa - eta * rho * iu
     quadratic_term = u_arr * u_arr + iu
 
-    # REVIEW: complex sqrt/log branch behavior should be validated against existing stable implementation before using in production pricing.
+    # The Cui-gradient branch behavior is regression-tested against the production
+    # stable affine path on stressed real-frequency grids. This analytic-gradient
+    # path is supported for the nonzero real quadrature nodes used by calibration,
+    # not as a general-purpose complex-plane branch-continuity guarantee.
     d = np.sqrt(xi * xi + eta * eta * quadratic_term)
     half_d_tau = 0.5 * d * tau
     A1 = quadratic_term * np.sinh(half_d_tau)
@@ -348,12 +367,24 @@ def _cui_char_fn_and_param_grad(
     The Fourier integrand owns the log-moneyness phase ``exp(i u x)``. This
     helper returns only the affine transform factor in parameter order
     ``[kappa, vbar, eta, rho, v]``.
+
+    The ordinary price path uses the stable Gatheral-style affine
+    implementation in :func:`_heston_affine_coeffs`. This helper uses a
+    Cui-style expression for analytic gradients and is supported only for the
+    production fixed Gauss-Legendre quadrature domain: nonzero real quadrature
+    nodes, positive maturity, eta at least ``HESTON_ANALYTIC_JAC_ETA_MIN``, and
+    bounded calibration parameter ranges. It does not claim global complex
+    branch-continuity safety.
     """
     tau = _validate_tau(tau)
 
-    # REVIEW: eta near zero is singular for these formulas; do not silently fallback without a separate design decision.
-    if params.eta <= 0.0:
-        raise ValueError("analytic Heston gradient requires eta to be positive.")
+    if params.eta < HESTON_ANALYTIC_JAC_ETA_MIN:
+        raise ValueError(
+            "Analytic Heston gradients require eta >= "
+            f"{HESTON_ANALYTIC_JAC_ETA_MIN:g}. Price-only deterministic-limit "
+            "pricing near eta=0 is handled separately and is not an analytic "
+            "Jacobian validation path."
+        )
 
     u_arr, scalar_input, original_shape = _normalize_frequency_grid(u)
 
@@ -437,7 +468,11 @@ def heston_char_fn(
 
     ``C(u, tau) * vbar + D(u, tau) * v + i * u * x``,
 
-    using the parameter names from :class:`HestonParams`.
+    using the parameter names from :class:`HestonParams`. Analytic parameter
+    gradients use the separate Cui-style helper
+    :func:`_cui_char_fn_and_param_grad`; that helper is supported on the
+    production quadrature domain only and does not claim global complex
+    branch-continuity safety.
     """
     tau = _validate_tau(tau)
     if not np.isfinite(float(x)):

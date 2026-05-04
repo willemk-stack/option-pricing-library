@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from numbers import Real
 from typing import Any
 
 import numpy as np
@@ -16,6 +17,7 @@ from ...models.heston.calibration.heston_types import (
     HestonQuoteSet,
 )
 from ...models.heston.calibration.objective import HestonObjective
+from ...models.heston.calibration.regulate import feller_ratio, feller_satisfied
 from ...models.heston.fourier import HestonBackend
 from ...models.heston.params import HESTON_PARAM_NAMES, HestonParams
 from ...numerics.quadrature import QuadratureConfig
@@ -25,6 +27,7 @@ from ...typing import FloatArray
 from ...vol.implied_vol_slice import implied_vol_black76_slice
 from ._provenance import backend_config_meta
 from .models import HestonCalibrationFitDiagnostics
+from .quote_policy import heston_calibration_quote_policy_tables
 
 _OBJECTIVE_SLICE_PAIRS: tuple[tuple[str, str], ...] = (
     ("kappa", "vbar"),
@@ -115,6 +118,16 @@ def _resolved_fit(
     if isinstance(fit, HestonMultistartResult):
         return fit.best_params, fit
     return fit, None
+
+
+def _coerce_real_scalar(value: object, *, label: str) -> float:
+    if isinstance(value, Real):
+        return float(value)
+    if isinstance(value, np.generic):
+        scalar = value.item()
+        if isinstance(scalar, Real):
+            return float(scalar)
+    raise TypeError(f"{label} must be a real scalar, got {type(value).__name__}.")
 
 
 def _resolve_mask(
@@ -219,7 +232,7 @@ def _residual_tables(
     ].copy()
     iv_residual_grid["grid_kind"] = "long_form_no_interpolation"
     iv_residual_grid.attrs["notes"] = [
-        "REVIEW: IV residual grids are returned long-form with no interpolation; "
+        "NOTE: IV residual grids are returned long-form with no interpolation; "
         "irregular quote grids therefore remain explicit."
     ]
 
@@ -322,6 +335,30 @@ def _parameter_recovery_table(
         rows.append(row)
 
     return pd.DataFrame(rows)
+
+
+def _constraint_diagnostics_table(params: HestonParams) -> pd.DataFrame:
+    feller_margin = 2.0 * float(params.kappa) * float(params.vbar) - float(
+        params.eta
+    ) * float(params.eta)
+    ratio = feller_ratio(params)
+    satisfied = feller_satisfied(params)
+    return pd.DataFrame(
+        [
+            {
+                "constraint": "feller",
+                "value": float(ratio),
+                "margin": float(feller_margin),
+                "satisfied": bool(satisfied),
+                "policy": "reported_not_hard_enforced",
+                "notes": (
+                    "Feller is visible calibration evidence. It is not hard-blocked "
+                    "by default; use HestonRegConfig.feller_penalty_weight for an "
+                    "optional soft penalty."
+                ),
+            }
+        ]
+    )
 
 
 def _multistart_runs_table(
@@ -504,7 +541,7 @@ def _objective_slices_table(
                         "cost": cost,
                         "delta_cost": cost - fitted_cost,
                         "note": (
-                            "REVIEW: Objective slices are local constrained-"
+                            "LIMITATION: Objective slices are local constrained-"
                             "coordinate approximations, not global identifiability "
                             "proofs."
                         ),
@@ -531,6 +568,8 @@ def run_heston_calibration_fit_diagnostics(
     objective_slice_grid_size: int = 3,
     objective_slice_relative_width: float = 0.25,
     objective_slice_pairs: Sequence[tuple[str, str]] = _OBJECTIVE_SLICE_PAIRS,
+    quote_diagnostics: pd.DataFrame | Mapping[str, Any] | None = None,
+    fit_used_filtered_quotes: bool = False,
 ) -> HestonCalibrationFitDiagnostics:
     """Build final Heston calibration evidence tables for a fitted quote set.
 
@@ -538,7 +577,7 @@ def run_heston_calibration_fit_diagnostics(
     fitted Heston parameters, computes implied-vol residuals where possible, and
     packages calibration evidence into deterministic DataFrames.
 
-    REVIEW: Held-out rows are only evaluation partitions for the supplied fit.
+    NOTE: Held-out rows are evaluation partitions for the supplied fit.
     The function cannot infer whether the fitted parameters were calibrated
     without seeing those rows.
     """
@@ -584,6 +623,14 @@ def run_heston_calibration_fit_diagnostics(
         true_params=true_params,
         seed_params=resolved_seed,
     )
+    constraint_diagnostics = _constraint_diagnostics_table(fitted_params)
+    quote_policy, quote_policy_summary, quote_policy_meta = (
+        heston_calibration_quote_policy_tables(
+            n_quotes=quotes.n_quotes,
+            quote_diagnostics=quote_diagnostics,
+            fit_used_filtered_quotes=fit_used_filtered_quotes,
+        )
+    )
     multistart_runs = _multistart_runs_table(multistart)
     objective_slices = _objective_slices_table(
         quotes=quotes,
@@ -605,13 +652,13 @@ def run_heston_calibration_fit_diagnostics(
         rule=None,
     )
     notes = [
-        "REVIEW: Heston vanilla calibration can be weakly identifiable; "
+        "LIMITATION: Heston vanilla calibration can be weakly identifiable; "
         "residual evidence should be read alongside multistart and slice tables.",
-        "REVIEW: Vega-scaled price residuals are an IV-like calibration proxy, "
+        "NOTE: Vega-scaled price residuals are an IV-like calibration proxy, "
         "not direct IV RMSE unless implied vols are inverted and reported.",
-        "REVIEW: Objective slices are local diagnostics and can be runtime- and "
+        "NOTE: Objective slices are local diagnostics and can be runtime- and "
         "coordinate-convention dependent.",
-        "REVIEW: IV residual grids are long-form with no interpolation so "
+        "NOTE: IV residual grids are long-form with no interpolation so "
         "irregular quote grids remain explicit.",
     ]
     meta: dict[str, Any] = {
@@ -628,6 +675,16 @@ def run_heston_calibration_fit_diagnostics(
         "held_out_mask_provided": mask_provided,
         "multistart_result_provided": multistart is not None,
         "objective_slice_grid_size": int(objective_slice_grid_size),
+        "feller_ratio": _coerce_real_scalar(
+            constraint_diagnostics.at[0, "value"],
+            label="feller_ratio",
+        ),
+        "feller_margin": _coerce_real_scalar(
+            constraint_diagnostics.at[0, "margin"],
+            label="feller_margin",
+        ),
+        "feller_satisfied": bool(constraint_diagnostics.at[0, "satisfied"]),
+        **quote_policy_meta,
         "notes": notes,
     }
 
@@ -653,6 +710,9 @@ def run_heston_calibration_fit_diagnostics(
             "smile_fit": smile_fit,
             "iv_residual_grid": iv_residual_grid,
             "parameter_recovery": parameter_recovery,
+            "constraint_diagnostics": constraint_diagnostics,
+            "quote_policy": quote_policy,
+            "quote_policy_summary": quote_policy_summary,
             "multistart_runs": multistart_runs,
             "held_out_errors": held_out_errors,
             "objective_slices": objective_slices,

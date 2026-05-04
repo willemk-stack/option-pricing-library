@@ -230,7 +230,7 @@ market smiles. Even a clean surface can contain shallow directions where
 different combinations of `kappa`, `vbar`, `eta`, `rho`, and `v` fit nearly the
 same prices.
 
-REVIEW: Clean-recovery parameter tolerances are diagnostic guardrails. They
+NOTE: Clean-recovery parameter tolerances are diagnostic guardrails. They
 should remain looser than the deterministic synthetic case currently achieves
 because exact parameter equality can become brittle under modest grid,
 quadrature, or objective changes.
@@ -244,7 +244,7 @@ reasonable repricing or IV residuals. Exact equality to the synthetic truth is
 not required because the quotes no longer come from a single exact Heston
 surface.
 
-REVIEW: The current noisy-recovery noise level and IV residual thresholds are
+LIMITATION: The current noisy-recovery noise level and IV residual thresholds are
 capstone smoke thresholds, not market microstructure claims. For final
 calibration evidence, state the chosen noise level and whether repricing error
 or parameter closeness is the primary success metric.
@@ -267,7 +267,7 @@ read as parameter uniqueness. Similar near-best costs should be paired with
 residual plots, repricing error, and stability checks before interpreting the
 parameters economically.
 
-REVIEW: What counts as "near-best" should be specified with the capstone
+NOTE: What counts as "near-best" should be specified with the capstone
 evidence table. A fixed absolute cost threshold may be fine for a compact
 synthetic surface, while production quote sets may need a scale-aware threshold.
 

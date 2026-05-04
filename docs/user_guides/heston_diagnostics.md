@@ -66,12 +66,14 @@ direct IV residuals when possible.
 
 ## Heston versus local-vol comparison
 
-`run_heston_vs_local_vol_comparison(...)` compares Heston with the existing
-eSSVI/local-vol-facing path on the same vanilla target.
+`run_heston_vs_local_vol_comparison(...)` compares Heston with eSSVI
+implied-surface repricing and a small direct local-vol PDE validation grid on
+the same vanilla target. The eSSVI row is retained as a supporting proxy; the
+`direct_local_vol_pde` table carries the Dupire/PDE repricing evidence, status,
+runtime, and grid metadata.
 
-REVIEW: The current local-vol side uses eSSVI implied-surface repricing as a
-proxy and does not run a full Dupire PDE repricer. Conclusions depend on the
-target quotes, weights, held-out partition, and local-vol proxy.
+LIMITATION: Conclusions depend on the target quotes, weights, held-out
+partition, eSSVI projection, local-vol PDE grid, and boundary policy.
 
 ## One-call report
 

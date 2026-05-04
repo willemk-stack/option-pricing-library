@@ -20,6 +20,7 @@ from ...numerics.quadrature import (
 )
 from ...typing import ArrayLike, FloatArray
 from .charfunc import (
+    HESTON_ANALYTIC_JAC_ETA_MIN,
     _cui_char_fn_and_param_grad,
     _heston_affine_coeffs,
     _normalize_frequency_grid,
@@ -36,6 +37,7 @@ type HestonBackend = Literal["gauss_legendre", "quad"]
 type HestonProbabilityIndex = Literal[0, 1]
 type Backend = HestonBackend
 type J = HestonProbabilityIndex
+type HestonCalibrationWarningAction = Literal["ok", "review", "quarantine", "block"]
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +82,49 @@ class HestonIntegralWarning(IntFlag):
     EXCESSIVE_CANCELLATION = 1 << 4
     TOO_MANY_BAD_PANELS = 1 << 5
     QUAD_ERROR_LARGE = 1 << 6
+
+
+HESTON_WARNING_CALIBRATION_ACTION: dict[
+    HestonIntegralWarning, HestonCalibrationWarningAction
+] = {
+    HestonIntegralWarning.NONFINITE_TOTAL: "block",
+    HestonIntegralWarning.NONFINITE_PROBABILITY: "block",
+    HestonIntegralWarning.PROBABILITY_OUT_OF_RANGE: "quarantine",
+    HestonIntegralWarning.LARGE_TAIL_FRACTION: "review",
+    HestonIntegralWarning.EXCESSIVE_CANCELLATION: "review",
+    HestonIntegralWarning.TOO_MANY_BAD_PANELS: "review",
+    HestonIntegralWarning.QUAD_ERROR_LARGE: "review",
+}
+
+_CALIBRATION_ACTION_RANK: dict[HestonCalibrationWarningAction, int] = {
+    "ok": 0,
+    "review": 1,
+    "quarantine": 2,
+    "block": 3,
+}
+
+
+def heston_warning_calibration_action(
+    warning_flags: int | np.integer,
+) -> HestonCalibrationWarningAction:
+    """Return the quote-calibration action implied by Heston warning flags.
+
+    ``block`` and ``quarantine`` are reserved for warnings that invalidate a
+    calibration input unless a robust/diagnostics rerun clears them. Tail,
+    cancellation, panel-count, and quad-error warnings are soft review signals.
+    Persistent backend disagreement is not a single-integral warning flag and
+    is handled by the diagnostics quote-policy layer.
+    """
+    flag_value = int(warning_flags)
+    action: HestonCalibrationWarningAction = "ok"
+    for warning, warning_action in HESTON_WARNING_CALIBRATION_ACTION.items():
+        if flag_value & int(warning):
+            if (
+                _CALIBRATION_ACTION_RANK[warning_action]
+                > _CALIBRATION_ACTION_RANK[action]
+            ):
+                action = warning_action
+    return action
 
 
 @dataclass(frozen=True, slots=True)
@@ -879,7 +924,8 @@ def _integrate_pj_fixed_rule_and_param_jac(
             dtype=np.float64,
         )
 
-    # REVIEW: diagnostics for panel-level Jacobian contributions are intentionally not added in this phase.
+    # NOTE: Panel-level Jacobian diagnostics are intentionally not part of this
+    # path; production diagnostics classify the price/probability integrals.
     return integral, d_integral
 
 
@@ -1114,12 +1160,21 @@ def heston_probability_and_param_jac(
     """Evaluate a Heston probability integral and constrained parameter Jacobian.
 
     Analytic Heston parameter Jacobians currently support only
-    ``backend="gauss_legendre"``. The Jacobian columns are ordered as
-    ``[kappa, vbar, eta, rho, v]``; scalar ``x`` returns shape ``(5,)`` and
-    array ``x`` returns ``x.shape + (5,)``.
+    ``backend="gauss_legendre"`` on the production fixed-rule quadrature
+    domain. Eta must be at least ``HESTON_ANALYTIC_JAC_ETA_MIN``; price-only
+    deterministic-limit pricing near eta zero is separate. The Jacobian columns
+    are ordered as ``[kappa, vbar, eta, rho, v]``; scalar ``x`` returns shape
+    ``(5,)`` and array ``x`` returns ``x.shape + (5,)``.
     """
     _, scalar_input, original_shape = _normalize_x_grid(x)
     j = probability_index
+
+    if params.eta < HESTON_ANALYTIC_JAC_ETA_MIN:
+        raise ValueError(
+            "Analytic Heston probability Jacobians require eta >= "
+            f"{HESTON_ANALYTIC_JAC_ETA_MIN:g}. Price-only deterministic-limit "
+            "pricing near eta=0 is separate."
+        )
 
     if backend == "quad":
         raise NotImplementedError(
@@ -1154,7 +1209,8 @@ def heston_probability_and_param_jac(
                 dtype=np.float64,
             )
 
-        # REVIEW: this function exposes constrained-parameter derivatives only; unconstrained optimizer chain-rule belongs in the calibration objective phase.
+        # NOTE: This function exposes constrained-parameter derivatives only;
+        # unconstrained optimizer chain-rule belongs in the calibration objective.
         return probability, d_probability_dtheta
 
     raise ValueError(f"Unknown backend: {backend}")

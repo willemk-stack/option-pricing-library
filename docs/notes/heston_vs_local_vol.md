@@ -1,57 +1,65 @@
 # Heston versus local volatility
 
-`run_heston_vs_local_vol_comparison(...)` is the Capstone 3 comparison layer
-for a fitted Heston model and the repo-native eSSVI/local-vol-facing vanilla
-surface path. It uses one common `HestonQuoteSet` target, reprices that target
-with both models, and packages the evidence as tables plus metadata notes.
+`run_heston_vs_local_vol_comparison(...)` is the Capstone 3 comparison layer for
+a fitted Heston model, the repo-native eSSVI implied-surface path, and a small
+direct Dupire/PDE local-vol repricing audit. It uses one common
+`HestonQuoteSet` target so Heston, eSSVI, and local-vol PDE residuals are
+computed against the same quotes.
 
-REVIEW: This comparison uses the repo-native eSSVI nodal implied surface as a
-local-vol-facing proxy. It does not run direct Dupire/PDE local-vol repricing.
-Direct PDE repricing should be audited separately if the capstone conclusion
-depends on pathwise local-vol pricing.
+The final target is a deterministic market-like synthetic fixture. It is not
+market data and is not generated from the fitted Heston model. This avoids
+advantaging Heston with Heston-generated recovery data while keeping the
+comparison deterministic and version-controlled.
 
-## What is compared
+## What Is Compared
 
 The diagnostic compares:
 
-- the common target quote set or surface nodes
-- fitted Heston repricing on those quotes
-- eSSVI nodal implied-surface repricing on the same quotes
-- optional train versus held-out partitions
-- quote-level price and implied-vol residuals
-- ATM, downside-wing, and upside-wing error buckets
-- qualitative model tradeoffs
+- fitted Heston repricing on the common quote target;
+- eSSVI nodal implied-surface repricing on the same quotes as a supporting
+  proxy;
+- direct local-vol PDE repricing on a small deterministic validation grid;
+- optional train versus held-out partitions;
+- quote-level price and implied-vol residuals;
+- ATM, downside-wing, and upside-wing error buckets;
+- qualitative tradeoffs around fit quality, interpretability, smoothness,
+  extrapolation, and dynamics.
 
 The final comparison notebook is
-`demos/13_heston_calibration_vs_localvol.ipynb`. It calibrates Heston once,
-calls `run_heston_vs_local_vol_comparison(...)`, and then displays only tables
-plots, and notes already produced by the diagnostic and plot helpers.
+`demos/13_heston_calibration_vs_localvol.ipynb`. It should call library
+diagnostics and plotting helpers rather than rebuilding Heston, eSSVI, Dupire,
+or PDE logic in notebook cells.
 
-## Diagnostic outputs
+## Diagnostic Outputs
 
 Use these report fields rather than rebuilding comparison tables in a notebook:
 
 - `comparison.tables["fit_errors"]`: quote-level market/model prices, market
-  and model implied vols, residuals, moneyness bucket, and sample label
+  and model implied vols, residuals, moneyness bucket, and sample label;
+- `comparison.tables["direct_local_vol_pde"]`: selected validation-grid rows
+  with target IV, Heston price/IV, local-vol PDE price/IV, residuals, status,
+  runtime, and PDE grid metadata;
+- `comparison.tables["direct_local_vol_pde_summary"]`: direct PDE quote count,
+  success count, grid size, surface source, and average residuals;
 - `comparison.tables["error_summary"]`: RMSE, MAE, and max absolute error by
-  model and by `all`, `atm`, `downside_wing`, and `upside_wing` buckets
-- `comparison.tables["held_out_comparison"]`: train versus held-out errors
-  when a held-out mask is supplied
+  model and by `all`, `atm`, `downside_wing`, and `upside_wing` buckets;
+- `comparison.tables["held_out_comparison"]`: train versus held-out errors when
+  a held-out mask is supplied;
 - `comparison.tables["tradeoff_summary"]`: concise fit-quality,
-  interpretability, extrapolation, and dynamics notes
-- `comparison.meta["notes"]`: `REVIEW:` limitations that should travel with
-  any capstone artifact
+  interpretability, extrapolation, and dynamics notes;
+- `comparison.meta["notes"]`: `NOTE:` and `LIMITATION:` statements that should
+  travel with any capstone artifact.
 
 The moneyness buckets are intentionally simple:
 
-- `atm`: `abs(log_moneyness) <= 0.03`
-- `downside_wing`: `log_moneyness < -0.03`
-- `upside_wing`: `log_moneyness > 0.03`
+- `atm`: `abs(log_moneyness) <= 0.03`;
+- `downside_wing`: `log_moneyness < -0.03`;
+- `upside_wing`: `log_moneyness > 0.03`.
 
-REVIEW: These bucket thresholds are capstone diagnostics, not universal smile
-region definitions.
+These thresholds are capstone diagnostics, not universal smile-region
+definitions.
 
-## Reading the result
+## Reading The Result
 
 Heston is preferable when interpretable stochastic-volatility dynamics matter:
 mean reversion, long-run variance, vol-of-vol, spot/variance correlation, and
@@ -62,31 +70,34 @@ variance scenarios.
 Local-vol/eSSVI is preferable when the main target is vanilla surface fit. The
 eSSVI side is a flexible implied-surface representation and can often match
 vanilla smiles more tightly at calibrated nodes than a single five-parameter
-Heston fit.
+Heston fit. The direct PDE rows audit whether the Dupire handoff and PDE grid
+reprice selected quotes consistently; they do not globally prove local-vol
+accuracy across all strikes, maturities, boundaries, or extrapolation regimes.
 
-The comparison does not prove that the local-vol PDE repricer reproduces every
-vanilla price on the fitted surface. Smoothness, extrapolation, Dupire
-stability, and PDE repricing accuracy remain separate evidence items covered by
-the existing local-vol and eSSVI workflows.
-
-## Minimal usage
+## Minimal Usage
 
 ```python
 from option_pricing.diagnostics.heston import (
+    build_market_like_heston_quote_set,
     run_heston_vs_local_vol_comparison,
 )
 from option_pricing.vol.ssvi import ESSVICalibrationConfig
+
+quotes = build_market_like_heston_quote_set()
 
 comparison = run_heston_vs_local_vol_comparison(
     quotes=quotes,
     heston_fit=multistart_result,
     held_out_mask=held_out_mask,
     essvi_cfg=ESSVICalibrationConfig(max_nfev=1000),
+    local_vol_pde_max_quotes=9,
+    local_vol_pde_Nx=81,
+    local_vol_pde_Nt=121,
 )
 
 comparison.tables["fit_errors"]
+comparison.tables["direct_local_vol_pde"]
 comparison.tables["error_summary"]
-comparison.tables["held_out_comparison"]
 comparison.tables["tradeoff_summary"]
 comparison.meta["notes"]
 ```

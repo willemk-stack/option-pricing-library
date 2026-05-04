@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from dataclasses import asdict
+from time import perf_counter
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -14,14 +16,24 @@ from ...models.heston.calibration.heston_types import (
 )
 from ...models.heston.fourier import HestonBackend
 from ...models.heston.params import HestonParams
+from ...numerics.grids import SpacingPolicy
+from ...numerics.pde import AdvectionScheme
+from ...numerics.pde.domain import Coord
 from ...numerics.quadrature import QuadratureConfig
-from ...types import OptionType
+from ...pricers.pde.domain import BSDomainConfig, BSDomainPolicy
+from ...pricers.pde_pricer import local_vol_price_pde_european
+from ...types import MarketData, OptionSpec, OptionType, PricingInputs
 from ...typing import FloatArray
+from ...vol.implied_vol_scalar import implied_vol_bs
+from ...vol.local_vol_surface import LocalVolSurface
 from ...vol.ssvi import (
     ESSVICalibrationConfig,
     ESSVIFitResult,
     ESSVINodalSurface,
+    ESSVIProjectionConfig,
+    ESSVIProjectionResult,
     calibrate_essvi,
+    project_essvi_nodes,
 )
 from ._provenance import backend_config_meta
 from .calibration_fit import (
@@ -36,11 +48,15 @@ from .models import HestonModelComparisonDiagnostics
 
 _HESTON_MODEL_NAME = "Heston"
 _LOCAL_VOL_MODEL_NAME = "ESSVI local-vol proxy"
-_LOCAL_VOL_PROXY_REVIEW_NOTE = (
-    "REVIEW: This comparison uses the repo-native eSSVI nodal implied surface "
-    "as a local-vol-facing proxy. It does not run direct Dupire/PDE local-vol "
-    "repricing. Direct PDE repricing should be audited separately if the "
-    "capstone conclusion depends on pathwise local-vol pricing."
+_DIRECT_LOCAL_VOL_MODEL_NAME = "Direct local-vol PDE"
+_LOCAL_VOL_PROXY_NOTE = (
+    "NOTE: The eSSVI row reprices the calibrated implied surface directly and "
+    "is retained as a supporting proxy; the direct local-vol PDE table is the "
+    "Dupire/PDE repricing audit for the selected validation grid."
+)
+_MONEYNESS_BUCKET_NOTE = (
+    "NOTE: Moneyness buckets use abs(log_moneyness) <= 0.03 for ATM, "
+    "log_moneyness < -0.03 for downside wing/skew, and > 0.03 for upside wing."
 )
 
 
@@ -113,6 +129,337 @@ def _price_essvi_quotes(
         dtype=np.float64,
     )
     return np.asarray(np.where(quotes.is_call, call_price, put_price), dtype=np.float64)
+
+
+def _default_projection_cfg() -> ESSVIProjectionConfig:
+    return ESSVIProjectionConfig(
+        validation_nt=21,
+        validation_y_min=-0.60,
+        validation_y_max=0.60,
+        validation_ny=41,
+        dupire_nt=15,
+        dupire_y_min=-0.50,
+        dupire_y_max=0.50,
+        dupire_ny=31,
+        strict_validation=False,
+    )
+
+
+def _default_local_vol_pde_solver_cfg() -> dict[str, Any]:
+    return {
+        "coord": Coord.LOG_S,
+        "domain_cfg": BSDomainConfig(
+            policy=BSDomainPolicy.LOG_NSIGMA,
+            n_sigma=5.5,
+            center="strike",
+            spacing=SpacingPolicy.CLUSTERED,
+            cluster_strength=2.5,
+        ),
+        "method": "rannacher",
+        "advection": AdvectionScheme.CENTRAL,
+        "sigma2_floor": 1.0e-12,
+        "sigma2_cap": 4.0,
+    }
+
+
+def _serialize_solver_cfg(solver_cfg: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, value in solver_cfg.items():
+        if isinstance(value, BSDomainConfig):
+            domain = asdict(value)
+            domain["policy"] = str(value.policy.value)
+            domain["spacing"] = str(value.spacing.value)
+            out[str(key)] = domain
+        elif isinstance(value, (Coord, AdvectionScheme)):
+            out[str(key)] = str(value.value)
+        else:
+            out[str(key)] = value
+    return out
+
+
+def _select_direct_pde_quote_indices(
+    quotes: HestonQuoteSet,
+    *,
+    max_quotes: int,
+) -> np.ndarray:
+    if int(max_quotes) <= 0 or quotes.n_quotes == 0:
+        return np.array([], dtype=np.int64)
+
+    expiries = np.sort(np.unique(np.asarray(quotes.expiry, dtype=np.float64)))
+    if expiries.size <= 3:
+        selected_expiries = expiries
+    else:
+        selected_expiries = expiries[
+            np.unique(np.round(np.linspace(0, expiries.size - 1, 3)).astype(np.int64))
+        ]
+
+    targets = np.array([-0.10, 0.0, 0.10], dtype=np.float64)
+    selected: list[int] = []
+    log_mny = np.asarray(quotes.log_moneyness, dtype=np.float64)
+    for expiry in selected_expiries:
+        idx = np.flatnonzero(np.isclose(quotes.expiry, float(expiry)))
+        used: set[int] = set()
+        for target in targets:
+            available = [int(i) for i in idx if int(i) not in used]
+            if not available:
+                continue
+            best = min(
+                available,
+                key=lambda i: (abs(float(log_mny[i]) - float(target)), i),
+            )
+            selected.append(best)
+            used.add(best)
+            if len(selected) >= int(max_quotes):
+                return np.array(sorted(set(selected)), dtype=np.int64)
+
+    return np.array(sorted(set(selected))[: int(max_quotes)], dtype=np.int64)
+
+
+def _quote_market(quotes: HestonQuoteSet, tau: float) -> MarketData:
+    return MarketData(
+        spot=float(quotes.ctx.spot),
+        rate=float(quotes.ctx.r_avg(float(tau))),
+        dividend_yield=float(quotes.ctx.q_avg(float(tau))),
+    )
+
+
+def _local_vol_surface_from_essvi(
+    fit: ESSVIFitResult,
+    quotes: HestonQuoteSet,
+    projection_cfg: ESSVIProjectionConfig | None,
+) -> tuple[LocalVolSurface | None, ESSVIProjectionResult, str]:
+    projection = project_essvi_nodes(
+        fit.nodes,
+        cfg=_default_projection_cfg() if projection_cfg is None else projection_cfg,
+    )
+    if projection.surface is None:
+        return None, projection, "essvi_projection_failed_no_local_vol_surface"
+    return (
+        LocalVolSurface.from_implied(
+            projection.surface,
+            forward=quotes.ctx.fwd,
+            discount=quotes.ctx.df,
+        ),
+        projection,
+        "essvi_smoothed_projection",
+    )
+
+
+def _direct_local_vol_pde_table(
+    *,
+    quotes: HestonQuoteSet,
+    fit: ESSVIFitResult,
+    heston_prices: FloatArray,
+    heston_iv: FloatArray,
+    held_out_mask: np.ndarray,
+    mask_provided: bool,
+    max_quotes: int,
+    Nx: int,
+    Nt: int,
+    solver_cfg: dict[str, Any] | None,
+    projection_cfg: ESSVIProjectionConfig | None,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    selected = _select_direct_pde_quote_indices(quotes, max_quotes=max_quotes)
+    resolved_solver_cfg = (
+        _default_local_vol_pde_solver_cfg() if solver_cfg is None else dict(solver_cfg)
+    )
+    lv, projection, surface_source = _local_vol_surface_from_essvi(
+        fit,
+        quotes,
+        projection_cfg,
+    )
+    if lv is None:
+        return (
+            pd.DataFrame(
+                columns=[
+                    "model",
+                    "quote_index",
+                    "expiry",
+                    "strike",
+                    "log_moneyness",
+                    "moneyness_bucket",
+                    "is_call",
+                    "sample",
+                    "is_held_out",
+                    "target_iv",
+                    "target_price",
+                    "heston_price",
+                    "heston_iv",
+                    "heston_price_residual",
+                    "heston_iv_residual_bps",
+                    "local_vol_pde_price",
+                    "local_vol_pde_iv",
+                    "local_vol_pde_price_residual",
+                    "local_vol_pde_iv_residual_bps",
+                    "pde_runtime_ms",
+                    "pde_status",
+                    "pde_error",
+                    "Nx",
+                    "Nt",
+                    "surface_source",
+                ]
+            ),
+            {
+                "direct_local_vol_pde_repricing": True,
+                "direct_local_vol_pde_quote_count": 0,
+                "direct_local_vol_pde_success_count": 0,
+                "direct_local_vol_pde_surface_source": surface_source,
+                "direct_local_vol_pde_projection_success": bool(projection.success),
+                "direct_local_vol_pde_projection_message": str(projection.diag.message),
+                "direct_local_vol_pde_total_runtime_ms": 0.0,
+                "direct_local_vol_pde_solver": {
+                    "Nx": int(Nx),
+                    "Nt": int(Nt),
+                    **_serialize_solver_cfg(resolved_solver_cfg),
+                },
+            },
+        )
+    market_iv = _market_iv(quotes)
+    sample = np.where(held_out_mask, "held_out", "train")
+    if not mask_provided:
+        sample = np.full(quotes.n_quotes, "fit", dtype=object)
+
+    rows: list[dict[str, Any]] = []
+    total_t0 = perf_counter()
+    for quote_index in selected:
+        i = int(quote_index)
+        tau = float(quotes.expiry[i])
+        strike = float(quotes.strike[i])
+        kind = OptionType.CALL if bool(quotes.is_call[i]) else OptionType.PUT
+        market = _quote_market(quotes, tau)
+        target_iv = float(market_iv[i])
+        sigma_seed = target_iv if np.isfinite(target_iv) and target_iv > 0.0 else 0.20
+        spec = OptionSpec(kind=kind, strike=strike, expiry=tau)
+        p = PricingInputs(spec=spec, market=market, sigma=max(float(sigma_seed), 1e-4))
+        row: dict[str, Any] = {
+            "model": _DIRECT_LOCAL_VOL_MODEL_NAME,
+            "quote_index": i,
+            "expiry": tau,
+            "strike": strike,
+            "log_moneyness": float(quotes.log_moneyness[i]),
+            "moneyness_bucket": str(
+                _moneyness_bucket(np.array([quotes.log_moneyness[i]]))[0]
+            ),
+            "is_call": bool(quotes.is_call[i]),
+            "sample": str(sample[i]),
+            "is_held_out": bool(held_out_mask[i]),
+            "target_iv": target_iv,
+            "target_price": float(quotes.mid[i]),
+            "heston_price": float(np.asarray(heston_prices)[i]),
+            "heston_iv": float(np.asarray(heston_iv)[i]),
+            "heston_price_residual": float(
+                np.asarray(heston_prices)[i] - quotes.mid[i]
+            ),
+            "heston_iv_residual_bps": float(
+                (np.asarray(heston_iv)[i] - target_iv) * 1.0e4
+            ),
+            "local_vol_pde_price": np.nan,
+            "local_vol_pde_iv": np.nan,
+            "local_vol_pde_price_residual": np.nan,
+            "local_vol_pde_iv_residual_bps": np.nan,
+            "pde_runtime_ms": np.nan,
+            "pde_status": "not_run",
+            "pde_error": "",
+            "Nx": int(Nx),
+            "Nt": int(Nt),
+            "surface_source": surface_source,
+        }
+        t0 = perf_counter()
+        try:
+            pde_price_raw = local_vol_price_pde_european(
+                p,
+                lv=lv,
+                Nx=int(Nx),
+                Nt=int(Nt),
+                return_solution=False,
+                **resolved_solver_cfg,
+            )
+            pde_price = float(cast(float, pde_price_raw))
+            pde_iv = float(
+                implied_vol_bs(
+                    pde_price,
+                    spec,
+                    market,
+                    sigma0=max(float(sigma_seed), 1.0e-4),
+                )
+            )
+            row.update(
+                {
+                    "local_vol_pde_price": pde_price,
+                    "local_vol_pde_iv": pde_iv,
+                    "local_vol_pde_price_residual": pde_price - float(quotes.mid[i]),
+                    "local_vol_pde_iv_residual_bps": (pde_iv - target_iv) * 1.0e4,
+                    "pde_status": "ok",
+                }
+            )
+        except Exception as exc:  # noqa: BLE001
+            row["pde_status"] = "error"
+            row["pde_error"] = f"{type(exc).__name__}: {exc}"
+        finally:
+            row["pde_runtime_ms"] = 1.0e3 * (perf_counter() - t0)
+        rows.append(row)
+
+    table = pd.DataFrame(rows)
+    ok_count = int((table["pde_status"] == "ok").sum()) if not table.empty else 0
+    meta = {
+        "direct_local_vol_pde_repricing": True,
+        "direct_local_vol_pde_quote_count": int(len(table)),
+        "direct_local_vol_pde_success_count": ok_count,
+        "direct_local_vol_pde_surface_source": surface_source,
+        "direct_local_vol_pde_projection_success": bool(projection.success),
+        "direct_local_vol_pde_projection_message": str(projection.diag.message),
+        "direct_local_vol_pde_total_runtime_ms": 1.0e3 * (perf_counter() - total_t0),
+        "direct_local_vol_pde_solver": {
+            "Nx": int(Nx),
+            "Nt": int(Nt),
+            **_serialize_solver_cfg(resolved_solver_cfg),
+        },
+    }
+    return table, meta
+
+
+def _direct_pde_fit_errors(
+    direct_table: pd.DataFrame,
+) -> pd.DataFrame:
+    if direct_table.empty:
+        return pd.DataFrame(
+            columns=[
+                "model",
+                "quote_index",
+                "expiry",
+                "strike",
+                "log_moneyness",
+                "moneyness_bucket",
+                "is_call",
+                "market_iv",
+                "model_iv",
+                "iv_residual_bps",
+                "market_price",
+                "model_price",
+                "price_residual",
+                "is_held_out",
+                "sample",
+            ]
+        )
+    return pd.DataFrame(
+        {
+            "model": direct_table["model"],
+            "quote_index": direct_table["quote_index"],
+            "expiry": direct_table["expiry"],
+            "strike": direct_table["strike"],
+            "log_moneyness": direct_table["log_moneyness"],
+            "moneyness_bucket": direct_table["moneyness_bucket"],
+            "is_call": direct_table["is_call"],
+            "market_iv": direct_table["target_iv"],
+            "model_iv": direct_table["local_vol_pde_iv"],
+            "iv_residual_bps": direct_table["local_vol_pde_iv_residual_bps"],
+            "market_price": direct_table["target_price"],
+            "model_price": direct_table["local_vol_pde_price"],
+            "price_residual": direct_table["local_vol_pde_price_residual"],
+            "is_held_out": direct_table["is_held_out"],
+            "sample": direct_table["sample"],
+        }
+    )
 
 
 def _fit_error_table(
@@ -292,6 +639,27 @@ def _tradeoff_summary() -> pd.DataFrame:
                     "assumptions, but it does not model independent variance risk."
                 ),
             },
+            {
+                "model": _DIRECT_LOCAL_VOL_MODEL_NAME,
+                "fit_quality_note": (
+                    "Direct PDE repricing audits a small validation grid against "
+                    "the same target quotes rather than relying only on implied-"
+                    "surface proxy prices."
+                ),
+                "interpretability_note": (
+                    "Dupire local vol is implied by the calibrated vanilla "
+                    "surface; it is a surface model rather than a variance-factor "
+                    "model."
+                ),
+                "smoothness_extrapolation_note": (
+                    "Numerics depend on the eSSVI projection, local-vol "
+                    "regularity, boundaries, and grid settings."
+                ),
+                "dynamic_plausibility_note": (
+                    "Local volatility matches vanilla marginals under its surface "
+                    "assumptions but does not model independent variance risk."
+                ),
+            },
         ]
     )
 
@@ -305,16 +673,20 @@ def run_heston_vs_local_vol_comparison(
     heston_backend: HestonBackend | None = None,
     heston_quad_cfg: QuadratureConfig | None = None,
     essvi_cfg: ESSVICalibrationConfig | None = None,
+    essvi_projection_cfg: ESSVIProjectionConfig | None = None,
     sqrt_weights: FloatArray | None = None,
+    run_direct_local_vol_pde: bool = True,
+    local_vol_pde_max_quotes: int = 9,
+    local_vol_pde_Nx: int = 81,
+    local_vol_pde_Nt: int = 121,
+    local_vol_pde_solver_cfg: dict[str, Any] | None = None,
 ) -> HestonModelComparisonDiagnostics:
-    """Compare Heston against the repo-native eSSVI/local-vol-facing path.
+    """Compare Heston against eSSVI and direct local-vol PDE diagnostics.
 
-    The local-vol side uses eSSVI calibration and nodal implied-price repricing.
-    It does not run a Dupire PDE repricer.
-
-    REVIEW: This is a vanilla-surface comparison proxy. Direct local-vol PDE
-    repricing can be materially more expensive and should be audited separately
-    when the capstone target requires it.
+    The eSSVI proxy row reprices the calibrated implied surface directly. When
+    ``run_direct_local_vol_pde`` is true, the diagnostic also projects eSSVI
+    nodes into a Dupire-oriented surface and reprices a small deterministic
+    validation grid with the local-vol PDE pricer.
     """
     heston_params, heston_multistart = _resolved_fit(heston_fit)
     resolved_backend = (
@@ -346,32 +718,85 @@ def run_heston_vs_local_vol_comparison(
     local_prices = _price_essvi_quotes(quotes, resolved_local_fit)
     local_iv = _implied_vols_from_prices(quotes, local_prices)
 
-    fit_errors = pd.concat(
-        [
-            _fit_error_table(
-                quotes=quotes,
-                model_name=_HESTON_MODEL_NAME,
-                model_prices=heston_prices,
-                model_iv=heston_iv,
-                held_out_mask=mask,
-                mask_provided=mask_provided,
-            ),
-            _fit_error_table(
-                quotes=quotes,
-                model_name=_LOCAL_VOL_MODEL_NAME,
-                model_prices=local_prices,
-                model_iv=local_iv,
-                held_out_mask=mask,
-                mask_provided=mask_provided,
-            ),
-        ],
-        ignore_index=True,
-    )
-    fit_errors.attrs["notes"] = [
-        _LOCAL_VOL_PROXY_REVIEW_NOTE,
-        "REVIEW: Moneyness buckets use abs(log_moneyness) <= 0.03 for ATM, "
-        "log_moneyness < -0.03 for downside wing/skew, and > 0.03 for upside wing.",
+    fit_error_parts = [
+        _fit_error_table(
+            quotes=quotes,
+            model_name=_HESTON_MODEL_NAME,
+            model_prices=heston_prices,
+            model_iv=heston_iv,
+            held_out_mask=mask,
+            mask_provided=mask_provided,
+        ),
+        _fit_error_table(
+            quotes=quotes,
+            model_name=_LOCAL_VOL_MODEL_NAME,
+            model_prices=local_prices,
+            model_iv=local_iv,
+            held_out_mask=mask,
+            mask_provided=mask_provided,
+        ),
     ]
+
+    direct_local_vol_pde = pd.DataFrame()
+    direct_meta: dict[str, Any] = {
+        "direct_local_vol_pde_repricing": False,
+        "direct_local_vol_pde_quote_count": 0,
+        "direct_local_vol_pde_success_count": 0,
+    }
+    if run_direct_local_vol_pde:
+        direct_local_vol_pde, direct_meta = _direct_local_vol_pde_table(
+            quotes=quotes,
+            fit=resolved_local_fit,
+            heston_prices=heston_prices,
+            heston_iv=heston_iv,
+            held_out_mask=mask,
+            mask_provided=mask_provided,
+            max_quotes=int(local_vol_pde_max_quotes),
+            Nx=int(local_vol_pde_Nx),
+            Nt=int(local_vol_pde_Nt),
+            solver_cfg=local_vol_pde_solver_cfg,
+            projection_cfg=essvi_projection_cfg,
+        )
+        fit_error_parts.append(_direct_pde_fit_errors(direct_local_vol_pde))
+
+    fit_errors = pd.concat(fit_error_parts, ignore_index=True)
+    fit_errors.attrs["notes"] = [
+        _LOCAL_VOL_PROXY_NOTE,
+        _MONEYNESS_BUCKET_NOTE,
+    ]
+
+    direct_local_vol_pde_summary = pd.DataFrame(
+        [
+            {
+                "model": _DIRECT_LOCAL_VOL_MODEL_NAME,
+                "n_quotes": int(direct_meta["direct_local_vol_pde_quote_count"]),
+                "n_success": int(direct_meta["direct_local_vol_pde_success_count"]),
+                "Nx": int(local_vol_pde_Nx),
+                "Nt": int(local_vol_pde_Nt),
+                "surface_source": str(
+                    direct_meta.get("direct_local_vol_pde_surface_source", "not_run")
+                ),
+                "mean_abs_price_residual": (
+                    float(
+                        direct_local_vol_pde["local_vol_pde_price_residual"]
+                        .abs()
+                        .mean()
+                    )
+                    if not direct_local_vol_pde.empty
+                    else np.nan
+                ),
+                "mean_abs_iv_residual_bps": (
+                    float(
+                        direct_local_vol_pde["local_vol_pde_iv_residual_bps"]
+                        .abs()
+                        .mean()
+                    )
+                    if not direct_local_vol_pde.empty
+                    else np.nan
+                ),
+            }
+        ]
+    )
 
     error_summary = _error_summary(fit_errors)
     tradeoff_summary = _tradeoff_summary()
@@ -385,16 +810,19 @@ def run_heston_vs_local_vol_comparison(
     )
     held_out_quote_count = int(np.count_nonzero(mask)) if mask_provided else 0
 
+    models = [_HESTON_MODEL_NAME, _LOCAL_VOL_MODEL_NAME]
+    if bool(direct_meta["direct_local_vol_pde_repricing"]):
+        models.append(_DIRECT_LOCAL_VOL_MODEL_NAME)
+
     notes = [
-        _LOCAL_VOL_PROXY_REVIEW_NOTE,
-        "REVIEW: Moneyness bucket thresholds are simple capstone diagnostics, "
-        "not universal smile-region definitions.",
-        "REVIEW: Comparison conclusions depend on the target quotes, fit "
-        "partition, and chosen local-vol proxy.",
+        _LOCAL_VOL_PROXY_NOTE,
+        _MONEYNESS_BUCKET_NOTE,
+        "LIMITATION: Comparison conclusions depend on the target quotes, fit "
+        "partition, eSSVI projection, local-vol PDE grid, and boundary policy.",
     ]
     meta: dict[str, Any] = {
         "diagnostic": "heston_vs_local_vol_comparison",
-        "models": [_HESTON_MODEL_NAME, _LOCAL_VOL_MODEL_NAME],
+        "models": models,
         "quote_count": int(quotes.n_quotes),
         "train_quote_count": train_quote_count,
         "held_out_quote_count": held_out_quote_count,
@@ -403,9 +831,13 @@ def run_heston_vs_local_vol_comparison(
         "held_out_mask_provided": mask_provided,
         "sample_labels": ["train", "held_out"] if mask_provided else ["fit"],
         "comparison_target": "same HestonQuoteSet quotes repriced by both models",
+        "comparison_fixture_label": (
+            None
+            if quotes.metadata is None
+            else quotes.metadata.get("fixture_label", None)
+        ),
         "local_vol_proxy_kind": "essvi_nodal_implied_surface",
         "local_vol_proxy": "ESSVINodalSurface repricing from calibrate_essvi",
-        "direct_local_vol_pde_repricing": False,
         "local_vol_fit_source": "computed" if local_vol_fit is None else "provided",
         "heston_backend_config": backend_config_meta(
             backend=resolved_backend,
@@ -417,6 +849,7 @@ def run_heston_vs_local_vol_comparison(
         "essvi_cost": float(resolved_local_fit.diag.cost),
         "notes": notes,
     }
+    meta.update(direct_meta)
     arrays: dict[str, Any] = {
         "heston_params": heston_params.as_array(),
         "heston_model_price": heston_prices,
@@ -425,6 +858,16 @@ def run_heston_vs_local_vol_comparison(
         "local_vol_model_iv": local_iv,
         "market_iv": _market_iv(quotes),
     }
+    if not direct_local_vol_pde.empty:
+        arrays["direct_local_vol_pde_quote_index"] = direct_local_vol_pde[
+            "quote_index"
+        ].to_numpy(dtype=np.int64)
+        arrays["direct_local_vol_pde_price"] = direct_local_vol_pde[
+            "local_vol_pde_price"
+        ].to_numpy(dtype=np.float64)
+        arrays["direct_local_vol_pde_iv"] = direct_local_vol_pde[
+            "local_vol_pde_iv"
+        ].to_numpy(dtype=np.float64)
 
     return HestonModelComparisonDiagnostics(
         meta=meta,
@@ -433,6 +876,8 @@ def run_heston_vs_local_vol_comparison(
             "error_summary": error_summary,
             "tradeoff_summary": tradeoff_summary,
             "held_out_comparison": held_out_comparison,
+            "direct_local_vol_pde": direct_local_vol_pde,
+            "direct_local_vol_pde_summary": direct_local_vol_pde_summary,
         },
         arrays=arrays,
     )

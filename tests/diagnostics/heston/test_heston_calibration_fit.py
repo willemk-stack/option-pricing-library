@@ -11,6 +11,7 @@ from option_pricing.models.heston.calibration.heston_types import (
     HestonCalibrationRun,
     HestonMultistartResult,
 )
+from option_pricing.models.heston.fourier import HestonIntegralWarning
 from option_pricing.models.heston.params import HestonParams
 from option_pricing.numerics.quadrature import QuadratureConfig
 
@@ -101,6 +102,9 @@ def test_heston_calibration_fit_diagnostics_tables_and_exports() -> None:
         "smile_fit",
         "iv_residual_grid",
         "parameter_recovery",
+        "constraint_diagnostics",
+        "quote_policy",
+        "quote_policy_summary",
         "multistart_runs",
         "held_out_errors",
         "objective_slices",
@@ -130,6 +134,11 @@ def test_heston_calibration_fit_diagnostics_tables_and_exports() -> None:
     )
     assert np.all(np.isfinite(objective_slices["cost"].to_numpy(dtype=np.float64)))
 
+    feller = report.tables["constraint_diagnostics"].set_index("constraint")
+    assert "feller" in feller.index
+    assert feller.loc["feller", "policy"] == "reported_not_hard_enforced"
+    assert "feller_margin" in report.meta
+
 
 def test_heston_calibration_fit_without_truth_or_heldout_is_explicit() -> None:
     quotes = _quotes()
@@ -146,3 +155,46 @@ def test_heston_calibration_fit_without_truth_or_heldout_is_explicit() -> None:
     assert "true" not in recovery.columns
     assert report.tables["held_out_errors"].empty
     assert not bool(report.meta["held_out_mask_provided"])
+
+
+def test_heston_calibration_fit_reports_quote_warning_policy() -> None:
+    quotes = _quotes()
+    quote_diagnostics = {
+        "quote_index": np.array([0, 1, 2, 3], dtype=np.int64),
+        "warning_flags": np.array(
+            [
+                int(HestonIntegralWarning.NONFINITE_TOTAL),
+                int(HestonIntegralWarning.PROBABILITY_OUT_OF_RANGE),
+                int(HestonIntegralWarning.LARGE_TAIL_FRACTION),
+                0,
+            ],
+            dtype=np.uint32,
+        ),
+        "persistent_backend_disagreement": np.array(
+            [False, False, False, True],
+            dtype=np.bool_,
+        ),
+    }
+
+    report = run_heston_calibration_fit_diagnostics(
+        quotes=quotes,
+        fit=_true_params(),
+        quad_cfg=_quad_cfg(),
+        objective_type="vega_scaled_price",
+        objective_slice_grid_size=2,
+        quote_diagnostics=quote_diagnostics,
+        fit_used_filtered_quotes=True,
+    )
+
+    policy = report.tables["quote_policy"].set_index("quote_index")
+    assert policy.loc[0, "calibration_action"] == "block"
+    assert policy.loc[1, "calibration_action"] == "quarantine"
+    assert policy.loc[2, "calibration_action"] == "review"
+    assert policy.loc[3, "calibration_action"] == "quarantine"
+    assert bool(policy.loc[0, "fit_used_quote"]) is False
+    assert bool(policy.loc[2, "fit_used_quote"]) is True
+
+    assert report.meta["blocked_quote_count"] == 1
+    assert report.meta["quarantined_quote_count"] == 2
+    assert report.meta["review_quote_count"] == 1
+    assert report.meta["quote_filtering_policy"] == "filtered_blocked_and_quarantined"

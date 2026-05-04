@@ -22,13 +22,13 @@ def _true_params() -> HestonParams:
 
 
 def _quad_cfg() -> QuadratureConfig:
-    # REVIEW: Recovery tests use the same modest fixed-rule quadrature for
+    # NOTE: Recovery tests use the same modest fixed-rule quadrature for
     # synthetic generation and calibration to keep the suite fast and focused.
     return QuadratureConfig(u_max=50.0, n_panels=6, nodes_per_panel=6)
 
 
 def _synthetic_quotes(*, noise_vol_bps: float = 0.0) -> HestonQuoteSet:
-    # REVIEW: The compact 3x5 surface is broad enough to exercise skew and term
+    # NOTE: The compact 3x5 surface is broad enough to exercise skew and term
     # structure without turning routine unit tests into a benchmark.
     return build_synthetic_heston_quote_set(
         market=None,
@@ -141,7 +141,7 @@ def test_clean_synthetic_surface_recovers_heston_parameters_and_fit_quality() ->
     assert float(np.max(np.abs(price_residual))) < 1.0e-8
     assert float(np.sqrt(np.mean(price_residual * price_residual))) < 1.0e-9
 
-    # REVIEW: Exact parameter recovery can be fragile under weak Heston
+    # NOTE: Exact parameter recovery can be fragile under weak Heston
     # identifiability, so these tolerances are intentionally looser than this
     # deterministic clean surface currently achieves.
     tolerances = np.array([5.0e-2, 2.0e-3, 2.0e-2, 2.0e-2, 2.0e-3])
@@ -151,7 +151,7 @@ def test_clean_synthetic_surface_recovers_heston_parameters_and_fit_quality() ->
 
 
 def test_noisy_synthetic_surface_prioritizes_fit_stability_over_exact_params() -> None:
-    # REVIEW: Two vol basis points is a small deterministic quote perturbation
+    # NOTE: Two vol basis points is a small deterministic quote perturbation
     # for a stability smoke test, not a universal market-data noise model.
     quotes = _synthetic_quotes(noise_vol_bps=2.0)
     bounds = HestonCalibrationBounds()
@@ -176,7 +176,7 @@ def test_noisy_synthetic_surface_prioritizes_fit_stability_over_exact_params() -
     _assert_inside_bounds(result.best_params, bounds)
     assert result.best_run.cost < default_cost * 1.0e-2
 
-    # REVIEW: With noisy quotes, repricing/IV error and bounded stability are
+    # NOTE: With noisy quotes, repricing/IV error and bounded stability are
     # the primary assertions; exact true-parameter recovery is deliberately not
     # required.
     iv_residual_bps = _model_iv_residual_bps(quotes, result.best_params)

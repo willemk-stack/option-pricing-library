@@ -11,7 +11,7 @@ that means:
 - least-squares calibration from vanilla quote sets;
 - notebook-friendly diagnostics for pricing stability, calibration fit, Monte
     Carlo convergence, and model comparison;
-- a comparison layer against the repo-native eSSVI local-vol-facing path.
+- a comparison layer against eSSVI plus a direct local-vol PDE validation grid.
 
 Compared with Black-Scholes, Heston introduces mean reversion, long-run
 variance, vol-of-vol, and spot/variance correlation. Compared with the
@@ -57,8 +57,9 @@ Use the code names `vbar`, `eta`, and `v` when calling the library. `theta`,
 - `rho in [-1, 1]`
 
 The class does not enforce the Feller condition. Calibration is therefore
-allowed to explore outside that region, but diagnostics should tell you when a
-fitted point is numerically or economically uncomfortable.
+allowed to explore outside that region. Fit diagnostics report the Feller value,
+margin, and status by default, and calibration regularization can add an
+optional soft Feller penalty without hard-blocking violations.
 
 For routine calibration, use `HestonCalibrationBounds` to keep the optimizer in
 a practical box. Those bounds are optimizer safeguards, not a proof of
@@ -86,11 +87,14 @@ production-oriented path for ordinary pricing and calibration because it is
 deterministic and vectorized across strike slices. The `quad` backend is still
 available as an adaptive scalar cross-check.
 
-Analytic parameter-Jacobian helpers currently support only
-`backend="gauss_legendre"` and return columns in the order
+Analytic parameter-Jacobian helpers currently support only the guarded fixed
+Gauss-Legendre production domain: `backend="gauss_legendre"`, nonzero fixed-rule
+quadrature nodes, `eta >= HESTON_ANALYTIC_JAC_ETA_MIN` (`1e-6`), and parameters
+inside the documented calibration bounds. They return columns in the order
 `[kappa, vbar, eta, rho, v]`. Scalar strikes return Jacobian shape `(5,)`;
 array-valued strikes return `strike.shape + (5,)`. Ordinary price-only helpers
-continue to support both `gauss_legendre` and `quad`.
+continue to support both `gauss_legendre` and `quad`, including the
+deterministic-variance pricing limit near `eta=0`.
 
 ```python
 import numpy as np
@@ -167,16 +171,16 @@ policy on this branch is:
 - quality tiers are `fast`, `balanced`, `robust`, and `diagnostics`.
 
 Use `balanced` for ordinary user-facing pricing, `robust` for final calibration
-runs and published evidence, and `diagnostics` when warnings or backend
-disagreement need investigation. The low-level recommender is
+tables and plots, and at least one `diagnostics` rerun for headline fitted
+parameters or warning review. Lighter settings are for quick interactive
+exploration only. The low-level recommender is
 `recommend_heston_quadrature_config(...)` in `option_pricing.models.heston`.
 
-At the user level, the main red flags are the same ones surfaced by the
-diagnostics layer: non-finite probabilities, probabilities materially outside
-`[0, 1]`, large tail contribution, excessive cancellation, or persistent
-disagreement between fixed-rule and `quad` runs. If those appear, rerun with a
-denser rule and inspect the [Heston diagnostics guide](heston_diagnostics.md)
-before treating the price as stable.
+At the user level, the hard red flags are non-finite integrals, non-finite
+probabilities, probabilities materially outside `[0, 1]`, or persistent backend
+disagreement after robust/diagnostics reruns. Tail, cancellation, oscillation,
+and near-origin warnings require review. Calibration summaries report whether
+quotes were blocked, quarantined, reviewed, or retained.
 
 ## Monte Carlo
 
@@ -303,6 +307,8 @@ The main report families are:
 - synthetic benchmark and Jacobian smoke coverage:
     `build_synthetic_heston_quote_set(...)` and
     `run_heston_calibration_benchmark_diagnostics(...)`;
+- deterministic model-comparison fixture:
+    `build_market_like_heston_quote_set(...)`;
 - model comparison: `run_heston_vs_local_vol_comparison(...)`.
 
 Use benchmark diagnostics as smoke, regression, or synthetic-recovery evidence.
@@ -315,20 +321,18 @@ The detailed notebook-oriented walkthrough is in the
 ## Heston versus local volatility / eSSVI comparison
 
 `run_heston_vs_local_vol_comparison(...)` compares one fitted Heston model
-against the repo-native eSSVI local-vol-facing path on the same
-`HestonQuoteSet` target. The report packages quote-level price and IV
-residuals, ATM and wing buckets, optional held-out splits, and a concise
+against eSSVI implied-surface repricing and a direct local-vol PDE repricing
+audit on the same `HestonQuoteSet` target. The final capstone target should use
+`build_market_like_heston_quote_set(...)`, which returns a deterministic
+market-like synthetic fixture rather than market data or Heston-generated
+recovery quotes. The report packages quote-level price and IV residuals, direct
+PDE rows, ATM and wing buckets, optional held-out splits, and a concise
 trade-off summary.
 
 [Open the comparison notebook](https://github.com/willemk-stack/option-pricing-library/blob/Feature/heston/demos/13_heston_calibration_vs_localvol.ipynb){ .md-button .md-button--primary }
 
 The deeper written discussion is in the
 [comparison note](../notes/heston_vs_local_vol.md).
-
-REVIEW: This comparison uses the repo-native eSSVI nodal implied surface as a
-local-vol-facing proxy. It does not run direct Dupire/PDE local-vol repricing.
-Direct PDE repricing should be audited separately if the capstone conclusion
-depends on pathwise local-vol pricing.
 
 Read the trade-off honestly:
 
@@ -338,6 +342,9 @@ Read the trade-off honestly:
 - eSSVI/local-vol-facing tools are the flexible vanilla-fit side: they can
     often match quoted smile nodes more closely, but they do not tell the same
     stochastic-variance story.
+- Direct local-vol PDE rows audit a small validation grid. They are useful
+    numerical evidence, not a global proof of local-vol accuracy across every
+    boundary, extrapolation, and grid regime.
 
 ## Limitations and when to distrust results
 
@@ -349,8 +356,8 @@ Read the trade-off honestly:
     investigated, not waved away.
 - Monte Carlo results still contain discretization error and sampling error,
     even when the confidence interval looks tight.
-- The current local-vol comparison is proxy-based unless direct Dupire/PDE
-    repricing is added and audited.
+- The direct local-vol PDE comparison is intentionally small; distinguish model
+    residuals from PDE grid, boundary, and projection error.
 - Nothing in this guide should be read as a production-trading claim.
 
 ## Minimal workflow checklist
@@ -360,6 +367,6 @@ Read the trade-off honestly:
 3. Build a `HestonQuoteSet` and run `calibrate_heston_multistart(...)`.
 4. Run `run_heston_calibration_fit_diagnostics(...)` on the fitted result.
 5. Review held-out errors separately when a held-out mask exists.
-6. Compare against the eSSVI/local-vol-facing proxy with
+6. Compare against eSSVI and the direct local-vol PDE validation grid with
      `run_heston_vs_local_vol_comparison(...)`.
 7. Re-read the limitations before drawing capstone conclusions.

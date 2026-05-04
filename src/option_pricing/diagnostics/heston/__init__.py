@@ -8,6 +8,10 @@ from .calibration_fit import (
     run_heston_calibration_diagnostics,
     run_heston_calibration_fit_diagnostics,
 )
+from .fixtures import (
+    MARKET_LIKE_SYNTHETIC_FIXTURE_LABEL,
+    build_market_like_heston_quote_set,
+)
 from .model_comparison import run_heston_vs_local_vol_comparison
 from .models import (
     HestonBackendComparisonDiagnostics,
@@ -45,6 +49,7 @@ from .pricing import (
     probability_slice_with_diagnostics,
     run_heston_pricing_diagnostics,
 )
+from .quote_policy import heston_calibration_quote_policy_tables
 from .report import run_heston_slice_diagnostics
 
 __all__ = [
@@ -57,8 +62,10 @@ __all__ = [
     "HestonPriceSliceDiagnostics",
     "HestonProbabilitySliceDiagnostics",
     "HestonMCSweepConfig",
+    "MARKET_LIKE_SYNTHETIC_FIXTURE_LABEL",
     "compare_backend_slice",
     "compare_heston_mc_schemes",
+    "build_market_like_heston_quote_set",
     "build_synthetic_heston_quote_set",
     "plot_heston_calibration_iv_residuals",
     "plot_heston_calibration_objective_slice",
@@ -73,6 +80,7 @@ __all__ = [
     "plot_heston_mc_scheme_comparison",
     "price_slice_with_diagnostics",
     "probability_slice_with_diagnostics",
+    "heston_calibration_quote_policy_tables",
     "run_heston_calibration_benchmark_diagnostics",
     "run_heston_calibration_diagnostics",
     "run_heston_calibration_fit_diagnostics",

@@ -31,12 +31,12 @@ Build CSV and JSON artifacts on demand:
 python scripts/build_heston_calibration_benchmark_artifacts.py
 ```
 
-REVIEW: The default synthetic quote grid and quadrature settings are smoke
+NOTE: The default synthetic quote grid and quadrature settings are smoke
 benchmark choices, not a production calibration benchmark.
 
-REVIEW: Timings are environment-dependent. Treat speedups as directional for
+NOTE: Timings are environment-dependent. Treat speedups as directional for
 the configured scenario, not universal guarantees.
 
-REVIEW: This diagnostic mirrors the paper's analytic-vs-numerical-gradient
+NOTE: This diagnostic mirrors the paper's analytic-vs-numerical-gradient
 motivation, but it uses this repo's current vega-scaled price residual and
 optimizer defaults unless those inputs are explicitly changed.

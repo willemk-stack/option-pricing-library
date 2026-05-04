@@ -11,6 +11,7 @@ import numpy as np
 from ...._scipy_compat import OptimizeResult, least_squares
 from ....exceptions import NoConvergenceError
 from ....typing import FloatArray
+from ..charfunc import HESTON_ANALYTIC_JAC_ETA_MIN
 from ..fourier import HestonBackend, QuadratureConfig
 from ..params import HestonParams
 from .bounds import HestonCalibrationBounds, transform_to_bounded_constrained
@@ -32,7 +33,7 @@ def _dedupe_multistart_seeds(
     *,
     decimals: int = 10,
 ) -> tuple[HestonParams, ...]:
-    # REVIEW: Deduplicate by rounded constrained parameter values so repeated
+    # NOTE: Deduplicate by rounded constrained parameter values so repeated
     # starts do not waste optimizer budget or skew initialization diagnostics.
     seen: set[tuple[float, ...]] = set()
     out: list[HestonParams] = []
@@ -56,7 +57,7 @@ def _build_multistart_seeds(
     max_seeds: int | None,
     include_default_seed: bool,
 ) -> tuple[HestonParams, ...]:
-    # REVIEW: Reject nonpositive limits before seed construction so explicit
+    # NOTE: Reject nonpositive limits before seed construction so explicit
     # and generated seed paths expose the same public API validation.
     if max_seeds is not None and max_seeds <= 0:
         raise ValueError("max_seeds must be positive or None.")
@@ -75,14 +76,14 @@ def _build_multistart_seeds(
     else:
         generated = list(seeds)
 
-    # REVIEW: Prepend x0_params so callers migrating from single-start
+    # NOTE: Prepend x0_params so callers migrating from single-start
     # calibration keep their explicit initial guess as the first attempted run.
     if x0_params is not None:
         generated.insert(0, x0_params)
 
     deduped = _dedupe_multistart_seeds(generated)
 
-    # REVIEW: Apply max_seeds after x0_params insertion and deduplication so the
+    # NOTE: Apply max_seeds after x0_params insertion and deduplication so the
     # final optimizer-run count is bounded while preserving caller priority.
     if max_seeds is not None:
         deduped = deduped[:max_seeds]
@@ -109,9 +110,71 @@ def _optional_int(value: SupportsInt | SupportsIndex | None) -> int | None:
 
 
 def _run_sort_key(run: HestonCalibrationRun) -> tuple[int, float, int]:
-    # REVIEW: Sort successful runs before failed runs, then by cost and original
+    # NOTE: Sort successful runs before failed runs, then by cost and original
     # seed order, so best_run is deterministic and failures remain inspectable.
     return (0 if run.success else 1, run.cost, run.seed_index)
+
+
+def _analytic_jacobian_policy_metadata(
+    *,
+    use_analytic_jac: bool,
+    backend: HestonBackend,
+    parameter_transform: HestonParameterTransform,
+) -> dict[str, object]:
+    mode = "analytic" if use_analytic_jac else "finite_difference"
+    return {
+        "heston_jacobian_mode": mode,
+        "heston_analytic_jacobian_requested": bool(use_analytic_jac),
+        "heston_analytic_jacobian_backend": backend,
+        "heston_analytic_jacobian_eta_min": float(HESTON_ANALYTIC_JAC_ETA_MIN),
+        "heston_analytic_jacobian_supported_domain": (
+            "fixed Gauss-Legendre backend, nonzero fixed-rule quadrature nodes, "
+            "eta at or above the analytic-Jacobian floor, and documented calibration "
+            "bounds"
+        ),
+        "heston_parameter_transform": parameter_transform,
+    }
+
+
+def _validate_analytic_jacobian_calibration_request(
+    *,
+    x0_params: HestonParams,
+    backend: HestonBackend,
+    bounds: HestonCalibrationBounds | None,
+) -> HestonCalibrationBounds:
+    """Validate the supported analytic-Jacobian calibration domain."""
+    if backend != "gauss_legendre":
+        raise NotImplementedError(
+            "Analytic Heston calibration Jacobians require backend='gauss_legendre'. "
+            "Use use_analytic_jac=False for finite-difference calibration on other "
+            "backends."
+        )
+
+    resolved_bounds = HestonCalibrationBounds() if bounds is None else bounds
+    resolved_bounds.require_analytic_jacobian_compatible()
+
+    if x0_params.eta < HESTON_ANALYTIC_JAC_ETA_MIN:
+        raise ValueError(
+            "Analytic Heston calibration Jacobians require initial eta >= "
+            f"{HESTON_ANALYTIC_JAC_ETA_MIN:g}. Price-only deterministic-limit "
+            "pricing near eta=0 is separate; use finite-difference calibration "
+            "or choose an initial eta above the analytic-Jacobian floor."
+        )
+
+    values = x0_params.as_array()
+    lower = resolved_bounds.lower_array()
+    upper = resolved_bounds.upper_array()
+    outside = (values < lower) | (values > upper)
+    if np.any(outside):
+        idx = int(np.flatnonzero(outside)[0])
+        name = ("kappa", "vbar", "eta", "rho", "v")[idx]
+        raise ValueError(
+            "Analytic Heston calibration Jacobians are default-enabled only for "
+            f"documented calibration bounds. Initial {name}={values[idx]} is outside "
+            f"[{lower[idx]}, {upper[idx]}]."
+        )
+
+    return resolved_bounds
 
 
 def _all_failed_message(runs: tuple[HestonCalibrationRun, ...]) -> str:
@@ -127,7 +190,7 @@ def _all_failed_message(runs: tuple[HestonCalibrationRun, ...]) -> str:
     )
 
 
-# REVIEW: Use overloads for return_result so the backward-compatible fitted
+# NOTE: Use overloads for return_result so the backward-compatible fitted
 # parameter return and the diagnostics tuple return stay type-checkable without
 # casts at call sites.
 @overload
@@ -244,7 +307,16 @@ def calibrate_heston(
             quotes,
             bounds=bounds if bounds is not None else HestonCalibrationBounds(),
         )
-    # REVIEW: Keep the default optimizer at "trf" because the default
+    analytic_bounds = (
+        _validate_analytic_jacobian_calibration_request(
+            x0_params=x0_params,
+            backend=backend,
+            bounds=bounds,
+        )
+        if use_analytic_jac
+        else None
+    )
+    # NOTE: Keep the default optimizer at "trf" because the default
     # loss="soft_l1" is invalid for SciPy's method="lm"; explicit LM is still
     # allowed with loss="linear".
     if method == "lm" and loss != "linear":
@@ -270,7 +342,11 @@ def calibrate_heston(
         return obj.jac(np.asarray(u, dtype=np.float64))
 
     if parameter_transform == "bounded":
-        resolved_bounds = bounds if bounds is not None else HestonCalibrationBounds()
+        resolved_bounds = (
+            analytic_bounds
+            if analytic_bounds is not None
+            else (bounds if bounds is not None else HestonCalibrationBounds())
+        )
         x0 = x0_params.transform_to_bounded_unconstrained(resolved_bounds)
     else:
         resolved_bounds = None
@@ -327,6 +403,14 @@ def calibrate_heston(
     if not res.success or not np.all(np.isfinite(res.x)):
         raise NoConvergenceError(f"Heston calibration failed: {res.message}")
 
+    res.update(
+        _analytic_jacobian_policy_metadata(
+            use_analytic_jac=use_analytic_jac,
+            backend=backend,
+            parameter_transform=parameter_transform,
+        )
+    )
+
     raw_fit = np.asarray(res.x, dtype=np.float64)
     if parameter_transform == "bounded":
         assert resolved_bounds is not None
@@ -364,7 +448,7 @@ def calibrate_heston_multistart(
     gtol: float | None = None,
 ) -> HestonMultistartResult:
     """Run Heston calibration from multiple deterministic starting points."""
-    # REVIEW: Multi-start defaults to the bounded transform because seed-grid
+    # NOTE: Multi-start defaults to the bounded transform because seed-grid
     # diagnostics are most useful when every optimizer run stays inside the
     # same practical calibration box; calibrate_heston keeps its old default.
     resolved_seeds = _build_multistart_seeds(
@@ -419,7 +503,7 @@ def calibrate_heston_multistart(
                 raw_x=np.asarray(scipy_result.x, dtype=np.float64),
             )
         except Exception as exc:
-            # REVIEW: Do not raise on individual seed failures; retain failed
+            # NOTE: Do not raise on individual seed failures; retain failed
             # runs because initialization sensitivity is a calibration diagnostic.
             run = HestonCalibrationRun(
                 seed_index=seed_index,
@@ -441,7 +525,7 @@ def calibrate_heston_multistart(
     successful_runs = tuple(run for run in sorted_runs if run.success)
 
     if not successful_runs:
-        # REVIEW: Always raise when all seeds fail because a result object
+        # NOTE: Always raise when all seeds fail because a result object
         # without a successful best_run would violate its own type contract.
         raise NoConvergenceError(_all_failed_message(sorted_runs))
 
@@ -458,4 +542,6 @@ def calibrate_heston_multistart(
         quote_count=quotes.n_quotes,
         success_count=len(successful_runs),
         failure_count=len(sorted_runs) - len(successful_runs),
+        jacobian_mode="analytic" if use_analytic_jac else "finite_difference",
+        analytic_jacobian_eta_min=HESTON_ANALYTIC_JAC_ETA_MIN,
     )

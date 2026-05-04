@@ -138,6 +138,19 @@ because one heuristic fired while still remaining stable across backends and
 denser quadrature settings. That is why the notebook-facing diagnostics keep the
 raw warning facts separate from the higher-level strike suspiciousness policy.
 
+For calibration input, the warning-to-action policy is:
+
+- `block`: non-finite total integral or non-finite probability;
+- `quarantine`: probability materially outside `[0, 1]` or persistent backend
+  disagreement after robust/diagnostics rerun;
+- `review`: high tail fraction, cancellation warnings, isolated oscillation
+  spikes, near-origin underresolution, too many bad panels, or large quadrature
+  error estimates;
+- `ok`: no warning flags.
+
+Calibration summaries should report blocked, quarantined, and reviewed quote
+counts so filtering decisions are visible.
+
 ## Summary metrics
 
 Two summary metrics are stored alongside `warning_flags` for fixed-rule

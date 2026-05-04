@@ -45,28 +45,28 @@ class _CalibrationRunResult:
 
 
 def _default_true_params() -> HestonParams:
-    # REVIEW: Smoke-benchmark synthetic truth; not a production calibration scenario.
+    # NOTE: Smoke-benchmark synthetic truth; not a production calibration scenario.
     return HestonParams(kappa=1.5, vbar=0.04, eta=0.45, rho=-0.55, v=0.045)
 
 
 def _default_seed_params() -> HestonParams:
-    # REVIEW: Smoke-benchmark seed chosen to require optimization without stress testing.
+    # NOTE: Smoke-benchmark seed chosen to require optimization without stress testing.
     return HestonParams(kappa=1.1, vbar=0.035, eta=0.35, rho=-0.35, v=0.04)
 
 
 def _default_quad_cfg() -> QuadratureConfig:
-    # REVIEW: Smoke-benchmark quadrature keeps CI/runtime costs low; it is not a
+    # NOTE: Smoke-benchmark quadrature keeps CI/runtime costs low; it is not a
     # production accuracy policy.
     return QuadratureConfig(u_max=50.0, n_panels=6, nodes_per_panel=6)
 
 
 def _default_expiries() -> FloatArray:
-    # REVIEW: Synthetic quote grid is intentionally small for smoke diagnostics.
+    # NOTE: Synthetic quote grid is intentionally small for smoke diagnostics.
     return np.array([0.5, 1.0], dtype=np.float64)
 
 
 def _default_log_moneyness() -> FloatArray:
-    # REVIEW: Synthetic quote grid is intentionally small for smoke diagnostics.
+    # NOTE: Synthetic quote grid is intentionally small for smoke diagnostics.
     return np.array([-0.08, 0.0, 0.08], dtype=np.float64)
 
 
@@ -189,7 +189,7 @@ def build_synthetic_heston_quote_set(
             dtype=np.float64,
         )
         if noise_vol_bps > 0.0:
-            # REVIEW: Noise is applied in absolute Black-vol basis points and
+            # NOTE: Noise is applied in absolute Black-vol basis points and
             # repriced to keep quote prices arbitrage-compatible pointwise.
             iv_slice = np.maximum(
                 iv_slice
@@ -362,7 +362,7 @@ def _summary_table(runs: pd.DataFrame) -> pd.DataFrame:
             "finite-difference baseline"
             if mode == "finite_difference"
             else (
-                "REVIEW: Speedup ratios are smoke-benchmark measurements and "
+                "NOTE: Speedup ratios are smoke-benchmark measurements and "
                 "environment-dependent."
             )
         )
@@ -459,7 +459,7 @@ def run_heston_calibration_benchmark_diagnostics(
     once with ``HestonObjective.jac``. It captures optimizer diagnostics and
     packages them into notebook-facing tables without plotting objects.
 
-    REVIEW: Defaults define a smoke benchmark only. They intentionally exercise
+    LIMITATION: Defaults define a smoke benchmark only. They intentionally exercise
     analytic-vs-finite-difference wiring without claiming production speedups
     or paper-equivalent calibration coverage.
     """
@@ -586,10 +586,10 @@ def run_heston_calibration_benchmark_diagnostics(
         "seed_params": _params_to_dict(resolved_seed_params),
         "backend_config": backend_meta,
         "notes": [
-            "REVIEW: Synthetic quote grid and quadrature settings are smoke-benchmark choices.",
-            "REVIEW: Optimizer method/loss choices determine benchmark comparability.",
-            "REVIEW: Residuals use the repo's existing vega-scaled price objective.",
-            "REVIEW: Timing and speedup ratios are environment-dependent.",
+            "NOTE: Synthetic quote grid and quadrature settings are smoke-benchmark choices.",
+            "NOTE: Optimizer method/loss choices determine benchmark comparability.",
+            "NOTE: Residuals use the repo's existing vega-scaled price objective.",
+            "NOTE: Timing and speedup ratios are environment-dependent.",
         ],
     }
     arrays = {

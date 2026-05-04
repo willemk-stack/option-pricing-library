@@ -11,6 +11,7 @@ from option_pricing.models.heston.fourier import (
     _compute_global_warning_flags,
     heston_probability_batch_with_diagnostics,
     heston_probability_with_diagnostics,
+    heston_warning_calibration_action,
     recommend_heston_quadrature_config,
 )
 from option_pricing.models.heston.params import HestonParams
@@ -52,6 +53,26 @@ def test_compute_global_warning_flags_probability_and_quad_error() -> None:
 
     assert int(flags[1]) & int(HestonIntegralWarning.NONFINITE_TOTAL)
     assert int(flags[1]) & int(HestonIntegralWarning.NONFINITE_PROBABILITY)
+
+
+def test_heston_warning_calibration_action_policy_mapping() -> None:
+    assert (
+        heston_warning_calibration_action(int(HestonIntegralWarning.NONFINITE_TOTAL))
+        == "block"
+    )
+    assert (
+        heston_warning_calibration_action(
+            int(HestonIntegralWarning.PROBABILITY_OUT_OF_RANGE)
+        )
+        == "quarantine"
+    )
+    assert (
+        heston_warning_calibration_action(
+            int(HestonIntegralWarning.LARGE_TAIL_FRACTION)
+        )
+        == "review"
+    )
+    assert heston_warning_calibration_action(0) == "ok"
 
 
 def test_compute_fixed_rule_panel_reason_marks_nonfinite_tail_and_spike() -> None:

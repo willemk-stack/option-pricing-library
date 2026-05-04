@@ -297,3 +297,50 @@ def test_call_and_put_param_jac_match_by_parity() -> None:
     )
 
     np.testing.assert_allclose(call_jac, put_jac, rtol=RTOL, atol=ATOL)
+
+
+def test_call_and_put_market_rate_sensitivities_are_not_param_jac_invariant() -> None:
+    tau = 0.75
+    strike = 100.0
+    dr = 1.0e-4
+
+    def call_price_at_rate(rate: float) -> float:
+        return float(
+            heston_price_call_from_ctx(
+                strike=strike,
+                tau=tau,
+                ctx=MarketData(
+                    spot=100.0,
+                    rate=float(rate),
+                    dividend_yield=0.01,
+                ).to_context(),
+                params=BASE_PARAMS,
+                backend="gauss_legendre",
+                quad_cfg=QUAD_CFG,
+            )
+        )
+
+    def put_price_at_rate(rate: float) -> float:
+        return float(
+            heston_price_put_from_ctx(
+                strike=strike,
+                tau=tau,
+                ctx=MarketData(
+                    spot=100.0,
+                    rate=float(rate),
+                    dividend_yield=0.01,
+                ).to_context(),
+                params=BASE_PARAMS,
+                backend="gauss_legendre",
+                quad_cfg=QUAD_CFG,
+            )
+        )
+
+    call_rate_fd = (call_price_at_rate(0.02 + dr) - call_price_at_rate(0.02 - dr)) / (
+        2.0 * dr
+    )
+    put_rate_fd = (put_price_at_rate(0.02 + dr) - put_price_at_rate(0.02 - dr)) / (
+        2.0 * dr
+    )
+
+    assert abs(call_rate_fd - put_rate_fd) > 1.0
