@@ -241,6 +241,8 @@ jobs:
           if-no-files-found: ignore
           path: |
             tests/visual/test-results/**
+            tests/visual/playwright-report/**
+            artifacts/pre_push/**
 
   stage-pages-artifact:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.outputs.docs_site_required == 'true'

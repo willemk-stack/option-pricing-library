@@ -103,9 +103,18 @@ extra_javascript:
   - javascripts/proof-path-lightbox.js
   - javascripts/vendor/tex-mml-svg.js
 
-# add custom tweaks from (docs/stylesheets/extra.css)
+# Load custom docs CSS by concern. Keep this order stable: tokens first,
+# shared typography/base rules next, Material overrides, components,
+# route/page-specific styles, API overflow guards, then responsive fixes.
 extra_css:
-  - stylesheets/extra.css
+  - stylesheets/tokens.css
+  - stylesheets/base.css
+  - stylesheets/mkdocs-overrides.css
+  - stylesheets/components.css
+  - stylesheets/homepage.css
+  - stylesheets/diagrams.css
+  - stylesheets/api-reference.css
+  - stylesheets/responsive.css
 
 nav:
   - Home: index.md

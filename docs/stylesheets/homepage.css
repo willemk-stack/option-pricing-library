@@ -1,0 +1,249 @@
+.homepage-hero {
+    margin: 0 auto 1.75rem;
+    max-width: 64rem;
+    padding: clamp(1.4rem, 2vw, 1.9rem);
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    background:
+        radial-gradient(circle at top right, rgba(20, 95, 163, 0.08), transparent 34%),
+        linear-gradient(180deg, rgba(247, 250, 253, 0.96), rgba(244, 248, 252, 0.92));
+    border: var(--docs-border-standard);
+    border-radius: var(--docs-radius-xl);
+    box-shadow: none;
+}
+
+.homepage-hero__title {
+    margin: 0;
+    max-width: 11ch;
+    font-size: clamp(2.25rem, 4vw, 3.3rem);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+}
+
+.homepage-page-title {
+    margin: 0 auto 0.4rem;
+    max-width: 64rem;
+}
+
+.homepage-hero__copy {
+    max-width: 54rem;
+    font-size: clamp(1.03rem, 1.5vw, 1.16rem);
+    line-height: 1.55;
+}
+
+.homepage-cta-row {
+    margin-top: 0.2rem;
+}
+
+.homepage-cta-row.cta-row--trio {
+    grid-template-columns: minmax(0, 1.15fr) repeat(2, minmax(0, 1fr));
+}
+
+.homepage-signature-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+    margin: 1rem 0 1.6rem;
+}
+
+.homepage-signature-figure {
+    margin: 0;
+    padding: 0.88rem 0.98rem 0.85rem;
+}
+
+.homepage-signature-figure img.diagram-img {
+    width: 100%;
+}
+
+.homepage-signature-figure figcaption {
+    max-width: 42rem;
+    margin: 0.78rem 0 0;
+    text-align: left;
+    line-height: 1.58;
+}
+
+.homepage-support-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0 1.5rem;
+    align-items: stretch;
+}
+
+.homepage-support-card {
+    margin: 0;
+    min-height: 100%;
+    padding: 0.5rem 0.56rem 0.62rem;
+    border-radius: var(--docs-radius-md);
+    border-color: var(--docs-divider);
+    background: var(--docs-card-bg);
+}
+
+.homepage-support-card img.diagram-img {
+    width: 100%;
+}
+
+.homepage-support-card figcaption {
+    margin-top: 0.55rem;
+    line-height: 1.52;
+    color: var(--docs-muted) !important;
+    opacity: 1 !important;
+}
+
+.homepage-route-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.72rem;
+}
+
+.homepage-proof-section {
+    margin: 0 0 2rem;
+    padding: 0.9rem;
+    border-radius: var(--docs-radius-xl);
+    border: var(--docs-border-standard);
+    background: var(--docs-card-bg-strong);
+    box-shadow: none;
+}
+
+.homepage-proof-section__header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    align-items: end;
+    justify-content: space-between;
+    margin-bottom: 0.85rem;
+}
+
+.homepage-section-kicker {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--docs-accent);
+}
+
+.homepage-proof-section__copy {
+    margin: 0;
+    max-width: 42rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: var(--docs-muted);
+}
+
+.homepage-proof-panel {
+    margin: 0;
+    padding: 0.6rem 0.7rem 0.8rem;
+    border-radius: var(--docs-radius-lg);
+    border-color: var(--docs-border);
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: none;
+}
+
+.homepage-proof-panel figcaption {
+    max-width: 38rem;
+    margin: 0.8rem auto 0;
+    text-align: center;
+    font-style: normal;
+    line-height: 1.55;
+    color: var(--docs-muted);
+}
+
+.homepage-snapshot-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    align-items: stretch;
+}
+
+.homepage-snapshot-card {
+    min-height: 14rem;
+    padding: 1.15rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    border: var(--docs-border-standard);
+    border-radius: var(--docs-radius-md);
+    background: var(--docs-card-bg);
+}
+
+.homepage-snapshot-card .snapshot-label {
+    margin-bottom: 0.2rem;
+}
+
+.homepage-snapshot-card .snapshot-copy {
+    min-height: 2.75rem;
+    line-height: 1.45;
+}
+
+.homepage-snapshot-card .snapshot-copy code {
+    font-size: 0.9em;
+    overflow-wrap: anywhere;
+}
+
+.homepage-snapshot-card .metric-pair,
+.homepage-snapshot-card .metric-line {
+    margin-top: 0;
+}
+
+.homepage-snapshot-card--transition .metric-pair,
+.homepage-snapshot-card--zero .metric-line {
+    margin-top: auto;
+}
+
+.homepage-snapshot-card--detail .metric-inline {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+}
+
+.homepage-snapshot-card--detail .metric-inline:first-of-type {
+    margin-top: auto;
+    padding-top: 0.45rem;
+    border-top: 1px solid var(--docs-divider);
+}
+[data-md-color-scheme="slate"] .homepage-hero {
+    background:
+        radial-gradient(circle at top right, rgba(154, 206, 255, 0.08), transparent 34%),
+        linear-gradient(180deg, rgba(12, 20, 34, 0.88), rgba(15, 25, 43, 0.9));
+    border-color: var(--docs-border);
+    box-shadow: none;
+}
+
+[data-md-color-scheme="slate"] .homepage-signature-figure {
+    background: linear-gradient(180deg, rgba(12, 20, 36, 0.92), rgba(14, 24, 42, 0.96));
+}
+
+[data-md-color-scheme="slate"] .homepage-support-card {
+    background: linear-gradient(180deg, rgba(11, 18, 31, 0.76), rgba(14, 24, 41, 0.82));
+    border-color: var(--docs-divider);
+}
+
+[data-md-color-scheme="slate"] .homepage-proof-section {
+    background: var(--docs-card-bg-strong);
+    border-color: var(--docs-border);
+    box-shadow: none;
+}
+
+[data-md-color-scheme="slate"] .homepage-section-kicker {
+    color: var(--docs-accent);
+}
+
+[data-md-color-scheme="slate"] .homepage-proof-section__copy,
+[data-md-color-scheme="slate"] .homepage-proof-panel figcaption {
+    color: #c1cade;
+}
+
+[data-md-color-scheme="slate"] .homepage-proof-panel {
+    background: rgba(11, 18, 31, 0.82);
+    border-color: var(--docs-border);
+}
+
+[data-md-color-scheme="slate"] .homepage-snapshot-card {
+    background: var(--docs-card-bg);
+    border-color: var(--docs-border);
+}
+
+[data-md-color-scheme="slate"] .homepage-snapshot-card--detail .metric-inline:first-of-type {
+    border-top-color: rgba(140, 201, 255, 0.12);
+}

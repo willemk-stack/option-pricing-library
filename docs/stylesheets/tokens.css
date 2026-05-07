@@ -1,0 +1,67 @@
+/* Slightly improve readability on wide screens */
+:root {
+    --md-primary-fg-color: #2f4f86;
+    --md-primary-fg-color--light: #4a6aa3;
+    --md-primary-fg-color--dark: #233a61;
+    --md-accent-fg-color: #145fa3;
+    /*
+     * Keep docs typography runner-stable by avoiding remote font downloads and
+     * using a repo-chosen local stack. Ubuntu is the visual-regression source
+     * of truth, so prefer fonts that are present on Linux first.
+     */
+    --md-text-font: "DejaVu Sans", "Liberation Sans", Arial, sans-serif;
+    --md-code-font: "DejaVu Sans Mono", "Liberation Mono", "Cascadia Mono", Consolas, monospace;
+    --docs-accent: #145fa3;
+    --docs-accent-soft: rgba(20, 95, 163, 0.05);
+    --docs-accent-border: rgba(20, 95, 163, 0.14);
+    --docs-border: rgba(15, 23, 42, 0.09);
+    --docs-divider: rgba(15, 23, 42, 0.08);
+    --docs-muted: #5a697d;
+    --docs-card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(245, 248, 252, 0.92));
+    --docs-card-bg-strong: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 253, 0.95));
+    --docs-intro-bg: linear-gradient(180deg, rgba(248, 250, 253, 0.98), rgba(242, 246, 251, 0.94));
+    --docs-code-bg: rgba(15, 23, 42, 0.045);
+    --docs-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+    --docs-shadow-soft: 0 8px 18px rgba(15, 23, 42, 0.045);
+    --docs-border-standard: 1px solid var(--docs-border);
+    --docs-radius-xl: 22px;
+    --docs-radius-lg: 18px;
+    --docs-radius-md: 14px;
+    --docs-radius-sm: 10px;
+    --docs-radius-pill: 999px;
+    --docs-transition-fast: 140ms ease;
+}
+[data-md-color-scheme="default"] .md-typeset .highlight .nv {
+    color: #666666;
+}
+
+/*
+ * Material's default syntax palette sits just under 4.5:1 on a few code-heavy
+ * pages. Nudge the shared token variables instead of styling individual pages.
+ */
+[data-md-color-scheme="default"] {
+    --md-code-hl-comment-color: #666666;
+    --md-code-hl-operator-color: #666666;
+    --md-code-hl-punctuation-color: #666666;
+    --md-code-hl-generic-color: #666666;
+    --md-code-hl-variable-color: #61656b;
+}
+
+[data-md-color-scheme="slate"] {
+    --docs-accent: #9aceff;
+    --docs-accent-soft: rgba(154, 206, 255, 0.08);
+    --docs-accent-border: rgba(154, 206, 255, 0.16);
+    --docs-border: rgba(255, 255, 255, 0.09);
+    --docs-divider: rgba(255, 255, 255, 0.08);
+    --docs-muted: #bac5d7;
+    --docs-card-bg: linear-gradient(180deg, rgba(11, 18, 31, 0.78), rgba(14, 24, 41, 0.84));
+    --docs-card-bg-strong: linear-gradient(180deg, rgba(12, 20, 36, 0.88), rgba(14, 24, 42, 0.92));
+    --docs-intro-bg: linear-gradient(180deg, rgba(12, 20, 34, 0.88), rgba(15, 25, 43, 0.9));
+    --docs-code-bg: rgba(255, 255, 255, 0.045);
+    --docs-shadow: 0 14px 28px rgba(0, 0, 0, 0.2);
+    --docs-shadow-soft: 0 10px 20px rgba(0, 0, 0, 0.18);
+    --md-code-hl-number-color: #f07a6c;
+    --md-code-hl-function-color: #d788e4;
+    --md-code-hl-constant-color: #a292f0;
+    --md-code-hl-keyword-color: #78a2f0;
+}

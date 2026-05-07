@@ -1,0 +1,252 @@
+@media screen and (max-width: 44.984375em) {
+
+    .cta-row--duo,
+    .cta-row--trio {
+        grid-template-columns: 1fr;
+        max-width: none;
+    }
+
+    .proof-route {
+        grid-template-columns: 1fr;
+    }
+
+    .homepage-cta-row.cta-row--trio {
+        grid-template-columns: 1fr;
+    }
+
+    .homepage-cta-row>a:first-child {
+        grid-column: auto;
+    }
+
+    .homepage-hero {
+        padding: 1.15rem 1rem 1rem;
+        gap: 0.7rem;
+    }
+
+    .homepage-signature-layout,
+    .homepage-route-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .homepage-signature-layout {
+        gap: 0.85rem;
+        margin-bottom: 1.35rem;
+    }
+
+    .homepage-support-grid {
+        grid-template-columns: 1fr;
+        gap: 0.72rem;
+    }
+
+    .homepage-cta-row .md-button {
+        min-height: 3.25rem;
+        padding: 0.95rem 1rem;
+    }
+
+    .homepage-proof-section {
+        padding: 0.75rem;
+    }
+
+    .homepage-proof-section__header {
+        margin-bottom: 0.6rem;
+    }
+
+    .homepage-proof-panel {
+        padding: 0.4rem 0.4rem 0.65rem;
+    }
+
+    .homepage-proof-panel figcaption {
+        max-width: none;
+        font-size: 0.96rem;
+    }
+
+    .homepage-signature-figure figcaption,
+    .homepage-support-card figcaption {
+        max-width: none;
+    }
+
+    .homepage-snapshot-card {
+        min-height: 0;
+    }
+
+    .surface-repair-proof-strip,
+    .surface-repair-support-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .architecture-reading-line {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+    }
+
+    .surface-repair-signature-figure figcaption {
+        max-width: none;
+    }
+
+    .essvi-proof-strip,
+    .essvi-support-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .essvi-signature-figure figcaption {
+        max-width: none;
+    }
+
+    .localvol-validation-reading-line,
+    .localvol-validation-support-grid {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+    }
+
+    .localvol-validation-primary-figure figcaption {
+        max-width: none;
+    }
+
+    .proof-path-lightbox-hint {
+        right: 0.55rem;
+        bottom: 0.55rem;
+        padding: 0.24rem 0.56rem;
+        font-size: 0.7rem;
+    }
+
+    .proof-path-lightbox {
+        padding: 0.85rem;
+    }
+
+    .proof-path-lightbox__dialog {
+        width: 100%;
+        max-height: calc(100vh - 1.7rem);
+        padding: 0.75rem;
+        gap: 0.65rem;
+    }
+
+    .proof-path-lightbox__header {
+        align-items: flex-start;
+    }
+
+    .proof-path-lightbox__image {
+        max-height: calc(100vh - 10.25rem);
+    }
+}
+
+@media screen and (min-width: 45em) and (max-width: 63.984375em) {
+
+    .proof-route {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .homepage-cta-row.cta-row--trio {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .homepage-cta-row>a:first-child {
+        grid-column: 1 / -1;
+    }
+
+    .homepage-support-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .homepage-snapshot-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .homepage-snapshot-card--detail {
+        grid-column: 1 / -1;
+        min-height: 0;
+    }
+
+    .surface-repair-proof-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .essvi-proof-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .localvol-validation-reading-line {
+        grid-template-columns: 1fr;
+    }
+}
+@media screen and (max-width: 44.984375em) {
+    .md-grid {
+        max-width: none;
+    }
+
+    .md-content__inner > h1:not(.homepage-hero__title) {
+        font-size: 1.9rem;
+    }
+
+    .md-content__inner > h2 {
+        margin-top: 2.35rem;
+        padding-top: 0.95rem;
+    }
+
+    .doc-intro,
+    .doc-panel,
+    .doc-card,
+    .doc-link-card {
+        padding: 0.85rem 0.85rem 0.8rem;
+        border-radius: var(--docs-radius-md);
+    }
+
+    .doc-intro--hero,
+    .doc-panel--strong,
+    .figure-frame--hero,
+    figure.diagram--hero {
+        padding: 0.9rem 0.9rem 0.84rem;
+    }
+
+    .doc-intro--quiet {
+        padding: 0.12rem 0 0.12rem 0.75rem;
+        border-radius: 0;
+    }
+
+    .doc-pill-row {
+        gap: 0.45rem;
+    }
+
+    .doc-step-list > li {
+        padding: 3.2rem 0.9rem 0.9rem;
+    }
+
+    .doc-step-list > li::before {
+        top: 0.9rem;
+        left: 0.9rem;
+    }
+
+    .md-content__inner > .doc.doc-object.doc-module {
+        padding-bottom: 0.1rem;
+    }
+
+    .md-typeset div.arithmatex {
+        margin: 0.9rem 0;
+        padding-inline: 0;
+    }
+}
+
+.snapshot-grid.homepage-support-grid,
+.snapshot-grid.surface-repair-support-grid,
+.snapshot-grid.essvi-support-grid,
+.snapshot-grid.localvol-validation-support-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0 1.5rem;
+}
+
+.architecture-reading-line {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+
+@media print {
+
+    /* Ensure something prints even if the scheme is slate. */
+    figure.diagram img.diagram-light {
+        display: block !important;
+    }
+
+    figure.diagram img.diagram-dark {
+        display: none !important;
+    }
+}
