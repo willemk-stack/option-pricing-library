@@ -48,6 +48,7 @@
     options:
       members:
         - mc_price_from_ctx
+        - mc_price_path_payoff_from_ctx
 
 ::: option_pricing.pricers.tree
     options:
@@ -80,6 +81,8 @@
 
 ## Notes
 
-- `mc_price*` functions return `(price, std_error)`.
+- `mc_price*` functions return `MonteCarloResult`.
+- Advanced simulator-backed engine entrypoints live under `option_pricing.monte_carlo`, not `option_pricing.pricers.mc`.
+- The reusable GBM simulator adapters for those advanced MC engine calls live under `option_pricing.models.gbm`.
 - Black-Scholes closed-form instrument pricers support European exercise only.
 - Tree-based instrument pricers can use the instrument's exercise style, including American exercise where supported.

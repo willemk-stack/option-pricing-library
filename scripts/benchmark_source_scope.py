@@ -11,6 +11,13 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_NAME = "option_pricing"
 BENCHMARK_CONFTEST_PATH = "benchmarks/conftest.py"
 BENCHMARK_BUILDER_PATH = "scripts/build_benchmark_artifacts.py"
+AUTHORITATIVE_BENCHMARK_TEST_PATHS = (
+    "benchmarks/test_bench_iv.py",
+    "benchmarks/test_bench_localvol.py",
+    "benchmarks/test_bench_macro.py",
+    "benchmarks/test_bench_pde.py",
+    "benchmarks/test_bench_tree.py",
+)
 BENCHMARK_SCOPE_DEFINITION_PATHS = ("scripts/benchmark_source_scope.py",)
 
 
@@ -190,13 +197,8 @@ def _git_tracked_paths(root_str: str) -> frozenset[str]:
 
 
 def _benchmark_test_seed_paths(root: Path) -> tuple[str, ...]:
-    benchmark_dir = root / "benchmarks"
     return tuple(
-        sorted(
-            normalize_repo_path(path.relative_to(root))
-            for path in benchmark_dir.glob("test_bench_*.py")
-            if path.is_file()
-        )
+        path for path in AUTHORITATIVE_BENCHMARK_TEST_PATHS if (root / path).is_file()
     )
 
 

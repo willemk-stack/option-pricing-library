@@ -5,8 +5,8 @@ from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.optimize import least_squares
 
+from ..._scipy_compat import least_squares
 from .diagnostics import SVIDiagnosticsContext, build_svi_diagnostics
 from .domain import DomainCheckConfig, build_domain_grid
 from .math import EPS, svi_total_variance

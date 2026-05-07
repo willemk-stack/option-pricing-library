@@ -9,9 +9,17 @@ The format is based on *Keep a Changelog*, and this project aims to follow *Sema
 ## [Unreleased]
 ### Added
 - (Add bullets here as you work; move them into the next release at tag time.)
+- Cached reusable Gauss-Legendre quadrature rules for the Heston Fourier path, including `option_pricing.numerics` exports for `QuadratureConfig`, `PanelSpacing`, `CompositeRule`, `CompositeIntegrationResult`, and `build_gauss_legendre_rule`.
+- Heston simulation and Monte Carlo wrappers now support the public `quadratic_exponential` scheme, wiring Andersen QE through the path and terminal simulators.
+- Heston Monte Carlo comparison diagnostics under `option_pricing.diagnostics.heston`, including bias-vs-timestep, runtime-vs-error, scheme-comparison summaries, and table-driven plotting helpers.
+- Euler Heston simulation results now expose `metadata["negative_variance_proposal_rate"]` so diagnostics can quantify how often raw variance proposals would have gone negative before full truncation applies the floor.
 
 ### Changed
 - Docs workflow architecture notes now describe the single-workflow `docs-ci` validate/build/deploy contract and the split between fast local pre-push checks and heavier manual/CI browser validation.
+- Public Heston simulation and Monte Carlo pricing entrypoints now default to `quadratic_exponential`; pass `scheme="euler_full_truncation"` explicitly when you want the baseline Euler scheme for comparisons or educational runs.
+- Heston pricer entrypoints can now accept either a reusable quadrature config or a prebuilt composite rule and pass it through to the Fourier backend without changing the default numerical path.
+- Monte Carlo pricing entrypoints now return `MonteCarloResult` instead of `(price, stderr)` tuples, and the canonical direct path-payoff GBM entrypoint is `mc_price_path_payoff_from_ctx(...)`.
+- Monte Carlo engine orchestration now lives under `option_pricing.monte_carlo`, while the reusable GBM simulator adapters live under `option_pricing.models.gbm`, leaving `option_pricing.pricers.mc` as a thin public GBM wrapper layer.
 
 ### Fixed
 - Locked the docs workflow contract in tests so blocking CI remains check-only for committed generated docs assets, deployment stays in `docs-ci`, and the docs-impact-selected authoritative visual suites remain the blocking source of truth.
@@ -19,6 +27,8 @@ The format is based on *Keep a Changelog*, and this project aims to follow *Sema
 ### Deprecated
 
 ### Removed
+- The stateful `McGBMModel` wrapper has been removed; use the stateless `mc_price*` entrypoints instead.
+- The generic simulator-backed terminal/path engine entrypoints are no longer re-exported from `option_pricing.pricers.mc` or the package root; use `option_pricing.monte_carlo` for those advanced APIs.
 
 
 ## [0.4.0] - 2026-02-28

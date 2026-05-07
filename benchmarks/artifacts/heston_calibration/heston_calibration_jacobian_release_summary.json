@@ -1,0 +1,30 @@
+[
+  {
+    "mode":"finite_difference",
+    "median_runtime_ms":64.8976999801,
+    "mean_runtime_ms":72.524359962,
+    "std_runtime_ms":12.8630658297,
+    "median_nfev":5.0,
+    "median_njev":5.0,
+    "median_residual_norm":0.0,
+    "median_max_abs_residual":0.0,
+    "speedup_vs_finite_difference":1.0,
+    "nfev_ratio_vs_finite_difference":1.0,
+    "notes":"release finite-difference baseline",
+    "benchmark_label":"release"
+  },
+  {
+    "mode":"analytic",
+    "median_runtime_ms":36.4739999641,
+    "mean_runtime_ms":36.4366800059,
+    "std_runtime_ms":0.7118393543,
+    "median_nfev":5.0,
+    "median_njev":5.0,
+    "median_residual_norm":0.0,
+    "median_max_abs_residual":0.0,
+    "speedup_vs_finite_difference":1.7792866163,
+    "nfev_ratio_vs_finite_difference":1.0,
+    "notes":"NOTE: release analytic-vs-finite-difference speedup ratios are directional and environment-dependent.",
+    "benchmark_label":"release"
+  }
+]

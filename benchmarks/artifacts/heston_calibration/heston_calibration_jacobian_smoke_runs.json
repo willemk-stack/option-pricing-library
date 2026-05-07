@@ -1,0 +1,42 @@
+[
+  {
+    "mode":"finite_difference",
+    "use_analytic_jac":false,
+    "repeat_index":0,
+    "warmup":false,
+    "runtime_ms":21.4724999387,
+    "nfev":5,
+    "njev":5,
+    "cost":7.127480907e-21,
+    "residual_norm":0.0000000001,
+    "max_abs_residual":0.0000000001,
+    "success":true,
+    "status":1,
+    "message":"`gtol` termination condition is satisfied.",
+    "method":"trf",
+    "loss":"linear",
+    "backend":"gauss_legendre",
+    "n_quotes":6,
+    "benchmark_label":"smoke"
+  },
+  {
+    "mode":"analytic",
+    "use_analytic_jac":true,
+    "repeat_index":0,
+    "warmup":false,
+    "runtime_ms":16.5814000648,
+    "nfev":5,
+    "njev":5,
+    "cost":7.411328448e-21,
+    "residual_norm":0.0000000001,
+    "max_abs_residual":0.0000000001,
+    "success":true,
+    "status":1,
+    "message":"`gtol` termination condition is satisfied.",
+    "method":"trf",
+    "loss":"linear",
+    "backend":"gauss_legendre",
+    "n_quotes":6,
+    "benchmark_label":"smoke"
+  }
+]

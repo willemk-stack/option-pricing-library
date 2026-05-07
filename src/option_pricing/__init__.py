@@ -20,7 +20,7 @@ can write, for example:
 """
 
 # Re-export pricing entrypoints (nice public names)
-from .config import ImpliedVolConfig, MCConfig, RandomConfig
+from .config import ImpliedVolConfig
 from .instruments import ExerciseStyle, VanillaOption, VanillaPayoff
 from .market.curves import (
     DiscountCurve,
@@ -29,6 +29,7 @@ from .market.curves import (
     ForwardCurve,
     PricingContext,
 )
+from .monte_carlo import MCConfig, RandomConfig
 from .numerics.root_finding import RootMethod
 from .pricers.black_scholes import (
     bs_greeks,
@@ -45,6 +46,7 @@ from .pricers.mc import (
     mc_price_from_ctx,
     mc_price_instrument,
     mc_price_instrument_from_ctx,
+    mc_price_path_payoff_from_ctx,
 )
 from .pricers.tree import (
     binom_price,
@@ -90,6 +92,7 @@ __all__ = [
     "mc_price_from_ctx",
     "mc_price_instrument",
     "mc_price_instrument_from_ctx",
+    "mc_price_path_payoff_from_ctx",
     "binom_price",
     "binom_price_from_ctx",
     "binom_price_instrument",

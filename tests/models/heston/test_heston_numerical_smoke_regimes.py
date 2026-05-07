@@ -1,0 +1,444 @@
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from option_pricing.models.black_scholes.bs import black76_call_price
+from option_pricing.models.heston import (
+    HestonParams,
+    recommend_heston_quadrature_config,
+)
+from option_pricing.pricers.heston import heston_price_call_from_ctx
+from option_pricing.types import MarketData, OptionSpec, OptionType
+from option_pricing.vol.implied_vol_scalar import implied_vol_bs
+from option_pricing.vol.implied_vol_slice import implied_vol_black76_slice
+
+STRESS_REGIMES = [
+    pytest.param(
+        "high_xi",
+        HestonParams(kappa=1.2, vbar=0.04, eta=1.8, rho=-0.75, v=0.05),
+        1.0,
+        id="high-xi",
+    ),
+    pytest.param(
+        "rho_near_minus_one",
+        HestonParams(kappa=1.5, vbar=0.04, eta=1.0, rho=-0.98, v=0.04),
+        1.0,
+        id="rho-near-minus-one",
+    ),
+    pytest.param(
+        "slow_mean_reversion",
+        HestonParams(kappa=0.15, vbar=0.04, eta=0.9, rho=-0.8, v=0.05),
+        1.0,
+        id="slow-mean-reversion",
+    ),
+    pytest.param(
+        "small_v0",
+        HestonParams(kappa=1.5, vbar=0.04, eta=0.8, rho=-0.7, v=1e-4),
+        1.0,
+        id="small-v0",
+    ),
+    pytest.param(
+        "long_maturity",
+        HestonParams(kappa=1.2, vbar=0.04, eta=0.9, rho=-0.8, v=0.05),
+        5.0,
+        id="long-maturity",
+    ),
+    pytest.param(
+        "short_maturity",
+        HestonParams(kappa=1.2, vbar=0.04, eta=0.9, rho=-0.8, v=0.05),
+        0.03,
+        id="short-maturity",
+    ),
+]
+
+
+CONTINUITY_CASES = [
+    pytest.param(
+        "high_xi",
+        HestonParams(kappa=1.2, vbar=0.04, eta=1.8, rho=-0.75, v=0.05),
+        HestonParams(kappa=1.201, vbar=0.0401, eta=1.801, rho=-0.749, v=0.0501),
+        1.0,
+        id="high-xi",
+    ),
+    pytest.param(
+        "rho_near_minus_one",
+        HestonParams(kappa=1.5, vbar=0.04, eta=1.0, rho=-0.98, v=0.04),
+        HestonParams(kappa=1.501, vbar=0.0401, eta=1.001, rho=-0.979, v=0.0401),
+        1.0,
+        id="rho-near-minus-one",
+    ),
+]
+
+
+def _ctx():
+    return MarketData(spot=100.0, rate=0.02, dividend_yield=0.0).to_context()
+
+
+def _deterministic_variance_black76_sigma(params: HestonParams, tau: float) -> float:
+    tau = float(tau)
+    integrated_variance = (
+        params.vbar * tau
+        + (params.v - params.vbar) * (1.0 - np.exp(-params.kappa * tau)) / params.kappa
+    )
+    return float(np.sqrt(integrated_variance / tau))
+
+
+def _recommended_gauss_quad_cfg(*, x: float, tau: float, params: HestonParams):
+    return recommend_heston_quadrature_config(
+        x=x,
+        tau=tau,
+        params=params,
+        quality="robust",
+    )
+
+
+def _diagnostics_slice_quad_cfg(
+    *,
+    strikes: np.ndarray,
+    tau: float,
+    params: HestonParams,
+):
+    ctx = _ctx()
+    forward = float(ctx.fwd(tau=tau))
+    max_abs_x = float(
+        np.max(np.abs(np.log(forward / np.asarray(strikes, dtype=float))))
+    )
+    return recommend_heston_quadrature_config(
+        x=max_abs_x,
+        tau=tau,
+        params=params,
+        quality="diagnostics",
+    )
+
+
+def _stress_strike_grid() -> np.ndarray:
+    return np.linspace(85.0, 115.0, 61)
+
+
+def _call_price_slice(
+    *,
+    strikes: np.ndarray,
+    tau: float,
+    params: HestonParams,
+    backend: str = "gauss_legendre",
+    use_recommended_quad_cfg: bool = False,
+) -> np.ndarray:
+    ctx = _ctx()
+    forward = float(ctx.fwd(tau=tau))
+    return np.asarray(
+        [
+            heston_price_call_from_ctx(
+                strike=float(strike),
+                ctx=ctx,
+                tau=tau,
+                params=params,
+                backend=backend,
+                quad_cfg=(
+                    _recommended_gauss_quad_cfg(
+                        x=float(np.log(forward / float(strike))),
+                        tau=tau,
+                        params=params,
+                    )
+                    if use_recommended_quad_cfg and backend == "gauss_legendre"
+                    else None
+                ),
+            )
+            for strike in strikes
+        ],
+        dtype=float,
+    )
+
+
+def _black76_call_slice(
+    *,
+    strikes: np.ndarray,
+    tau: float,
+    sigma: float,
+) -> np.ndarray:
+    ctx = _ctx()
+    forward = ctx.fwd(tau)
+    df = ctx.df(tau)
+    return np.asarray(
+        [
+            black76_call_price(
+                forward=forward,
+                strike=float(strike),
+                sigma=sigma,
+                tau=tau,
+                df=df,
+            )
+            for strike in strikes
+        ],
+        dtype=float,
+    )
+
+
+def _implied_vol_slice(
+    *,
+    strikes: np.ndarray,
+    tau: float,
+    prices: np.ndarray,
+) -> np.ndarray:
+    market = MarketData(spot=100.0, rate=0.02, dividend_yield=0.0)
+    return np.asarray(
+        [
+            implied_vol_bs(
+                float(price),
+                OptionSpec(kind=OptionType.CALL, strike=float(strike), expiry=tau),
+                market,
+            )
+            for strike, price in zip(strikes, prices, strict=True)
+        ],
+        dtype=float,
+    )
+
+
+def _format_limit_diagnostics(
+    *,
+    strikes: np.ndarray,
+    heston_prices: np.ndarray,
+    black_prices: np.ndarray,
+    params: HestonParams,
+    tau: float,
+) -> str:
+    errors = heston_prices - black_prices
+    worst_idx = int(np.argmax(np.abs(errors)))
+    rows = [
+        f"tau={tau:.6f}",
+        f"params={params}",
+        (
+            "max_abs_error="
+            f"{float(np.max(np.abs(errors))):.12e} at strike={float(strikes[worst_idx]):.6f}"
+        ),
+        "",
+        "strike | heston | black76 | diff",
+    ]
+    for strike, heston_px, black_px, diff in zip(
+        strikes, heston_prices, black_prices, errors, strict=True
+    ):
+        rows.append(
+            f"{float(strike):7.3f} | {float(heston_px): .12f} |"
+            f" {float(black_px): .12f} | {float(diff): .12e}"
+        )
+    return "\n".join(rows)
+
+
+def _format_skew_diagnostics(
+    *,
+    strikes: np.ndarray,
+    low_corr_ivs: np.ndarray,
+    neg_corr_ivs: np.ndarray,
+    params_low_corr: HestonParams,
+    params_neg_corr: HestonParams,
+) -> str:
+    low_corr_wing_spread = float(low_corr_ivs[0] - low_corr_ivs[-1])
+    neg_corr_wing_spread = float(neg_corr_ivs[0] - neg_corr_ivs[-1])
+    rows = [
+        f"params_low_corr={params_low_corr}",
+        f"params_neg_corr={params_neg_corr}",
+        f"low_corr_wing_spread={low_corr_wing_spread:.12e}",
+        f"neg_corr_wing_spread={neg_corr_wing_spread:.12e}",
+        "",
+        "strike | iv_low_corr | iv_neg_corr | diff",
+    ]
+    for strike, low_corr_iv, neg_corr_iv in zip(
+        strikes, low_corr_ivs, neg_corr_ivs, strict=True
+    ):
+        rows.append(
+            f"{float(strike):7.3f} | {float(low_corr_iv): .12f} |"
+            f" {float(neg_corr_iv): .12f} |"
+            f" {float(low_corr_iv - neg_corr_iv): .12e}"
+        )
+    return "\n".join(rows)
+
+
+def test_heston_very_small_vol_of_vol_limit_is_close_to_black76() -> None:
+    """Smoke-test a small-eta regime against its Black-76 deterministic limit."""
+    tau = 1.0
+    strikes = np.linspace(85.0, 115.0, 7)
+    params = HestonParams(
+        kappa=3.0,
+        vbar=0.04,
+        eta=1e-4,
+        rho=-0.35,
+        v=0.07,
+    )
+
+    heston_prices = _call_price_slice(
+        strikes=strikes,
+        tau=tau,
+        params=params,
+        use_recommended_quad_cfg=True,
+    )
+    black_prices = _black76_call_slice(
+        strikes=strikes,
+        tau=tau,
+        sigma=_deterministic_variance_black76_sigma(params, tau),
+    )
+
+    max_abs_error = float(np.max(np.abs(heston_prices - black_prices)))
+
+    assert max_abs_error < 5e-4, (
+        "Very small vol-of-vol regime should stay close to Black-76.\n"
+        + _format_limit_diagnostics(
+            strikes=strikes,
+            heston_prices=heston_prices,
+            black_prices=black_prices,
+            params=params,
+            tau=tau,
+        )
+    )
+
+
+def test_heston_low_correlation_regime_has_milder_skew_than_negative_correlation() -> (
+    None
+):
+    """Smoke-test that low correlation produces a visibly milder downside skew."""
+    tau = 1.0
+    strikes = np.array([80.0, 90.0, 100.0, 110.0, 120.0], dtype=float)
+    base = dict(kappa=2.0, vbar=0.04, eta=0.70, v=0.05)
+    params_low_corr = HestonParams(rho=-0.05, **base)
+    params_neg_corr = HestonParams(rho=-0.75, **base)
+
+    low_corr_prices = _call_price_slice(
+        strikes=strikes,
+        tau=tau,
+        params=params_low_corr,
+        use_recommended_quad_cfg=True,
+    )
+    neg_corr_prices = _call_price_slice(
+        strikes=strikes,
+        tau=tau,
+        params=params_neg_corr,
+        use_recommended_quad_cfg=True,
+    )
+
+    low_corr_ivs = _implied_vol_slice(strikes=strikes, tau=tau, prices=low_corr_prices)
+    neg_corr_ivs = _implied_vol_slice(strikes=strikes, tau=tau, prices=neg_corr_prices)
+
+    low_corr_wing_spread = float(low_corr_ivs[0] - low_corr_ivs[-1])
+    neg_corr_wing_spread = float(neg_corr_ivs[0] - neg_corr_ivs[-1])
+
+    assert np.all(np.isfinite(low_corr_ivs))
+    assert np.all(np.isfinite(neg_corr_ivs))
+    assert abs(low_corr_wing_spread) < abs(neg_corr_wing_spread), (
+        "Low-correlation Heston smile should have milder wing asymmetry than a"
+        " strongly negatively correlated smile.\n"
+        + _format_skew_diagnostics(
+            strikes=strikes,
+            low_corr_ivs=low_corr_ivs,
+            neg_corr_ivs=neg_corr_ivs,
+            params_low_corr=params_low_corr,
+            params_neg_corr=params_neg_corr,
+        )
+    )
+
+
+@pytest.mark.parametrize(("regime_name", "params", "tau"), STRESS_REGIMES)
+def test_heston_stress_regimes_return_finite_monotone_dense_call_slices(
+    regime_name: str,
+    params: HestonParams,
+    tau: float,
+) -> None:
+    strikes = _stress_strike_grid()
+    quad_cfg = _diagnostics_slice_quad_cfg(strikes=strikes, tau=tau, params=params)
+
+    prices = np.asarray(
+        heston_price_call_from_ctx(
+            strike=strikes,
+            ctx=_ctx(),
+            tau=tau,
+            params=params,
+            quad_cfg=quad_cfg,
+        ),
+        dtype=float,
+    )
+
+    assert np.all(np.isfinite(prices)), regime_name
+    assert float(np.min(prices)) >= -1e-7, regime_name
+    assert float(np.max(np.diff(prices))) <= 5e-7, regime_name
+    assert float(prices[0]) > float(prices[-1]), regime_name
+
+
+@pytest.mark.parametrize(("regime_name", "params", "tau"), STRESS_REGIMES)
+def test_heston_dense_smiles_are_smooth_across_stress_regimes(
+    regime_name: str,
+    params: HestonParams,
+    tau: float,
+) -> None:
+    ctx = _ctx()
+    strikes = _stress_strike_grid()
+    quad_cfg = _diagnostics_slice_quad_cfg(strikes=strikes, tau=tau, params=params)
+    forward = float(ctx.fwd(tau))
+    df = float(ctx.df(tau))
+
+    prices = np.asarray(
+        heston_price_call_from_ctx(
+            strike=strikes,
+            ctx=ctx,
+            tau=tau,
+            params=params,
+            quad_cfg=quad_cfg,
+        ),
+        dtype=float,
+    )
+    implied_vols, result = implied_vol_black76_slice(
+        forward=forward,
+        strikes=strikes,
+        tau=tau,
+        df=df,
+        prices=prices,
+        is_call=True,
+        return_result=True,
+    )
+
+    assert np.all(result.converged), regime_name
+    assert np.all(np.isfinite(implied_vols)), regime_name
+    assert float(np.max(np.abs(np.diff(implied_vols)))) < 2e-2, regime_name
+    assert float(np.max(np.abs(np.diff(implied_vols, n=2)))) < 2e-2, regime_name
+
+
+@pytest.mark.parametrize(
+    ("regime_name", "base_params", "perturbed_params", "tau"),
+    CONTINUITY_CASES,
+)
+def test_heston_call_slices_change_continuously_under_small_parameter_perturbations(
+    regime_name: str,
+    base_params: HestonParams,
+    perturbed_params: HestonParams,
+    tau: float,
+) -> None:
+    ctx = _ctx()
+    strikes = _stress_strike_grid()
+    quad_cfg = _diagnostics_slice_quad_cfg(
+        strikes=strikes,
+        tau=tau,
+        params=base_params,
+    )
+
+    base_prices = np.asarray(
+        heston_price_call_from_ctx(
+            strike=strikes,
+            ctx=ctx,
+            tau=tau,
+            params=base_params,
+            quad_cfg=quad_cfg,
+        ),
+        dtype=float,
+    )
+    perturbed_prices = np.asarray(
+        heston_price_call_from_ctx(
+            strike=strikes,
+            ctx=ctx,
+            tau=tau,
+            params=perturbed_params,
+            quad_cfg=quad_cfg,
+        ),
+        dtype=float,
+    )
+    diff = perturbed_prices - base_prices
+
+    assert np.all(np.isfinite(diff)), regime_name
+    assert float(np.max(np.abs(diff))) < 2e-2, regime_name
+    assert float(np.max(np.abs(np.diff(diff, n=2)))) < 5e-4, regime_name

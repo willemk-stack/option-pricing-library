@@ -24,25 +24,25 @@ Choose the right benchmark subset for the touched code, pair it with the right c
 ### PDE changes
 ```bash
 pytest benchmarks/test_bench_pde.py --benchmark-only --benchmark-verbose
-pytest -q tests/test_pde_pricer.py tests/test_localvol_pde_vanilla_vs_bs.py
+pytest -q tests/pricers/test_pde_pricer.py tests/vol/localvol/test_localvol_pde_vanilla_vs_bs.py
 ```
 
 ### Local-vol or surface extraction changes
 ```bash
 pytest benchmarks/test_bench_localvol.py --benchmark-only --benchmark-verbose
-pytest -q tests/test_dupire_constant_vol.py tests/test_surface_svi_and_localvol.py
+pytest -q tests/vol/localvol/test_dupire_constant_vol.py tests/vol/surface/test_surface_svi_and_localvol.py
 ```
 
 ### Implied-vol changes
 ```bash
 pytest benchmarks/test_bench_iv.py --benchmark-only --benchmark-verbose
-pytest -q tests/test_iv.py tests/test_iv_edge_cases.py
+pytest -q tests/vol/iv/test_iv.py tests/vol/iv/test_iv_edge_cases.py
 ```
 
 ### Tree changes
 ```bash
 pytest benchmarks/test_bench_tree.py --benchmark-only --benchmark-verbose
-pytest -q tests/test_binomial.py tests/test_tree_pricer_branches.py
+pytest -q tests/models/test_binomial.py tests/pricers/test_tree_pricer_branches.py
 ```
 
 ### Broad workflow changes

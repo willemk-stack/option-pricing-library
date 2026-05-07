@@ -25,6 +25,8 @@ Use this section either to evaluate the repo quickly or to start from the public
 - [Binomial CRR](binomial_crr.md) - lattice pricing, convergence, and American exercise.
 - [PDE pricing](pde_pricing.md) - finite-difference pricing under Black-Scholes and local vol.
 - [Diagnostics](diagnostics.md) - notebook-friendly helpers for comparisons, sweeps, and reports.
+- [Heston](heston.md) - vanilla pricing, smile inversion, Monte Carlo, calibration, diagnostics, and model comparison.
+- [Heston diagnostics](heston_diagnostics.md) - one-call slice review for convergence, smoothness, continuity, and visible failure modes.
 
 ## Volatility workflows
 

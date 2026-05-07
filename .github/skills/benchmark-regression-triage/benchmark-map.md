@@ -23,10 +23,10 @@ Primary code paths:
 - `src/option_pricing/types.py`
 
 Relevant correctness tests first:
-- `tests/test_iv.py`
-- `tests/test_iv_edge_cases.py`
-- `tests/test_implied_vol_slice_branches.py`
-- `tests/test_black_scholes_bs_module_branches.py`
+- `tests/vol/iv/test_iv.py`
+- `tests/vol/iv/test_iv_edge_cases.py`
+- `tests/vol/iv/test_implied_vol_slice_branches.py`
+- `tests/models/test_black_scholes_bs_module_branches.py`
 
 Run when:
 - inversion algorithms change
@@ -55,13 +55,13 @@ Primary code paths:
 - `src/option_pricing/numerics/tridiag.py`
 
 Relevant correctness tests first:
-- `tests/test_pde_pricer.py`
-- `tests/test_pricers_finite_diff.py`
-- `tests/test_finite_diff_pricer_branches.py`
-- `tests/test_pde_digital_wrappers.py`
-- `tests/test_pde_domain_branches.py`
-- `tests/test_convergence_remedies_digital.py`
-- `tests/test_tridiag_solvers.py`
+- `tests/pricers/test_pde_pricer.py`
+- `tests/pricers/test_pricers_finite_diff.py`
+- `tests/pricers/test_finite_diff_pricer_branches.py`
+- `tests/pricers/test_pde_digital_wrappers.py`
+- `tests/numerics/test_pde_domain_branches.py`
+- `tests/vol/localvol/test_convergence_remedies_digital.py`
+- `tests/numerics/test_tridiag_solvers.py`
 
 Run when:
 - solver loops or stencil assembly change
@@ -86,20 +86,20 @@ Primary code paths:
 - `src/option_pricing/diagnostics/vol_surface/`
 
 Relevant correctness tests first:
-- `tests/test_dupire_constant_vol.py`
-- `tests/test_surface_svi_and_localvol.py`
-- `tests/test_svi.py`
-- `tests/test_svi_calibrate_smoke_paths.py`
-- `tests/test_svi_calibrate_additional_paths.py`
-- `tests/test_svi_repair.py`
-- `tests/test_local_vol_fd_branches.py`
-- `tests/test_localvol_pde_vanilla_vs_bs.py`
+- `tests/vol/localvol/test_dupire_constant_vol.py`
+- `tests/vol/surface/test_surface_svi_and_localvol.py`
+- `tests/vol/svi/test_svi.py`
+- `tests/vol/svi/test_svi_calibrate_smoke_paths.py`
+- `tests/vol/svi/test_svi_calibrate_additional_paths.py`
+- `tests/vol/svi/test_svi_repair.py`
+- `tests/vol/localvol/test_local_vol_fd_branches.py`
+- `tests/vol/localvol/test_localvol_pde_vanilla_vs_bs.py`
 
 Also consider these if the change is in eSSVI rather than classic SVI:
-- `tests/test_essvi_surface.py`
-- `tests/test_essvi_calibrate.py`
-- `tests/test_essvi_objective.py`
-- `tests/test_essvi_mingone_projection.py`
+- `tests/vol/essvi/test_essvi_surface.py`
+- `tests/vol/essvi/test_essvi_calibrate.py`
+- `tests/vol/essvi/test_essvi_objective.py`
+- `tests/vol/essvi/test_essvi_mingone_projection.py`
 
 Run when:
 - local-vol extraction logic changes
@@ -124,13 +124,13 @@ Primary code paths:
 - `src/option_pricing/diagnostics/vol_surface/`
 
 Relevant correctness tests first:
-- `tests/test_localvol_pde_vanilla_vs_bs.py`
-- `tests/test_localvol_digital_vs_bs.py`
-- `tests/test_localvol_digital_vs_call_strike_derivative.py`
-- `tests/test_localvol_digital_convergence_sweep.py`
-- `tests/test_diagnostics_vol_surface_report.py`
-- `tests/test_surface_time_diagnosis.py`
-- `tests/test_surface_svi_and_localvol.py`
+- `tests/vol/localvol/test_localvol_pde_vanilla_vs_bs.py`
+- `tests/vol/localvol/test_localvol_digital_vs_bs.py`
+- `tests/vol/localvol/test_localvol_digital_vs_call_strike_derivative.py`
+- `tests/vol/localvol/test_localvol_digital_convergence_sweep.py`
+- `tests/diagnostics/test_diagnostics_vol_surface_report.py`
+- `tests/vol/surface/test_surface_time_diagnosis.py`
+- `tests/vol/surface/test_surface_svi_and_localvol.py`
 
 Run when:
 - changes cross surface calibration, local-vol extraction, and PDE repricing
@@ -151,9 +151,9 @@ Primary code paths:
 - `src/option_pricing/types.py`
 
 Relevant correctness tests first:
-- `tests/test_binomial.py`
-- `tests/test_tree_pricer_branches.py`
-- `tests/test_api_smoke.py`
+- `tests/models/test_binomial.py`
+- `tests/pricers/test_tree_pricer_branches.py`
+- `tests/api/test_api_contracts.py`
 
 Run when:
 - CRR recursion, backward induction, or branching logic changes

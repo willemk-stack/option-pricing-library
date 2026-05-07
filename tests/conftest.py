@@ -19,6 +19,16 @@ if _SRC.exists():
     sys.path.insert(0, str(_SRC))
 
 
+_DOCS_INTEGRATION_FILES = {
+    "tests/docs/test_pre_push_docs_validation.py",
+    "tests/docs/test_run_ci_visual_regression.py",
+    "tests/docs/test_visual_publishing_pipeline.py",
+}
+_REGRESSION_FILES = {
+    "tests/vol/localvol/test_localvol_pde_repricing_regression.py",
+}
+
+
 @pytest.fixture
 def base_params() -> dict:
     """A small set of canonical parameters used across tests."""
@@ -141,3 +151,14 @@ def quick_smoothed_localvol_workflow(quick_demo_scenario, quick_demo_bridge_arti
         localvol=quick_demo_bridge_artifacts.localvol,
         solver_cfg=quick_demo_scenario.cfg["LV_PDE_SOLVER_CFG"],
     )
+
+
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    for item in items:
+        rel_path = item.path.resolve().relative_to(_ROOT).as_posix()
+        if rel_path.startswith("tests/docs/"):
+            item.add_marker(pytest.mark.docs)
+        if rel_path in _DOCS_INTEGRATION_FILES:
+            item.add_marker(pytest.mark.integration)
+        if rel_path in _REGRESSION_FILES:
+            item.add_marker(pytest.mark.regression)

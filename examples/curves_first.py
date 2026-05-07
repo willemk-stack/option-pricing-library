@@ -21,7 +21,7 @@ def main() -> None:
         bs_price_from_ctx,
         mc_price_from_ctx,
     )
-    from option_pricing.config import MCConfig, RandomConfig
+    from option_pricing.monte_carlo import MCConfig, RandomConfig
 
     spot = 100.0
     r = 0.05
@@ -48,10 +48,10 @@ def main() -> None:
     )
 
     cfg_mc = MCConfig(n_paths=200_000, antithetic=True, random=RandomConfig(seed=0))
-    price_mc, se = mc_price_from_ctx(
+    mc_result = mc_price_from_ctx(
         kind=OptionType.CALL, strike=K, sigma=sigma, tau=tau, ctx=ctx, cfg=cfg_mc
     )
-    print("MC:", price_mc, "(SE=", se, ")")
+    print("MC:", mc_result.price, "(SE=", mc_result.stderr, ")")
 
     print(
         "CRR:",

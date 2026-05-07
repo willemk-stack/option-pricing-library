@@ -1,0 +1,131 @@
+/* Make API signatures and object clusters easier to scan */
+.doc-heading code {
+    font-size: 0.95em;
+}
+
+.md-content__inner > .doc.doc-object.doc-module {
+    margin: 0 0 1.8rem;
+    padding: 0 0 0.1rem;
+    border-radius: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.doc.doc-object.doc-class,
+.doc.doc-object.doc-function,
+.doc.doc-object.doc-attribute {
+    margin: 0.8rem 0 0.95rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid var(--docs-divider);
+}
+
+.doc.doc-object.doc-class:first-child,
+.doc.doc-object.doc-function:first-child,
+.doc.doc-object.doc-attribute:first-child {
+    margin-top: 0.2rem;
+}
+
+.doc.doc-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem 0.65rem;
+    margin-bottom: 0;
+}
+
+.doc.doc-heading .doc.doc-object-name {
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+}
+
+.doc.doc-label {
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    border-radius: 0;
+    border: 0;
+    background: transparent;
+    color: var(--docs-muted);
+    font-size: 0.69rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.doc-signature {
+    margin: 0.38rem 0 0.55rem;
+}
+
+.doc-signature pre {
+    padding: 0.64rem 0.74rem;
+}
+
+.doc-section-title {
+    display: inline-flex;
+    align-items: center;
+    margin: 0.75rem 0 0.32rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--docs-muted);
+}
+
+.doc.doc-class-bases {
+    color: var(--docs-muted);
+}
+
+.doc.doc-contents > p:first-child {
+    max-width: 70ch;
+}
+
+.doc.doc-contents details {
+    margin: 0.85rem 0;
+}
+/* Mobile API-reference overflow guard.
+ * mkdocstrings can generate very long signatures that exceed 375px viewports.
+ */
+@media screen and (max-width: 600px) {
+
+    body:has(.md-typeset .doc.doc-object) .md-content,
+    body:has(.md-typeset .doc.doc-object) .md-content__inner,
+    body:has(.md-typeset .doc.doc-object) .md-typeset,
+    body:has(.md-typeset .doc.doc-object) .md-typeset article,
+    .md-typeset .doc,
+    .md-typeset .doc-object,
+    .md-typeset .doc-contents,
+    .md-typeset .doc-heading,
+    .md-typeset .doc-signature {
+        max-width: 100%;
+        min-width: 0;
+    }
+
+    .md-typeset .doc-heading,
+    .md-typeset .doc-signature,
+    .md-typeset .doc-signature code,
+    .md-typeset .doc-heading code,
+    .md-typeset .doc-contents code,
+    body:has(.md-typeset .doc.doc-object) .md-typeset :not(pre) > code {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    .md-typeset .doc-signature.highlight,
+    .md-typeset .doc-signature.highlight pre,
+    .md-typeset .doc-signature.highlight code {
+        white-space: pre-wrap;
+    }
+
+    body:has(.md-typeset .doc.doc-object) .md-typeset .doc-signature.highlight,
+    body:has(.md-typeset .doc.doc-object) .md-typeset .highlight,
+    body:has(.md-typeset .doc.doc-object) .md-typeset pre,
+    body:has(.md-typeset .doc.doc-object) .md-typeset table {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    body:has(.md-typeset .doc.doc-object) .md-typeset table:not([class]) {
+        display: block;
+    }
+}

@@ -1,7 +1,7 @@
 # Notes
 
 These notes are a compact “story” of the standard option-pricing toolkit used throughout the library:
-**no-arbitrage → risk-neutral pricing → Brownian motion/Itô → GBM → Black–Scholes → implied vol → numerical methods**.
+**no-arbitrage → risk-neutral pricing → Brownian motion/Itô → GBM → Black–Scholes → implied vol → numerical methods → local vol → stochastic vol**.
 
 They are written to be readable linearly, but each note also stands on its own.
 
@@ -14,6 +14,20 @@ They are written to be readable linearly, but each note also stands on its own.
 5. [Implied volatility](IV.md) — “vol as the price”; inversion, bounds, and practical solver notes.
 6. [Monte Carlo](mc.md) — simulation pricing, error bars, and variance reduction.
 7. [Binomial CRR](binomial_crr.md) — discrete-time replication and convergence to Black–Scholes.
+8. [Finite Differences](finite_difference_pde.md) — how PDE pricing is discretized in practice.
+9. [Dupire local vol](dupire_local_vol.md) — deterministic volatility surfaces that fit vanilla prices.
+10. [Heston stochastic volatility](heston_stochastic_vol.md) — affine stochastic vol, characteristic functions, and the bridge to capstone 3.
+
+## Heston implementation notes
+
+- [Heston stochastic volatility](heston_stochastic_vol.md) - model setup, notation, characteristic functions, and calibration transform context.
+- [Heston pricing conventions](heston_pricing_conventions.md) - pricing state, probability indices, discounting, call/put formulas, and Jacobian conventions.
+- [Heston Fourier diagnostics](heston_fourier_diagnostics.md) - branch stability, finite-price warnings, and backend review checks.
+- [Heston quadrature policy](heston_quadrature_policy.md) - deterministic integration policy for pricing, calibration, and published evidence.
+- [Heston calibration seed design](heston_calibration_seeds.md) - default seeds, compact seed grids, and multi-start sensitivity rationale.
+- [Heston calibration benchmark diagnostics](heston_calibration_benchmark_diagnostics.md) - benchmark outputs, analytic Jacobian checks, and recovery diagnostics.
+- [Heston Monte Carlo diagnostics](heston_monte_carlo.md) - path simulation comparisons, convergence sweeps, and control-variate notes.
+- [Andersen's QE Heston simulation scheme](heston_qe_notes.md) - QE variance transition logic and why Euler is only a baseline.
 
 ## Conventions and notation
 

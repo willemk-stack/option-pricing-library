@@ -62,14 +62,15 @@ class TerminalInstrument(Protocol):
     def payoff(self) -> TerminalPayoff: ...
 
 
-# --- Backwards-compatible names (used by older notebooks / docs)
-Instrument = TerminalInstrument
-
-
 class PathPayoff(Protocol):
     """Path-dependent payoff callable (placeholder interface)."""
 
-    def __call__(self, paths: FloatArray) -> FloatArray:  # pragma: no cover
+    def __call__(
+        self,
+        paths: FloatArray,
+        *,
+        times: FloatArray | None = None,
+    ) -> FloatArray:  # pragma: no cover
         ...
 
 

@@ -18,7 +18,7 @@ The goal is to cheaply detect obvious regressions, broken hot paths, and acciden
 Use correctness-focused tests first:
 
 ```bash
-pytest tests/test_iv.py tests/test_iv_edge_cases.py tests/test_implied_vol_slice_branches.py -q
+pytest tests/vol/iv/test_iv.py tests/vol/iv/test_iv_edge_cases.py tests/vol/iv/test_implied_vol_slice_branches.py -q
 ```
 
 If you need a quick benchmark sample, run only the IV benchmark file:
@@ -39,10 +39,10 @@ Use correctness and branch coverage first:
 
 ```bash
 pytest \
-  tests/test_pde_pricer.py \
-  tests/test_pricers_finite_diff.py \
-  tests/test_pde_digital_wrappers.py \
-  tests/test_convergence_remedies_digital.py \
+  tests/pricers/test_pde_pricer.py \
+  tests/pricers/test_pricers_finite_diff.py \
+  tests/pricers/test_pde_digital_wrappers.py \
+  tests/vol/localvol/test_convergence_remedies_digital.py \
   -q
 ```
 
@@ -65,17 +65,17 @@ Use correctness tests first:
 
 ```bash
 pytest \
-  tests/test_dupire_constant_vol.py \
-  tests/test_surface_svi_and_localvol.py \
-  tests/test_svi.py \
-  tests/test_svi_calibrate_smoke_paths.py \
+  tests/vol/localvol/test_dupire_constant_vol.py \
+  tests/vol/surface/test_surface_svi_and_localvol.py \
+  tests/vol/svi/test_svi.py \
+  tests/vol/svi/test_svi_calibrate_smoke_paths.py \
   -q
 ```
 
 If the change is eSSVI-specific, add:
 
 ```bash
-pytest tests/test_essvi_surface.py tests/test_essvi_calibrate.py tests/test_essvi_objective.py -q
+pytest tests/vol/essvi/test_essvi_surface.py tests/vol/essvi/test_essvi_calibrate.py tests/vol/essvi/test_essvi_objective.py -q
 ```
 
 If you need runtime evidence, run only the local-vol benchmark file:
@@ -97,10 +97,10 @@ Default to a correctness proxy instead of the macro benchmark:
 
 ```bash
 pytest \
-  tests/test_localvol_pde_vanilla_vs_bs.py \
-  tests/test_localvol_digital_vs_bs.py \
-  tests/test_surface_time_diagnosis.py \
-  tests/test_diagnostics_vol_surface_report.py \
+  tests/vol/localvol/test_localvol_pde_vanilla_vs_bs.py \
+  tests/vol/localvol/test_localvol_digital_vs_bs.py \
+  tests/vol/surface/test_surface_time_diagnosis.py \
+  tests/diagnostics/test_diagnostics_vol_surface_report.py \
   -q
 ```
 
@@ -120,7 +120,7 @@ Use this for:
 Because the benchmark includes very large depths, default to correctness-only checks first:
 
 ```bash
-pytest tests/test_binomial.py tests/test_tree_pricer_branches.py -q
+pytest tests/models/test_binomial.py tests/pricers/test_tree_pricer_branches.py -q
 ```
 
 If you need a manual local smoke check for a tree change, prefer a small one-off script or REPL run using a reduced step count such as 200, 500, or 1000 rather than the benchmark file. Example:
