@@ -1,9 +1,9 @@
 # Heston quadrature policy
 
 !!! note "Status"
-	This note documents current repository implementation policy. Claims about defaults,
-	thresholds, and review tiers should be read as repo policy unless explicitly cited or
-	benchmark-backed.
+    This note documents current repository implementation policy. Claims about defaults,
+    thresholds, and review tiers should be read as repo policy unless explicitly cited or
+    benchmark-backed.
 
 This note defines the intended quadrature policy for the Heston Fourier pricer.
 It is meant to sit beside the implementation and diagnostics docs, not replace
@@ -211,3 +211,15 @@ comparison metrics, it should state:
 
 A final capstone table should not quote Heston calibration quality without also
 stating the quadrature tier used to produce it.
+
+## References
+
+- Heston, S. L. (1993). A Closed-Form Solution for Options with Stochastic
+    Volatility with Applications to Bond and Currency Options. *Review of
+    Financial Studies*, 6(2), 327-343.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*.
+    Wiley.
+- Lord, R., & Kahl, C. (2008). Complex logarithms in Heston-like models.
+    *Mathematical Finance*, 20(4), 671-694.
+- Gautschi, W. (2004). *Orthogonal Polynomials: Computation and Approximation*.
+    Oxford University Press.

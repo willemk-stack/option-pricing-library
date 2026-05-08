@@ -16,7 +16,12 @@ They are written to be readable linearly, but each note also stands on its own.
 7. [Binomial CRR](binomial_crr.md) — discrete-time replication and convergence to Black–Scholes.
 8. [Finite Differences](finite_difference_pde.md) — how PDE pricing is discretized in practice.
 9. [Dupire local vol](dupire_local_vol.md) — deterministic volatility surfaces that fit vanilla prices.
-10. [Heston stochastic volatility](heston_stochastic_vol.md) — affine stochastic vol, characteristic functions, and the bridge to capstone 3.
+10. [SVI calibration design](svi_calibration_design.md) — why the raw smile fit is wrapped in transforms, regularization, and repair before downstream use.
+11. [Heston stochastic volatility](heston_stochastic_vol.md) — affine stochastic vol, characteristic functions, and the bridge to capstone 3.
+
+## Surface-fitting implementation notes
+
+- [SVI calibration design](svi_calibration_design.md) - why raw SVI calibration is wrapped in constrained transforms, regularization, robust loss, and post-fit repair.
 
 ## Heston implementation notes
 

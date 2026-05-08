@@ -1,9 +1,9 @@
 # Heston Pricing Conventions
 
 !!! note "Status"
-	This note gives model background and notation for the repository's Heston implementation.
-	Mathematical claims should be tied to the references below; repository-specific defaults
-	are documented separately in the implementation-policy notes.
+    This note gives model background and notation for the repository's Heston implementation.
+    Mathematical claims should be tied to the references below; repository-specific defaults
+    are documented separately in the implementation-policy notes.
 
 This note fixes the pricing conventions used by the Heston Fourier pricer in this repository. It is intended to remove ambiguity around the state variable, log-moneyness input, probability indices, discounting convention, and call/put formulas.
 
@@ -621,3 +621,16 @@ where:
   synthetic fixture and includes a direct local-vol PDE repricing audit.
 
 Any future pricing, calibration, diagnostics, or Monte Carlo validation code should preserve this contract.
+
+## References
+
+- Heston, S. L. (1993). A Closed-Form Solution for Options with Stochastic
+    Volatility with Applications to Bond and Currency Options. *Review of
+    Financial Studies*, 6(2), 327-343.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*.
+    Wiley.
+- Lord, R., & Kahl, C. (2008). Complex logarithms in Heston-like models.
+    *Mathematical Finance*, 20(4), 671-694.
+- Cui, Y., del BaÃ±o Rollin, S., & Germano, G. (2017). Full and fast
+    calibration of the Heston stochastic volatility model. *European Journal of
+    Operational Research*, 263(2), 625-638.

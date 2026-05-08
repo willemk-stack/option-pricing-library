@@ -142,6 +142,7 @@ nav:
       - Surface repair workflow: user_guides/surface_workflow.md
       - eSSVI smooth handoff: user_guides/essvi_smooth_handoff.md
       - Local-vol and PDE validation: user_guides/localvol_pde_validation.md
+      - Heston model comparison: user_guides/heston_model_comparison.md
   - API:
       - Overview: api/index.md
       - Public: api/public.md
@@ -153,6 +154,7 @@ nav:
       - Overview: architecture.md
       - Docs pipeline: architecture/docs-pipeline.md
   - Performance evidence: performance.md
+  - Validation matrix: validation_matrix.md
   - Notes:
       - Overview: notes/index.md
       - Black-Scholes pricing: notes/bs_pricing.md
@@ -164,6 +166,7 @@ nav:
       - Risk neutral pricing: notes/risk_neutral_pricing.md
       - Finite Differences: notes/finite_difference_pde.md
       - Dupire local vol: notes/dupire_local_vol.md
+      - SVI calibration design: notes/svi_calibration_design.md
       - Heston:
           - Stochastic volatility: notes/heston_stochastic_vol.md
           - Pricing conventions: notes/heston_pricing_conventions.md

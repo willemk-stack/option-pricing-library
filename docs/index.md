@@ -8,7 +8,7 @@ hide:
 <p class="hero-copy homepage-hero__copy">This repo is strongest when the review follows the full volatility-modeling path: repair noisy implied-vol quotes, make the Dupire handoff smooth enough to differentiate, validate the local-vol/PDE leg, then calibrate Heston and compare stochastic volatility against the eSSVI/local-vol stack with pricing, Monte Carlo, and diagnostics evidence.</p>
 <p class="hero-copy homepage-hero__copy">The library surface is typed and reusable, but the main signal is judgment rather than abstraction. The docs keep assumptions, safeguards, and failure modes visible instead of hiding them behind one cleaned-up result.</p>
 <div class="cta-row cta-row--trio homepage-cta-row" markdown="1">
-[Review Heston model comparison](user_guides/heston.md){ .md-button .md-button--primary }
+[Review Heston model comparison](user_guides/heston_model_comparison.md){ .md-button .md-button--primary }
 [Start with surface repair](user_guides/surface_workflow.md){ .md-button }
 [See local-vol/PDE validation](user_guides/localvol_pde_validation.md){ .md-button }
 </div>
@@ -27,10 +27,18 @@ hide:
 <a class="proof-route__item" href="user_guides/surface_workflow/"><span class="proof-route__step">Step 1</span><span class="proof-route__title">Surface repair</span></a>
 <a class="proof-route__item" href="user_guides/essvi_smooth_handoff/"><span class="proof-route__step">Step 2</span><span class="proof-route__title">eSSVI handoff</span></a>
 <a class="proof-route__item" href="user_guides/localvol_pde_validation/"><span class="proof-route__step">Step 3</span><span class="proof-route__title">Local-vol / PDE</span></a>
-<a class="proof-route__item" href="user_guides/heston/"><span class="proof-route__step">Step 4</span><span class="proof-route__title">Heston / model comparison</span></a>
+<a class="proof-route__item" href="user_guides/heston_model_comparison/"><span class="proof-route__step">Step 4</span><span class="proof-route__title">Heston / model comparison</span></a>
 <a class="proof-route__item proof-route__item--followup" href="performance/"><span class="proof-route__step">Follow-up</span><span class="proof-route__title">Performance evidence</span></a>
 </div>
 </div>
+
+## Capstone progression
+
+| Capstone | Main proof | Best page | Main takeaway |
+| --- | --- | --- | --- |
+| Capstone 1 | IV and surface diagnostics | [Surface repair workflow](user_guides/surface_workflow.md) | Robust implied-vol and surface foundation |
+| Capstone 2 | eSSVI/local-vol/PDE | [Local-vol and PDE validation](user_guides/localvol_pde_validation.md) | Smooth surface handoff and numerical validation |
+| Capstone 3 | Heston/model comparison | [Heston model comparison](user_guides/heston_model_comparison.md) | Calibration, Monte Carlo validation, and model-choice judgment |
 
 ## Signature proof moment
 
@@ -67,7 +75,7 @@ hide:
 
 [<span class="doc-card__eyebrow">Proof path step 3</span><span class="doc-link-card__title">Local-vol / PDE validation</span><span class="doc-link-card__copy">See repricing scatter, error localization, and convergence evidence for the final numerical leg of the workflow.</span>](user_guides/localvol_pde_validation.md){ .doc-link-card .doc-link-card--quiet }
 
-[<span class="doc-card__eyebrow">Proof path step 4</span><span class="doc-link-card__title">Heston model comparison</span><span class="doc-link-card__copy">Review Fourier pricing, calibration diagnostics, Monte Carlo cross-checks, and the tradeoff between Heston interpretability and eSSVI/local-vol flexibility.</span>](user_guides/heston.md){ .doc-link-card .doc-link-card--quiet }
+[<span class="doc-card__eyebrow">Proof path step 4</span><span class="doc-link-card__title">Heston model comparison</span><span class="doc-link-card__copy">Review Fourier pricing, calibration diagnostics, Monte Carlo cross-checks, and the tradeoff between Heston interpretability and eSSVI/local-vol flexibility.</span>](user_guides/heston_model_comparison.md){ .doc-link-card .doc-link-card--quiet }
 
 [<span class="doc-card__eyebrow">Proof path follow-up</span><span class="doc-link-card__title">Performance evidence</span><span class="doc-link-card__copy">Open the authored benchmark page for implied-vol scaling, PDE runtime/error tradeoffs, digital remedies, and stage budgets.</span>](performance.md){ .doc-link-card .doc-link-card--quiet }
 </div>

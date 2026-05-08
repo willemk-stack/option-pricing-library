@@ -26,6 +26,14 @@ Package / import name: `option_pricing`
 
 I built this repo to make the difficult middle of quant engineering inspectable: not only pricing formulas, but the path from noisy implied-vol data to repaired surfaces, smooth local-vol inputs, validated PDE outputs, and a follow-on Heston model-comparison layer. The emphasis is on typed interfaces, reproducible artifacts, and proof pages that explain failure modes instead of hiding them.
 
+## Capstone progression
+
+| Capstone | Main proof | Best page | Main takeaway |
+| --- | --- | --- | --- |
+| Capstone 1 | IV and surface diagnostics | [Surface repair workflow](https://willemk-stack.github.io/option-pricing-library/user_guides/surface_workflow/) | Robust implied-vol and surface foundation |
+| Capstone 2 | eSSVI/local-vol/PDE | [Local-vol and PDE validation](https://willemk-stack.github.io/option-pricing-library/user_guides/localvol_pde_validation/) | Smooth surface handoff and numerical validation |
+| Capstone 3 | Heston/model comparison | [Heston model comparison](https://willemk-stack.github.io/option-pricing-library/user_guides/heston_model_comparison/) | Calibration, Monte Carlo validation, and model-choice judgment |
+
 ## Recommended example
 
 Instruments separate what is being priced from how it is priced.
@@ -70,7 +78,7 @@ The proof card above is generated from the published eSSVI and local-vol validat
 | Surface repair | Quote-vs-repaired surfaces, no-arbitrage checks, and per-expiry SVI residual tables | [Surface workflow](https://willemk-stack.github.io/option-pricing-library/user_guides/surface_workflow/) |
 | Smooth Dupire handoff | Published seam diagnostics, smoothed projection, and Dupire invalid-count checks | [eSSVI smooth handoff](https://willemk-stack.github.io/option-pricing-library/user_guides/essvi_smooth_handoff/) |
 | Local-vol and PDE validation | Repricing summaries, convergence plots, and local-vol diagnostics from the published sweep | [Local-vol and PDE validation](https://willemk-stack.github.io/option-pricing-library/user_guides/localvol_pde_validation/) |
-| Heston model comparison | Fourier pricing, calibration stability, Monte Carlo cross-checks, and Heston-vs-eSSVI/local-vol tradeoffs | [Heston guide](https://willemk-stack.github.io/option-pricing-library/user_guides/heston/) |
+| Heston model comparison | Fourier pricing, calibration stability, Monte Carlo cross-checks, and Heston-vs-eSSVI/local-vol tradeoffs | [Heston model comparison](https://willemk-stack.github.io/option-pricing-library/user_guides/heston_model_comparison/) |
 | Performance evidence | Committed IV scaling, PDE runtime/error, digital-remedy, and stage-budget benchmarks | [Performance evidence](https://willemk-stack.github.io/option-pricing-library/performance/) |
 
 ## Go deeper

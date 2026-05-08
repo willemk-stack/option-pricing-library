@@ -1,9 +1,9 @@
 # Heston versus local volatility
 
 !!! note "Status"
-	This note documents a capstone model-comparison diagnostic. It is designed to compare
-	Heston, eSSVI, and local-vol/PDE behavior on a common quote target; it is not a claim
-	that one model is universally superior.
+    This note documents a capstone model-comparison diagnostic. It is designed to compare
+    Heston, eSSVI, and local-vol/PDE behavior on a common quote target; it is not a claim
+    that one model is universally superior.
 
 `run_heston_vs_local_vol_comparison(...)` is the Capstone 3 comparison layer for
 a fitted Heston model, the repo-native eSSVI implied-surface path, and a small
@@ -107,3 +107,14 @@ comparison.tables["error_summary"]
 comparison.tables["tradeoff_summary"]
 comparison.meta["notes"]
 ```
+
+## References
+
+- Heston, S. L. (1993). A Closed-Form Solution for Options with Stochastic
+    Volatility with Applications to Bond and Currency Options. *Review of
+    Financial Studies*, 6(2), 327-343.
+- Dupire, B. (1994). Pricing with a smile. *Risk*, 7(1), 18-20.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*.
+    Wiley.
+- Gatheral, J., & Jacquier, A. (2014). Arbitrage-free SVI volatility surfaces.
+    *Quantitative Finance*, 14(1), 59-71.

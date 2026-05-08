@@ -1,9 +1,9 @@
 # Heston Fourier diagnostics
 
 !!! note "Status"
-	This note documents the repository's Fourier-diagnostics contract and review policy.
-	Warning flags, severity language, and tuning guidance should be read as implementation
-	diagnostics unless explicitly cited or benchmark-backed.
+    This note documents the repository's Fourier-diagnostics contract and review policy.
+    Warning flags, severity language, and tuning guidance should be read as implementation
+    diagnostics unless explicitly cited or benchmark-backed.
 
 ## Why this exists
 
@@ -347,3 +347,13 @@ they can be turned into:
 
 That keeps raw numerical facts close to the pricer and presentation and
 reporting logic in the diagnostics package.
+
+## References
+
+- Heston, S. L. (1993). A Closed-Form Solution for Options with Stochastic
+    Volatility with Applications to Bond and Currency Options. *Review of
+    Financial Studies*, 6(2), 327-343.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*.
+    Wiley.
+- Lord, R., & Kahl, C. (2008). Complex logarithms in Heston-like models.
+    *Mathematical Finance*, 20(4), 671-694.

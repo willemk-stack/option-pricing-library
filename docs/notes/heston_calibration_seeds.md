@@ -1,9 +1,9 @@
 # Heston calibration seed design
 
 !!! note "Status"
-	This note records repository calibration heuristics. The defaults are intended to make
-	calibration behavior reviewable and repeatable; they should not be read as universal
-	market-calibration rules.
+    This note records repository calibration heuristics. The defaults are intended to make
+    calibration behavior reviewable and repeatable; they should not be read as universal
+    market-calibration rules.
 
 This note explains the default Heston calibration seed used by
 `default_heston_seed` and the compact diagnostic seed grid exposed by
@@ -291,3 +291,14 @@ hand-picking parameters. They are not designed to prove that the resulting
 parameters are unique or economically meaningful. That responsibility belongs to
 calibration diagnostics: residual plots, synthetic recovery, objective slices,
 and multi-start sensitivity.
+
+## References
+
+- Heston, S. L. (1993). A Closed-Form Solution for Options with Stochastic
+    Volatility with Applications to Bond and Currency Options. *Review of
+    Financial Studies*, 6(2), 327-343.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*.
+    Wiley.
+- Cui, Y., del Baño Rollin, S., & Germano, G. (2017). Full and fast
+    calibration of the Heston stochastic volatility model. *European Journal of
+    Operational Research*, 263(2), 625-638.

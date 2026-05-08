@@ -1,9 +1,9 @@
 # Heston Monte Carlo diagnostics
 
 !!! note "Status"
-	This note documents the repository's Monte Carlo validation workflow and interpretation
-	guidance. Scheme labels, review thresholds, and recommendation text should be read as
-	diagnostics policy rather than a universal ranking of simulation methods.
+    This note documents the repository's Monte Carlo validation workflow and interpretation
+    guidance. Scheme labels, review thresholds, and recommendation text should be read as
+    diagnostics policy rather than a universal ranking of simulation methods.
 
 ## Purpose
 
@@ -47,18 +47,18 @@ Typical notebook flow:
 
 ```python
 from option_pricing.diagnostics.heston import (
-	HestonMCComparisonCase,
-	HestonMCSweepConfig,
-	run_heston_mc_comparison_sweep,
-	summarize_bias_vs_timestep,
+    HestonMCComparisonCase,
+    HestonMCSweepConfig,
+    run_heston_mc_comparison_sweep,
+    summarize_bias_vs_timestep,
 )
 
 case = HestonMCComparisonCase(
-	ctx=market.to_context(),
-	params=params,
-	kind=OptionType.CALL,
-	strike=100.0,
-	tau=1.0,
+    ctx=market.to_context(),
+    params=params,
+    kind=OptionType.CALL,
+    strike=100.0,
+    tau=1.0,
 )
 cfg = HestonMCSweepConfig(n_steps_grid=(8, 16, 32, 64), n_paths=20_000)
 
@@ -114,3 +114,14 @@ These columns answer a different question from timestep bias.
 - The bias summaries are about how the discretized scheme deviates from the semi-analytic reference as `dt` changes.
 
 If the confidence interval is narrow but the signed error stays materially away from zero as `dt` shrinks slowly, you are looking at a discretization issue rather than a pure Monte Carlo variance issue. If intervals are wide and coverage is erratic, increase the path count before over-interpreting small differences between schemes.
+
+## References
+
+- Heston, S. L. (1993). A Closed-Form Solution for Options with Stochastic
+    Volatility with Applications to Bond and Currency Options. *Review of
+    Financial Studies*, 6(2), 327-343.
+- Andersen, L. (2008). Simple and Efficient Simulation of the Heston
+    Stochastic Volatility Model. *Journal of Computational Finance*, 11(3),
+    1-42.
+- Broadie, M., & Kaya, Ö. (2006). Exact Simulation of Stochastic Volatility and
+    Other Affine Jump Diffusion Processes. *Operations Research*, 54(2), 217-231.

@@ -1,0 +1,18 @@
+# Validation matrix
+
+This page maps the library's public claims to bounded evidence. It is
+intentionally a review map, not a substitute for the tests, notebooks, or
+benchmark artifacts themselves.
+
+| Area | Claim being made | Evidence type | Where to review | Caveat |
+| --- | --- | --- | --- | --- |
+| Black-Scholes pricing | Closed-form vanilla pricing and basic Greeks are implemented behind typed APIs | Unit tests and API docs | [Pricers API](api/pricers.md); [API contracts tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/api/test_api_contracts.py); [finite-diff Greeks tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/pricers/test_pricers_finite_diff.py) | European vanilla scope only |
+| Implied-vol solver | Prices can be inverted to Black implied vol with bracketing safeguards | Unit tests and user guide | [Implied volatility guide](user_guides/implied_vol.md); [IV benchmark tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/vol/iv/test_iv.py); [IV edge-case tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/vol/iv/test_iv_edge_cases.py) | Solver validity depends on arbitrage-consistent input prices |
+| Surface repair / SVI | Noisy smile and surface inputs can be fitted, diagnosed, and repaired before downstream use | User guide, design note, notebooks | [Surface repair workflow](user_guides/surface_workflow.md); [SVI calibration design](notes/svi_calibration_design.md) | Demo inputs are controlled examples, not live market data |
+| eSSVI smooth handoff | A smoother cross-maturity surface is used for Dupire-oriented workflows | Proof page and generated visuals | [eSSVI smooth handoff](user_guides/essvi_smooth_handoff.md) | Smoothness is a modeling choice, not a universal optimum |
+| Local-vol extraction | Differentiable implied surfaces can be turned into local-vol diagnostics | User guide, notes, diagnostics pages | [Local volatility guide](user_guides/local_vol.md); [Dupire local vol note](notes/dupire_local_vol.md) | Numerical differentiation remains sensitivity-prone |
+| PDE validation | Local-vol extraction and PDE repricing are validated on selected grids | Proof page, benchmarks, diagnostics | [Local-vol and PDE validation](user_guides/localvol_pde_validation.md); [Performance evidence](performance.md) | Grid and boundary choices still matter |
+| Heston Fourier pricing | Heston vanilla pricing is available through a namespaced Fourier backend | API docs, guide, notes | [Heston guide](user_guides/heston.md); [Pricers API](api/pricers.md); [Pricing conventions note](notes/heston_pricing_conventions.md) | Integration warnings require review rather than blind acceptance |
+| Heston Monte Carlo | Heston paths can be simulated with Euler/QE workflows and uncertainty reporting | User guide, notes, notebooks | [Heston diagnostics](user_guides/heston_diagnostics.md); [Heston Monte Carlo note](notes/heston_monte_carlo.md) | Monte Carlo has sampling and discretization error |
+| Heston calibration | Calibration uses bounds, transforms, multistart, and diagnostic reporting | Guide, calibration notes, notebooks | [Heston guide](user_guides/heston.md); [Heston calibration evidence](notes/heston_calibration.md) | Parameters can still be weakly identified |
+| Heston vs local-vol/eSSVI comparison | The repo can compare stochastic-volatility and vanilla-surface workflows on a common target | Reviewer-facing guide and comparison note | [Heston model comparison](user_guides/heston_model_comparison.md); [Heston versus local volatility](notes/heston_vs_local_vol.md) | This does not prove universal model superiority |
