@@ -1,9 +1,9 @@
 # Heston quadrature policy
 
 !!! note "Status"
-  This note documents current repository implementation policy. Claims about defaults,
-  thresholds, and review tiers should be read as repo policy unless explicitly cited or
-  benchmark-backed.
+	This note documents current repository implementation policy. Claims about defaults,
+	thresholds, and review tiers should be read as repo policy unless explicitly cited or
+	benchmark-backed.
 
 This note defines the intended quadrature policy for the Heston Fourier pricer.
 It is meant to sit beside the implementation and diagnostics docs, not replace
