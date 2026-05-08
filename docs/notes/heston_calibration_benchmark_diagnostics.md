@@ -38,6 +38,7 @@ The artifact builder now writes two clearly separated profiles under
 - `smoke`: the default lightweight regression artifact, using the small
     synthetic grid, `repeat=1`, `warmup=0`, and cheap quadrature so wiring and
     analytics coverage stay fast.
+<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
 - `release`: a stronger deterministic benchmark artifact, using a larger quote
     grid, `repeat=5`, `warmup=1`, and more production-like Gauss-Legendre
     quadrature.

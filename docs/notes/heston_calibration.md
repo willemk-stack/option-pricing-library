@@ -57,6 +57,7 @@ global identifiability.
 
 ## Interpreting the evidence
 
+<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
 Heston calibration can be weakly identifiable from vanilla options. Several
 parameter combinations may produce similar vanilla prices, especially along
 mean-reversion, long-run variance, vol-of-vol, and correlation tradeoffs.

@@ -82,6 +82,7 @@ kappa = 1.50
 The seed deliberately does not infer `kappa` aggressively from the ATM variance
 term structure.
 
+<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
 Reason: `kappa` is often weakly identified from vanilla option prices alone.
 A seemingly clever formula can be misleading. For example, a large short-long
 variance difference does not automatically imply fast mean reversion; in many
@@ -109,6 +110,7 @@ skew = dIV / dlog_moneyness
 ```
 
 A negative skew means IV is higher for lower strikes. In equity-like markets,
+<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
 that usually corresponds to negative spot/variance correlation, so the seed maps
 skew to `rho` with:
 

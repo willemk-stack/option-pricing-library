@@ -94,6 +94,7 @@ This summary is only as broad as the sweep you ran. A tiny notebook sweep is a g
 
 The exact same vanilla option can be used as a control variate under Heston Monte Carlo, but it is disabled by default in these diagnostics.
 
+<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
 For validation work, enabling that control by default can make the Monte Carlo estimator look artificially close to the semi-analytic price you are comparing against. That hides the raw Monte Carlo behavior you usually want to inspect when you are studying timestep bias, runtime, or scheme differences.
 
 The control variate remains available through `HestonMCSweepConfig(use_control_variate=True)` when variance reduction is the actual subject of the experiment.

@@ -491,6 +491,7 @@ The following tests should remain in the project permanently.
 
 - QE vanilla prices agree with Fourier within confidence intervals.
 - QE discounted forward martingale condition holds.
+<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
 - Euler is treated as baseline, not production default.
 - Control variate reduces variance but is not used as the main Fourier validation proof.
 
@@ -610,6 +611,7 @@ where:
 - `probability_index=0` corresponds to \(P_K\), the strike-term probability,
 - `probability_index=1` corresponds to \(P_F\), the forward-term probability,
 - the Fourier phase \(e^{iux}\) is applied exactly once,
+<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
 - `gauss_legendre` is the production/default backend,
 - `quad` is the independent comparison backend,
 - analytic parameter Jacobians support only the guarded fixed

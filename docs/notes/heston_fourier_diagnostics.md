@@ -91,6 +91,7 @@ The current flags are:
 
 Interpretation:
 
+<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
 - `NONFINITE_TOTAL`, `NONFINITE_PROBABILITY`, and
   `PROBABILITY_OUT_OF_RANGE` are usually "do not trust this result" failures.
 - `LARGE_TAIL_FRACTION` and `QUAD_ERROR_LARGE` are soft cautions that often

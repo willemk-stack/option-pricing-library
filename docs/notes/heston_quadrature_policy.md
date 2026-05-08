@@ -25,6 +25,7 @@ this note.
 
 ## Production default
 
+<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
 The production default should be the fixed Gauss-Legendre backend:
 
 ```python
