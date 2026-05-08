@@ -64,31 +64,21 @@ def test_docs_advisory_owns_visual_drift_checks() -> None:
         in workflow
     )
     assert "Run full authoritative visual regression" in workflow
-    assert "python scripts/run_ci_visual_regression.py verify" in workflow
+    assert "python scripts/run_docs_browser_audits.py verify" in workflow
     assert "--skip-build" in workflow
-    assert "--tests ${{ needs.build.outputs.selected_tests }}" not in workflow
+    assert "npm ci --no-audit --no-fund" in workflow
 
 
-def test_docs_ci_runs_browser_audits_via_ci_like_container() -> None:
+def test_docs_ci_runs_browser_audits_via_native_prebuilt_runner() -> None:
     workflow = workflow_text("docs-ci.yml")
 
-    assert "Run CI-like smoke and DOM audits" in workflow
-    assert (
-        "run_ci_visual_regression.py verify \\\n            --skip-build \\\n            --tests smoke.spec.ts dom-audits.spec.ts"
-        in workflow
-    )
-    assert "Run CI-like math audits" in workflow
-    assert (
-        "run_ci_visual_regression.py verify \\\n            --skip-build \\\n            --tests math-audits.spec.ts"
-        in workflow
-    )
-    assert "Run CI-like accessibility checks" in workflow
-    assert (
-        "run_ci_visual_regression.py verify \\\n            --skip-build \\\n            --tests a11y.spec.ts"
-        in workflow
-    )
-    assert "npx playwright test smoke.spec.ts dom-audits.spec.ts" not in workflow
-    assert "npx playwright test math-audits.spec.ts" not in workflow
+    assert "Determine docs audit plan" in workflow
+    assert "python scripts/docs_audit_plan.py --format github-outputs" in workflow
+    assert "Install Playwright dependencies" in workflow
+    assert "npm ci --no-audit --no-fund" in workflow
+    assert "npx playwright install --with-deps chromium" in workflow
+    assert "scripts/run_docs_browser_audits.py" in workflow
+    assert "run_ci_visual_regression.py verify" not in workflow
 
 
 def test_docs_ci_owns_deploy_and_deploy_docs_workflow_is_gone() -> None:

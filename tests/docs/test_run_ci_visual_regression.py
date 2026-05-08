@@ -93,3 +93,40 @@ def test_browser_snapshot_stage_metadata_points_to_uploaded_artifact_bundle() ->
     assert likely_layer == "Ubuntu representative full-page snapshots"
     assert "visual regression artifact bundle" in next_step
     assert "tests/visual/test-results/**" in next_step
+
+
+def test_should_install_python_dependencies_skips_prebuilt_verify_mode() -> None:
+    assert (
+        runner.should_install_python_dependencies(mode="verify", skip_build=True)
+        is False
+    )
+    assert (
+        runner.should_install_python_dependencies(mode="verify", skip_build=False)
+        is True
+    )
+    assert (
+        runner.should_install_python_dependencies(mode="build-assets", skip_build=True)
+        is True
+    )
+
+
+def test_playwright_stage_commands_forward_projects_and_update_snapshots() -> None:
+    commands = runner.playwright_stage_commands(
+        ["smoke.spec.ts", "pages.spec.ts"],
+        projects=["chromium-375", "chromium-1280"],
+        update_snapshots=True,
+    )
+
+    assert [stage_name for stage_name, _ in commands] == [
+        "playwright-browser-audits",
+        "playwright-pages",
+    ]
+    parallel_command = commands[0][1]
+    serial_command = commands[1][1]
+
+    assert parallel_command[:4] == ["npx", "playwright", "test", "smoke.spec.ts"]
+    assert parallel_command.count("--project") == 2
+    assert parallel_command[-1] == "--update-snapshots"
+    assert serial_command.count("--project") == 2
+    assert "--workers=1" in serial_command
+    assert serial_command[-1] == "--update-snapshots"

@@ -175,7 +175,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Run docs visual validation steps inside a GitHub-runner-style Ubuntu "
-            "container so generated assets and snapshot verification match CI."
+            "container so generated assets and snapshot verification match CI. "
+            "Use scripts/run_docs_browser_audits.py for the normal native prebuilt-site "
+            "path; this wrapper is for Dockerized reproduction."
         )
     )
     parser.add_argument(
@@ -196,6 +198,12 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         default=DEFAULT_TESTS,
         help="Playwright test files to run inside the container.",
+    )
+    parser.add_argument(
+        "--project",
+        action="append",
+        default=[],
+        help="Playwright project to run. Repeat to select multiple projects.",
     )
     parser.add_argument(
         "--skip-build",
@@ -287,6 +295,54 @@ def classify_parallel_tests(parallel_tests: list[str]) -> str:
     return "playwright-sentinel-pages"
 
 
+def should_install_python_dependencies(*, mode: str, skip_build: bool) -> bool:
+    return mode == "build-assets" or not skip_build
+
+
+def playwright_stage_commands(
+    tests: list[str],
+    *,
+    projects: list[str],
+    update_snapshots: bool,
+) -> list[tuple[str, list[str]]]:
+    commands: list[tuple[str, list[str]]] = []
+    project_args = [
+        argument for project in projects for argument in ("--project", project)
+    ]
+    parallel_tests = [test for test in tests if test not in SERIAL_TESTS]
+    serial_tests = [test for test in tests if test in SERIAL_TESTS]
+
+    if parallel_tests:
+        command = ["npx", "playwright", "test", *parallel_tests, *project_args]
+        if update_snapshots:
+            command.append("--update-snapshots")
+        commands.append((classify_parallel_tests(parallel_tests), command))
+
+    for test_name in serial_tests:
+        command = [
+            "npx",
+            "playwright",
+            "test",
+            test_name,
+            *project_args,
+            "--workers=1",
+        ]
+        if update_snapshots:
+            command.append("--update-snapshots")
+
+        if test_name == "pages.spec.ts":
+            stage_name = "playwright-pages"
+        elif test_name == "components.spec.ts":
+            stage_name = "playwright-components"
+        elif test_name == "embedded-panels.spec.ts":
+            stage_name = "playwright-embedded-panels"
+        else:
+            stage_name = "playwright-sentinel-pages"
+        commands.append((stage_name, command))
+
+    return commands
+
+
 def main() -> int:
     args = parse_args()
     prepare_stage_status_artifact()
@@ -301,55 +357,37 @@ def main() -> int:
     build_only = args.mode == "build-assets"
 
     requested_tests = list(dict.fromkeys(args.tests))
-    parallel_tests = (
-        []
-        if build_only
-        else [test for test in requested_tests if test not in SERIAL_TESTS]
-    )
-    serial_tests = (
-        [] if build_only else [test for test in requested_tests if test in SERIAL_TESTS]
-    )
+    requested_projects = list(dict.fromkeys(args.project))
     forwarded_env = {
         name: value for name in FORWARDED_ENV_VARS if (value := os.environ.get(name))
     }
 
-    playwright_commands: list[list[str]] = []
-    playwright_stage_names: list[str] = []
-    if parallel_tests:
-        playwright_commands.append(["npx", "playwright", "test", *parallel_tests])
-        playwright_stage_names.append(classify_parallel_tests(parallel_tests))
-    for test_name in serial_tests:
-        playwright_commands.append(
-            ["npx", "playwright", "test", test_name, "--workers=1"]
+    playwright_stages = []
+    if not build_only:
+        playwright_stages = playwright_stage_commands(
+            requested_tests,
+            projects=requested_projects,
+            update_snapshots=args.mode == "update",
         )
-        if test_name == "pages.spec.ts":
-            playwright_stage_names.append("playwright-pages")
-        elif test_name == "components.spec.ts":
-            playwright_stage_names.append("playwright-components")
-        elif test_name == "embedded-panels.spec.ts":
-            playwright_stage_names.append("playwright-embedded-panels")
-        else:
-            playwright_stage_names.append("playwright-sentinel-pages")
 
-    if args.mode == "update":
-        for command in playwright_commands:
-            command.append("--update-snapshots")
-
-    if not playwright_commands and not build_only:
+    if not playwright_stages and not build_only:
         raise ValueError("No Playwright test files were selected.")
 
-    inner_commands = [
-        "set -e",
-        stage_status_setup_command(),
-        docker_stage_command(
-            "install-python-deps",
-            pip_install_command("--upgrade", "pip"),
-        ),
-        docker_stage_command(
-            "install-python-deps",
-            pip_install_command(*constraints_arg, "-e", ".[docs,plot]"),
-        ),
-    ]
+    inner_commands = ["set -e", stage_status_setup_command()]
+
+    if should_install_python_dependencies(mode=args.mode, skip_build=args.skip_build):
+        inner_commands.extend(
+            [
+                docker_stage_command(
+                    "install-python-deps",
+                    pip_install_command("--upgrade", "pip"),
+                ),
+                docker_stage_command(
+                    "install-python-deps",
+                    pip_install_command(*constraints_arg, "-e", ".[docs,plot]"),
+                ),
+            ]
+        )
 
     if build_only:
         inner_commands.append(
@@ -409,9 +447,7 @@ def main() -> int:
                     *command,
                 ],
             )
-            for stage_name, command in zip(
-                playwright_stage_names, playwright_commands, strict=True
-            )
+            for stage_name, command in playwright_stages
         )
 
     inner_script = " && ".join(inner_commands)
@@ -434,6 +470,8 @@ def main() -> int:
     print(f"Running CI-like visual {args.mode} in {args.image}", flush=True)
     if not build_only:
         print("Selected tests: " + ", ".join(requested_tests), flush=True)
+        if requested_projects:
+            print("Selected projects: " + ", ".join(requested_projects), flush=True)
     if args.skip_build and not build_only:
         print("Build mode: reuse prebuilt site", flush=True)
     if forwarded_env.get("REVIEW_PATHS"):

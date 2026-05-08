@@ -6,7 +6,7 @@ These tests run browser-based visual checks against the local MkDocs site.
 
 ```bash
 cd tests/visual
-npm install
+npm ci --no-audit --no-fund
 npx playwright install
 ```
 
@@ -26,6 +26,21 @@ cd tests/visual
 npm test
 ```
 
+For the fast native PR gate that matches `docs-ci`, prefer:
+
+```bash
+cd tests/visual
+npm run test:pr:blocking
+npm run test:pr:a11y
+```
+
+For the broader advisory/manual native lane, prefer:
+
+```bash
+cd tests/visual
+npm run test:native:full
+```
+
 For the CI-shaped split stages:
 
 ```bash
@@ -43,8 +58,12 @@ npm run test:components
 npm run test:artifacts
 ```
 
-The `test:local:*` scripts are the preferred native entrypoints. They build the docs
-site once, then reuse the prebuilt output for all selected suites instead of letting
+The `test:pr:*` scripts are the preferred native entrypoints for the CI-shaped blocking
+slice. They build the docs site once, then reuse the prebuilt output across the selected
+suites and emit compact findings JSON under `artifacts/docs-audit/`.
+
+The `test:local:*` scripts remain useful for broader legacy native replay. They build the
+docs site once, then reuse the prebuilt output for all selected suites instead of letting
 each standalone Playwright command trigger its own rebuild.
 
 The lower-level `npm run test:*` suite commands and `npm run test:raw` remain useful
@@ -62,9 +81,10 @@ The shared repo-facts shell widget is checked separately with mocked data so ful
 The two composite proof panels now inline their child thumbnails, and MathJax is served
 from a vendored local asset so visual CI no longer depends on nested browser fetches.
 
-For the closest local match to CI, run the visual suites inside the GitHub-runner-style
-Ubuntu container. The GitHub visual-regression job now uses this same container wrapper
-and selects suites with the same path-aware rules as the docs pre-push guard:
+For Dockerized reproduction of the authoritative Ubuntu environment, run the visual suites
+inside the GitHub-runner-style Ubuntu container. The blocking GitHub workflow no longer
+uses this wrapper for smoke, DOM, math, and a11y, but the container path remains the
+authoritative reproduction and snapshot-refresh mode:
 
 ```bash
 python ../../scripts/run_ci_visual_regression.py verify
@@ -83,7 +103,8 @@ python ../../scripts/docs_doctor.py
 When you do want a native run, prefer the cross-platform wrapper:
 
 ```bash
-python ../../scripts/run_local_visual_regression.py verify
+python ../../scripts/run_docs_browser_audits.py verify --build --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts --project chromium-375 --project chromium-1280 --findings-json ../../artifacts/docs-audit/findings.json
+python ../../scripts/run_docs_browser_audits.py verify --skip-build --tests a11y.spec.ts --project chromium-1280 --findings-json ../../artifacts/docs-audit/a11y-findings.json
 python ../../scripts/run_local_visual_regression.py verify --skip-build --tests smoke.spec.ts repo-facts.spec.ts
 ```
 
@@ -121,6 +142,14 @@ cd tests/visual
 set REVIEW_PAGE_KEYS=homepage
 set IMPROVEMENT_CAPTURE_DIR=..\..\artifacts\visual-state\improvement-runs\manual\homepage\before\captures
 npm run test:capture
+```
+
+For agent loops, start from the same plan and findings artifacts used by `docs-ci`:
+
+```bash
+python ../../scripts/docs_audit_plan.py --base-ref main --head-ref HEAD --format json
+python ../../scripts/run_docs_browser_audits.py verify --skip-build --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts --project chromium-375 --project chromium-1280 --review-paths /performance/ --findings-json ../../artifacts/docs-audit/findings.json
+python ../../scripts/visual_audit/run_improvement_loop.py --page-key visual_report --project chromium-1280 --suite review-capture --suite smoke --suite dom-audits
 ```
 
 ## What these tests check

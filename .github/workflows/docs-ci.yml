@@ -14,6 +14,7 @@ on:
       - 'scripts/build_benchmark_artifacts.py'
       - 'scripts/build_visual_artifacts.py'
       - 'scripts/check_docs_source_links.py'
+      - 'scripts/docs_audit_plan.py'
       - 'scripts/docs_doctor.py'
       - 'scripts/docs_impact.py'
       - 'scripts/docs_site_contract.py'
@@ -21,6 +22,7 @@ on:
       - 'scripts/render_d2_diagrams.py'
       - 'scripts/render_performance_page.py'
       - 'scripts/render_readme.py'
+      - 'scripts/run_docs_browser_audits.py'
       - 'scripts/run_ci_visual_regression.py'
       - 'scripts/select_docs_visual_ci.py'
       - 'scripts/serve_docs.py'
@@ -45,6 +47,7 @@ on:
       - 'scripts/build_benchmark_artifacts.py'
       - 'scripts/build_visual_artifacts.py'
       - 'scripts/check_docs_source_links.py'
+      - 'scripts/docs_audit_plan.py'
       - 'scripts/docs_doctor.py'
       - 'scripts/docs_impact.py'
       - 'scripts/docs_site_contract.py'
@@ -52,6 +55,7 @@ on:
       - 'scripts/render_d2_diagrams.py'
       - 'scripts/render_performance_page.py'
       - 'scripts/render_readme.py'
+      - 'scripts/run_docs_browser_audits.py'
       - 'scripts/run_ci_visual_regression.py'
       - 'scripts/select_docs_visual_ci.py'
       - 'scripts/serve_docs.py'
@@ -77,10 +81,14 @@ jobs:
       artifact_name: ${{ steps.docs_site_contract.outputs.artifact_name }}
       site_dir: ${{ steps.docs_site_contract.outputs.site_dir }}
       docs_site_required: ${{ steps.docs_impact.outputs.docs_site_required }}
-      selected_tests: ${{ steps.docs_impact.outputs.selected_tests }}
-      review_paths: ${{ steps.docs_impact.outputs.review_paths }}
-      a11y_paths: ${{ steps.docs_impact.outputs.a11y_paths }}
-      full_review: ${{ steps.docs_impact.outputs.full_review }}
+      review_paths: ${{ steps.docs_audit_plan.outputs.review_paths }}
+      a11y_paths: ${{ steps.docs_audit_plan.outputs.a11y_paths }}
+      full_review: ${{ steps.docs_audit_plan.outputs.full_review }}
+      blocking_suites: ${{ steps.docs_audit_plan.outputs.blocking_suites }}
+      a11y_suites: ${{ steps.docs_audit_plan.outputs.a11y_suites }}
+      blocking_projects: ${{ steps.docs_audit_plan.outputs.blocking_projects }}
+      a11y_projects: ${{ steps.docs_audit_plan.outputs.a11y_projects }}
+      audit_plan_json: ${{ steps.docs_audit_plan.outputs.audit_plan_json }}
     env:
       MPLBACKEND: Agg
       D2_VERSION: "v0.7.1"
@@ -119,20 +127,26 @@ jobs:
         id: docs_site_contract
         run: python scripts/docs_site_contract.py github-outputs
 
-      - name: Set up Node
-        if: steps.docs_impact.outputs.docs_site_required == 'true'
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: |
-            tests/visual/package-lock.json
-
       - name: Install Python dependencies
         if: steps.docs_impact.outputs.docs_sensitive == 'true'
         run: |
           python -m pip install --upgrade pip
           python -m pip install -c scripts/ci-constraints.txt -e ".[docs,plot]"
+
+      - name: Determine docs audit plan
+        id: docs_audit_plan
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python scripts/docs_audit_plan.py --format github-outputs \
+              --base-ref "${{ github.event.pull_request.base.sha }}" \
+              --head-ref "${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            python scripts/docs_audit_plan.py --format github-outputs \
+              --base-ref "${{ github.event.before }}" \
+              --head-ref "${{ github.sha }}"
+          else
+            python scripts/docs_audit_plan.py --format github-outputs --full
+          fi
 
       - name: Check performance snapshot freshness
         if: steps.docs_impact.outputs.benchmark_artifacts_required == 'true'
@@ -199,6 +213,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            tests/visual/package-lock.json
+
       - name: Download built docs site
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -208,30 +230,100 @@ jobs:
       - name: Verify built docs site layout
         run: python scripts/docs_site_contract.py verify
 
-      - name: Run CI-like smoke and DOM audits
-        env:
-          REVIEW_PATHS: ${{ needs.build.outputs.review_paths }}
+      - name: Install Playwright dependencies
+        working-directory: tests/visual
         run: |
-          python scripts/run_ci_visual_regression.py verify \
-            --skip-build \
-            --tests smoke.spec.ts dom-audits.spec.ts
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
 
-      - name: Run CI-like math audits
+      - name: Run blocking browser audits
         env:
-          REVIEW_PATHS: ${{ needs.build.outputs.review_paths }}
+          AUDIT_PLAN_JSON: ${{ needs.build.outputs.audit_plan_json }}
         run: |
-          python scripts/run_ci_visual_regression.py verify \
-            --skip-build \
-            --tests math-audits.spec.ts
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
 
-      - name: Run CI-like accessibility checks
-        if: needs.build.outputs.full_review == 'true' || needs.build.outputs.a11y_paths != ''
+          plan = json.loads(os.environ["AUDIT_PLAN_JSON"])
+          command = [
+              sys.executable,
+              "scripts/run_docs_browser_audits.py",
+              "verify",
+              "--skip-build",
+              "--tests",
+              *plan["blocking_suites"],
+              "--findings-json",
+              "artifacts/docs-audit/blocking-findings.json",
+              "--summary-md",
+              "artifacts/docs-audit/blocking-summary.md",
+          ]
+          for project in plan["blocking_projects"]:
+              command.extend(["--project", project])
+          if plan["review_paths"]:
+              command.extend(["--review-paths", *plan["review_paths"]])
+          subprocess.run(command, check=True)
+          PY
+
+      - name: Run curated accessibility audits
+        if: needs.build.outputs.a11y_suites != ''
         env:
-          REVIEW_PATHS: ${{ needs.build.outputs.a11y_paths }}
+          AUDIT_PLAN_JSON: ${{ needs.build.outputs.audit_plan_json }}
         run: |
-          python scripts/run_ci_visual_regression.py verify \
-            --skip-build \
-            --tests a11y.spec.ts
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          plan = json.loads(os.environ["AUDIT_PLAN_JSON"])
+          command = [
+              sys.executable,
+              "scripts/run_docs_browser_audits.py",
+              "verify",
+              "--skip-build",
+              "--tests",
+              *plan["a11y_suites"],
+              "--findings-json",
+              "artifacts/docs-audit/a11y-findings.json",
+              "--summary-md",
+              "artifacts/docs-audit/a11y-summary.md",
+          ]
+          for project in plan["a11y_projects"]:
+              command.extend(["--project", project])
+          if plan["a11y_paths"]:
+              command.extend(["--review-paths", *plan["a11y_paths"]])
+          subprocess.run(command, check=True)
+          PY
+
+      - name: Combine docs audit findings
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, "scripts")
+          import run_docs_browser_audits as runner
+
+          root = Path("artifacts/docs-audit")
+          root.mkdir(parents=True, exist_ok=True)
+          findings = []
+          for name in ("blocking-findings.json", "a11y-findings.json"):
+              path = root / name
+              if not path.is_file():
+                  continue
+              payload = json.loads(path.read_text(encoding="utf8"))
+              if isinstance(payload, list):
+                  findings.extend(entry for entry in payload if isinstance(entry, dict))
+          (root / "findings.json").write_text(
+              json.dumps(findings, indent=2),
+              encoding="utf8",
+          )
+          runner.write_findings_summary(root / "summary.md", findings)
+          PY
 
       - name: Upload browser audit artifacts
         if: always()
@@ -240,6 +332,7 @@ jobs:
           name: docs-ci-browser-audit-artifacts
           if-no-files-found: ignore
           path: |
+            artifacts/docs-audit/**
             tests/visual/test-results/**
             tests/visual/playwright-report/**
             artifacts/pre_push/**

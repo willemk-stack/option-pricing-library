@@ -4,6 +4,9 @@
   "scripts": {
     "test": "python ../../scripts/run_ci_visual_regression.py verify --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts a11y.spec.ts && python ../../scripts/run_ci_visual_regression.py verify --skip-build",
     "test:raw": "playwright test",
+    "test:pr:blocking": "python ../../scripts/run_docs_browser_audits.py verify --build --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts --project chromium-375 --project chromium-1280 --findings-json ../../artifacts/docs-audit/findings.json",
+    "test:pr:a11y": "python ../../scripts/run_docs_browser_audits.py verify --skip-build --tests a11y.spec.ts --project chromium-1280 --findings-json ../../artifacts/docs-audit/a11y-findings.json",
+    "test:native:full": "python ../../scripts/run_docs_browser_audits.py verify --build --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts a11y.spec.ts sentinel.spec.ts repo-facts.spec.ts pages.spec.ts components.spec.ts embedded-panels.spec.ts --project chromium-375 --project chromium-768 --project chromium-1280 --project chromium-1536 --findings-json ../../artifacts/docs-audit/findings.json",
     "test:local:quick": "python ../../scripts/run_local_visual_regression.py verify --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts a11y.spec.ts sentinel.spec.ts repo-facts.spec.ts",
     "test:local:full": "python ../../scripts/run_local_visual_regression.py verify",
     "test:local:update": "python ../../scripts/run_local_visual_regression.py update",

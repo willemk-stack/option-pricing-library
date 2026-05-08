@@ -30,6 +30,14 @@ jobs:
           cache-dependency-path: |
             pyproject.toml
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            tests/visual/package-lock.json
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
@@ -47,11 +55,20 @@ jobs:
       - name: Build MkDocs site strictly
         run: python -m mkdocs build --strict
 
-      - name: Run CI-like Playwright audits
+      - name: Install Playwright dependencies
+        working-directory: tests/visual
         run: |
-          python scripts/run_ci_visual_regression.py verify \
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Run targeted Playwright audits
+        run: |
+          python scripts/run_docs_browser_audits.py verify \
             --skip-build \
-            --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts embedded-panels.spec.ts
+            --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts embedded-panels.spec.ts \
+            --project chromium-375 \
+            --project chromium-1280 \
+            --findings-json artifacts/docs-audit/findings.json
 
       - name: Generate improvement report
         run: python scripts/visual_audit/score_pages.py
@@ -63,5 +80,6 @@ jobs:
           name: docs-improvement-report
           if-no-files-found: ignore
           path: |
+            artifacts/docs-audit/**
             artifacts/visual-state/**
             tests/visual/test-results/**
