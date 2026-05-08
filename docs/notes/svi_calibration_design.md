@@ -1,9 +1,9 @@
 # SVI calibration design
 
 !!! note "Status"
-  This note now reflects the current raw-SVI slice calibration path in the
-  repository. It stays scoped to the slice-level fitter, its repair hooks,
-  and the workflow helpers that assemble surfaces one expiry at a time.
+    This note now reflects the current raw-SVI slice calibration path in the
+    repository. It stays scoped to the slice-level fitter, its repair hooks,
+    and the workflow helpers that assemble surfaces one expiry at a time.
 
 ## Role in the library
 

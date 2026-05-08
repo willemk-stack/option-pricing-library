@@ -84,7 +84,9 @@ The proof card above is generated from the published eSSVI and local-vol validat
 ## Go deeper
 
 - [Decision guide](https://willemk-stack.github.io/option-pricing-library/user_guides/decision_guide/) for the strongest end-to-end review path
-- [Heston guide](https://willemk-stack.github.io/option-pricing-library/user_guides/heston/) for the stochastic-volatility pricing, calibration, MC, and comparison layer
+- [Heston model comparison](https://willemk-stack.github.io/option-pricing-library/user_guides/heston_model_comparison/) for the reviewer-facing model-choice proof path
+- [Validation matrix](https://willemk-stack.github.io/option-pricing-library/validation_matrix/) for the claim-to-evidence map across the library
+- [Heston guide](https://willemk-stack.github.io/option-pricing-library/user_guides/heston/) for the stochastic-volatility implementation and API workflow
 - [Instruments guide](https://willemk-stack.github.io/option-pricing-library/user_guides/instruments/) for the recommended public API
 - [Architecture](https://willemk-stack.github.io/option-pricing-library/architecture/) for package boundaries and dependency direction
 - [API reference](https://willemk-stack.github.io/option-pricing-library/api/) for the generated surface area

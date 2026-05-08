@@ -35,6 +35,32 @@ Dupire/PDE validation evidence.
 The table-level details for this workflow live in the
 [Heston versus local volatility note](../notes/heston_vs_local_vol.md).
 
+## Evidence produced by the comparison report
+
+| Evidence | What it shows | What it does not prove |
+| --- | --- | --- |
+| Quote-level Heston repricing errors | Whether the fitted Heston model stays close to the common quote target at the individual-row level | It does not prove parameter uniqueness or robustness outside the reviewed target |
+| eSSVI repricing errors | How well the surface-first path fits the same vanilla target without imposing Heston dynamics | It does not prove dynamic realism or path-dependent suitability |
+| Direct local-vol/PDE rows | Whether selected Dupire/PDE repricing rows remain aligned with the common target | It does not prove full-surface PDE accuracy across all grids or scenarios |
+| ATM, downside, and upside buckets | Where model fit is concentrated or weak instead of hiding everything inside one average error | It does not prove behavior outside the sampled bucket definitions |
+| Held-out comparison, when available | Whether the ranking changes once some rows are kept out of calibration | It does not prove broad out-of-sample generalization across dates or markets |
+| Tradeoff summary | A reviewer-facing summary of fit, interpretability, diagnostics, and validation tradeoffs | It does not declare a universal model winner |
+
+The report is bounded evidence on one shared vanilla target. It is meant to
+show what the repository can measure and compare, not to make a universal claim
+about stochastic-volatility superiority.
+
+## Comparison report architecture
+
+```text
+Common quote target
+      |
+      +--> Heston calibration -> Fourier repricing -> fit diagnostics
+      +--> Heston MC cross-check
+      +--> eSSVI surface repricing
+      +--> local-vol/PDE audit rows
+```
+
 ## Why Heston is not just another surface fitter
 
 Heston gives a stochastic variance story: mean reversion, long-run variance,
@@ -92,4 +118,5 @@ stochastic-volatility fit economically unique.
 This comparison does not prove that either Heston or local volatility is
 universally superior, and it is not a production-trading claim. It shows a
 bounded model-comparison workflow inside this repository, with diagnostics that
-make the tradeoffs visible enough for review.
+make the tradeoffs visible enough for review on the configured comparison
+target.
