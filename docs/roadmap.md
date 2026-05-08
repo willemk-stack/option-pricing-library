@@ -2,8 +2,8 @@
 
 <div class="portfolio-hero">
   <p class="hero-kicker">Stable today vs exploratory next</p>
-  <p class="hero-copy">Stable today: typed vanilla pricing engines, implied-vol and surface tooling, SVI/eSSVI workflows, local-vol/PDE diagnostics, README freshness checks, docs builds, and CI-executed notebooks.</p>
-  <p class="hero-copy">Exploratory next: broader stochastic-vol calibration, richer hedging experiments, and more portfolio/reporting workflows.</p>
+  <p class="hero-copy">Stable today: typed vanilla pricing engines, implied-vol and surface tooling, SVI/eSSVI workflows, local-vol/PDE diagnostics, the namespaced Heston pricing and calibration stack, README freshness checks, docs builds, and CI-executed notebooks.</p>
+  <p class="hero-copy">Exploratory next: hedging experiments, richer portfolio/reporting workflows, and capstone pages that tighten the evidence story around the existing model layers.</p>
 </div>
 
 ## What is already solid
@@ -20,6 +20,8 @@
   - SVI fitting and repair
   - eSSVI projection and seam diagnostics
   - local-vol extraction and PDE repricing checks
+  - Heston Fourier vanilla pricing and Monte Carlo cross-checks
+  - Heston calibration diagnostics and model-comparison workflows
 
 ## Active polish
 
@@ -29,12 +31,22 @@
 
 ## Research roadmap
 
-### Capstone 3 - Stochastic vol + calibration (Heston)
+### Capstone 3 - Heston stochastic volatility and model comparison
 
-- Heston characteristic-function pricer
-- Monte Carlo cross-check
-- calibration objective, constraints, and stability checks
-- notebook on surface fit quality and parameter stability
+Status: active polish / release candidate.
+
+Implemented:
+- Heston Fourier vanilla pricing
+- Heston Monte Carlo with full-truncation Euler and Andersen QE schemes
+- calibration with bounded transforms and multistart
+- calibration fit diagnostics and synthetic benchmark diagnostics
+- Heston vs eSSVI/local-vol comparison layer
+
+Remaining polish:
+- final reviewer-facing model-comparison page
+- Heston benchmark/performance evidence integration
+- citation and claim-support audit for Heston notes
+- README/homepage proof-card refresh once generated Heston visuals are ready
 
 ### Capstone 4 - Hedging realism
 

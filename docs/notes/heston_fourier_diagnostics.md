@@ -1,5 +1,10 @@
 # Heston Fourier diagnostics
 
+!!! note "Status"
+  This note documents the repository's Fourier-diagnostics contract and review policy.
+  Warning flags, severity language, and tuning guidance should be read as implementation
+  diagnostics unless explicitly cited or benchmark-backed.
+
 ## Why this exists
 
 The Heston Fourier pricer can produce a finite number that is still numerically

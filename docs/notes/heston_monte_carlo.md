@@ -1,5 +1,10 @@
 # Heston Monte Carlo diagnostics
 
+!!! note "Status"
+	This note documents the repository's Monte Carlo validation workflow and interpretation
+	guidance. Scheme labels, review thresholds, and recommendation text should be read as
+	diagnostics policy rather than a universal ranking of simulation methods.
+
 ## Purpose
 
 The Heston Monte Carlo diagnostics utilities package three review questions into notebook-friendly pandas tables:

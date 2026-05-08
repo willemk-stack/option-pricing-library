@@ -1,6 +1,6 @@
 # Option Pricing Library
 
-Typed Python library for pricing vanilla options, repairing implied-volatility surfaces, and validating the local-vol/PDE path with published evidence.
+Typed Python library for vanilla option pricing, volatility-surface repair, local-vol/PDE validation, and Heston model-comparison diagnostics.
 
 [![Tests](https://github.com/willemk-stack/option-pricing-library/actions/workflows/tests.yaml/badge.svg)](https://github.com/willemk-stack/option-pricing-library/actions/workflows/tests.yaml)
 [![Codecov](https://codecov.io/gh/willemk-stack/option-pricing-library/branch/main/graph/badge.svg)](https://codecov.io/gh/willemk-stack/option-pricing-library)
@@ -9,7 +9,7 @@ Typed Python library for pricing vanilla options, repairing implied-volatility s
 Package / import name: `option_pricing`
 
 - Prices vanilla options through a typed public API that scales from single trades to surface-aware workflows.
-- Makes the hard quant path reviewable: quote repair, smooth Dupire handoff, local-vol extraction, and PDE repricing stay documented and instrumented.
+- Makes the hard quant path reviewable: quote repair, smooth Dupire handoff, local-vol/PDE validation, Heston calibration, and model-comparison diagnostics stay documented and instrumented.
 - Publishes benchmarks, proof pages, and generated visuals from committed artifacts rather than screenshot-only claims.
 
 > **Hiring-manager path:** Start with the [Decision guide](https://willemk-stack.github.io/option-pricing-library/user_guides/decision_guide/), then [Performance evidence](https://willemk-stack.github.io/option-pricing-library/performance/), then [Architecture](https://willemk-stack.github.io/option-pricing-library/architecture/).
@@ -19,11 +19,12 @@ Package / import name: `option_pricing`
 - Numerical finance code packaged as a typed library instead of notebook-only snippets.
 - Surface repair and eSSVI smoothing with diagnostics that stay visible during review.
 - Local-vol and PDE validation backed by repricing, convergence, and no-arbitrage evidence.
+- Heston stochastic-volatility pricing, Monte Carlo validation, calibration diagnostics, and comparison against the eSSVI/local-vol stack.
 - CI-checked docs, generated visuals, and benchmark publishing tied to committed sources.
 
 ## Why I built it this way
 
-I built this repo to make the difficult middle of quant engineering inspectable: not only pricing formulas, but the path from noisy implied-vol data to repaired surfaces, smooth local-vol inputs, and validated PDE outputs. The emphasis is on typed interfaces, reproducible artifacts, and proof pages that explain failure modes instead of hiding them.
+I built this repo to make the difficult middle of quant engineering inspectable: not only pricing formulas, but the path from noisy implied-vol data to repaired surfaces, smooth local-vol inputs, validated PDE outputs, and a follow-on Heston model-comparison layer. The emphasis is on typed interfaces, reproducible artifacts, and proof pages that explain failure modes instead of hiding them.
 
 ## Recommended example
 
@@ -69,11 +70,13 @@ The proof card above is generated from the published eSSVI and local-vol validat
 | Surface repair | Quote-vs-repaired surfaces, no-arbitrage checks, and per-expiry SVI residual tables | [Surface workflow](https://willemk-stack.github.io/option-pricing-library/user_guides/surface_workflow/) |
 | Smooth Dupire handoff | Published seam diagnostics, smoothed projection, and Dupire invalid-count checks | [eSSVI smooth handoff](https://willemk-stack.github.io/option-pricing-library/user_guides/essvi_smooth_handoff/) |
 | Local-vol and PDE validation | Repricing summaries, convergence plots, and local-vol diagnostics from the published sweep | [Local-vol and PDE validation](https://willemk-stack.github.io/option-pricing-library/user_guides/localvol_pde_validation/) |
+| Heston model comparison | Fourier pricing, calibration stability, Monte Carlo cross-checks, and Heston-vs-eSSVI/local-vol tradeoffs | [Heston guide](https://willemk-stack.github.io/option-pricing-library/user_guides/heston/) |
 | Performance evidence | Committed IV scaling, PDE runtime/error, digital-remedy, and stage-budget benchmarks | [Performance evidence](https://willemk-stack.github.io/option-pricing-library/performance/) |
 
 ## Go deeper
 
 - [Decision guide](https://willemk-stack.github.io/option-pricing-library/user_guides/decision_guide/) for the strongest end-to-end review path
+- [Heston guide](https://willemk-stack.github.io/option-pricing-library/user_guides/heston/) for the stochastic-volatility pricing, calibration, MC, and comparison layer
 - [Instruments guide](https://willemk-stack.github.io/option-pricing-library/user_guides/instruments/) for the recommended public API
 - [Architecture](https://willemk-stack.github.io/option-pricing-library/architecture/) for package boundaries and dependency direction
 - [API reference](https://willemk-stack.github.io/option-pricing-library/api/) for the generated surface area
@@ -119,6 +122,8 @@ Python requirement:
 - **CRR binomial tree** for European and American vanilla options
 - **Monte Carlo under GBM** with optional variance-reduction features
 - **Finite-difference PDE pricing** for selected advanced workflows
+- **Heston Fourier pricing** for European vanilla options under stochastic volatility
+- **Heston Monte Carlo** with full-truncation Euler and Andersen QE schemes
 
 ### Volatility and diagnostics
 
@@ -128,6 +133,8 @@ Python requirement:
 - **SVI fitting and repair** workflows
 - **eSSVI calibration, validation, and smooth-surface projection**
 - **Local-vol extraction and diagnostics** from differentiable implied surfaces
+- **Heston calibration and diagnostics** with bounded transforms, multistart, fit residuals, and model-comparison reports
+- **Heston vs eSSVI/local-vol comparison** for fit quality, interpretability, and validation tradeoffs
 - **Convergence and repricing validation utilities**
 
 ## Project layout

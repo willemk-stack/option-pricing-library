@@ -332,7 +332,7 @@ recovery quotes. The report packages quote-level price and IV residuals, direct
 PDE rows, ATM and wing buckets, optional held-out splits, and a concise
 trade-off summary.
 
-[Open the comparison notebook](https://github.com/willemk-stack/option-pricing-library/blob/Feature/heston/demos/13_heston_calibration_vs_localvol.ipynb){ .md-button .md-button--primary }
+[Open the comparison notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/13_heston_calibration_vs_localvol.ipynb){ .md-button .md-button--primary }
 
 The deeper written discussion is in the
 [comparison note](../notes/heston_vs_local_vol.md).

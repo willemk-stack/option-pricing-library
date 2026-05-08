@@ -1,5 +1,10 @@
 # Andersen's QE Heston simulation scheme
 
+!!! note "Status"
+  This note gives model background and implementation-oriented interpretation for the QE
+  scheme used in the repository. It is meant to explain the method and its limitations,
+  not to claim a full convergence proof beyond what the cited references support.
+
 ## Learning goals
 
 - List implementation notes and failure notes.

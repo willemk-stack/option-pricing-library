@@ -1,5 +1,10 @@
 # Heston calibration seed design
 
+!!! note "Status"
+  This note records repository calibration heuristics. The defaults are intended to make
+  calibration behavior reviewable and repeatable; they should not be read as universal
+  market-calibration rules.
+
 This note explains the default Heston calibration seed used by
 `default_heston_seed` and the compact diagnostic seed grid exposed by
 `heston_seed_grid`.

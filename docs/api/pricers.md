@@ -25,6 +25,34 @@
       members:
         - mc_price
 
+## Heston Fourier pricers
+
+<p class="doc-section-lead">These functions expose the namespaced Heston stochastic-volatility vanilla pricing layer. Heston remains under submodules because it is a model stack with pricing, calibration, simulation, and diagnostics rather than a single everyday scalar pricer.</p>
+
+::: option_pricing.pricers.heston
+    options:
+      members:
+        - heston_price_from_ctx
+        - heston_price_call_from_ctx
+        - heston_price_put_from_ctx
+        - heston_price_instrument
+        - heston_price_instrument_from_ctx
+        - heston_price_and_param_jac_from_ctx
+
+## Heston Monte Carlo pricers
+
+<p class="doc-section-lead">These functions expose Heston simulation pricing, including full-truncation Euler and Andersen QE workflows where supported by the implementation.</p>
+
+::: option_pricing.pricers.heston_mc
+    options:
+      members:
+        - heston_mc_price_from_ctx
+        - heston_mc_price
+        - heston_mc_price_instrument
+        - heston_mc_price_instrument_from_ctx
+        - heston_mc_price_path_payoff_from_ctx
+        - heston_mc_price_with_vanilla_control_from_ctx
+
 ## Binomial CRR with `PricingInputs`
 
 <p class="doc-section-lead">This is the compact tree-based pricing entry point for the flat-input style.</p>

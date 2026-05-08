@@ -1,5 +1,10 @@
 # Heston Pricing Conventions
 
+!!! note "Status"
+   This note gives model background and notation for the repository's Heston implementation.
+   Mathematical claims should be tied to the references below; repository-specific defaults
+   are documented separately in the implementation-policy notes.
+
 This note fixes the pricing conventions used by the Heston Fourier pricer in this repository. It is intended to remove ambiguity around the state variable, log-moneyness input, probability indices, discounting convention, and call/put formulas.
 
 The purpose is not to re-derive the full Heston model. The purpose is to make the implementation contract explicit enough that pricing, calibration, diagnostics, and Monte Carlo validation can all refer to the same convention.

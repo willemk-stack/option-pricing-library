@@ -1,5 +1,10 @@
 # Heston versus local volatility
 
+!!! note "Status"
+  This note documents a capstone model-comparison diagnostic. It is designed to compare
+  Heston, eSSVI, and local-vol/PDE behavior on a common quote target; it is not a claim
+  that one model is universally superior.
+
 `run_heston_vs_local_vol_comparison(...)` is the Capstone 3 comparison layer for
 a fitted Heston model, the repo-native eSSVI implied-surface path, and a small
 direct Dupire/PDE local-vol repricing audit. It uses one common
