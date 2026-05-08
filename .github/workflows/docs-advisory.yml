@@ -34,6 +34,14 @@ jobs:
           cache-dependency-path: |
             pyproject.toml
 
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            tests/visual/package-lock.json
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
@@ -60,6 +68,12 @@ jobs:
       - name: Check docs source links
         run: python scripts/check_docs_source_links.py
 
+      - name: Install Playwright dependencies
+        working-directory: tests/visual
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
       - name: Link check docs sources and README
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411 # v2
         with:
@@ -71,26 +85,26 @@ jobs:
             --format detailed
             docs/**/*.md README.md
 
-      - name: Run CI-like DOM and CSS audits
+      - name: Run advisory DOM, math, and accessibility audits
         run: |
-          python scripts/run_ci_visual_regression.py verify \
+          python scripts/run_docs_browser_audits.py verify \
             --skip-build \
-            --tests dom-audits.spec.ts
-
-      - name: Run CI-like math audits
-        run: |
-          python scripts/run_ci_visual_regression.py verify \
-            --skip-build \
-            --tests math-audits.spec.ts
-
-      - name: Run CI-like accessibility checks
-        run: |
-          python scripts/run_ci_visual_regression.py verify \
-            --skip-build \
-            --tests a11y.spec.ts
+            --tests dom-audits.spec.ts math-audits.spec.ts a11y.spec.ts \
+            --project chromium-375 \
+            --project chromium-768 \
+            --project chromium-1280 \
+            --project chromium-1536 \
+            --findings-json artifacts/docs-audit/findings.json
 
       - name: Run full authoritative visual regression
-        run: python scripts/run_ci_visual_regression.py verify --skip-build
+        run: |
+          python scripts/run_docs_browser_audits.py verify \
+            --skip-build \
+            --tests sentinel.spec.ts repo-facts.spec.ts pages.spec.ts components.spec.ts embedded-panels.spec.ts \
+            --project chromium-375 \
+            --project chromium-768 \
+            --project chromium-1280 \
+            --project chromium-1536
 
       - name: Upload advisory artifacts
         if: always()
@@ -99,6 +113,7 @@ jobs:
           name: docs-advisory-linux-artifacts
           if-no-files-found: ignore
           path: |
+            artifacts/docs-audit/**
             artifacts/visual-state/**
             tests/visual/test-results/**
 
@@ -136,7 +151,7 @@ jobs:
       - name: Install Playwright dependencies
         working-directory: tests/visual
         run: |
-          npm ci
+          npm ci --no-audit --no-fund
           npx playwright install chromium
 
       - name: Build MkDocs site strictly

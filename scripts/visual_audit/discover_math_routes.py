@@ -33,19 +33,56 @@ def discover_math_routes(site_dir: Path) -> list[str]:
     return sorted(dict.fromkeys(routes))
 
 
+def normalize_route(path: str) -> str:
+    stripped = path.strip()
+    if not stripped:
+        return ""
+    if stripped == "/":
+        return "/"
+    return f"/{stripped.strip('/')}/"
+
+
+def select_math_routes(
+    discovered_routes: list[str],
+    review_paths: list[str] | None,
+) -> tuple[list[str], str | None]:
+    normalized_filters = {
+        normalized
+        for path in review_paths or []
+        if (normalized := normalize_route(path))
+    }
+    if not normalized_filters:
+        return discovered_routes, None
+
+    selected = [route for route in discovered_routes if route in normalized_filters]
+    if selected:
+        return selected, None
+
+    return [], (
+        "No selected review paths contain built math routes. "
+        f"Review paths: {', '.join(sorted(normalized_filters))}"
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Discover built docs routes that contain MathJax placeholders."
     )
     parser.add_argument(
         "--format",
-        choices=("json", "lines"),
+        choices=("json", "lines", "selection-json"),
         default="json",
         help="Output format.",
     )
     parser.add_argument(
         "--site-dir",
         help="Optional explicit built site directory. Defaults to the docs site contract.",
+    )
+    parser.add_argument(
+        "--review-path",
+        action="append",
+        default=[],
+        help="Optional review path filter. Repeat to select multiple routes.",
     )
     return parser.parse_args()
 
@@ -61,13 +98,26 @@ def main() -> int:
         raise SystemExit(f"Built site directory does not exist: {site_dir}")
 
     routes = discover_math_routes(site_dir)
+    selected_routes, message = select_math_routes(routes, args.review_path)
 
     if args.format == "lines":
-        for route in routes:
+        for route in selected_routes:
             print(route, flush=True)
         return 0
 
-    print(json.dumps(routes), flush=True)
+    if args.format == "selection-json":
+        print(
+            json.dumps(
+                {
+                    "routes": selected_routes,
+                    "message": message,
+                }
+            ),
+            flush=True,
+        )
+        return 0
+
+    print(json.dumps(selected_routes), flush=True)
     return 0
 
 

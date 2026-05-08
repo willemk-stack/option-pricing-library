@@ -3,15 +3,15 @@ import { test } from "@playwright/test";
 import type { AuditFinding } from "./audits";
 import {
   assertNoBlockingFindings,
-  attachAuditFindings,
+  recordAuditFindings,
   startRuntimeIssueTracking,
 } from "./audits";
 import { assertNoMissingPage, gotoAndStabilize } from "./helpers";
-import { loadMathRoutes } from "./math-targets";
+import { loadMathRouteSelection } from "./math-targets";
 import { themes } from "./targets";
 
 const TEX_SOURCE_PATTERN = /\\[A-Za-z]+|\\[()[\]]|\$\$/;
-
+const SUITE_NAME = "math-audits.spec.ts";
 async function collectMathAuditFindings(
   page: Parameters<typeof gotoAndStabilize>[0],
   route: string
@@ -171,9 +171,15 @@ async function collectMathAuditFindings(
 
 for (const theme of themes) {
   test(`math audits in ${theme}`, async ({ page }, testInfo) => {
+    const mathRouteSelection = loadMathRouteSelection();
+    test.skip(
+      mathRouteSelection.routes.length === 0,
+      mathRouteSelection.skipMessage || "No selected routes contain math."
+    );
+
     const allFindings: AuditFinding[] = [];
 
-    for (const route of loadMathRoutes()) {
+    for (const route of mathRouteSelection.routes) {
       await test.step(`${route} in ${theme}`, async () => {
         const runtimeTracker = startRuntimeIssueTracking(page);
         await gotoAndStabilize(page, route, theme);
@@ -187,7 +193,13 @@ for (const theme of themes) {
       });
     }
 
-    await attachAuditFindings(testInfo, "math-audit-findings", allFindings);
+    await recordAuditFindings(testInfo, {
+      name: "math-audit-findings",
+      suite: SUITE_NAME,
+      route: mathRouteSelection.routes.join(",") || "<no-route>",
+      theme,
+      findings: allFindings,
+    });
     assertNoBlockingFindings(allFindings, `Math audit findings in ${theme}`);
   });
 }

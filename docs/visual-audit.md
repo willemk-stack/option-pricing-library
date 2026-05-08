@@ -142,8 +142,8 @@ For the full repeatable audit flow from the repo root:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_visual_audit.ps1
 ```
 
-For pull requests, the blocking workflow lives in `.github/workflows/validate-docs.yml`.
-Generated-asset validation also has a dedicated workflow in `.github/workflows/validate-docs-artifacts.yml`.
+For pull requests, the blocking workflow lives in `.github/workflows/docs-ci.yml`.
+The heavier non-blocking browser and drift checks live in `.github/workflows/docs-advisory.yml`.
 The non-blocking quality-report workflow lives in `.github/workflows/improve-docs.yml`.
 The single-page bounded loop workflow lives in `.github/workflows/improve-page-loop.yml`.
 The manual draft-PR bridge lives in `.github/workflows/improve-page-pr.yml`.
@@ -172,6 +172,14 @@ For authoritative Playwright snapshot refreshes that match the Ubuntu CI runner,
 python scripts/run_ci_visual_regression.py update
 ```
 
+For the fast native PR gate against a local build artifact, prefer:
+
+```bash
+python scripts/docs_audit_plan.py --base-ref main --head-ref HEAD --format json
+python scripts/run_docs_browser_audits.py verify --build --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts --project chromium-375 --project chromium-1280 --findings-json artifacts/docs-audit/findings.json
+python scripts/run_docs_browser_audits.py verify --skip-build --tests a11y.spec.ts --project chromium-1280 --review-paths /performance/ --findings-json artifacts/docs-audit/a11y-findings.json
+```
+
 For generated docs figures that should also match the Ubuntu runner exactly, prefer:
 
 ```bash
@@ -182,16 +190,31 @@ Use that same CI-like Ubuntu runner for authoritative snapshot verification when
 diff is under investigation. Native Windows page-snapshot runs are helpful for debugging,
 but the shared baselines are owned by the Ubuntu visual-regression workflow.
 
+The Docker wrapper remains the authoritative reproduction path when you need CI-style
+Ubuntu parity or snapshot updates, but the blocking PR lane in `docs-ci` now uses the
+native prebuilt-site runner so it only pays the Node and Playwright setup cost once.
+
 For native local iteration, prefer:
 
 ```bash
-python scripts/run_local_visual_regression.py verify
+python scripts/run_docs_browser_audits.py verify --build --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts --project chromium-375 --project chromium-1280 --findings-json artifacts/docs-audit/findings.json
+python scripts/run_docs_browser_audits.py verify --skip-build --tests a11y.spec.ts --project chromium-1280 --findings-json artifacts/docs-audit/a11y-findings.json
 python scripts/run_local_visual_regression.py verify --skip-build --tests smoke.spec.ts repo-facts.spec.ts
 ```
 
-That wrapper builds the docs site once and then serves the prebuilt output to every
-selected Playwright suite, which is substantially less fragile than triggering several
-standalone Playwright commands that each rebuild the site independently.
+The native runner verifies the prebuilt-site contract, reuses one site build across the
+selected suites, supports explicit `--project`, `--review-paths`, and `--review-page-keys`
+filters, and emits `artifacts/docs-audit/findings.json` plus `summary.md` for agent loops.
+The older `run_local_visual_regression.py` wrapper remains useful for broad native replay,
+but it does not produce the compact audit-plan and findings artifacts used by `docs-ci`.
+
+For improvement and agent loops, start with:
+
+```bash
+python scripts/docs_audit_plan.py --base-ref main --head-ref HEAD --format json
+python scripts/run_docs_browser_audits.py verify --skip-build --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts --project chromium-375 --project chromium-1280 --review-paths /performance/ --findings-json artifacts/docs-audit/findings.json
+python scripts/visual_audit/run_improvement_loop.py --page-key visual_report --project chromium-1280 --suite review-capture --suite smoke --suite dom-audits
+```
 
 ## Root-cause buckets
 

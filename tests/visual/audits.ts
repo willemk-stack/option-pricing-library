@@ -1,3 +1,6 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
 import { expect, type Page, type TestInfo } from "@playwright/test";
 
 import { defaultDocsBaseURL } from "./config";
@@ -6,7 +9,13 @@ import type { PageReviewConfig } from "./targets";
 const DEFAULT_DOCS_BASE_URL = defaultDocsBaseURL;
 
 export type AuditSeverity = "critical" | "major" | "minor";
-export type AuditCategory = "console" | "content" | "layout" | "media" | "theme";
+export type AuditCategory =
+    | "accessibility"
+    | "console"
+    | "content"
+    | "layout"
+    | "media"
+    | "theme";
 
 export type AuditFinding = {
     severity: AuditSeverity;
@@ -14,6 +23,22 @@ export type AuditFinding = {
     rule: string;
     message: string;
     details?: unknown;
+};
+
+export type AgentReadableAuditFinding = AuditFinding & {
+    project: string;
+    route: string;
+    suite: string;
+    testName: string;
+    theme: string;
+};
+
+type RecordAuditFindingOptions = {
+    name: string;
+    suite: string;
+    route: string;
+    theme: string;
+    findings: AuditFinding[];
 };
 
 type RuntimeIssueTracker = {
@@ -644,6 +669,88 @@ export async function attachAuditFindings(
         body: Buffer.from(JSON.stringify(findings, null, 2), "utf8"),
         contentType: "application/json",
     });
+}
+
+function sanitizeFindingFileComponent(value: string): string {
+    const sanitized = value.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "");
+    return sanitized || "finding";
+}
+
+function toAgentReadableFindings(
+    testInfo: TestInfo,
+    suite: string,
+    route: string,
+    theme: string,
+    findings: AuditFinding[]
+): AgentReadableAuditFinding[] {
+    return findings.map((finding) => ({
+        ...finding,
+        project: testInfo.project.name,
+        route,
+        suite,
+        testName: testInfo.title,
+        theme,
+    }));
+}
+
+export async function recordAuditFindings(
+    testInfo: TestInfo,
+    {
+        name,
+        suite,
+        route,
+        theme,
+        findings,
+    }: RecordAuditFindingOptions
+): Promise<void> {
+    const records = toAgentReadableFindings(testInfo, suite, route, theme, findings);
+    await attachAuditFindings(testInfo, name, records);
+
+    const findingsDir = process.env.DOCS_AUDIT_FINDINGS_DIR;
+    if (!findingsDir || records.length === 0) {
+        return;
+    }
+
+    await mkdir(findingsDir, { recursive: true });
+    const fileName = [suite, route, theme, testInfo.project.name, testInfo.title]
+        .map(sanitizeFindingFileComponent)
+        .join("-");
+    await writeFile(
+        resolve(findingsDir, `${fileName}.json`),
+        JSON.stringify(records, null, 2),
+        "utf8"
+    );
+}
+
+export function a11yViolationsToFindings(
+    route: string,
+    violations: Array<{
+        id: string;
+        impact?: string | null;
+        help: string;
+        helpUrl: string;
+        nodes: Array<{
+            failureSummary?: string | null;
+            html?: string;
+            target: string[];
+        }>;
+    }>
+): AuditFinding[] {
+    return violations.map((violation) => ({
+        severity: violation.impact === "critical" ? "critical" : "major",
+        category: "accessibility",
+        rule: violation.id,
+        message: `${route} violates ${violation.id}: ${violation.help}`,
+        details: {
+            helpUrl: violation.helpUrl,
+            impact: violation.impact,
+            nodes: violation.nodes.slice(0, 10).map((node) => ({
+                failureSummary: node.failureSummary || null,
+                html: node.html || null,
+                target: node.target,
+            })),
+        },
+    }));
 }
 
 export function assertNoBlockingFindings(

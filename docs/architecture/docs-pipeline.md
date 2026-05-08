@@ -20,12 +20,16 @@ This repo treats docs as a built product rather than a pile of independently ref
 This is the authoritative blocking docs workflow on pull requests.
 
 - installs the pinned docs/test environment from `scripts/ci-constraints.txt`
+- computes one JSON audit plan with `python scripts/docs_audit_plan.py --format github-outputs ...`
 - checks `README.md` and `docs/performance.md` synchronization
 - checks benchmark snapshot freshness only when benchmark or performance inputs changed
 - validates D2 diagrams in check-only mode
 - builds the MkDocs site once, uploads the built-site artifact, and reuses that artifact for downstream browser audits and Pages deploy
-- runs blocking Playwright smoke and DOM audits against the prebuilt site artifact
-- runs targeted accessibility checks on curated impacted paths
+- sets up Node, `npm ci --no-audit --no-fund`, and Playwright once in the browser job
+- runs blocking Playwright smoke, DOM, and math audits against the prebuilt site artifact through `python scripts/run_docs_browser_audits.py verify --skip-build`
+- uses the narrow PR project set by default: `chromium-375` and `chromium-1280`
+- runs targeted accessibility checks only when the audit plan selects curated impacted paths, using `chromium-1280` by default
+- uploads agent-readable findings under `artifacts/docs-audit/findings.json` and `artifacts/docs-audit/summary.md`
 - keeps the blocking gate focused on deterministic sync/build/smoke checks instead of full-page snapshot drift
 
 ### `docs-assets-refresh`
@@ -63,9 +67,8 @@ This workflow is scheduled or manually triggered for the heavier audits.
 
 - generated visual asset drift checks
 - external link checks
-- DOM/CSS audits beyond the blocking smoke set
-- broader accessibility passes
-- full Ubuntu-authoritative snapshot verification
+- DOM/CSS, math, and broader accessibility audits across the full project set
+- full native prebuilt-site snapshot verification across all current Playwright projects
 - Windows browser checks
 - check-only validation for generated docs assets and full-page visual drift that is informative but too noisy for the blocking gate
 
@@ -73,8 +76,12 @@ This workflow is scheduled or manually triggered for the heavier audits.
 
 - Install the default hooks with `pre-commit install --hook-type pre-commit --hook-type pre-push`; the pre-commit hook refreshes `benchmarks/artifacts/benchmark_source_manifest.json` automatically when benchmark-sensitive sources change.
 - Use `python scripts/docs_doctor.py` or `python scripts/pre_push_docs_validation.py --mode fast` for the same portable pre-push checks that run locally by default.
+- Use `python scripts/docs_audit_plan.py --base-ref main --head-ref HEAD --format json` to preview the exact blocking suites, projects, and impacted paths before running browser checks.
+- Use `python scripts/run_docs_browser_audits.py verify --build --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts --project chromium-375 --project chromium-1280 --findings-json artifacts/docs-audit/findings.json` for the fast native PR gate against a locally built site.
+- Use `python scripts/run_docs_browser_audits.py verify --skip-build --tests a11y.spec.ts --project chromium-1280 --review-paths /performance/ --findings-json artifacts/docs-audit/a11y-findings.json` for the curated native accessibility slice.
 - Use `python scripts/render_readme.py` and `python scripts/render_performance_page.py` when updating generated text artifacts intentionally.
 - Use `python scripts/run_ci_visual_regression.py build-assets` when the authoritative Ubuntu visual-asset refresh matters more than native Windows rendering.
+- Use `python scripts/run_ci_visual_regression.py verify --skip-build --project chromium-375 --project chromium-1280` for Dockerized reproduction of the narrowed browser slice, or omit `--project` for the full authoritative sweep.
 - Use `python scripts/pre_push_docs_validation.py --mode manual` if you want local Playwright and Docker-backed checks before pushing.
 - Use the `benchmarks` workflow instead of manually editing `benchmarks/artifacts/*`.
 

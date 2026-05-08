@@ -20,7 +20,12 @@ if ($UpdateSnapshots) {
     exit $LASTEXITCODE
 }
 
-& $python .\scripts\run_ci_visual_regression.py verify --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts a11y.spec.ts
+& $python .\scripts\run_docs_browser_audits.py verify --build --tests smoke.spec.ts dom-audits.spec.ts math-audits.spec.ts --project chromium-375 --project chromium-1280 --findings-json .\artifacts\docs-audit\findings.json
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+& $python .\scripts\run_docs_browser_audits.py verify --skip-build --tests a11y.spec.ts --project chromium-1280 --findings-json .\artifacts\docs-audit\a11y-findings.json
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }

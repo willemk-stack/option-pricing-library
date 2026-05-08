@@ -11,6 +11,14 @@ on:
         description: Output folder name under artifacts/visual-state/improvement-runs
         required: false
         default: workflow-pr
+      projects:
+        description: Space-separated Playwright projects, for example chromium-375 chromium-1280
+        required: false
+        default: chromium-375 chromium-1280
+      suites:
+        description: Optional space-separated validation suite labels, for example review-capture smoke dom-audits a11y
+        required: false
+        default: ""
       edit_command:
         description: Shell command that applies the bounded page improvement
         required: true
@@ -62,7 +70,7 @@ jobs:
       - name: Install Playwright dependencies
         working-directory: tests/visual
         run: |
-          npm ci
+          npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
 
       - name: Install D2
@@ -72,11 +80,32 @@ jobs:
         id: loop
         env:
           EDIT_COMMAND: ${{ inputs.edit_command }}
+          LOOP_PAGE_KEY: ${{ inputs.page_key }}
+          LOOP_PROJECTS: ${{ inputs.projects }}
+          LOOP_RUN_NAME: ${{ inputs.run_name }}
+          LOOP_SUITES: ${{ inputs.suites }}
         run: |
-          python scripts/visual_audit/run_improvement_loop.py \
-            --page-key "${{ inputs.page_key }}" \
-            --run-name "${{ inputs.run_name }}" \
-            --edit-command "$EDIT_COMMAND"
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+
+          command = [
+              sys.executable,
+              "scripts/visual_audit/run_improvement_loop.py",
+              "--page-key",
+              os.environ["LOOP_PAGE_KEY"],
+              "--run-name",
+              os.environ["LOOP_RUN_NAME"],
+              "--edit-command",
+              os.environ["EDIT_COMMAND"],
+          ]
+          for project in os.environ.get("LOOP_PROJECTS", "").split():
+              command.extend(["--project", project])
+          for suite in os.environ.get("LOOP_SUITES", "").split():
+              command.extend(["--suite", suite])
+          subprocess.run(command, check=True)
+          PY
 
       - name: Evaluate bounded improvement result
         id: evaluate

@@ -83,6 +83,15 @@ def test_non_benchmark_src_change_no_longer_requires_benchmark_refresh() -> None
     assert impact.visual_assets_required is True
 
 
+def test_docs_ci_runner_changes_force_full_docs_review() -> None:
+    impact = classify_docs_impact(["scripts/run_docs_browser_audits.py"])
+
+    assert impact.docs_sensitive is True
+    assert impact.docs_site_required is True
+    assert impact.full_review is True
+    assert impact.review_paths is None
+
+
 @pytest.mark.parametrize(
     "path",
     [

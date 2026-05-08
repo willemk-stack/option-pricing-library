@@ -103,6 +103,7 @@ def run_targeted_validation(
     stage_root: Path,
     include_embedded_panels: bool,
     projects: list[str],
+    suites: list[str] | None,
     env: dict[str, str],
 ) -> tuple[bool, list[dict[str, str | int | bool]]]:
     capture_dir = stage_dir(stage_root, "captures")
@@ -198,6 +199,21 @@ def run_targeted_validation(
             )
         )
 
+    if suites:
+        selected_suites = set(suites)
+        known_suites = {label for label, _ in commands}
+        unknown_suites = sorted(selected_suites - known_suites)
+        if unknown_suites:
+            raise ValueError(
+                "Unknown improvement-loop suites requested: "
+                + ", ".join(unknown_suites)
+            )
+        commands = [
+            (label, command) for label, command in commands if label in selected_suites
+        ]
+        if not commands:
+            raise ValueError("No bounded improvement-loop suites were selected.")
+
     all_ok = True
     step_results: list[dict[str, str | int | bool]] = []
     for index, (label, command) in enumerate(commands, start=1):
@@ -279,6 +295,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=[],
         help="Playwright project to use for targeted validation. Repeat to widen the slice. Defaults to chromium-375 and chromium-1280.",
     )
+    parser.add_argument(
+        "--suite",
+        dest="suites",
+        action="append",
+        default=[],
+        help="Validation suite label to run. Repeat to narrow the bounded loop.",
+    )
     return parser.parse_args(argv)
 
 
@@ -345,6 +368,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
     }
     projects = args.projects or ["chromium-375", "chromium-1280"]
+    suites = args.suites or None
 
     include_embedded_panels = args.page_key in {"homepage", "visual_report"}
 
@@ -357,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
         stage_root=before_root,
         include_embedded_panels=include_embedded_panels,
         projects=projects,
+        suites=suites,
         env=env,
     )
     before_score = extract_page_score(before_score_json, args.page_key)
@@ -409,6 +434,7 @@ def main(argv: list[str] | None = None) -> int:
             stage_root=after_root,
             include_embedded_panels=include_embedded_panels,
             projects=projects,
+            suites=suites,
             env=env,
         )
         after_score = extract_page_score(after_score_json, args.page_key)
