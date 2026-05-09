@@ -119,6 +119,21 @@ The CRR benchmark remains useful for convergence discussion, but the published n
 
 The full figure is available at [tree_scaling.png](assets/generated/benchmarks/tree_scaling.png).
 
+## Heston diagnostics and stochastic-volatility evidence
+
+<p class="doc-section-lead">The Heston proof path is not a speed contest either. The reviewer-facing question is whether the stochastic-volatility leg keeps calibration and Monte Carlo evidence explicit enough to trust the model-choice discussion.</p>
+
+<figure markdown class="diagram" style="--diagram-max-width: 980px">
+  ![Heston Monte Carlo versus Fourier convergence, showing bias versus timestep and runtime versus error for Euler and QE schemes.](assets/generated/heston/heston_mc_vs_fourier_convergence.light.png){ .diagram-img .diagram-light }
+  ![Heston Monte Carlo versus Fourier convergence, showing bias versus timestep and runtime versus error for Euler and QE schemes.](assets/generated/heston/heston_mc_vs_fourier_convergence.dark.png){ .diagram-img .diagram-dark }
+  <figcaption>Heston Monte Carlo is checked against semi-analytic Fourier pricing. QE and Euler behavior are shown as numerical validation evidence, not as universal runtime claims.</figcaption>
+</figure>
+
+Heston timing and calibration benchmarks are directional for the configured
+deterministic fixture, optimizer settings, quadrature policy, and local
+environment. They should be read as engineering diagnostics rather than
+universal performance claims.
+
 ## Environment and reproducibility
 
 {{ ENVIRONMENT_SUMMARY }}

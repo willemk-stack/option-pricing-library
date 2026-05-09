@@ -42,26 +42,26 @@ hide:
 
 ## Signature proof moment
 
-<p class="doc-section-lead">The signature proof object is still the smoothed eSSVI surface used for the Dupire handoff, with smaller diagnostics showing the repair stage before it and the local-vol/PDE validation that follows before the Heston comparison layer.</p>
+<p class="doc-section-lead">The fastest way to understand the full proof path now is the Heston model-comparison summary card. It compresses the calibration, residual, stability, and model-choice judgment into one reviewer-facing artifact while still leaning on the earlier eSSVI and local-vol/PDE proof pages as visible baseline evidence.</p>
 
 <div class="homepage-signature-layout" markdown="1">
 <figure class="diagram diagram--hero homepage-signature-figure" style="--diagram-max-width: 980px" markdown="1">
-![3D surface of the smoothed eSSVI implied-vol handoff across moneyness and maturity](assets/generated/showcase/homepage_essvi_surface_3d.light.png){ .diagram-img .diagram-light }
-![3D surface of the smoothed eSSVI implied-vol handoff across moneyness and maturity](assets/generated/showcase/homepage_essvi_surface_3d.dark.png){ .diagram-img .diagram-dark }
-<figcaption>The standout object is the <a href="user_guides/essvi_smooth_handoff/">smooth eSSVI handoff</a>: the surface that makes <code>w_T</code> usable for Dupire-oriented local-vol extraction instead of leaving the workflow at a repaired slice stack.</figcaption>
+![Heston model-comparison summary showing the target smile, Heston residual structure, calibration stability, and bucketed model-comparison errors](assets/generated/heston/heston_comparison_summary_card.light.png){ .diagram-img .diagram-light }
+![Heston model-comparison summary showing the target smile, Heston residual structure, calibration stability, and bucketed model-comparison errors](assets/generated/heston/heston_comparison_summary_card.dark.png){ .diagram-img .diagram-dark }
+<figcaption>The Capstone 3 proof object is the <a href="user_guides/heston_model_comparison/">Heston model-comparison summary</a>: one generated view across smile fit, residual honesty, multistart stability, and Heston-versus-eSSVI/local-vol error buckets. Synthetic deterministic quote fixture; not real market data.</figcaption>
 </figure>
 
 <div class="snapshot-grid homepage-support-grid" markdown="1">
 <figure class="diagram diagram--quiet homepage-support-card" style="--diagram-max-width: 100%" markdown="1">
-![Quote fit comparison across maturity for repaired SVI and eSSVI surfaces](assets/generated/static/quote_surface_compare.light.png){ .diagram-img .diagram-light }
-![Quote fit comparison across maturity for repaired SVI and eSSVI surfaces](assets/generated/static/quote_surface_compare.dark.png){ .diagram-img .diagram-dark }
-<figcaption><a href="user_guides/surface_workflow/">Surface repair</a> stays visible first, so the hero surface does not hide the quoted-versus-repaired comparison that starts the proof path.</figcaption>
+![3D surface of the smoothed eSSVI implied-vol handoff across moneyness and maturity](assets/generated/showcase/homepage_essvi_surface_3d.light.png){ .diagram-img .diagram-light }
+![3D surface of the smoothed eSSVI implied-vol handoff across moneyness and maturity](assets/generated/showcase/homepage_essvi_surface_3d.dark.png){ .diagram-img .diagram-dark }
+<figcaption><a href="user_guides/essvi_smooth_handoff/">eSSVI smooth handoff</a> still matters because it is the surface-first baseline that the final Heston comparison reuses rather than replacing.</figcaption>
 </figure>
 
 <figure class="diagram diagram--quiet homepage-support-card" style="--diagram-max-width: 100%" markdown="1">
 ![Scatter plot comparing local-vol PDE repriced values with target prices](assets/generated/numerics/pde_roundtrip_scatter.light.png){ .diagram-img .diagram-light }
 ![Scatter plot comparing local-vol PDE repriced values with target prices](assets/generated/numerics/pde_roundtrip_scatter.dark.png){ .diagram-img .diagram-dark }
-<figcaption><a href="user_guides/localvol_pde_validation/">Local-vol / PDE validation</a> closes the loop with a published repricing bundle, visible error localization, and an explicit mesh/runtime judgment for the final numerical leg.</figcaption>
+<figcaption><a href="user_guides/localvol_pde_validation/">Local-vol / PDE validation</a> stays visible as the baseline audit path, so the final comparison remains a model-choice story instead of a Heston-only victory lap.</figcaption>
 </figure>
 </div>
 </div>

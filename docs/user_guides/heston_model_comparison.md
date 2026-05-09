@@ -18,10 +18,23 @@ library can compare volatility models with explicit diagnostics: fit quality,
 calibration stability, Monte Carlo validation, local-vol/PDE evidence, and
 model-purpose tradeoffs.
 
+The comparison uses a deterministic synthetic equity-index-style quote fixture.
+It is intentionally not generated from Heston, so the exercise is not a
+synthetic recovery victory lap. The purpose is to compare model behavior on a
+common target: Heston gives interpretable stochastic variance dynamics, while
+eSSVI/local-vol gives flexible vanilla-surface fit and direct Dupire/PDE
+repricing diagnostics.
+
 Heston is not presented as automatically superior. The comparison asks what
 each model is good for: Heston gives interpretable stochastic variance
 dynamics; eSSVI/local vol gives flexible vanilla surface fit and direct
 Dupire/PDE validation evidence.
+
+<figure markdown class="diagram diagram--hero" style="--diagram-max-width: 980px">
+   ![Capstone 3 summary card showing target smile fit, Heston residual heatmap, calibration stability, and model-comparison buckets.](../assets/generated/heston/heston_comparison_summary_card.light.png){ .diagram-img .diagram-light }
+   ![Capstone 3 summary card showing target smile fit, Heston residual heatmap, calibration stability, and model-comparison buckets.](../assets/generated/heston/heston_comparison_summary_card.dark.png){ .diagram-img .diagram-dark }
+   <figcaption>Capstone 3 model-comparison summary. Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior.</figcaption>
+</figure>
 
 ## What is being compared
 
@@ -52,14 +65,11 @@ about stochastic-volatility superiority.
 
 ## Comparison report architecture
 
-```text
-Common quote target
-      |
-      +--> Heston calibration -> Fourier repricing -> fit diagnostics
-      +--> Heston MC cross-check
-      +--> eSSVI surface repricing
-      +--> local-vol/PDE audit rows
-```
+<figure markdown class="diagram" style="--diagram-max-width: 980px">
+   ![Workflow architecture for the Heston comparison, showing the shared quote target, Heston Fourier calibration, QE Monte Carlo validation, and eSSVI/local-vol/PDE baseline feeding a final model-choice comparison layer.](../assets/generated/heston/heston_workflow_architecture.light.svg){ .diagram-img .diagram-light }
+   ![Workflow architecture for the Heston comparison, showing the shared quote target, Heston Fourier calibration, QE Monte Carlo validation, and eSSVI/local-vol/PDE baseline feeding a final model-choice comparison layer.](../assets/generated/heston/heston_workflow_architecture.dark.svg){ .diagram-img .diagram-dark }
+   <figcaption>Capstone 3 uses the Capstone 2 surface/local-vol/PDE stack as a comparison baseline for Heston stochastic-volatility calibration and validation.</figcaption>
+</figure>
 
 ## Why Heston is not just another surface fitter
 
@@ -86,12 +96,62 @@ whether the fit is weakly identified. The broader API and workflow context is
 in the [Heston guide](heston.md), while the notebook-facing review layer is in
 [Heston diagnostics](heston_diagnostics.md).
 
+<figure markdown class="diagram" style="--diagram-max-width: 980px">
+   ![Heston and eSSVI/local-vol smile overlays across the deterministic comparison expiries, with direct local-vol PDE points marked as a selected subset.](../assets/generated/heston/heston_model_comparison_smile_overlay.light.png){ .diagram-img .diagram-light }
+   ![Heston and eSSVI/local-vol smile overlays across the deterministic comparison expiries, with direct local-vol PDE points marked as a selected subset.](../assets/generated/heston/heston_model_comparison_smile_overlay.dark.png){ .diagram-img .diagram-dark }
+   <figcaption>Heston and eSSVI/local-vol are compared on the same deterministic quote target. The direct local-vol PDE markers show a selected validation subset rather than a full-grid repricing claim.</figcaption>
+</figure>
+
+<figure class="diagram diagram--quiet proof-path-support-figure" style="--diagram-max-width: 780px" markdown="1">
+[![](../assets/generated/heston/heston_iv_residual_heatmap.light.png){ .diagram-img .diagram-light } ![](../assets/generated/heston/heston_iv_residual_heatmap.dark.png){ .diagram-img .diagram-dark } <span class="proof-path-lightbox-hint" aria-hidden="true">Open larger view</span>](../assets/generated/heston/heston_iv_residual_heatmap.light.png){ .proof-path-lightbox-trigger data-proof-path-lightbox="" data-light-src="../../assets/generated/heston/heston_iv_residual_heatmap.light.png" data-dark-src="../../assets/generated/heston/heston_iv_residual_heatmap.dark.png" data-alt="Heston IV residual heatmap by expiry and log-moneyness" data-lightbox-title="Heston IV residual heatmap" aria-label="Open a larger view of the Heston IV residual heatmap" aria-describedby="heston-residual-heatmap-caption" aria-haspopup="dialog" }
+   <figcaption id="heston-residual-heatmap-caption">Structured residuals are part of the diagnostic story: Heston is interpretable, but it is not an unconstrained surface fitter. Synthetic deterministic quote fixture; not real market data.</figcaption>
+</figure>
+
+<figure markdown class="diagram" style="--diagram-max-width: 980px">
+   ![Heston multistart stability panel showing objective value by seed and fitted-parameter spread across starts.](../assets/generated/heston/heston_multistart_stability_panel.light.png){ .diagram-img .diagram-light }
+   ![Heston multistart stability panel showing objective value by seed and fitted-parameter spread across starts.](../assets/generated/heston/heston_multistart_stability_panel.dark.png){ .diagram-img .diagram-dark }
+   <figcaption>Heston calibration can be weakly identifiable. Multistart diagnostics make optimizer dependence and parameter stability visible before interpreting a fit.</figcaption>
+</figure>
+
+<figure markdown class="diagram" style="--diagram-max-width: 900px">
+   ![Train versus held-out IV RMSE comparison across Heston, eSSVI/local-vol proxy, and direct local-vol PDE subset rows.](../assets/generated/heston/heston_train_vs_heldout_comparison.light.png){ .diagram-img .diagram-light }
+   ![Train versus held-out IV RMSE comparison across Heston, eSSVI/local-vol proxy, and direct local-vol PDE subset rows.](../assets/generated/heston/heston_train_vs_heldout_comparison.dark.png){ .diagram-img .diagram-dark }
+   <figcaption>Held-out diagnostics use a deterministic three-point split: short downside wing, middle-expiry ATM, and long-expiry upside wing. The goal is honesty about fit partitions, not a broad out-of-sample claim.</figcaption>
+</figure>
+
 ## Monte Carlo validation
 
 Monte Carlo results should be read with standard errors, confidence intervals,
 path counts, time steps, and scheme labels. A tight confidence interval does
 not remove discretization bias, and a matching point estimate does not make the
 stochastic-volatility fit economically unique.
+
+<figure markdown class="diagram" style="--diagram-max-width: 980px">
+   ![Heston Monte Carlo versus Fourier convergence, showing bias versus timestep and runtime versus error for Euler and QE schemes.](../assets/generated/heston/heston_mc_vs_fourier_convergence.light.png){ .diagram-img .diagram-light }
+   ![Heston Monte Carlo versus Fourier convergence, showing bias versus timestep and runtime versus error for Euler and QE schemes.](../assets/generated/heston/heston_mc_vs_fourier_convergence.dark.png){ .diagram-img .diagram-dark }
+   <figcaption>Heston Monte Carlo is checked against semi-analytic Fourier pricing. QE and Euler behavior are shown as numerical validation evidence, not as universal runtime claims.</figcaption>
+</figure>
+
+<figure markdown class="diagram" style="--diagram-max-width: 900px">
+   ![Bucketed IV RMSE comparison across Heston, eSSVI/local-vol proxy, and direct local-vol PDE.](../assets/generated/heston/heston_model_comparison_error_buckets.light.png){ .diagram-img .diagram-light }
+   ![Bucketed IV RMSE comparison across Heston, eSSVI/local-vol proxy, and direct local-vol PDE.](../assets/generated/heston/heston_model_comparison_error_buckets.dark.png){ .diagram-img .diagram-dark }
+   <figcaption>Error buckets summarize fit by moneyness region. The point is model-choice judgment, not declaring one model universally best.</figcaption>
+</figure>
+
+## Generated artifact bundle
+
+- [Artifact manifest](../assets/generated/heston/data/heston_artifact_manifest.json)
+- [Quote-level fit errors](../assets/generated/heston/data/heston_comparison_fit_errors.csv)
+- [Error summary](../assets/generated/heston/data/heston_comparison_error_summary.csv)
+- [Held-out comparison](../assets/generated/heston/data/heston_comparison_heldout.csv)
+- [Direct local-vol PDE audit rows](../assets/generated/heston/data/heston_comparison_direct_local_vol_pde.csv)
+- [Model tradeoff summary](../assets/generated/heston/data/heston_comparison_tradeoff_summary.csv)
+- [MC convergence summary](../assets/generated/heston/data/heston_mc_convergence_summary.csv)
+
+These generated tables are the reviewer-facing provenance surface behind the
+figures on this page. They preserve the deterministic held-out split, direct
+local-vol subset disclosure, and the synthetic-fixture caveat in machine-
+readable form.
 
 ## When not to trust the result
 

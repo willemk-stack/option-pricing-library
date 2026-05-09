@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="650" viewBox="0 0 1040 650" role="img" aria-labelledby="title desc">
+  <title id="title">Heston workflow architecture</title>
+  <desc id="desc">Synthetic quote target flows into Heston Fourier calibration, QE Monte Carlo validation, and the eSSVI/local-vol/PDE stack before a final model-choice comparison layer.</desc>
+  <rect x="0" y="0" width="1040" height="650" rx="24" fill="#08101f"/>
+  <rect x="80" y="38" width="880" height="92" rx="18" fill="#162033" stroke="#8cc9ff" stroke-width="2"/>
+  <text x="520" y="78" text-anchor="middle" font-size="26" font-family="DejaVu Sans, Arial, sans-serif" fill="#E5EDF7" font-weight="600">Synthetic quote target</text>
+  <text x="520" y="106" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="#A8B5C7">Deterministic market-like fixture for model-choice diagnostics</text>
+  <line x1="520" y1="130" x2="520" y2="175" stroke="#A8B5C7" stroke-width="3"/>
+  <polygon points="520,188 512,172 528,172" fill="#A8B5C7"/>
+  <rect x="60" y="210" width="270" height="165" rx="18" fill="#162033" stroke="#8cc9ff" stroke-width="2"/>
+  <text x="195" y="248" text-anchor="middle" font-size="22" font-family="DejaVu Sans, Arial, sans-serif" fill="#E5EDF7" font-weight="600">Heston Fourier pricing</text>
+  <text x="195" y="282" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="#A8B5C7">Multistart calibration</text>
+  <text x="195" y="306" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="#A8B5C7">Residual heatmaps</text>
+  <text x="195" y="330" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="#A8B5C7">Objective and seed stability</text>
+  <rect x="385" y="210" width="270" height="165" rx="18" fill="#0f172a" stroke="#f3b562" stroke-width="2"/>
+  <text x="520" y="248" text-anchor="middle" font-size="22" font-family="DejaVu Sans, Arial, sans-serif" fill="#E5EDF7" font-weight="600">QE Monte Carlo</text>
+  <text x="520" y="282" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="#A8B5C7">MC vs Fourier validation</text>
+  <text x="520" y="306" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="#A8B5C7">Bias, CI, and runtime/error tradeoff</text>
+  <text x="520" y="330" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="#A8B5C7">Directional evidence, not universal speed claims</text>
+  <rect x="710" y="210" width="270" height="165" rx="18" fill="#0f172a" stroke="#91e0d7" stroke-width="2"/>
+  <text x="845" y="248" text-anchor="middle" font-size="22" font-family="DejaVu Sans, Arial, sans-serif" fill="#E5EDF7" font-weight="600">eSSVI / local-vol stack</text>
+  <text x="845" y="282" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="#A8B5C7">Flexible vanilla surface fit</text>
+  <text x="845" y="306" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="#A8B5C7">Direct Dupire/PDE repricing audit</text>
+  <text x="845" y="330" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="#A8B5C7">Capstone 2 baseline, reused not rebuilt</text>
+  <line x1="195" y1="375" x2="195" y2="455" stroke="#A8B5C7" stroke-width="3"/>
+  <line x1="520" y1="375" x2="520" y2="455" stroke="#A8B5C7" stroke-width="3"/>
+  <line x1="845" y1="375" x2="845" y2="455" stroke="#A8B5C7" stroke-width="3"/>
+  <polygon points="195,468 187,452 203,452" fill="#A8B5C7"/>
+  <polygon points="520,468 512,452 528,452" fill="#A8B5C7"/>
+  <polygon points="845,468 837,452 853,452" fill="#A8B5C7"/>
+  <rect x="160" y="480" width="720" height="112" rx="22" fill="#0f172a" stroke="#314056" stroke-width="2.5"/>
+  <text x="520" y="520" text-anchor="middle" font-size="28" font-family="DejaVu Sans, Arial, sans-serif" fill="#E5EDF7" font-weight="700">Model-choice comparison</text>
+  <text x="520" y="552" text-anchor="middle" font-size="18" font-family="DejaVu Sans, Arial, sans-serif" fill="#A8B5C7">fit quality | stability | dynamics | failure modes</text>
+  <text x="520" y="625" text-anchor="middle" font-size="13" font-family="DejaVu Sans, Arial, sans-serif" fill="#A8B5C7">Synthetic deterministic target; not market data. Capstone 3 compares Heston against the same eSSVI/local-vol baseline rather than declaring a universal winner.</text>
+</svg>
