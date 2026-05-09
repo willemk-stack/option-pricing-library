@@ -2,12 +2,13 @@
 
 <div class="doc-intro" markdown="1">
 <p class="doc-intro__kicker">Flagship benchmark page</p>
-<p class="doc-intro__lead">This page is the committed benchmark bundle for the runtime questions that matter most in review: workload-class scaling, PDE cost versus accuracy, digital-payoff remedies, and the end-to-end surface-to-PDE stage budget.</p>
+<p class="doc-intro__lead">This page is the committed benchmark bundle for the runtime and provenance questions that matter most in review: workload-class scaling, PDE cost versus accuracy, digital-payoff remedies, Heston MC/Fourier validation, and the end-to-end surface-to-PDE stage budget.</p>
 <p class="doc-intro__support">Read it as a benchmark case study rather than a leaderboard. The point is to show what actually matters, where extra runtime buys something real, and which stages deserve optimization effort before the quieter ones do.</p>
 <div class="doc-pill-row">
   <span class="doc-pill">Vectorized IV scaling</span>
   <span class="doc-pill">Runtime versus error</span>
   <span class="doc-pill">Stage-budget attribution</span>
+  <span class="doc-pill">Heston MC/Fourier validation</span>
 </div>
 </div>
 
@@ -18,6 +19,7 @@
 <a class="proof-route__item" href="../user_guides/surface_workflow/"><span class="proof-route__step">Step 1</span><span class="proof-route__title">Surface repair</span></a>
 <a class="proof-route__item" href="../user_guides/essvi_smooth_handoff/"><span class="proof-route__step">Step 2</span><span class="proof-route__title">eSSVI handoff</span></a>
 <a class="proof-route__item" href="../user_guides/localvol_pde_validation/"><span class="proof-route__step">Step 3</span><span class="proof-route__title">Local-vol / PDE</span></a>
+<a class="proof-route__item" href="../user_guides/heston_model_comparison/"><span class="proof-route__step">Step 4</span><span class="proof-route__title">Heston / model comparison</span></a>
 <span class="proof-route__item proof-route__item--current proof-route__item--followup" aria-current="page"><span class="proof-route__step">Follow-up</span><span class="proof-route__title">Performance evidence</span></span>
 </div>
 </div>

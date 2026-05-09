@@ -7,7 +7,7 @@ docs_dir: docs
 
 theme:
   name: material
-  custom_dir: docs/overrides
+  custom_dir: mkdocs_overrides
   language: en
   font: false
   icon:

@@ -635,6 +635,6 @@ Any future pricing, calibration, diagnostics, or Monte Carlo validation code sho
     Wiley.
 - Lord, R., & Kahl, C. (2008). Complex logarithms in Heston-like models.
     *Mathematical Finance*, 20(4), 671-694.
-- Cui, Y., del BaÃ±o Rollin, S., & Germano, G. (2017). Full and fast
+- Cui, Y., del Baño Rollin, S., & Germano, G. (2017). Full and fast
     calibration of the Heston stochastic volatility model. *European Journal of
     Operational Research*, 263(2), 625-638.
