@@ -32,6 +32,12 @@ The practical workflow is split into pricing, implied-vol smile generation,
 quadrature policy, Monte Carlo, calibration, diagnostics, and model
 comparison.
 
+For generated signatures and exact import paths across that whole stack, use
+the [Heston API reference](../api/heston.md). It covers the namespaced
+parameter object, Fourier pricers, Monte Carlo pricers, simulation primitives,
+calibration helpers, quote-set container, diagnostics, and model-comparison
+entrypoints without adding root-level exports.
+
 ## Parameters
 
 The implementation parameter object is

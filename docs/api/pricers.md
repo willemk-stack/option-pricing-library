@@ -29,6 +29,10 @@
 
 <p class="doc-section-lead">These functions expose the namespaced Heston stochastic-volatility vanilla pricing layer. Heston remains under submodules because it is a model stack with pricing, calibration, simulation, and diagnostics rather than a single everyday scalar pricer.</p>
 
+For the broader stochastic-volatility stack, including parameters,
+calibration, simulation, diagnostics, and model-comparison helpers, use the
+[Heston API](heston.md) reference page.
+
 ::: option_pricing.pricers.heston
     options:
       members:

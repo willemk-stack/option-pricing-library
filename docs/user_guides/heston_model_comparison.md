@@ -11,6 +11,11 @@ that one model is universally superior.
 [Open comparison notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/13_heston_calibration_vs_localvol.ipynb){ .md-button }
 </div>
 
+The generated import and signature map for the same stack is in the
+[Heston API reference](../api/heston.md). It keeps Heston namespaced while
+making pricing, calibration, simulation, diagnostics, and model-comparison
+entrypoints easier to find.
+
 ## What this page proves
 
 The point is not that Heston is automatically better. The point is that the
@@ -195,9 +200,11 @@ as the published review bundle; both profiles remain synthetic-fixture scoped.
 2. Open the [Heston guide](heston.md) for the namespaced pricing and
    calibration workflow.
 3. Open [Heston diagnostics](heston_diagnostics.md) for report interpretation.
-4. Review the [Heston versus local volatility note](../notes/heston_vs_local_vol.md)
+4. Check the [Heston API reference](../api/heston.md) for exact import paths
+   and generated signatures.
+5. Review the [Heston versus local volatility note](../notes/heston_vs_local_vol.md)
    for the comparison outputs.
-5. Run or inspect the
+6. Run or inspect the
    [comparison notebook on `main`](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/13_heston_calibration_vs_localvol.ipynb).
 
 ## What not to conclude

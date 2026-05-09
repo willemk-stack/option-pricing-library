@@ -148,6 +148,7 @@ nav:
       - Public: api/public.md
       - Curves: api/curves.md
       - Pricers: api/pricers.md
+      - Heston: api/heston.md
       - Volatility: api/vol.md
       - Exceptions: api/exceptions.md
   - Architecture:
