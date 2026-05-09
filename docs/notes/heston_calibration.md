@@ -57,10 +57,16 @@ global identifiability.
 
 ## Interpreting the evidence
 
-<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
-Heston calibration can be weakly identifiable from vanilla options. Several
-parameter combinations may produce similar vanilla prices, especially along
-mean-reversion, long-run variance, vol-of-vol, and correlation tradeoffs.
+Repository review policy: treat vanilla-only Heston calibration as potentially
+weakly identified unless multistart runs, residual tables, and held-out
+diagnostics say otherwise. Several parameter combinations may produce similar
+vanilla prices, especially along mean-reversion, long-run variance,
+vol-of-vol, and correlation tradeoffs. The committed evidence surface is the
+`multistart_runs`, `held_out_errors`, and residual tables emitted by
+`run_heston_calibration_fit_diagnostics(...)`, plus the generated
+[multistart panel](../assets/generated/heston/heston_multistart_stability_panel.svg)
+and focused
+[calibration-fit tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/diagnostics/heston/test_heston_calibration_fit.py).
 
 Multistart is diagnostic, not magic. It can show whether different starts
 converge to the same basin, whether some starts fail, and whether near-best

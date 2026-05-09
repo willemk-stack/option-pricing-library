@@ -48,6 +48,12 @@ Dupire/PDE validation evidence.
 The table-level details for this workflow live in the
 [Heston versus local volatility note](../notes/heston_vs_local_vol.md).
 
+The direct local-vol/PDE audit intentionally runs on selected Dupire/PDE
+handoff quotes, while the Heston and eSSVI proxy rows are available on the full
+comparison fixture. The full error summary is retained for continuity, but use
+the matched direct-PDE subset table when comparing Heston, eSSVI proxy, and
+direct PDE on the same quote indices.
+
 ## Evidence produced by the comparison report
 
 | Evidence | What it shows | What it does not prove |
@@ -55,7 +61,7 @@ The table-level details for this workflow live in the
 | Quote-level Heston repricing errors | Whether the fitted Heston model stays close to the common quote target at the individual-row level | It does not prove parameter uniqueness or robustness outside the reviewed target |
 | eSSVI repricing errors | How well the surface-first path fits the same vanilla target without imposing Heston dynamics | It does not prove dynamic realism or path-dependent suitability |
 | Direct local-vol/PDE rows | Whether selected Dupire/PDE repricing rows remain aligned with the common target | It does not prove full-surface PDE accuracy across all grids or scenarios |
-| ATM, downside, and upside buckets | Where model fit is concentrated or weak instead of hiding everything inside one average error | It does not prove behavior outside the sampled bucket definitions |
+| ATM, downside, and upside buckets | Where model fit is concentrated or weak instead of hiding everything inside one average error | The full summary mixes full-set Heston/eSSVI rows with selected direct-PDE rows; use the matched subset table for proxy-vs-PDE comparison |
 | Held-out comparison, when available | Whether the ranking changes once some rows are kept out of calibration | It does not prove broad out-of-sample generalization across dates or markets |
 | Tradeoff summary | A reviewer-facing summary of fit, interpretability, diagnostics, and validation tradeoffs | It does not declare a universal model winner |
 
@@ -135,8 +141,19 @@ stochastic-volatility fit economically unique.
 <figure markdown class="diagram" style="--diagram-max-width: 900px">
    ![Bucketed IV RMSE comparison across Heston, eSSVI/local-vol proxy, and direct local-vol PDE.](../assets/generated/heston/heston_model_comparison_error_buckets.light.png){ .diagram-img .diagram-light }
    ![Bucketed IV RMSE comparison across Heston, eSSVI/local-vol proxy, and direct local-vol PDE.](../assets/generated/heston/heston_model_comparison_error_buckets.dark.png){ .diagram-img .diagram-dark }
-   <figcaption>Error buckets summarize fit by moneyness region. The point is model-choice judgment, not declaring one model universally best.</figcaption>
+   <figcaption>Error buckets summarize fit by moneyness region. The Heston and eSSVI proxy bars retain the full quote set, while direct local-vol PDE bars use selected successful Dupire/PDE audit quotes. Use the matched direct-PDE subset table for apples-to-apples proxy-vs-direct-PDE comparisons.</figcaption>
 </figure>
+
+## Matched direct-PDE subset
+
+The matched subset filters the quote-level fit errors to the successful direct
+local-vol/PDE quote indices, then reruns the same bucket summary for Heston,
+eSSVI local-vol proxy, and direct local-vol PDE. Each bucket row therefore uses
+the same `n_quotes` for all three models.
+
+- Full-set comparison: [Error summary](../assets/generated/heston/data/heston_comparison_error_summary.csv)
+- Matched direct-PDE subset: [Matched error summary](../assets/generated/heston/data/heston_comparison_direct_pde_matched_error_summary.csv)
+- Selected PDE audit rows: [Direct local-vol PDE audit rows](../assets/generated/heston/data/heston_comparison_direct_local_vol_pde.csv)
 
 ## Generated artifact bundle
 
@@ -145,13 +162,23 @@ stochastic-volatility fit economically unique.
 - [Error summary](../assets/generated/heston/data/heston_comparison_error_summary.csv)
 - [Held-out comparison](../assets/generated/heston/data/heston_comparison_heldout.csv)
 - [Direct local-vol PDE audit rows](../assets/generated/heston/data/heston_comparison_direct_local_vol_pde.csv)
+- [Matched direct-PDE subset error summary](../assets/generated/heston/data/heston_comparison_direct_pde_matched_error_summary.csv)
 - [Model tradeoff summary](../assets/generated/heston/data/heston_comparison_tradeoff_summary.csv)
 - [MC convergence summary](../assets/generated/heston/data/heston_mc_convergence_summary.csv)
 
 These generated tables are the reviewer-facing provenance surface behind the
 figures on this page. They preserve the deterministic held-out split, direct
-local-vol subset disclosure, and the synthetic-fixture caveat in machine-
-readable form.
+local-vol subset disclosure, matched-subset quote counts, and the synthetic-
+fixture caveat in machine-readable form.
+
+The bundle is produced by
+[`scripts/build_heston_docs_artifacts.py`](https://github.com/willemk-stack/option-pricing-library/blob/main/scripts/build_heston_docs_artifacts.py).
+The nearest regression checks are the
+[model-comparison tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/diagnostics/heston/test_heston_model_comparison.py)
+and the
+[docs artifact builder tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/docs/test_build_heston_docs_artifacts.py).
+Use the `smoke` profile as a fast wiring diagnostic and the `release` profile
+as the published review bundle; both profiles remain synthetic-fixture scoped.
 
 ## When not to trust the result
 

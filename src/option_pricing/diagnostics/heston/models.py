@@ -633,6 +633,9 @@ class HestonModelComparisonDiagnostics:
         column_contracts = {
             "fit_errors": HESTON_MODEL_COMPARISON_FIT_ERROR_COLUMNS,
             "error_summary": HESTON_MODEL_COMPARISON_ERROR_SUMMARY_COLUMNS,
+            "direct_local_vol_pde_matched_error_summary": (
+                HESTON_MODEL_COMPARISON_ERROR_SUMMARY_COLUMNS
+            ),
         }
         normalized_tables = dict(self.tables)
         for table_name, columns in column_contracts.items():

@@ -41,12 +41,16 @@ Implemented:
 - calibration with bounded transforms and multistart
 - calibration fit diagnostics and synthetic benchmark diagnostics
 - Heston vs eSSVI/local-vol comparison layer
+- reviewer-facing Heston model-comparison page
+- generated Heston model-comparison visuals and CSV artifact bundle
+- README, homepage, decision guide, and validation-matrix proof-path exposure
 
 Remaining polish:
-- final reviewer-facing model-comparison page
-- Heston benchmark/performance evidence integration
-- citation and claim-support audit for Heston notes
-- README/homepage proof-card refresh once generated Heston visuals are ready
+- finish any remaining Heston citation and claim-support follow-ups after owner review
+- keep Heston benchmark provenance and environment-scope disclosure aligned with regenerated artifacts
+- preserve issue #93 matched direct-PDE subset caveat in docs, CSVs, and notebooks
+- prepare v0.5.0 release packaging and changelog story when the branch is ready
+- run final docs build, light/dark, and responsive visual validation before merge
 
 ### Capstone 4 - Hedging realism
 

@@ -29,11 +29,13 @@ The current Heston Fourier stack separates:
 
 ## Characteristic-function stability
 
-The implementation uses a stable Gatheral-style affine form in `charfunc.py`.
-The discriminant handling in `_stable_discriminant(...)` flips the sign of the
-square-root branch whenever the implied `g` ratio would be non-finite or
-unstable. This is the main safeguard against the classic Heston branch-cut and
-complex-log instability.
+Literature-backed convention plus repository policy: the implementation follows
+a Gatheral-style affine form in `charfunc.py`, with branch-cut concerns framed
+by Lord and Kahl's Heston-like complex-log discussion. The discriminant handling
+in `_stable_discriminant(...)` flips the sign of the square-root branch whenever
+the implied `g` ratio would be non-finite or unstable. The branch-stability
+tests cover this repository implementation choice; they do not prove all
+algebraically equivalent forms are equally safe.
 
 That branch choice does not eliminate every numerical problem in the Fourier
 inversion. It reduces one major source of instability, but the inversion still
@@ -91,14 +93,19 @@ The current flags are:
 
 Interpretation:
 
-<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
+Repository review policy:
+
 - `NONFINITE_TOTAL`, `NONFINITE_PROBABILITY`, and
-  `PROBABILITY_OUT_OF_RANGE` are usually "do not trust this result" failures.
-- `LARGE_TAIL_FRACTION` and `QUAD_ERROR_LARGE` are soft cautions that often
-  justify a denser rerun before rejecting the point outright.
+  `PROBABILITY_OUT_OF_RANGE` are hard trust failures unless a rerun identifies
+  a benign data or configuration problem.
+- `LARGE_TAIL_FRACTION` and `QUAD_ERROR_LARGE` are soft cautions that should be
+  checked with a denser rerun before rejecting the point outright.
 - `EXCESSIVE_CANCELLATION` and `TOO_MANY_BAD_PANELS` mean the finite number may
   still be fragile and should be reviewed together with backend agreement and
-  config-sweep behavior.
+  config-sweep behavior. These severity labels are implementation policy
+  covered by the
+  [Heston diagnostics tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/diagnostics/heston/test_heston_report.py),
+  not literature theorem statements.
 
 ## Operational flag guide
 

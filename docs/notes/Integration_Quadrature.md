@@ -1,198 +1,117 @@
-# Fixed-Rule-Quadrature
+# Fixed-rule quadrature
 
-## why Gaussian quadrature is tied to orthogonal polynomial families
+!!! note "Status"
+    This is a numerical-method note plus Heston implementation rationale.
+    Gaussian quadrature facts are standard mathematical facts, with Gautschi
+    listed as the reference. Heston-specific comments are repository
+    implementation policy unless they are tied to tests or generated
+    diagnostics elsewhere.
 
-Let $p_{n+1}$ be the degree-$n+1$ polynomial orthogonal with respect to the weight $w(x)$ on ([a,b]), meaning
+## Gaussian quadrature and orthogonal polynomials
 
-$$
-\langle p,q\rangle=\int_a^b w(x)p(x)q(x),dx.
-$$
+Let \(p_{n+1}\) be the degree-\(n+1\) polynomial orthogonal with respect to a
+weight \(w(x)\) on \([a,b]\):
 
-Then the **$(n+1)$-point Gaussian quadrature rule** uses the zeros $x_1,\dots,x_{n+1}$ of $p_{n+1}$ as its nodes, and there exist weights $\lambda_1,\dots,\lambda_{n+1}$ such that
+\[
+\langle p,q\rangle=\int_a^b w(x)p(x)q(x)\,dx.
+\]
 
-$$
-\int_a^b w(x) f(x),dx
+The \((n+1)\)-point Gaussian quadrature rule uses the zeros
+\(x_1,\ldots,x_{n+1}\) of \(p_{n+1}\) as its nodes, with weights
+\(\lambda_1,\ldots,\lambda_{n+1}\):
+
+\[
+\int_a^b w(x) f(x)\,dx
 \approx
-\sum_{i=1}^{n+1} w_i f(x_i),
-$$
+\sum_{i=1}^{n+1} \lambda_i f(x_i).
+\]
 
-and this rule is exact for every polynomial $f$ of degree at most $2n+1$
+For sufficiently regular \(f\), the rule is exact for every polynomial of
+degree at most \(2n+1\). The key structural point is that the nodes are chosen
+from orthogonality, not from an equally spaced geometric grid.
 
-## Why orthogonal polynomials appear
+## Newton-Cotes versus Gauss-Legendre
 
-> Gaussian quadrature arises because an ((n+1))-node rule that is exact for all polynomials up to degree (2n+1) must use as its node polynomial the degree-(n+1) orthogonal polynomial for the weight (w(x)); therefore the nodes are the zeros of that orthogonal polynomial.
+Both Newton-Cotes and Gauss-Legendre rules can be written as weighted sums of
+function values, but their node choices come from different principles.
 
-## what makes Gauss–Legendre structurally different from low-order Newton–Cotes style rules.
+For Newton-Cotes rules:
 
-Structurally:
+- nodes are fixed by equally spaced geometry;
+- weights are obtained by integrating interpolation basis polynomials;
+- high-order closed rules can become poorly conditioned and can have negative
+  weights.
 
-$$
-\int_a^b f(x),dx \approx \sum_{i=0}^n w_i f(x_i)
-$$
+For Gauss-Legendre rules:
 
-for both methods, but the $x_i$ come from very different principles.
+- nodes are not equally spaced;
+- nodes are the roots of Legendre polynomials on the transformed interval;
+- with \(n\) nodes, the rule is exact for polynomials up to degree \(2n-1\).
 
-For Newton–Cotes:
+That is the mathematical reason Gauss-Legendre is attractive when a fixed
+finite interval and a high-order deterministic rule are useful.
 
-* $x_i$ are fixed by geometry: equally spaced.
-* weights come afterward from integrating Lagrange basis polynomials.
-* this simplicity is nice, but high-order versions become unstable and can even produce negative weights.
+## Heston implementation rationale
 
-For Gauss–Legendre:
+The Heston Fourier pricer needs more than a one-off integral approximation. In
+calibration and diagnostics, the same pricing path is evaluated across strikes,
+maturities, seeds, and parameter perturbations. A deterministic fixed-rule
+backend makes those repeated evaluations easier to reproduce and inspect.
 
-* $x_i$ are **not** equally spaced.
-* they are chosen to satisfy an orthogonality condition tied to Legendre polynomials.
-* with (n) nodes, Gauss–Legendre is exact for all polynomials up to degree (2n-1), which is much better than Newton–Cotes with the same number of nodes.
+Repository implementation policy:
 
-Another way to say it:
+- keep the truncation boundary \(u_{\max}\), panel count, nodes per panel, and
+  spacing policy explicit;
+- reuse deterministic nodes and weights across repeated evaluations where the
+  integration rule is unchanged;
+- surface panel-level diagnostics so tail, origin, oscillation, and
+  cancellation problems can be reviewed locally;
+- keep SciPy `quad` as an independent comparison backend rather than the main
+  calibration workhorse.
 
-* **Newton–Cotes** is an **interpolate-then-integrate on a fixed grid** method.
-* **Gauss–Legendre** is an **optimize the nodes for polynomial exactness** method.
+These are implementation and diagnostics choices. They do not prove that one
+quadrature rule is universally best across all Heston regimes.
 
-> Newton–Cotes uses equally spaced interpolation nodes and integrates the interpolant, whereas Gauss–Legendre chooses nonuniform nodes and weights so that the quadrature is maximally exact; in the Legendre case, the nodes are the roots of Legendre polynomials.
+## Panelization
 
-## Why deterministic nodes and weights is a meaningful implementation asset for a Heston Backend
+Panelization divides the finite integration interval into subintervals and
+applies the same fixed rule on each panel. The composite rule is then the sum of
+panel contributions. This gives the implementation one global quadrature
+contract while still allowing diagnostics to identify where resolution is
+missing.
 
-In the Heston pricer, the main numerical problem is not merely to approximate an integral, but to do so stably, reproducibly, and diagnostically across difficult parameter regimes. The Fourier integrand can change character across maturities and parameter sets, and the pricing engine must remain well behaved not only for one price evaluation, but also under calibration loops, regression tests, and parameter perturbations. That is why a deterministic fixed-rule backend is valuable.
+Typical panel-level signals:
 
-The practical advantage of deterministic quadrature is that the integration grid is known in advance: once the truncation boundary $u_{max}$, the panel layout, and the rule order are chosen, the nodes and weights are fixed. This makes the backend easier to reason about than black-box adaptive integration, where the effective evaluation pattern changes from case to case.
+- early panels: possible under-resolution near the origin;
+- late panels: possible tail truncation issue;
+- alternating or spiky panels: possible oscillation or cancellation problem.
 
-clearer convergence diagnostics. With deterministic nodes and weights, refinement is structured: increase $u_{max​}$, increase the number of panels, or increase the nodes per panel, and observe how the price changes.
+The Heston diagnostics pages use these signals as review evidence, not as
+automatic rejection rules.
 
-Other points of interest:
+## API controls
 
-- Calibration friendly
-- nodes and weights can be cached and reused across repeated evaluations, vectorized across strikes and held fixed while only the integrand values change.
+The implementation should keep these controls visible:
 
-## why compound rules are the natural bridge between a finite interval and local resolution control
+- `backend`: for example `gauss_legendre` or `quad`;
+- `u_max`: truncation boundary;
+- `n_panels`: composite-rule panel count;
+- `nodes_per_panel`: fixed-rule order on each panel;
+- `panel_spacing`: optional spacing policy.
 
-Composite rules and panelization are not conceptually identical, but in implementation they work hand in hand: panelization creates the local subinterval structure, and the composite rule is obtained by applying the chosen fixed quadrature rule on each panel and summing the results. This makes composite quadrature a natural bridge between finite-interval integration and local resolution control. A single global rule gives uniformity and conceptual simplicity, but it can be too rigid when different parts of the domain require different levels of resolution. In Heston this can be especially important. Panelization restores that flexibility by allowing resolution to be concentrated where it is needed, while the composite construction preserves a single consistent integration procedure over the whole interval. In that sense, composite rules combine the coherence of a global quadrature framework with the adaptability of local refinement.
+## Jacobi-matrix construction
 
-## why panelization makes diagnostics clearer
+Gautschi gives the standard computational route from orthogonal-polynomial
+recurrence coefficients to Gaussian quadrature nodes and weights. In that
+setup, the nodes are eigenvalues of the finite Jacobi matrix associated with
+the recurrence, and the weights are recovered from the normalized eigenvectors.
 
-> Panelization makes diagnostics clearer because it localizes numerical error. Instead of observing only that the global integral converges slowly, we can inspect convergence panel by panel and identify which subintervals contribute most of the residual error. In practice, this lets us say not just that the quadrature is under-resolved, but that specific regions of the integration domain are under-resolved and may require more panels, higher local order, or different spacing.
+This repo does not require the Heston docs to rederive that construction in
+full. The important implementation point is narrower: if a fixed
+Gauss-Legendre rule is selected, the node and weight arrays are deterministic
+and can be treated as part of the pricing configuration.
 
-early panels may indicate under-resolution near the origin,
-late panels may indicate tail truncation issues,
-irregular behavior across adjacent panels may indicate oscillation or cancellation.
+## References
 
-## which settings should become explicit controls in the pricing API
-
-- Panel spacing: uniform, local, ...
-- Order/Nodes per panel(s):
-- convergence tolerance
-- 
-
-
-
-## Implementation/Interface choices:
-
-- Composite rule should be clean arbitrary-n Gauss–Legendre interface.
-
-- `Backend` = `gauss_legendre`
-- `u_max`
-- `n_panels`,
-- `nodes_per_panel`,
-- `panel_spacing` (optional).
-
-## Gautschi Core
-
-We take  $\tilde \pi _k(t)$, the orthonormal family of Gauss polynomials.
-
-Then from Theorem 1.31 $\Rightarrow$, the zero's $t_\nu^{(n)}$ of the Gauss polynomials are eigenvalues of $\mathbb{J}_n (d,\\lambda)$ and $\tilde \pi ^{(n)} _\nu(t)$ are the corresponding eigenvectors.
-
-<details>
-<summary>Why?</summary>
-
-This follows from rewriting the three step recurrance relation as 
-
-$$
-t\tilde \pi (t) 
-= 
-\mathbb{J}_n ^{d\lambda} \tilde\pi (t)
-+
-\sqrt{\beta_n}\tilde\pi (t)\mathbb{e_n},
-\qquad
-e_n := (0,0,\dots,0,1)^T
-$$
-
-and cleverly applying properties such as $\tilde\pi _0 = \frac{1}{\sqrt{\beta_0}},$
-gives the final result.
-
-</details>
-
-The corollary to Theorem 3.1 gives $v_\nu$, the normalised eigenvector of $\mathbb{J}_n$ to eigenvalue $\lambda_\nu$,
-
-i.e satisfying,
-
-$$
-J_n = \sum_\nu \lambda_\nu\, U_\nu \otimes U_\nu,
-\qquad
-U_\mu^T U_\nu = \delta_{\mu\nu}.
-$$
-
-Then,
-
-$$
-\beta_0\,v_{\nu,1}^2
-\le
-\frac{1}{\sum_{k=0}^{n-1}\bigl(\tilde \pi_k(\tau_\nu^{(n)})\bigr)^2}
-$$
-
-Because
-
-$$
-v_{\nu}
-=
-\frac{\tilde \pi\bigl(\tau_\nu^{(n)}\bigr)}
-{\left\|\tilde \pi\bigl(\tau_\nu^{(n)}\bigr)\right\|}
-$$
-
----
-
-Now, in the Gauss formula, take
-
-$$
-f(x)=\tilde \pi_k(x), \qquad k \le n-1.
-$$
-
-$$
-\pi _0 = \frac{1}{\sqrt{\beta_0}}
-$$
-
-By orthogonality we get
-
-$$
-\sqrt{\beta_0}\delta _{k,0}
-=
-\sum_{\nu=1}^n \lambda_\nu^{G}\,\tilde \pi\!\bigl(\tau _\nu^{G}\bigr).
-$$
-
-Equivalently,
-
-$$
-P\,\lambda^{G} = \sqrt{\beta_0^{1/2}} \mathbb{e_1} \qquad (*)
-$$
-
-where
-
-$$
-P = \bigl[\tilde \pi(\tau_1^{G}),\dots], \qquad \lambda^{G} = [\lambda _i^{G},\cdots,]^T
-$$
-
-$$
-P^T P = D_{\pi} = \operatorname{diag}(d_0,d_1,\dots,d_{n-1})
-$$
-
-and
-
-$$
-d_{\nu-1} = \sum_{k=0}^{n-1} \bigl[\tilde \pi _k(\tau _\nu^{G})\bigr]^2.
-$$
-
-Multiplyign both sides of (*) with $P^T$ gives
-
-$$\lambda_{\nu}^G = \frac{1}{\sum_{k=0}^{n-1} [\tilde{\pi}_k(\tau_{\nu}^G)]^2}, \quad \nu = 1, 2, \dots, n$$
-
-**Reference**
-Walter Gautschi, *Orthogonal Polynomials: Computation and Approximation*, Numerical Mathematics and Scientific Computation, Oxford University Press, Oxford, 2004. ([Oxford University Press])
+- Gautschi, W. (2004). *Orthogonal Polynomials: Computation and
+    Approximation*. Oxford University Press.

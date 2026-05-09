@@ -23,10 +23,10 @@ semi-analytic probability-integral path:
 Monte Carlo, local-vol PDE, and implied-vol inversion are outside the scope of
 this note.
 
-## Production default
+## Repository default
 
-<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
-The production default should be the fixed Gauss-Legendre backend:
+The current repository default for reviewed Heston pricing and calibration
+paths is the fixed Gauss-Legendre backend:
 
 ```python
 backend = "gauss_legendre"
@@ -44,9 +44,10 @@ Rationale:
 default calibration backend because it evaluates scalar integrals and is much
 more expensive across strikes, maturities, and optimizer iterations.
 
-NOTE: This default is a performance and numerical-policy decision. The
-branch-stability and reference-price tests validate the supported production
-real-frequency grid, not every possible complex-plane path.
+NOTE: This default is a repository performance and numerical-policy decision,
+not a theorem about all Heston regimes. The branch-stability and
+reference-price tests validate the supported real-frequency grid, not every
+possible complex-plane path.
 
 ## Configuration tiers
 

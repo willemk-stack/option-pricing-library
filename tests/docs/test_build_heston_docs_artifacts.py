@@ -84,6 +84,7 @@ def test_build_heston_docs_artifacts_smoke_profile_writes_required_bundle(
         "heston_comparison_error_summary.csv",
         "heston_comparison_heldout.csv",
         "heston_comparison_direct_local_vol_pde.csv",
+        "heston_comparison_direct_pde_matched_error_summary.csv",
         "heston_comparison_tradeoff_summary.csv",
         "heston_mc_convergence_summary.csv",
         "heston_artifact_manifest.json",
@@ -97,6 +98,7 @@ def test_build_heston_docs_artifacts_smoke_profile_writes_required_bundle(
         output_dir / "heston_model_comparison_smile_overlay.png",
         output_dir / "heston_workflow_architecture.svg",
         output_dir / "data" / "heston_comparison_fit_errors.csv",
+        output_dir / "data" / "heston_comparison_direct_pde_matched_error_summary.csv",
         output_dir / "data" / "heston_mc_convergence_summary.csv",
     ]
     for path in expected_paths:

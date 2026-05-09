@@ -2,23 +2,25 @@
 
 ## Summary
 
-Add committed, reviewer-usable performance evidence for the Heston pricing,
-calibration, and comparison workflows.
+Keep the committed, reviewer-usable Heston performance and diagnostics evidence
+discoverable from the public docs.
 
 ## Motivation
 
-The branch now explains what the Heston workflow proves, but it still lacks a
-performance evidence page that is comparable in discipline to the existing
-surface and PDE benchmark story.
+The branch now exposes Heston docs artifacts, the model-comparison CSV bundle,
+and calibration benchmark artifacts. The remaining tracking value is to keep
+fixture scope, environment dependence, smoke-vs-release intent, and artifact
+links aligned as the bundle is regenerated.
 
 ## Proposed scope
 
-- Choose the smallest useful benchmark set for Heston Fourier pricing,
-  calibration diagnostics, Monte Carlo sweeps, and model-comparison overhead.
-- Define fixture scope, environment notes, and artifact schema for committed
-  benchmark outputs.
-- Publish the resulting evidence through docs pages or proof tables without
-  overstating generality.
+- Keep `docs/performance.md`, `docs/user_guides/heston_model_comparison.md`,
+  and `docs/validation_matrix.md` linked to the Heston artifact manifest,
+  builder scripts, generated CSVs, and nearest tests.
+- Preserve the distinction between smoke diagnostics and stronger release/review
+  artifacts.
+- Keep issue #93's matched direct-PDE subset CSV visible when bucket summaries
+  are discussed.
 
 ## Non-goals
 

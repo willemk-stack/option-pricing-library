@@ -491,8 +491,10 @@ The following tests should remain in the project permanently.
 
 - QE vanilla prices agree with Fourier within confidence intervals.
 - QE discounted forward martingale condition holds.
-<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
-- Euler is treated as baseline, not production default.
+- Repository MC policy treats Euler as a baseline/debugging scheme, not the
+  final validation default; the generated
+  [MC convergence artifact](../assets/generated/heston/heston_mc_vs_fourier_convergence.svg)
+  reports QE and Euler separately.
 - Control variate reduces variance but is not used as the main Fourier validation proof.
 
 ---
@@ -611,8 +613,8 @@ where:
 - `probability_index=0` corresponds to \(P_K\), the strike-term probability,
 - `probability_index=1` corresponds to \(P_F\), the forward-term probability,
 - the Fourier phase \(e^{iux}\) is applied exactly once,
-<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
-- `gauss_legendre` is the production/default backend,
+- repository implementation policy uses `gauss_legendre` as the default
+  backend for reviewed Heston pricing and calibration paths,
 - `quad` is the independent comparison backend,
 - analytic parameter Jacobians support only the guarded fixed
   Gauss-Legendre production domain with `eta >= 1e-6`,

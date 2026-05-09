@@ -451,9 +451,10 @@ So the right statement is:
 - Generate $\widehat V_{t+\Delta}$ first.
 - Then draw a **new independent** Gaussian for the $\log X$ step.
 - If using the martingale-corrected form, check the regularity conditions for $\rho > 0$.
-<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
-- Use Broadie--Kaya mainly as a benchmark / gold-standard reference, not as the default production workhorse.
-- Treat Euler as a benchmark and debugging baseline, not as the final production discretization.
+- Use Broadie--Kaya as an exact-simulation reference in literature discussions,
+  not as this repository's default simulation workhorse.
+- Treat Euler as a benchmark and debugging baseline, not as the final
+  validation discretization.
 
 ## Failure notes
 

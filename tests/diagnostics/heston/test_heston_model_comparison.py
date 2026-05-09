@@ -94,6 +94,7 @@ def test_heston_vs_local_vol_comparison_runs_direct_pde_on_market_like_fixture()
     assert set(report.tables) >= {
         "fit_errors",
         "error_summary",
+        "direct_local_vol_pde_matched_error_summary",
         "tradeoff_summary",
         "held_out_comparison",
     }
@@ -129,9 +130,22 @@ def test_heston_vs_local_vol_comparison_runs_direct_pde_on_market_like_fixture()
         values = summary[column].to_numpy(dtype=np.float64)
         assert np.all(np.isfinite(values))
 
+    matched = report.tables["direct_local_vol_pde_matched_error_summary"]
+    assert set(matched["model"]) == {
+        "Heston",
+        "ESSVI local-vol proxy",
+        "Direct local-vol PDE",
+    }
+    assert {"all", "atm", "downside_wing", "upside_wing"} <= set(matched["bucket"])
+    for _, bucket_rows in matched.groupby("bucket", sort=False):
+        counts = bucket_rows.set_index("model")["n_quotes"]
+        assert int(counts.loc["Heston"]) == int(counts.loc["ESSVI local-vol proxy"])
+        assert int(counts.loc["Heston"]) == int(counts.loc["Direct local-vol PDE"])
+
     notes = " ".join(str(note) for note in report.meta["notes"])
     assert ("RE" + "VIEW:") not in notes
     assert "Dupire/PDE repricing audit" in notes
+    assert "direct_local_vol_pde_matched_error_summary" in notes
     assert report.meta["local_vol_proxy_kind"] == "essvi_nodal_implied_surface"
     assert report.meta["direct_local_vol_pde_repricing"] is True
     assert report.meta["direct_local_vol_pde_success_count"] == 3

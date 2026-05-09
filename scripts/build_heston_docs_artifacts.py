@@ -103,6 +103,9 @@ DATA_TABLE_SPECS = {
     "heston_comparison_error_summary.csv": "error_summary",
     "heston_comparison_heldout.csv": "held_out_comparison",
     "heston_comparison_direct_local_vol_pde.csv": "direct_local_vol_pde",
+    "heston_comparison_direct_pde_matched_error_summary.csv": (
+        "direct_local_vol_pde_matched_error_summary"
+    ),
     "heston_comparison_tradeoff_summary.csv": "tradeoff_summary",
 }
 
@@ -262,8 +265,10 @@ CAPTIONS = {
         "unconstrained surface fitter."
     ),
     "heston_model_comparison_error_buckets": (
-        "Error buckets summarize model fit by moneyness region. The point is "
-        "model-choice judgment, not declaring one model universally best."
+        "Error buckets summarize model fit by moneyness region. Heston and "
+        "eSSVI full-set rows are retained; direct PDE rows are selected "
+        "Dupire/PDE audit quotes, so proxy-vs-direct-PDE comparisons should "
+        "use the matched-subset CSV."
     ),
     "heston_multistart_stability_panel": (
         "Heston calibration can be weakly identifiable. Multistart diagnostics "
@@ -331,6 +336,10 @@ DOCS_PAGES = {
     ],
     "heston_comparison_direct_local_vol_pde.csv": [
         "docs/user_guides/heston_model_comparison.md",
+    ],
+    "heston_comparison_direct_pde_matched_error_summary.csv": [
+        "docs/user_guides/heston_model_comparison.md",
+        "docs/validation_matrix.md",
     ],
     "heston_comparison_tradeoff_summary.csv": [
         "docs/user_guides/heston_model_comparison.md",
@@ -935,19 +944,34 @@ def _plot_error_buckets(ax: Axes, bundle: DiagnosticsBundle, spec: ThemeSpec) ->
     for index, model_name in enumerate(model_order):
         rows = table.loc[table["model"].astype(str) == model_name]
         values: list[float] = []
+        counts: list[int | None] = []
         for bucket in bucket_order:
             match = rows.loc[rows["bucket"].astype(str) == bucket]
             values.append(
                 float(match[metric].iloc[0]) if not match.empty else float("nan")
             )
+            counts.append(int(match["n_quotes"].iloc[0]) if not match.empty else None)
         offset = (index - (len(model_order) - 1) / 2.0) * width
-        ax.bar(
+        bars = ax.bar(
             x + offset,
             values,
             width=width,
             label=model_name,
             color=spec.model_colors[model_name],
         )
+        for bar, value, n_quotes in zip(bars, values, counts, strict=True):
+            if n_quotes is None or not np.isfinite(value):
+                continue
+            ax.text(
+                bar.get_x() + bar.get_width() / 2.0,
+                max(float(value), 0.0),
+                f"n={n_quotes}",
+                ha="center",
+                va="bottom",
+                rotation=90,
+                fontsize=7,
+                color=spec.palette["muted_text"],
+            )
 
     ax.set_title("Model comparison buckets", loc="left")
     ax.set_xticks(
@@ -955,12 +979,13 @@ def _plot_error_buckets(ax: Axes, bundle: DiagnosticsBundle, spec: ThemeSpec) ->
     )
     ax.set_ylabel("IV RMSE (bps)")
     ax.grid(True, axis="y", alpha=0.45)
+    ax.margins(y=0.20)
     ax.legend(fontsize=8, loc="upper left")
     if "Direct local-vol PDE" in model_order:
         ax.text(
             0.98,
             0.98,
-            "Direct local-vol PDE uses a selected\nvalidation subset",
+            "Direct PDE bars use selected audit quotes;\nuse matched CSV for proxy comparison",
             transform=ax.transAxes,
             va="top",
             ha="right",
@@ -1688,6 +1713,7 @@ def _required_paths(
             out_dir / "data" / "heston_comparison_error_summary.csv",
             out_dir / "data" / "heston_comparison_heldout.csv",
             out_dir / "data" / "heston_comparison_direct_local_vol_pde.csv",
+            out_dir / "data" / "heston_comparison_direct_pde_matched_error_summary.csv",
             out_dir / "data" / "heston_comparison_tradeoff_summary.csv",
             out_dir / "data" / "heston_mc_convergence_summary.csv",
             out_dir / "data" / "heston_artifact_manifest.json",

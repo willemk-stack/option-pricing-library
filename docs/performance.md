@@ -155,6 +155,15 @@ deterministic fixture, optimizer settings, quadrature policy, and local
 environment. They should be read as engineering diagnostics rather than
 universal performance claims.
 
+<div class="doc-panel doc-panel--quiet" markdown="1">
+<p class="doc-panel__label">Heston provenance path</p>
+- Docs comparison artifacts are built by [`scripts/build_heston_docs_artifacts.py`](https://github.com/willemk-stack/option-pricing-library/blob/main/scripts/build_heston_docs_artifacts.py) and indexed by the [Heston artifact manifest](assets/generated/heston/data/heston_artifact_manifest.json).
+- The committed model-comparison CSVs include the full [error summary](assets/generated/heston/data/heston_comparison_error_summary.csv), selected [direct local-vol PDE audit rows](assets/generated/heston/data/heston_comparison_direct_local_vol_pde.csv), and the [matched direct-PDE subset summary](assets/generated/heston/data/heston_comparison_direct_pde_matched_error_summary.csv).
+- The `smoke` Heston docs profile is a lightweight regression diagnostic. The `release` profile is the stronger review artifact used for the published bundle, but it remains synthetic-fixture and environment scoped.
+- Calibration benchmark artifacts are built separately by [`scripts/build_heston_calibration_benchmark_artifacts.py`](https://github.com/willemk-stack/option-pricing-library/blob/main/scripts/build_heston_calibration_benchmark_artifacts.py) and indexed under [`benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_artifacts.json`](https://github.com/willemk-stack/option-pricing-library/blob/main/benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_artifacts.json).
+- Nearest regression coverage lives in the [model-comparison tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/diagnostics/heston/test_heston_model_comparison.py), [docs artifact builder tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/docs/test_build_heston_docs_artifacts.py), and [calibration benchmark tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/diagnostics/heston/test_heston_calibration_benchmark.py).
+</div>
+
 ## Environment and reproducibility
 
 - Snapshot environment: Python `3.12.0`, NumPy `2.4.0rc1`, SciPy `1.16.3`, pandas `2.2.3`, 16 logical CPUs.

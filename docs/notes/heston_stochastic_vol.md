@@ -209,7 +209,11 @@ A useful map is:
 - \(\theta\): sets the long-run variance level,
 - \(v_0\): sets the short-maturity variance level.
 
-For equity-style skews, negative \(\rho\) is usually the main asymmetry driver. Random variance alone fattens tails, but correlation drives the strong left-skew pattern seen in index options.
+Model-intuition note: in the Heston setup, negative \(\rho\) is the parameter
+that tilts equity-style smiles toward higher lower-strike implied volatilities.
+Random variance contributes smile and tail effects, but this note treats the
+correlation/skew link as practitioner intuition from the Heston/Gatheral model
+reading, not as a calibrated-market universal.
 
 ## 9. Notation map: Heston vs Gatheral
 
@@ -286,7 +290,11 @@ Typical symptoms are:
 - noisy implied-vol curves,
 - fragile calibration.
 
-This is why Gatheral’s algebraic rearrangement is important: it is the numerically safer default for implementation.
+This is why the repository follows the Gatheral-style algebraic rearrangement
+and branch-handling policy discussed in
+[Heston Fourier diagnostics](heston_fourier_diagnostics.md). That is an
+implementation-stability choice backed by the branch-stability tests, not a
+claim that every equivalent formula has been benchmarked here.
 
 ### Narrow scope for a first pricer
 
@@ -306,7 +314,10 @@ Useful checks include:
 - \(v_0 \ge 0\), \(\theta \ge 0\), \(\xi \ge 0\), \(|\rho| < 1\), \(\kappa > 0\),
 - the Feller condition \(2\kappa\theta \ge \xi^2\).
 
-The Feller condition is an important process-quality diagnostic, but violating it does not by itself make the model unusable for vanilla pricing.
+The Feller condition is an important process-quality diagnostic. The repository
+reports violations as review evidence rather than treating them as an automatic
+vanilla-pricing failure, because the supported Fourier pricing path is tested
+on the configured regimes separately from process-boundary interpretation.
 
 ### Calibration parameter transforms
 

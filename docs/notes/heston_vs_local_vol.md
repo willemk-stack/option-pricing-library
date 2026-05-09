@@ -11,6 +11,13 @@ direct Dupire/PDE local-vol repricing audit. It uses one common
 `HestonQuoteSet` target so Heston, eSSVI, and local-vol PDE residuals are
 computed against the same quotes.
 
+The direct local-vol PDE audit is selected-subset evidence. Heston and eSSVI
+proxy errors are available over the full comparison fixture, but direct PDE
+rows are emitted only for the successful deterministic PDE audit quote indices.
+The mixed full summary is retained for continuity; the matched direct-PDE subset
+summary is the apples-to-apples table for comparing all three models on the
+same selected quotes.
+
 The final target is a deterministic market-like synthetic fixture. It is not
 market data and is not generated from the fitted Heston model. This avoids
 advantaging Heston with Heston-generated recovery data while keeping the
@@ -48,6 +55,9 @@ Use these report fields rather than rebuilding comparison tables in a notebook:
   success count, grid size, surface source, and average residuals;
 - `comparison.tables["error_summary"]`: RMSE, MAE, and max absolute error by
   model and by `all`, `atm`, `downside_wing`, and `upside_wing` buckets;
+- `comparison.tables["direct_local_vol_pde_matched_error_summary"]`: the same
+  bucket summary, filtered to successful direct-PDE quote indices so Heston,
+  eSSVI proxy, and direct PDE use identical per-bucket quote counts;
 - `comparison.tables["held_out_comparison"]`: train versus held-out errors when
   a held-out mask is supplied;
 - `comparison.tables["tradeoff_summary"]`: concise fit-quality,
@@ -78,7 +88,9 @@ vanilla smiles more tightly at calibrated nodes than a single five-parameter
 Heston fit. The direct local-vol PDE rows are a separate audit of whether the
 Dupire handoff and PDE grid reprice selected quotes consistently; they do not
 globally prove local-vol accuracy across all strikes, maturities, boundaries,
-or extrapolation regimes.
+or extrapolation regimes. Do not compare a full-set eSSVI proxy bucket directly
+with a selected-subset direct PDE bucket; use
+`direct_local_vol_pde_matched_error_summary` for that question.
 
 ## Minimal Usage
 
@@ -104,6 +116,7 @@ comparison = run_heston_vs_local_vol_comparison(
 comparison.tables["fit_errors"]
 comparison.tables["direct_local_vol_pde"]
 comparison.tables["error_summary"]
+comparison.tables["direct_local_vol_pde_matched_error_summary"]
 comparison.tables["tradeoff_summary"]
 comparison.meta["notes"]
 ```

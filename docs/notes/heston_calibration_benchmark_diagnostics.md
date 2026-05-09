@@ -38,10 +38,11 @@ The artifact builder now writes two clearly separated profiles under
 - `smoke`: the default lightweight regression artifact, using the small
     synthetic grid, `repeat=1`, `warmup=0`, and cheap quadrature so wiring and
     analytics coverage stay fast.
-<!-- TODO(evidence): Add citation, benchmark link, or soften this repository-policy claim. -->
-- `release`: a stronger deterministic benchmark artifact, using a larger quote
-    grid, `repeat=5`, `warmup=1`, and more production-like Gauss-Legendre
-    quadrature.
+- `release`: a stronger deterministic review artifact for this repository
+    scenario, using a larger quote grid, `repeat=5`, `warmup=1`, and denser
+    Gauss-Legendre quadrature. Its scope is recorded in
+    [`heston_calibration_jacobian_artifacts.json`](https://github.com/willemk-stack/option-pricing-library/blob/main/benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_artifacts.json);
+    it is not a machine-independent performance claim.
 
 Build one profile explicitly when needed:
 

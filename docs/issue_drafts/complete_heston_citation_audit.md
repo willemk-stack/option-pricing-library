@@ -7,16 +7,18 @@ temporary TODO markers with citations, benchmark links, or softer wording.
 
 ## Motivation
 
-The current cleanup pass adds targeted `TODO(evidence)` markers near strong
-repository-policy claims. Those markers need a follow-up pass by someone who can
-verify the supporting papers, tests, and benchmark artifacts carefully.
+The P0 cleanup pass replaced the generic `TODO(evidence)` markers with
+repository-policy language, evidence links, or softer wording. This follow-up
+is now for owner review of any remaining policy calls that should be upgraded
+to stronger citations, benchmark artifacts, or issue-specific evidence.
 
 ## Proposed scope
 
 - Review the Heston notes one by one for strong language about defaults,
   stability, weak identification, and benchmark roles.
-- Replace each TODO marker with either a citation, a link to committed evidence,
-  or toned-down wording.
+- Replace any remaining policy-only wording with a citation, a link to
+  committed evidence, or toned-down wording when owner review finds the current
+  label too strong.
 - Keep mathematical references separate from repository-policy claims.
 
 ## Non-goals
@@ -27,8 +29,8 @@ verify the supporting papers, tests, and benchmark artifacts carefully.
 
 ## Acceptance criteria
 
-- Each Heston note with a TODO marker is either cited, linked to evidence, or
-  softened.
+- Each Heston note labels theory, repository policy, diagnostics evidence, and
+  provisional heuristics clearly enough for public review.
 - The notes remain readable and reviewer-facing.
 - Repository-policy language is clearly separated from literature-backed claims.
 

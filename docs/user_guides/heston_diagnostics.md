@@ -72,6 +72,9 @@ implied-surface repricing layer and a small direct local-vol PDE validation
 grid on the same vanilla target. The eSSVI row is the flexible vanilla-surface
 comparison layer; the `direct_local_vol_pde` table carries the separate
 Dupire/PDE repricing evidence, status, runtime, and grid metadata.
+Use `direct_local_vol_pde_matched_error_summary` for Heston/eSSVI/direct-PDE
+bucket comparisons on the same successful direct-PDE quote subset; the regular
+`error_summary` keeps the full-set Heston/eSSVI rows for continuity.
 
 LIMITATION: Conclusions depend on the target quotes, weights, held-out
 partition, eSSVI projection, local-vol PDE grid, and boundary policy.
