@@ -7,6 +7,7 @@
         display: none;
     }
 }
+
 .md-typeset .admonition,
 .md-typeset details {
     border-radius: var(--docs-radius-md);
@@ -17,6 +18,11 @@
 [data-md-color-scheme="slate"] .md-typeset a:not(.md-button) {
     color: #8cc9ff !important;
 }
+
+[data-md-color-scheme="slate"] .md-typeset a:not(.md-button) code {
+    color: #8cc9ff !important;
+}
+
 @media screen and (min-width: 76.25em) {
     .md-sidebar--secondary .md-sidebar__scrollwrap {
         max-height: calc(100vh - 5.2rem);
