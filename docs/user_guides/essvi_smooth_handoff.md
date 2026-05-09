@@ -11,8 +11,9 @@
 </div>
 </div>
 
-<div class="cta-row cta-row--duo" markdown="1">
+<div class="cta-row cta-row--trio" markdown="1">
 [Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/07_essvi_smooth_surface_for_dupire.ipynb){ .md-button .md-button--primary }
+[Read the design note](../notes/volatility/essvi_calibration_design.md){ .md-button }
 [Next: local-vol and PDE validation](localvol_pde_validation.md){ .md-button }
 </div>
 

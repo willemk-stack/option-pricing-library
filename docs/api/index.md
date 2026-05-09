@@ -25,6 +25,8 @@
 
 [<span class="doc-card__eyebrow">Execution layer</span><span class="doc-link-card__title">Pricers</span><span class="doc-link-card__copy">Black-Scholes, Monte Carlo, and Binomial entry points across all three public styles.</span>](pricers.md){ .doc-link-card .doc-link-card--quiet }
 
+[<span class="doc-card__eyebrow">Stochastic volatility</span><span class="doc-link-card__title">Heston API</span><span class="doc-link-card__copy">Namespaced parameters, Fourier pricing, Monte Carlo, calibration, diagnostics, and model-comparison helpers.</span>](heston.md){ .doc-link-card .doc-link-card--quiet }
+
 [<span class="doc-card__eyebrow">Volatility stack</span><span class="doc-link-card__title">Volatility</span><span class="doc-link-card__copy">Implied-vol inversion, smiles, surfaces, local-vol objects, and the eSSVI toolbox.</span>](vol.md){ .doc-link-card .doc-link-card--quiet }
 
 [<span class="doc-card__eyebrow">Error handling</span><span class="doc-link-card__title">Exceptions</span><span class="doc-link-card__copy">Exception types to catch when validation, bracketing, or root-finding fails.</span>](exceptions.md){ .doc-link-card .doc-link-card--quiet }

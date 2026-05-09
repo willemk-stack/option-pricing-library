@@ -82,7 +82,7 @@ Choosing <code>101x201</code> for the published bundle is a practical decision, 
 
 | Layer | Object or check | Design choice and reason |
 | --- | --- | --- |
-| Input surface | `ESSVISmoothedSurface` from the previous step | Start from an explicit time-continuous handoff rather than a rough slice stack |
+| Input surface | `ESSVISmoothedSurface` from the previous step | Start from an explicit time-continuous handoff rather than a rough slice stack; see the [eSSVI calibration design note](../notes/volatility/essvi_calibration_design.md) for the bridge policy |
 | Local-vol diagnostics | invalid masks, denominator checks, worst-point inspection | Keep extraction failure modes visible before making pricing claims |
 | Repricing bundle | representative `30`-option vanilla-call bundle against the originating implied surface | Show the numerical workflow where the page actually makes its claim without pretending universality |
 | Error localization | repricing scatter plus strike/maturity heatmap | Let reviewers see structure instead of trusting one mean |

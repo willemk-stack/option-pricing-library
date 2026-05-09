@@ -4,12 +4,13 @@
 
 <div class="doc-intro" markdown="1">
 <p class="doc-intro__kicker">Flagship benchmark page</p>
-<p class="doc-intro__lead">This page is the committed benchmark bundle for the runtime questions that matter most in review: workload-class scaling, PDE cost versus accuracy, digital-payoff remedies, and the end-to-end surface-to-PDE stage budget.</p>
+<p class="doc-intro__lead">This page is the committed benchmark bundle for the runtime and provenance questions that matter most in review: workload-class scaling, PDE cost versus accuracy, digital-payoff remedies, Heston MC/Fourier validation, and the end-to-end surface-to-PDE stage budget.</p>
 <p class="doc-intro__support">Read it as a benchmark case study rather than a leaderboard. The point is to show what actually matters, where extra runtime buys something real, and which stages deserve optimization effort before the quieter ones do.</p>
 <div class="doc-pill-row">
   <span class="doc-pill">Vectorized IV scaling</span>
   <span class="doc-pill">Runtime versus error</span>
   <span class="doc-pill">Stage-budget attribution</span>
+  <span class="doc-pill">Heston MC/Fourier validation</span>
 </div>
 </div>
 
@@ -20,6 +21,7 @@
 <a class="proof-route__item" href="../user_guides/surface_workflow/"><span class="proof-route__step">Step 1</span><span class="proof-route__title">Surface repair</span></a>
 <a class="proof-route__item" href="../user_guides/essvi_smooth_handoff/"><span class="proof-route__step">Step 2</span><span class="proof-route__title">eSSVI handoff</span></a>
 <a class="proof-route__item" href="../user_guides/localvol_pde_validation/"><span class="proof-route__step">Step 3</span><span class="proof-route__title">Local-vol / PDE</span></a>
+<a class="proof-route__item" href="../user_guides/heston_model_comparison/"><span class="proof-route__step">Step 4</span><span class="proof-route__title">Heston / model comparison</span></a>
 <span class="proof-route__item proof-route__item--current proof-route__item--followup" aria-current="page"><span class="proof-route__step">Follow-up</span><span class="proof-route__title">Performance evidence</span></span>
 </div>
 </div>
@@ -139,6 +141,30 @@ The CRR benchmark remains useful for convergence discussion, but the published n
 | `5000` | 40.4 s | 3.96e-04 |
 
 The full figure is available at [tree_scaling.png](assets/generated/benchmarks/tree_scaling.png).
+
+## Heston diagnostics and stochastic-volatility evidence
+
+<p class="doc-section-lead">The Heston proof path is not a speed contest either. The reviewer-facing question is whether the stochastic-volatility leg keeps calibration and Monte Carlo evidence explicit enough to trust the model-choice discussion.</p>
+
+<figure markdown class="diagram" style="--diagram-max-width: 980px">
+  ![Heston Monte Carlo versus Fourier convergence, showing bias versus timestep and runtime versus error for Euler and QE schemes.](assets/generated/heston/heston_mc_vs_fourier_convergence.light.png){ .diagram-img .diagram-light }
+  ![Heston Monte Carlo versus Fourier convergence, showing bias versus timestep and runtime versus error for Euler and QE schemes.](assets/generated/heston/heston_mc_vs_fourier_convergence.dark.png){ .diagram-img .diagram-dark }
+  <figcaption>Heston Monte Carlo is checked against semi-analytic Fourier pricing. QE and Euler behavior are shown as numerical validation evidence, not as universal runtime claims.</figcaption>
+</figure>
+
+Heston timing and calibration benchmarks are directional for the configured
+deterministic fixture, optimizer settings, quadrature policy, and local
+environment. They should be read as engineering diagnostics rather than
+universal performance claims.
+
+<div class="doc-panel doc-panel--quiet" markdown="1">
+<p class="doc-panel__label">Heston provenance path</p>
+- Docs comparison artifacts are built by [`scripts/build_heston_docs_artifacts.py`](https://github.com/willemk-stack/option-pricing-library/blob/main/scripts/build_heston_docs_artifacts.py) and indexed by the [Heston artifact manifest](assets/generated/heston/data/heston_artifact_manifest.json).
+- The committed model-comparison CSVs include the full [error summary](assets/generated/heston/data/heston_comparison_error_summary.csv), selected [direct local-vol PDE audit rows](assets/generated/heston/data/heston_comparison_direct_local_vol_pde.csv), and the [matched direct-PDE subset summary](assets/generated/heston/data/heston_comparison_direct_pde_matched_error_summary.csv).
+- The `smoke` Heston docs profile is a lightweight regression diagnostic. The `release` profile is the stronger review artifact used for the published bundle, but it remains synthetic-fixture and environment scoped.
+- Calibration benchmark artifacts are built separately by [`scripts/build_heston_calibration_benchmark_artifacts.py`](https://github.com/willemk-stack/option-pricing-library/blob/main/scripts/build_heston_calibration_benchmark_artifacts.py) and indexed under [`benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_artifacts.json`](https://github.com/willemk-stack/option-pricing-library/blob/main/benchmarks/artifacts/heston_calibration/heston_calibration_jacobian_artifacts.json).
+- Nearest regression coverage lives in the [model-comparison tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/diagnostics/heston/test_heston_model_comparison.py), [docs artifact builder tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/docs/test_build_heston_docs_artifacts.py), and [calibration benchmark tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/diagnostics/heston/test_heston_calibration_benchmark.py).
+</div>
 
 ## Environment and reproducibility
 

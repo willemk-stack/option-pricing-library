@@ -58,6 +58,24 @@ _MONEYNESS_BUCKET_NOTE = (
     "NOTE: Moneyness buckets use abs(log_moneyness) <= 0.03 for ATM, "
     "log_moneyness < -0.03 for downside wing/skew, and > 0.03 for upside wing."
 )
+_MATCHED_DIRECT_PDE_NOTE = (
+    "NOTE: The full error summary keeps full-set Heston/eSSVI rows and the "
+    "selected direct local-vol PDE audit rows together for continuity. Use "
+    "direct_local_vol_pde_matched_error_summary for apples-to-apples Heston, "
+    "eSSVI proxy, and direct PDE comparisons on the successful direct-PDE "
+    "quote subset."
+)
+_ERROR_SUMMARY_COLUMNS = [
+    "model",
+    "bucket",
+    "n_quotes",
+    "price_rmse",
+    "price_mae",
+    "price_max_abs",
+    "iv_rmse_bps",
+    "iv_mae_bps",
+    "iv_max_abs_bps",
+]
 
 
 def _moneyness_bucket(log_moneyness: FloatArray) -> np.ndarray:
@@ -546,7 +564,73 @@ def _error_summary(fit_errors: pd.DataFrame) -> pd.DataFrame:
                     group=bucket_group,
                 )
             )
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=_ERROR_SUMMARY_COLUMNS)
+
+
+def _matched_direct_pde_error_summary(
+    fit_errors: pd.DataFrame,
+    direct_table: pd.DataFrame,
+) -> pd.DataFrame:
+    if direct_table.empty:
+        table = pd.DataFrame(columns=_ERROR_SUMMARY_COLUMNS)
+        table.attrs["notes"] = [
+            "No direct local-vol PDE rows were emitted; matched subset is empty."
+        ]
+        return table
+
+    ok_rows = direct_table
+    if "pde_status" in direct_table.columns:
+        ok_rows = direct_table.loc[direct_table["pde_status"].astype(str) == "ok"]
+    selected_quote_indices = sorted(
+        {int(value) for value in ok_rows["quote_index"].dropna().to_numpy()}
+    )
+    if not selected_quote_indices:
+        table = pd.DataFrame(columns=_ERROR_SUMMARY_COLUMNS)
+        table.attrs["notes"] = [
+            "Direct local-vol PDE rows were emitted, but none succeeded; "
+            "matched subset is empty."
+        ]
+        return table
+
+    model_order = [
+        _HESTON_MODEL_NAME,
+        _LOCAL_VOL_MODEL_NAME,
+        _DIRECT_LOCAL_VOL_MODEL_NAME,
+    ]
+    matched = fit_errors.loc[
+        fit_errors["quote_index"].isin(selected_quote_indices)
+        & fit_errors["model"].isin(model_order)
+    ].copy()
+    summary = _error_summary(matched)
+    if summary.empty:
+        summary.attrs["notes"] = [
+            "Matched direct local-vol PDE subset produced no summary rows."
+        ]
+        return summary
+
+    count_matrix = summary.pivot(
+        index="bucket",
+        columns="model",
+        values="n_quotes",
+    )
+    missing_models = [model for model in model_order if model not in count_matrix]
+    if missing_models:
+        raise ValueError(
+            "Matched direct local-vol PDE subset is missing model rows for "
+            f"{', '.join(missing_models)}."
+        )
+    count_matrix = count_matrix.loc[:, model_order]
+    inconsistent = count_matrix.loc[
+        count_matrix.isna().any(axis=1)
+        | (count_matrix.nunique(axis=1, dropna=False) != 1)
+    ]
+    if not inconsistent.empty:
+        raise ValueError(
+            "Matched direct local-vol PDE subset has inconsistent per-bucket "
+            f"quote counts: {inconsistent.to_dict(orient='index')}"
+        )
+    summary.attrs["notes"] = [_MATCHED_DIRECT_PDE_NOTE]
+    return summary
 
 
 def _held_out_comparison(
@@ -763,6 +847,7 @@ def run_heston_vs_local_vol_comparison(
     fit_errors.attrs["notes"] = [
         _LOCAL_VOL_PROXY_NOTE,
         _MONEYNESS_BUCKET_NOTE,
+        _MATCHED_DIRECT_PDE_NOTE,
     ]
 
     direct_local_vol_pde_summary = pd.DataFrame(
@@ -799,6 +884,10 @@ def run_heston_vs_local_vol_comparison(
     )
 
     error_summary = _error_summary(fit_errors)
+    direct_local_vol_pde_matched_error_summary = _matched_direct_pde_error_summary(
+        fit_errors,
+        direct_local_vol_pde,
+    )
     tradeoff_summary = _tradeoff_summary()
     held_out_comparison = _held_out_comparison(
         fit_errors,
@@ -817,6 +906,7 @@ def run_heston_vs_local_vol_comparison(
     notes = [
         _LOCAL_VOL_PROXY_NOTE,
         _MONEYNESS_BUCKET_NOTE,
+        _MATCHED_DIRECT_PDE_NOTE,
         "LIMITATION: Comparison conclusions depend on the target quotes, fit "
         "partition, eSSVI projection, local-vol PDE grid, and boundary policy.",
     ]
@@ -878,6 +968,9 @@ def run_heston_vs_local_vol_comparison(
             "held_out_comparison": held_out_comparison,
             "direct_local_vol_pde": direct_local_vol_pde,
             "direct_local_vol_pde_summary": direct_local_vol_pde_summary,
+            "direct_local_vol_pde_matched_error_summary": (
+                direct_local_vol_pde_matched_error_summary
+            ),
         },
         arrays=arrays,
     )

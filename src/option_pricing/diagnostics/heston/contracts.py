@@ -191,6 +191,7 @@ HESTON_MODEL_COMPARISON_REQUIRED_TABLES: tuple[str, ...] = (
     "error_summary",
     "tradeoff_summary",
     "held_out_comparison",
+    "direct_local_vol_pde_matched_error_summary",
 )
 
 HESTON_MODEL_COMPARISON_FIT_ERROR_COLUMNS: tuple[str, ...] = (

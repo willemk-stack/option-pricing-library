@@ -2,6 +2,9 @@
 
 This guide covers the library's extended SSVI implementation and the three main ways it appears in the public volatility API.
 
+For the calibration-policy rationale behind the API, see the
+[eSSVI calibration design note](../notes/volatility/essvi_calibration_design.md).
+
 In this codebase, eSSVI is parameterized by maturity term structures for:
 
 - `theta(T)`

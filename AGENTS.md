@@ -6,6 +6,9 @@ This repo contains a MkDocs Material documentation site for option-pricing-libra
 ## Ground rules
 - Always fix root causes, not screenshot symptoms.
 - Prefer editing the source or generator over editing built artifacts directly.
+- For `docs/notes/*.md`, use exact four-space continuation indentation for
+  admonition bodies and wrapped bibliography/list lines; match
+  `docs/notes/heston_monte_carlo.md`, not two- or three-space variants.
 - Validate both light and dark theme.
 - Validate at 375, 768, 1280, and 1536 widths.
 - Rebuild and retest after each fix.
