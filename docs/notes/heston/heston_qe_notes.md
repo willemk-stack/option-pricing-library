@@ -14,9 +14,11 @@
 ## Core question
 
 For an arbitrary increment $\Delta$, how do we generate a random sample of
+
 $$
 (\log X_{t+\Delta}, V_{t+\Delta}) \mid (\log X_t, V_t)
 $$
+
 with low discretization bias and acceptable computational cost?
 
 That is the real simulation problem for Heston path generation.
@@ -24,18 +26,23 @@ That is the real simulation problem for Heston path generation.
 ## Model setup
 
 The Heston model is
+
 $$
 \frac{dX_t}{X_t} = \sqrt{V_t}\, dW_t^X,
 $$
+
 $$
 dV_t = \kappa(\theta - V_t)\, dt + \varepsilon \sqrt{V_t}\, dW_t^V,
 $$
+
 with
+
 $$
 dW_t^X\, dW_t^V = \rho\, dt.
 $$
 
 Equivalently, for the log-price,
+
 $$
 d \log X_t = -\frac12 V_t\, dt + \sqrt{V_t}\, dW_t^X.
 $$
@@ -67,10 +74,12 @@ So the right strategy is:
 3. switch forms depending on how hard the conditional distribution is to approximate.
 
 The exact conditional moments used by QE are
+
 $$
 m = \mathbb{E}[V_{t+\Delta} \mid V_t]
   = \theta + (V_t - \theta)e^{-\kappa \Delta},
 $$
+
 and
 
 $$
@@ -80,6 +89,7 @@ s^2 = \operatorname{Var}(V_{t+\Delta} \mid V_t)
 $$
 
 Define the key shape ratio
+
 $$
 \psi = \frac{s^2}{m^2}.
 $$
@@ -91,21 +101,26 @@ This $\psi$ is the switching statistic.
 ### Quadratic branch
 
 When $\psi$ is small enough, represent the next-step variance as
+
 $$
 \widehat V_{t+\Delta} = a(b + Z_V)^2,
 \qquad Z_V \sim N(0,1).
 $$
 
 Moment matching gives
+
 $$
 b^2 = \frac{2}{\psi} - 1 + \sqrt{\frac{2}{\psi}}\sqrt{\frac{2}{\psi} - 1},
 $$
+
 and
+
 $$
 a = \frac{m}{1 + b^2}.
 $$
 
 This branch only works when
+
 $$
 \psi \le 2.
 $$
@@ -113,6 +128,7 @@ $$
 ### Exponential branch
 
 When $\psi$ is larger, use the atom-at-zero plus exponential-tail approximation:
+
 $$
 \widehat V_{t+\Delta} =
 \begin{cases}
@@ -123,15 +139,19 @@ $$
 $$
 
 The parameters are
+
 $$
 p = \frac{\psi - 1}{\psi + 1},
 $$
+
 and
+
 $$
 \beta = \frac{1-p}{m} = \frac{2}{m(\psi + 1)}.
 $$
 
 This branch only works when
+
 $$
 \psi \ge 1.
 $$
@@ -139,15 +159,18 @@ $$
 ### Switching rule
 
 Because the quadratic branch works for $\psi \le 2$ and the exponential branch works for $\psi \ge 1$, Andersen introduces a threshold
+
 $$
 \psi_c \in [1,2]
 $$
+
 and uses:
 
 - quadratic branch if $\psi \le \psi_c$,
 - exponential branch if $\psi > \psi_c$.
 
 In the paper's numerical tests,
+
 $$
 \psi_c = 1.5.
 $$
@@ -155,31 +178,24 @@ $$
 ### Summary algorithm for sampling variance
 
 1. Given $\widehat V_t$, compute $m$ and $s^2$.
-2. Compute
-   $$
-   \psi = \frac{s^2}{m^2}.
-   $$
+2. Compute $\psi = \frac{s^2}{m^2}.$
 3. Draw $U_V \sim \mathrm{Unif}(0,1)$.
 4. If $\psi \le \psi_c$:
    - compute $a$ and $b$,
-   - compute
-     $$
-     Z_V = \Phi^{-1}(U_V),
-     $$
-   - set
-     $$
-     \widehat V_{t+\Delta} = a(b + Z_V)^2.
-     $$
+   - compute $Z_V = \Phi^{-1}(U_V),$
+   - set $\widehat V_{t+\Delta} = a(b + Z_V)^2.$
+
 5. If $\psi > \psi_c$:
    - compute $p$ and $\beta$,
    - set
-     $$
-     \widehat V_{t+\Delta} =
-     \begin{cases}
-     0, & U_V \le p, \\
-     -\frac{1}{\beta}\log\left(\frac{1-p}{1-U_V}\right), & U_V > p.
-     \end{cases}
-     $$
+
+$$
+\widehat V_{t+\Delta} =
+\begin{cases}
+0, & U_V \le p, \\
+-\frac{1}{\beta}\log\left(\frac{1-p}{1-U_V}\right), & U_V > p.
+\end{cases}
+$$
 
 ## What assumption is doing the heavy lifting?
 
@@ -193,10 +209,12 @@ The important ingredients are:
 4. building the $X$ step from the exact integral representation instead of a naive Euler correlation coupling.
 
 For the asymptotic justification stated in the paper, the explicit assumption is
+
 $$
 \gamma_1 + \gamma_2 \to 1
 \qquad \text{as } \Delta \to 0,
 $$
+
 which is used in the weak consistency proposition.
 
 ## Sampling log price and why Euler is too naive
@@ -233,15 +251,19 @@ $$
 where $Z \sim N(0,1)$ is **independent** of the random numbers used to generate $\widehat V_{t+\Delta}$.
 
 The coefficients are
+
 $$
 K_0 = -\frac{\rho \kappa \theta}{\varepsilon}\Delta,
 $$
+
 $$
 K_1 = \gamma_1 \Delta\left(\frac{\kappa\rho}{\varepsilon} - \frac12\right) - \frac{\rho}{\varepsilon},
 $$
+
 $$
 K_2 = \gamma_2 \Delta\left(\frac{\kappa\rho}{\varepsilon} - \frac12\right) + \frac{\rho}{\varepsilon},
 $$
+
 $$
 K_3 = \gamma_1 \Delta(1-\rho^2),
 \qquad
@@ -278,11 +300,7 @@ Even if you repair the $V$ step, it is still tempting to correlate the Gaussian 
 
 That is too naive.
 
-The reason is that once $\widehat V_{t+\Delta}$ is generated through a **nonlinear** transform such as
-$$
-a(b + Z_V)^2
-$$
-or through the exponential branch, the effective correlation between $\log \widehat X_{t+\Delta}$ and $\widehat V_{t+\Delta}$ is no longer correctly represented by simply correlating Gaussian shocks.
+The reason is that once $\widehat V_{t+\Delta}$ is generated through a **nonlinear** transform such as $a(b + Z_V)^2$ or through the exponential branch, the effective correlation between $\log \widehat X_{t+\Delta}$ and $\widehat V_{t+\Delta}$ is no longer correctly represented by simply correlating Gaussian shocks.
 
 This produces **correlation leakage**:
 
@@ -291,9 +309,11 @@ This produces **correlation leakage**:
 - away-from-the-money option pricing deteriorates.
 
 That is why Andersen abandons naive Euler discretization for $\log X$ and keeps the explicit
+
 $$
 \frac{\rho}{\varepsilon}\left(V_{t+\Delta} - V_t - \kappa\theta\Delta\right)
 $$
+
 term from the exact representation.
 
 ## Martingale correction
@@ -306,21 +326,26 @@ $$
 So Andersen introduces a corrected constant $K_0^*$.
 
 Let
+
 $$
 A = K_2 + \frac12 K_4
 = \frac{\rho}{\varepsilon}(1 + \kappa \gamma_2 \Delta) - \frac12 \gamma_2 \Delta \rho^2,
 $$
+
 and define
+
 $$
 M = \mathbb{E}\left[e^{A \widehat V_{t+\Delta}} \mid \widehat V_t\right].
 $$
 
 Then, if $M < \infty$, set
+
 $$
 K_0^* = -\log M - \left(K_1 + \frac12 K_3\right)\widehat V_t.
 $$
 
 Replacing $K_0$ by $K_0^*$ enforces
+
 $$
 \mathbb{E}[\widehat X_{t+\Delta} \mid \widehat X_t] = \widehat X_t.
 $$
@@ -336,16 +361,19 @@ For $\rho \le 0$, the relevant exponential moment is safe.
 For $\rho > 0$, regularity conditions must be checked.
 
 In the QE quadratic branch, one needs
+
 $$
 A < \frac{1}{2a}.
 $$
 
 In the QE exponential branch, one needs
+
 $$
 A < \beta.
 $$
 
 Andersen notes that, roughly, positive correlation imposes a step-size restriction of the form
+
 $$
 \rho \varepsilon \Delta < 2.
 $$
@@ -365,10 +393,12 @@ The paper does **not** present a full general weak convergence proof for QE.
 Instead, it proves **weak consistency**.
 
 Under the assumption
+
 $$
 \gamma_1 + \gamma_2 \to 1
 \qquad \text{as } \Delta \to 0,
 $$
+
 the schemes are weakly consistent in the sense that
 
 $$
@@ -435,19 +465,10 @@ So the right statement is:
 
 ## Implementation notes
 
-- Precompute anything depending only on $\Delta$ outside the Monte Carlo loop, especially
-  $$
-  e^{-\kappa\Delta}.
-  $$
-- At each step, compute
-  $$
-  m, \quad s^2, \quad \psi = \frac{s^2}{m^2}.
-  $$
+- Precompute anything depending only on $\Delta$ outside the Monte Carlo loop, especially $e^{-\kappa\Delta}.$
+- At each step, compute $m, \quad s^2, \quad \psi = \frac{s^2}{m^2}.$
 - Switch on $\psi$, not directly on whether $V_t$ is "small."
-- Use a fixed threshold such as
-  $$
-  \psi_c = 1.5.
-  $$
+- Use a fixed threshold such as $\psi_c = 1.5.$
 - Generate $\widehat V_{t+\Delta}$ first.
 - Then draw a **new independent** Gaussian for the $\log X$ step.
 - If using the martingale-corrected form, check the regularity conditions for $\rho > 0$.
