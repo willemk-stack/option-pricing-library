@@ -1,5 +1,10 @@
 # Implied volatility
 
+!!! note "Status: mathematical background and implementation context"
+    This note explains implied volatility as a price inversion. Solver-specific
+    guarantees belong to the API docs and focused tests linked from the
+    validation matrix.
+
 Market prices are often quoted not as option prices but as **implied volatilities**.
 The implied volatility (IV) of an option is the value of \(\sigma\) that, plugged into the Black–Scholes formula,
 reproduces the observed market price.
@@ -83,7 +88,7 @@ Then \(\widetilde C\) is a function of \(F,K,\tau,\sigma\) and is often numerica
 ### ATM-forward seed (time-value based)
 
 At-the-money-forward (\(K\approx F\)), the option time value is approximately linear in \(\sigma\sqrt{\tau}\).
-A classic approximation (Brenner–Subrahmanyam style) leads to a seed
+A time-value approximation commonly used as a heuristic leads to a seed
 
 \[
 \sigma_{\text{ATM}} \approx \sqrt{\frac{2\pi}{\tau}}\,\frac{\widetilde C}{F}.
@@ -91,13 +96,13 @@ A classic approximation (Brenner–Subrahmanyam style) leads to a seed
 
 Use this as a safe starting point near ATM.
 
-### Wing / OTM seed (Manaster–Koehler-style scaling)
+### Wing / OTM seed (log-moneyness scaling)
 
 In the wings, it is often more stable to work with total volatility \(\sigma\sqrt{\tau}\) and log-moneyness
 \(k=\ln(K/F)\). A common heuristic seed is
 
 \[
-\sigma_{\text{MK}} \approx \frac{|k|}{\sqrt{\tau}}\,\left(\frac{1}{\sqrt{2\,|\ln(\widetilde C/\text{scale})|}}\right),
+\sigma_{\text{wing}} \approx \frac{|k|}{\sqrt{\tau}}\,\left(\frac{1}{\sqrt{2\,|\ln(\widetilde C/\text{scale})|}}\right),
 \]
 
 where “scale” is chosen so the argument is dimensionless (practitioners use several variants).
@@ -142,7 +147,10 @@ Finally clamp into a safe domain:
 
 ## References
 
-- Manaster & Koehler (1982). *The Calculation of Implied Variances from the Black–Scholes Model: A Note.*
-- Brenner & Subrahmanyam (1988). *A Simple Formula to Compute the Implied Standard Deviation.*
-- Corrado & Miller (1996). *A note on a simple, accurate formula to compute implied volatility.*
-- Jäckel (2015). *Let’s Be Rational* (robust inversion methods and initializations used in practice).
+The note relies on the local `Finance-books` source library:
+
+- *Options Futures Derivatives (2021).pdf*
+    in `01_Foundations/01_Derivatives_Overview_(Hall)`.
+- *Gatheral - The Volatility Surface.pdf*
+    in `03_Volatility_Surface/01_Books_Notes`.
+- *Euan Sinclair - Volatility Trading.pdf* in `06_Trading_and_ML`.

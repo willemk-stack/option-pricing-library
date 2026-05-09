@@ -1,5 +1,10 @@
 # Binomial CRR model
 
+!!! note "Status: mathematical background"
+    This note explains the Cox-Ross-Rubinstein pricing construction. Statements
+    here are baseline pricing background unless a repository test or API page is
+    linked explicitly.
+
 The Cox–Ross–Rubinstein (CRR) binomial tree is the classic discrete-time option-pricing model.
 It is valuable because it makes **replication and risk-neutral probabilities** completely explicit,
 and because it converges to Black–Scholes as the time step shrinks.
@@ -100,6 +105,9 @@ the Black–Scholes price. Intuitively:
 
 ## References
 
-- Cox, Ross & Rubinstein (1979), “Option Pricing: A Simplified Approach”.
-- Shreve, *Stochastic Calculus for Finance I*, binomial-tree chapters.
-- Hull, *Options, Futures, and Other Derivatives*, chapters on binomial trees.
+The note relies on the local `Finance-books` source library:
+
+- *Shreve - Stochastic Calculus for Finance I.pdf*
+    in `01_Foundations/02_Stochastic_Calculus`.
+- *Options Futures Derivatives (2021).pdf*
+    in `01_Foundations/01_Derivatives_Overview_(Hall)`.

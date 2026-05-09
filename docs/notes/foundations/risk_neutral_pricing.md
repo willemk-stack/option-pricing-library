@@ -1,5 +1,10 @@
 # Risk-neutral pricing
 
+!!! note "Status: mathematical background"
+    This note is a mathematical primer for the pricing measure used throughout
+    the library. Implementation-specific validation lives in the relevant
+    pricer, volatility, and Heston notes.
+
 Derivative pricing in modern quantitative finance is primarily an **arbitrage** story, not a forecasting story.
 The key idea is that (under standard assumptions) we can price without ever estimating the real-world drift \(\mu\).
 
@@ -58,7 +63,7 @@ A change of measure from \(\mathbb{P}\) to \(\mathbb{Q}\) is described by a Rado
 
 Intuitively: \(Z_t\) reweights paths so that the discounted traded assets lose their drift and become martingales.
 
-## From \(\mu\) to \(r\) in Black–Scholes (Girsanov in one page)
+## Drift change under Girsanov
 
 Under the real-world measure \(\mathbb{P}\), the Black–Scholes model assumes
 
@@ -103,5 +108,16 @@ So the drift becomes \(r\) under the pricing measure.
 
 ## Where to go next
 
-- The change-of-measure step uses Brownian motion; see [Brownian motion and Itô](brownian_motion_and_Ito.md).
+- The change-of-measure step uses Brownian motion; see [Brownian motion and Itô](brownian_motion_and_ito.md).
 - The resulting stock dynamics under \(\mathbb{Q}\) are solved explicitly in [GBM](gbm.md).
+
+## References
+
+The note relies on the local `Finance-books` source library:
+
+- *Shreve - Stochastic Calculus for Finance I.pdf*
+    in `01_Foundations/02_Stochastic_Calculus`.
+- *Shreve - Stochastic Calculus for Finance II.pdf*
+    in `01_Foundations/02_Stochastic_Calculus`.
+- *Options Futures Derivatives (2021).pdf*
+    in `01_Foundations/01_Derivatives_Overview_(Hall)`.

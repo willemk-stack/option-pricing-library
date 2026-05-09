@@ -1,4 +1,11 @@
-These notes will cover some common methods used to handle discontinuities in payoffs when using a PDE pricer.
+# PDE convergence notes
+
+!!! note "Status: provisional implementation note"
+    This note tracks convergence remedies for nonsmooth payoffs in PDE pricing.
+    Treat it as implementation guidance until each remedy is linked to a
+    maintained validation page or focused test.
+
+These notes cover common methods used to handle discontinuities in payoffs when using a PDE pricer.
 
 # Convergence remedies
 When saying convergence remedies I mean methods that we can employ to re-obtain the expected rate of convergence that
@@ -26,5 +33,9 @@ where $f$ denotes an option's payoff
 ## Projecting The Initial Conditions
 
 
-### references:
-Pooley, D. M., Vetzal, K. R., & Forsyth, P. A. (2002, June 17). _Convergence remedies for non-smooth payoffs in option pricing_. University of Waterloo.
+## References
+
+The note relies on the local `Finance-books` source library:
+
+- *Convergence Remedies for Non-Smooth Payoffs in Option Pricing.pdf*
+    in `04_Numerical_Methods/01_PDE_Finite_Difference`.

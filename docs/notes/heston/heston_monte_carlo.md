@@ -99,7 +99,7 @@ so the reported rows expose raw timestep bias, sampling error, and scheme
 differences against the semi-analytic reference. This is not a claim against
 variance reduction; it is a reporting choice for the committed MC diagnostics
 and the generated
-[MC convergence artifact](../assets/generated/heston/heston_mc_vs_fourier_convergence.svg).
+[MC convergence artifact](../../assets/generated/heston/heston_mc_vs_fourier_convergence.svg).
 
 The control variate remains available through `HestonMCSweepConfig(use_control_variate=True)` when variance reduction is the actual subject of the experiment.
 
@@ -122,11 +122,12 @@ If the confidence interval is narrow but the signed error stays materially away 
 
 ## References
 
-- Heston, S. L. (1993). A Closed-Form Solution for Options with Stochastic
-    Volatility with Applications to Bond and Currency Options. *Review of
-    Financial Studies*, 6(2), 327-343.
-- Andersen, L. (2008). Simple and Efficient Simulation of the Heston
-    Stochastic Volatility Model. *Journal of Computational Finance*, 11(3),
-    1-42.
-- Broadie, M., & Kaya, Ö. (2006). Exact Simulation of Stochastic Volatility and
-    Other Affine Jump Diffusion Processes. *Operations Research*, 54(2), 217-231.
+The note relies on the local `Finance-books` source library:
+
+- *Heston (1993).pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
+- *AndersenHestonSimulation.pdf*
+    in `02_Pricing_Models/01_Classic_Models/Heston`.
+- *broadie_kaya_exact_sim_or_2006.pdf*
+    in `04_Numerical_Methods/02_Monte_Carlo`.
+- *Monte Carlo Methods in Financial Engineering.pdf*
+    in `04_Numerical_Methods/02_Monte_Carlo`.

@@ -18,6 +18,11 @@
     color: #8cc9ff !important;
 }
 @media screen and (min-width: 76.25em) {
+    .md-sidebar--secondary .md-sidebar__scrollwrap {
+        max-height: calc(100vh - 5.2rem);
+        overflow-y: auto;
+    }
+
     .md-sidebar--primary .md-nav__link,
     .md-sidebar--secondary .md-nav__link {
         border-radius: var(--docs-radius-sm);

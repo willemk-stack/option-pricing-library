@@ -158,29 +158,36 @@ nav:
   - Validation matrix: validation_matrix.md
   - Notes:
       - Overview: notes/index.md
-      - Black-Scholes pricing: notes/bs_pricing.md
-      - GBM: notes/gbm.md
-      - Monte Carlo: notes/mc.md
-      - Binomial CRR: notes/binomial_crr.md
-      - Brownian motion and Itô: notes/brownian_motion_and_Ito.md
-      - Implied volatility: notes/IV.md
-      - Risk neutral pricing: notes/risk_neutral_pricing.md
-      - Finite Differences: notes/finite_difference_pde.md
-      - Dupire local vol: notes/dupire_local_vol.md
-      - SVI calibration design: notes/svi_calibration_design.md
+      - Foundations:
+          - Risk neutral pricing: notes/foundations/risk_neutral_pricing.md
+          - Brownian motion and Ito: notes/foundations/brownian_motion_and_ito.md
+          - GBM: notes/foundations/gbm.md
+      - Pricing:
+          - Black-Scholes pricing: notes/pricing/bs_pricing.md
+          - Binomial CRR: notes/pricing/binomial_crr.md
+          - Monte Carlo: notes/pricing/mc.md
+      - Volatility:
+          - Implied volatility: notes/volatility/implied_volatility.md
+          - SVI calibration design: notes/volatility/svi_calibration_design.md
+          - eSSVI calibration design: notes/volatility/essvi_calibration_design.md
+          - Interpolation: notes/volatility/interpolation.md
+      - Local-vol and PDE:
+          - Dupire local vol: notes/local-vol-pde/dupire_local_vol.md
+          - Finite differences: notes/local-vol-pde/finite_difference_pde.md
+          - PDE convergence: notes/local-vol-pde/pde_convergence.md
       - Heston:
-          - Stochastic volatility: notes/heston_stochastic_vol.md
-          - Pricing conventions: notes/heston_pricing_conventions.md
-          - Fourier diagnostics: notes/heston_fourier_diagnostics.md
-          - Quadrature policy: notes/heston_quadrature_policy.md
-          - Calibration evidence: notes/heston_calibration.md
-          - Calibration seeds: notes/heston_calibration_seeds.md
-          - Calibration benchmark diagnostics: notes/heston_calibration_benchmark_diagnostics.md
-          - Heston vs local vol: notes/heston_vs_local_vol.md
-          - Monte Carlo diagnostics: notes/heston_monte_carlo.md
-          - Andersen QE scheme: notes/heston_qe_notes.md
-      - Interpolation: notes/interpolation.md
-      - PDE convergence: notes/pde/PDE_convergence.md
-      - PDE diagnostics notes: notes/diagnostics_notes.md
-      - Fixed-rule quadrature: notes/Integration_Quadrature.md
+          - Stochastic volatility: notes/heston/heston_stochastic_vol.md
+          - Pricing conventions: notes/heston/heston_pricing_conventions.md
+          - Fourier diagnostics: notes/heston/heston_fourier_diagnostics.md
+          - Quadrature policy: notes/heston/heston_quadrature_policy.md
+          - Calibration evidence: notes/heston/heston_calibration.md
+          - Calibration seeds: notes/heston/heston_calibration_seeds.md
+          - Calibration benchmark diagnostics: notes/heston/heston_calibration_benchmark_diagnostics.md
+          - Heston vs local vol: notes/heston/heston_vs_local_vol.md
+          - Monte Carlo diagnostics: notes/heston/heston_monte_carlo.md
+          - Andersen QE scheme: notes/heston/heston_qe_notes.md
+      - Diagnostics and numerical methods:
+          - Diagnostics notes: notes/diagnostics/diagnostics_notes.md
+          - Fixed-rule quadrature: notes/diagnostics/integration_quadrature.md
+          - Docs workflow architecture: notes/diagnostics/docs_workflow_architecture.md
   - Future work: roadmap.md

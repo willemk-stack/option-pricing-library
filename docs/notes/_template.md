@@ -28,7 +28,8 @@ What tests, diagnostics, notebooks, or benchmark artifacts support the choice?
 
 ## References
 
-Use complete bibliographic references. Do not invent page or equation numbers.
+Use source-library references when available, and do not invent page, equation,
+benchmark, or citation details.
 
 ## Known limitations
 

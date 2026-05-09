@@ -81,6 +81,8 @@ The flagged expiries are the point of the review. They show where the static rep
 <div class="doc-panel doc-panel--quiet" markdown="1">
 <p class="doc-panel__label">Boundary of this page</p>
 Static repair is necessary, but it is not the same thing as a time-smooth Dupire-ready handoff. The next page handles continuity in <code>T</code> and <code>w_T</code> explicitly rather than implying that the repair page already solved it.
+The calibration-policy details for that bridge live in the
+[eSSVI calibration design note](../notes/volatility/essvi_calibration_design.md).
 </div>
 
 ## Chosen Method

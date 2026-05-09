@@ -1,6 +1,6 @@
 # SVI calibration design
 
-!!! note "Status"
+!!! note "Status: implementation policy"
     This note now reflects the current raw-SVI slice calibration path in the
     repository. It stays scoped to the slice-level fitter, its repair hooks,
     and the workflow helpers that assemble surfaces one expiry at a time.
@@ -12,9 +12,9 @@ single unconstrained least-squares fit and call the job finished. The goal is a
 reviewable vanilla-surface workflow that can feed repair, smoothing, and
 Dupire-oriented downstream steps without hiding shape risk.
 
-See also the [SVI guide](../user_guides/svi.md), the
-[eSSVI guide](../user_guides/essvi.md), and the
-[volatility API overview](../api/vol.md).
+See also the [SVI guide](../../user_guides/svi.md), the
+[eSSVI guide](../../user_guides/essvi.md), and the
+[volatility API overview](../../api/vol.md).
 
 ## Why raw SVI is not calibrated directly
 
@@ -165,13 +165,13 @@ explicitly in notebook or workflow code.
 
 ## Validation and diagnostics
 
-- [Surface repair workflow](../user_guides/surface_workflow.md) is the primary
+- [Surface repair workflow](../../user_guides/surface_workflow.md) is the primary
   public proof page for quote repair, SVI fit quality, and no-arbitrage review.
-- [eSSVI smooth handoff](../user_guides/essvi_smooth_handoff.md) shows the next
+- [eSSVI smooth handoff](../../user_guides/essvi_smooth_handoff.md) shows the next
   stage where surface smoothness matters for Dupire-oriented use.
-- [Local-vol and PDE validation](../user_guides/localvol_pde_validation.md)
+- [Local-vol and PDE validation](../../user_guides/localvol_pde_validation.md)
   shows why a surface design note cannot stop at calibration residuals.
-- [SVI repair guide](../user_guides/svi_repair.md) documents the public repair
+- [SVI repair guide](../../user_guides/svi_repair.md) documents the public repair
   entrypoints and the calibration-time repair hook.
 - [test_svi.py](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/vol/svi/test_svi.py)
   covers transform round-trips, the transform Jacobian against finite
@@ -188,10 +188,16 @@ explicitly in notebook or workflow code.
 
 ## References
 
-- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*.
-  Wiley.
-- Gatheral, J., & Jacquier, A. (2014). Arbitrage-free SVI volatility surfaces.
-  *Quantitative Finance*, 14(1), 59-71.
+The note relies on the local `Finance-books` source library:
+
+- *Gatheral - The Volatility Surface.pdf*
+    in `03_Volatility_Surface/01_Books_Notes`.
+- *Gatheral - No-Arbitrage SVI Presentation.pdf*
+    in `03_Volatility_Surface/02_SVI_SSVI_eSSVI`.
+- *GJ - No-Arbitrage SVI (SSVI).pdf*
+    in `03_Volatility_Surface/02_SVI_SSVI_eSSVI`.
+- *SVI Lee Moment Formula.pdf*
+    in `03_Volatility_Surface/02_SVI_SSVI_eSSVI`.
 
 ## Known limitations
 

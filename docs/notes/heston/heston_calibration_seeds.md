@@ -294,11 +294,10 @@ and multi-start sensitivity.
 
 ## References
 
-- Heston, S. L. (1993). A Closed-Form Solution for Options with Stochastic
-    Volatility with Applications to Bond and Currency Options. *Review of
-    Financial Studies*, 6(2), 327-343.
-- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*.
-    Wiley.
-- Cui, Y., del Baño Rollin, S., & Germano, G. (2017). Full and fast
-    calibration of the Heston stochastic volatility model. *European Journal of
-    Operational Research*, 263(2), 625-638.
+The note relies on the local `Finance-books` source library:
+
+- *Heston (1993).pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
+- *Gatheral - The Volatility Surface.pdf*
+    in `03_Volatility_Surface/01_Books_Notes`.
+- *FastHestonCalib-.pdf*
+    in `02_Pricing_Models/01_Classic_Models/Heston`.

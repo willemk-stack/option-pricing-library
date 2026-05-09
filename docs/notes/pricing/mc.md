@@ -1,12 +1,17 @@
 # Monte Carlo option pricing
 
+!!! note "Status: mathematical background"
+    This note describes the standard Monte Carlo estimator and its error
+    interpretation. Implementation validation is scoped to the tests and
+    diagnostics linked from the relevant model pages.
+
 Monte Carlo (MC) methods price derivatives by simulating the underlying under the **risk-neutral measure**
 and averaging discounted payoffs. MC is flexible: it handles high dimensions and path-dependent payoffs naturally.
 Its trade-off is statistical noise (convergence is \(O(1/\sqrt{N})\)).
 
 ## Objectives
 
-- Connect Monte Carlo to [risk-neutral pricing](risk_neutral_pricing.md).
+- Connect Monte Carlo to [risk-neutral pricing](../foundations/risk_neutral_pricing.md).
 - Build the basic MC estimator for European options under GBM.
 - Understand standard error / confidence intervals.
 - See the main variance-reduction ideas used in practice.
@@ -132,3 +137,12 @@ between grid points (lognormal bridges), but for more complex models you may nee
 
 - Compare MC to the [Black–Scholes benchmark](bs_pricing.md) for European options.
 - For discrete-time intuition and early exercise, see [Binomial CRR](binomial_crr.md).
+
+## References
+
+The note relies on the local `Finance-books` source library:
+
+- *Monte Carlo Methods in Financial Engineering.pdf*
+    in `04_Numerical_Methods/02_Monte_Carlo`.
+- *Shreve - Stochastic Calculus for Finance I.pdf*
+    in `01_Foundations/02_Stochastic_Calculus`.

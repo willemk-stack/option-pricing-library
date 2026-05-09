@@ -216,12 +216,13 @@ stating the quadrature tier used to produce it.
 
 ## References
 
-- Heston, S. L. (1993). A Closed-Form Solution for Options with Stochastic
-    Volatility with Applications to Bond and Currency Options. *Review of
-    Financial Studies*, 6(2), 327-343.
-- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*.
-    Wiley.
-- Lord, R., & Kahl, C. (2008). Complex logarithms in Heston-like models.
-    *Mathematical Finance*, 20(4), 671-694.
-- Gautschi, W. (2004). *Orthogonal Polynomials: Computation and Approximation*.
-    Oxford University Press.
+The note relies on the local `Finance-books` source library:
+
+- *Heston (1993).pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
+- *Gatheral - The Volatility Surface.pdf*
+    in `03_Volatility_Surface/01_Books_Notes`.
+- *HestonTrap.pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
+- *Walter Gautschi - Orthogonal Polynomials - Computation and Approximation (2004).pdf*
+    in `05_Math_Reference/02_Integration_Quadrature`.
+- *Hale and Townsend - Fast and Accurate Gauss-Legendre Quadrature.pdf*
+    in `05_Math_Reference/02_Integration_Quadrature`.

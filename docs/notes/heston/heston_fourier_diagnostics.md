@@ -31,7 +31,7 @@ The current Heston Fourier stack separates:
 
 Literature-backed convention plus repository policy: the implementation follows
 a Gatheral-style affine form in `charfunc.py`, with branch-cut concerns framed
-by Lord and Kahl's Heston-like complex-log discussion. The discriminant handling
+by the Heston trap discussion in the source library. The discriminant handling
 in `_stable_discriminant(...)` flips the sign of the square-root branch whenever
 the implied `g` ratio would be non-finite or unstable. The branch-stability
 tests cover this repository implementation choice; they do not prove all
@@ -173,9 +173,9 @@ diagnostics.
 
 Definition:
 
-```text
-sum(abs(last tail panels)) / sum(abs(all panel contributions))
-```
+\[
+\frac{\sum |\text{last tail panels}|}{\sum |\text{all panel contributions}|}
+\]
 
 Interpretation:
 
@@ -187,9 +187,9 @@ Interpretation:
 
 Definition:
 
-```text
-sum(abs(all panel contributions)) / abs(total_integral)
-```
+\[
+\frac{\sum |\text{all panel contributions}|}{|\text{total integral}|}
+\]
 
 Interpretation:
 
@@ -358,10 +358,9 @@ reporting logic in the diagnostics package.
 
 ## References
 
-- Heston, S. L. (1993). A Closed-Form Solution for Options with Stochastic
-    Volatility with Applications to Bond and Currency Options. *Review of
-    Financial Studies*, 6(2), 327-343.
-- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*.
-    Wiley.
-- Lord, R., & Kahl, C. (2008). Complex logarithms in Heston-like models.
-    *Mathematical Finance*, 20(4), 671-694.
+The note relies on the local `Finance-books` source library:
+
+- *Heston (1993).pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
+- *Gatheral - The Volatility Surface.pdf*
+    in `03_Volatility_Surface/01_Books_Notes`.
+- *HestonTrap.pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.

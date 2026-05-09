@@ -126,7 +126,7 @@ Gauss-Legendre backend batches the slice directly; the `quad` backend accepts
 arrays for API consistency but still loops over scalar integrals under the
 hood.
 
-See the [pricing convention note](../notes/heston_pricing_conventions.md) for
+See the [pricing convention note](../notes/heston/heston_pricing_conventions.md) for
 the exact `log(F / K)` convention, semantic `P_K`/`P_F` probability-index
 mapping, eta-near-zero deterministic fallback, and call/put formulas.
 
@@ -169,7 +169,7 @@ the inversion reflects model behavior rather than mixed numerical settings.
 ## Quadrature and numerical policy
 
 The numerical-policy note for this stack is the
-[Heston quadrature policy](../notes/heston_quadrature_policy.md). The high-level
+[Heston quadrature policy](../notes/heston/heston_quadrature_policy.md). The high-level
 policy on this branch is:
 
 - fixed Gauss-Legendre is the default production backend;
@@ -231,8 +231,8 @@ available, but the diagnostics workflow intentionally keeps that control off by
 default when the point is to compare raw Monte Carlo behavior against the
 Fourier price.
 
-See the [Monte Carlo note](../notes/heston_monte_carlo.md) and the
-[Andersen QE note](../notes/heston_qe_notes.md) for the scheme-level details
+See the [Monte Carlo note](../notes/heston/heston_monte_carlo.md) and the
+[Andersen QE note](../notes/heston/heston_qe_notes.md) for the scheme-level details
 and validation rationale.
 
 ## Calibration
@@ -292,8 +292,8 @@ result = calibrate_heston_multistart(
 )
 ```
 
-Use the [calibration evidence note](../notes/heston_calibration.md) for fit
-interpretation and the [seed-design note](../notes/heston_calibration_seeds.md)
+Use the [calibration evidence note](../notes/heston/heston_calibration.md) for fit
+interpretation and the [seed-design note](../notes/heston/heston_calibration_seeds.md)
 for the default seed and multistart heuristics.
 
 ## Diagnostics
@@ -341,7 +341,7 @@ trade-off summary.
 [Open the comparison notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/13_heston_calibration_vs_localvol.ipynb){ .md-button .md-button--primary }
 
 The deeper written discussion is in the
-[comparison note](../notes/heston_vs_local_vol.md).
+[comparison note](../notes/heston/heston_vs_local_vol.md).
 
 Read the trade-off honestly:
 

@@ -1,5 +1,10 @@
 # Docs Workflow Architecture
 
+!!! note "Status: repository policy"
+    This note documents the documentation workflow for generated artifacts and
+    review pages. It is repository process policy, not model validation
+    evidence.
+
 ## Validation workflow
 
 `.github/workflows/docs-ci.yml` is the authoritative blocking workflow for docs changes.

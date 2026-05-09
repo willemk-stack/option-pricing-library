@@ -30,7 +30,7 @@ class HestonReferenceCase:
       Heston test-suite source.
 
     Both checks use the repository convention documented in
-    docs/notes/heston_pricing_conventions.md: ``x = log(F/K)``,
+    docs/notes/heston/heston_pricing_conventions.md: ``x = log(F/K)``,
     ``call = df * (F * P_F - K * P_K)``, and ``put`` by parity.
     """
 

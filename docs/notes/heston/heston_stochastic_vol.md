@@ -1,16 +1,21 @@
 # Heston stochastic volatility
 
+!!! note "Status: literature-backed convention"
+    This note summarizes the model setup and pricing conventions used by the
+    Heston implementation notes. Repository-specific numerical policy and
+    validation evidence are separated into the adjacent Heston notes.
+
 The Heston model is a standard extension of Black–Scholes when one constant volatility is no longer enough. It keeps continuous-time diffusion pricing, but lets the variance itself evolve randomly and lets spot and variance shocks be correlated. This is one of the simplest stochastic-volatility models that can generate persistent skew and smile while still leaving European vanilla pricing semi-analytic.
 
 ## Context
 
 This note assumes familiarity with:
 
-- [Risk-neutral pricing](risk_neutral_pricing.md)
-- [Brownian motion and Itô](brownian_motion_and_Ito.md)
-- [Black-Scholes pricing](bs_pricing.md)
-- [Finite Differences](finite_difference_pde.md)
-- [Dupire local vol](dupire_local_vol.md)
+- [Risk-neutral pricing](../foundations/risk_neutral_pricing.md)
+- [Brownian motion and Itô](../foundations/brownian_motion_and_ito.md)
+- [Black-Scholes pricing](../pricing/bs_pricing.md)
+- [Finite Differences](../local-vol-pde/finite_difference_pde.md)
+- [Dupire local vol](../local-vol-pde/dupire_local_vol.md)
 
 A useful progression is:
 
@@ -55,7 +60,7 @@ Heston keeps diffusion pricing, replaces constant volatility with a stochastic v
 
 ## 2. Model dynamics
 
-### Under the real-world measure \(\mathbb{P}\)
+### Under the real-world measure
 
 A modern presentation writes
 
@@ -75,7 +80,7 @@ d\langle W_1^{\mathbb{P}}, W_2^{\mathbb{P}} \rangle_t = \rho\,dt.
 
 Heston’s original paper reaches the square-root variance process by first specifying an OU process for \(\sqrt{v_t}\). For pricing and implementation, it is cleaner to write the CIR-style variance process directly.
 
-### Under the pricing measure \(\mathbb{Q}\)
+### Under the pricing measure
 
 For valuation, the relevant dynamics are the risk-neutral ones:
 
@@ -343,5 +348,8 @@ Heston’s original paper emphasizes the economics and PDE structure. Gatheral e
 
 ## References
 
-- Steven L. Heston, *A Closed-Form Solution for Options with Stochastic Volatility with Applications to Bond and Currency Options* (1993).
-- Jim Gatheral, *The Volatility Surface: A Practitioner’s Guide*, Chapter 2.
+The note relies on the local `Finance-books` source library:
+
+- *Heston (1993).pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
+- *Gatheral - The Volatility Surface.pdf*
+    in `03_Volatility_Surface/01_Books_Notes`.

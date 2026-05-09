@@ -1,5 +1,10 @@
 # Heston calibration evidence
 
+!!! note "Status: validation evidence"
+    This note documents the repository's calibration-fit diagnostics. It is
+    bounded validation evidence for configured quote sets, objective choices,
+    and quadrature settings; it is not a guarantee of parameter uniqueness.
+
 The final calibration diagnostics use
 `run_heston_calibration_fit_diagnostics(...)` to turn a fitted Heston parameter
 set or `HestonMultistartResult` into plain evidence tables.
@@ -64,7 +69,7 @@ vanilla prices, especially along mean-reversion, long-run variance,
 vol-of-vol, and correlation tradeoffs. The committed evidence surface is the
 `multistart_runs`, `held_out_errors`, and residual tables emitted by
 `run_heston_calibration_fit_diagnostics(...)`, plus the generated
-[multistart panel](../assets/generated/heston/heston_multistart_stability_panel.svg)
+[multistart panel](../../assets/generated/heston/heston_multistart_stability_panel.svg)
 and focused
 [calibration-fit tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/diagnostics/heston/test_heston_calibration_fit.py).
 
@@ -91,6 +96,13 @@ diagnostics summarize train and held-out rows separately. If no mask is
 supplied, the report leaves held-out evaluation empty instead of pretending it
 happened.
 
+## Known limitations
+
+Heston calibration can be weakly identified from vanilla prices alone. Similar
+residuals may come from different combinations of mean reversion, long-run
+variance, vol-of-vol, correlation, and initial variance. The diagnostic tables
+make that risk visible; they do not remove it.
+
 ## Minimal usage
 
 ```python
@@ -115,11 +127,10 @@ report.tables["objective_slices"].head()
 
 ## References
 
-- Heston, S. L. (1993). A Closed-Form Solution for Options with Stochastic
-    Volatility with Applications to Bond and Currency Options. *Review of
-    Financial Studies*, 6(2), 327-343.
-- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*.
-    Wiley.
-- Cui, Y., del Baño Rollin, S., & Germano, G. (2017). Full and fast
-    calibration of the Heston stochastic volatility model. *European Journal of
-    Operational Research*, 263(2), 625-638.
+The note relies on the local `Finance-books` source library:
+
+- *Heston (1993).pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
+- *Gatheral - The Volatility Surface.pdf*
+    in `03_Volatility_Surface/01_Books_Notes`.
+- *FastHestonCalib-.pdf*
+    in `02_Pricing_Models/01_Classic_Models/Heston`.

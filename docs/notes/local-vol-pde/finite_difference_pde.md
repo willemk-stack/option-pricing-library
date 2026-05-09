@@ -1,8 +1,24 @@
 # Finite Difference Methods for Black–Scholes (Duffy, 2006)
 
+!!! note "Status: implementation design note"
+    This note records finite-difference design choices for the repository's
+    PDE solver. Standard stencil and theta-scheme identities are mathematical
+    background; grid, boundary, and smoothing guidance is repository policy
+    unless a validation page or test is linked explicitly.
+
 ## Sprint 1 — Non-Uniform Spatial Grid (Design + Implementation Notes)
 
 > **Scope:** This document defines the *1D finite-difference solver* for parabolic pricing PDEs on **non-uniform spatial grids**, with an emphasis on Black–Scholes–type operators. It serves as a solver specification for implementation in `pde_fd.py`.
+
+---
+
+## Role in the library
+
+This note supports the local-vol and PDE evidence path. The Dupire note explains
+how an implied-volatility surface becomes a local-variance surface; this note
+records the solver assumptions used once that coefficient field is ready for
+pricing. The user-facing validation entry point is the
+[local-vol/PDE validation guide](../../user_guides/localvol_pde_validation.md).
 
 ---
 
@@ -66,7 +82,7 @@ A problem is well-posed if a unique solution exists and depends continuously on 
 
 ## 3) Non-Uniform Finite-Difference Stencils
 
-### 3.1 First Derivative ($u_x$)
+### 3.1 First derivative
 
 #### Central (2nd order, non-uniform)
 
@@ -85,7 +101,7 @@ Used when the drift $b$ dominates diffusion $a$.
 * **Backward** (if $b > 0$): $u_x \approx \frac{u_j - u_{j-1}}{h_{j-}}$
 * **Forward** (if $b < 0$): $u_x \approx \frac{u_{j+1} - u_j}{h_{j+}}$
 
-### 3.2 Second Derivative ($u_{xx}$)
+### 3.2 Second derivative
 
 #### Central (2nd order, non-uniform)
 
@@ -125,7 +141,7 @@ $$
 
 ---
 
-## 5) Time Discretization — The $\theta$-Scheme
+## 5) Time discretization scheme
 
 For the interior vector $\mathbf{u}^n$:
 
@@ -205,6 +221,36 @@ $$
 2.  **CN Ringing:** Oscillations near $K$ due to $\theta=0.5$ without smoothing.
 3.  **Boundary Pollution:** $S_{\max}$ too small, causing asymptotic BCs to bias the price.
 4.  **CFL Violation:** Using $\theta=0$ with too large a $k$.
+
+---
+
+## Validation and diagnostics
+
+The maintained evidence for this solver lives in the local-vol/PDE guide, the
+validation matrix, and focused tests:
+
+- [Local-vol/PDE validation guide](../../user_guides/localvol_pde_validation.md)
+- [Local-vol PDE repricing regression](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/vol/localvol/test_localvol_pde_repricing_regression.py)
+- [Local-vol PDE convergence reference](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/vol/localvol/test_localvol_pde_convergence_reference.py)
+- [PDE pricer tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/pricers/test_pde_pricer.py)
+
+## Known limitations
+
+Finite-difference agreement is grid-, boundary-, payoff-, and coefficient-field
+dependent. The notes and tests validate selected regimes; they do not imply
+uniform convergence for every local-vol surface, wing extrapolation, or
+time-discretization choice.
+
+## References
+
+The note relies on the local `Finance-books` source library:
+
+- *Duffy - Finite Difference Methods in Financial Engineering.pdf*
+    in `04_Numerical_Methods/01_PDE_Finite_Difference`.
+- *Pricing Financial Instruments - The Finite Difference Method.pdf*
+    in `04_Numerical_Methods/01_PDE_Finite_Difference`.
+- *Convergence Remedies for Non-Smooth Payoffs in Option Pricing.pdf*
+    in `04_Numerical_Methods/01_PDE_Finite_Difference`.
 
 ---
 

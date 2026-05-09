@@ -1,6 +1,13 @@
-# Fritsch-Carlson
+# Monotone interpolation and arbitrage-safe smoothing
 
-Interpolating **total variance** is exactly the place where that paper’s idea is most useful — but mainly **in the maturity \(T\) direction**, not as a full “surface interpolator”.
+!!! note "Status: provisional heuristic"
+    This note records interpolation background for review. Treat implementation
+    choices as provisional unless they are promoted into a specific calibration
+    or validation note.
+
+Interpolating **total variance** is where the local monotone piecewise cubic
+interpolation source is most useful, mainly **in the maturity \(T\) direction**,
+not as a full “surface interpolator”.
 
 ### Where interpolating fits really well (and is worth implementing)
 
@@ -12,7 +19,7 @@ w(k,T) = \sigma_{\mathrm{impl}}(k,T)^2\,T.
 
 to be **nondecreasing in \(T\)**.
 
-A monotone piecewise cubic Hermite interpolant (the paper’s method) is a great building block here because it:
+A monotone piecewise cubic Hermite interpolant is a useful building block here because it:
 
 * preserves monotonicity (no overshoot if your input is monotone),
 * is **local** (changing one quote only affects nearby intervals),
@@ -88,7 +95,9 @@ On a discrete strike grid, these become **linear inequality constraints**, so th
 
 **Tradeoff:** More engineering (QP solver, constraint discretization).
 
-A classic reference thread here is the work around arbitrage-free smoothing of the IV surface (e.g., Dietmar Pfaffel / Rüdiger Kiesel style approaches), and especially Matthias Fengler’s treatment in his book on implied volatility surface modeling.
+The local source library has the relevant smoothing references for this track:
+monotone cubic interpolation, no-arbitrage spline construction, PAV regression,
+Tikhonov regularization, and spline basics.
 
 ---
 
@@ -152,3 +161,20 @@ If your goal is “strong and reusable” without going full PDE:
 ---
 
 If you tell me how your quotes come in (delta-quoted vs strike) and whether you’re working in \(K\) or log-moneyness \(k=\log(K/F)\), I can recommend a concrete constraint set + objective (LP vs QP, which basis, what wing conditions) that fits your library design.
+
+## References
+
+The note relies on the local `Finance-books` source library:
+
+- *Monotone Piecewise Cubic Interpolation.pdf*
+    in `03_Volatility_Surface/03_Interpolation_Smoothing`.
+- *Monotonic Spline.pdf*
+    in `03_Volatility_Surface/03_Interpolation_Smoothing`.
+- *No-Arbitrage Spline.pdf*
+    in `03_Volatility_Surface/03_Interpolation_Smoothing`.
+- *PAV Regression.pdf*
+    in `03_Volatility_Surface/03_Interpolation_Smoothing`.
+- *Tikhonov Regularization.pdf*
+    in `03_Volatility_Surface/03_Interpolation_Smoothing`.
+- *de Boor - A Practical Guide to Splines.pdf*
+    in `05_Math_Reference/03_Splines_Interpolation`.

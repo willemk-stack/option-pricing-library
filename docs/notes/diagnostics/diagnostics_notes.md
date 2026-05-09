@@ -1,5 +1,10 @@
 # Diagnostics design engineering notes
 
+!!! note "Status: provisional heuristic"
+    This note is an engineering scratchpad for diagnostics design. Treat it as
+    provisional implementation guidance, not as mathematical proof or final
+    owner-approved policy.
+
 This will be a small type up to be used as fallback when engineering / modifying diagnostics modules. Here I clarify and defend design choices which will ultimately shape the user guide.
 
 ## Requirements

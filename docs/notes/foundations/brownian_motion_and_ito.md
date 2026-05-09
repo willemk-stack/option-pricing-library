@@ -1,5 +1,10 @@
 # Brownian motion and Itô calculus
 
+!!! note "Status: mathematical background"
+    This note summarizes stochastic-calculus identities used by later model
+    notes. It is background material, not repository-specific validation
+    evidence.
+
 Brownian motion is the canonical continuous-time “randomness” used in finance. Itô calculus is the extension of ordinary
 calculus that lets us differentiate and integrate functions of Brownian-driven processes.
 
@@ -131,7 +136,7 @@ df(t,X_t)
 = \left(f_t + a f_x + \tfrac12 b^2 f_{xx}\right)dt + b f_x\,dW_t.
 \]
 
-### Example: \(f(W_t)=W_t^2\)
+### Worked Ito example
 
 Take \(X_t=W_t\) so \(a=0\), \(b=1\), and \(f(x)=x^2\). Then \(f_x=2x\), \(f_{xx}=2\), and Itô’s lemma gives
 
@@ -150,4 +155,13 @@ matching \(\operatorname{Var}(W_t)=t\).
 ## Where to go next
 
 - Brownian-driven stock dynamics are solved in [GBM](gbm.md).
-- The Black–Scholes PDE and formula use Itô’s lemma implicitly; see [Black–Scholes pricing](bs_pricing.md).
+- The Black–Scholes PDE and formula use Itô’s lemma implicitly; see [Black–Scholes pricing](../pricing/bs_pricing.md).
+
+## References
+
+The note relies on the local `Finance-books` source library:
+
+- *Shreve - Stochastic Calculus for Finance I.pdf*
+    in `01_Foundations/02_Stochastic_Calculus`.
+- *Shreve - Stochastic Calculus for Finance II.pdf*
+    in `01_Foundations/02_Stochastic_Calculus`.

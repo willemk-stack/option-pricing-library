@@ -51,7 +51,7 @@ Dupire/PDE validation evidence.
   comparison outputs.
 
 The table-level details for this workflow live in the
-[Heston versus local volatility note](../notes/heston_vs_local_vol.md).
+[Heston versus local volatility note](../notes/heston/heston_vs_local_vol.md).
 
 The direct local-vol/PDE audit intentionally runs on selected Dupire/PDE
 handoff quotes, while the Heston and eSSVI proxy rows are available on the full
@@ -202,7 +202,7 @@ as the published review bundle; both profiles remain synthetic-fixture scoped.
 3. Open [Heston diagnostics](heston_diagnostics.md) for report interpretation.
 4. Check the [Heston API reference](../api/heston.md) for exact import paths
    and generated signatures.
-5. Review the [Heston versus local volatility note](../notes/heston_vs_local_vol.md)
+5. Review the [Heston versus local volatility note](../notes/heston/heston_vs_local_vol.md)
    for the comparison outputs.
 6. Run or inspect the
    [comparison notebook on `main`](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/13_heston_calibration_vs_localvol.ipynb).

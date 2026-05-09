@@ -86,7 +86,7 @@ $$
 
 This $\psi$ is the switching statistic.
 
-## Sampling $V$: QE scheme
+## Sampling variance with the QE scheme
 
 ### Quadratic branch
 
@@ -152,7 +152,7 @@ $$
 \psi_c = 1.5.
 $$
 
-### Summary algorithm for sampling $V$
+### Summary algorithm for sampling variance
 
 1. Given $\widehat V_t$, compute $m$ and $s^2$.
 2. Compute
@@ -199,7 +199,7 @@ $$
 $$
 which is used in the weak consistency proposition.
 
-## Sampling $\log X$: why Euler is too naive
+## Sampling log price and why Euler is too naive
 
 The exact representation Andersen starts from is
 
@@ -252,7 +252,7 @@ $$
 
 There are **two** separate naiveties.
 
-### 1. Naive Euler for $V$
+### 1. Naive Euler for variance
 
 A direct Euler step for variance can produce negative values:
 
@@ -272,7 +272,7 @@ This is already problematic because:
 
 So Euler here is not principled enough for production-quality Heston simulation.
 
-### 2. Naive Euler for $\log X$
+### 2. Naive Euler for log price
 
 Even if you repair the $V$ step, it is still tempting to correlate the Gaussian shock in the $\log X$ step directly with the Gaussian used to generate $V$.
 
@@ -480,5 +480,10 @@ QE works because it respects the shape of the Heston variance transition much be
 
 ## References
 
-- Leif Andersen, _Efficient Simulation of the Heston Stochastic Volatility Model_
+The note relies on the local `Finance-books` source library:
+
+- *AndersenHestonSimulation.pdf*
+    in `02_Pricing_Models/01_Classic_Models/Heston`.
+- *broadie_kaya_exact_sim_or_2006.pdf*
+    in `04_Numerical_Methods/02_Monte_Carlo`.
 

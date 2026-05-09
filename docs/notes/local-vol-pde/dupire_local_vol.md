@@ -1,7 +1,22 @@
 # Dupire local vol
 
+!!! note "Status: mathematical background and repository policy"
+    Dupire identities are mathematical background. Statements about smooth
+    eSSVI handoff, masking, trimming, and downstream diagnostics are repository
+    implementation policy unless they are linked to validation evidence.
+
 Dupire local volatility replaces the constant-volatility assumption with a deterministic surface
 \(\sigma_{\mathrm{loc}}(S,t)\) chosen so that the model reproduces a continuum of European vanilla prices.
+
+## Role in the library
+
+This note is the mathematical handoff between the volatility-surface workflow
+and the PDE validation path. Raw SVI slices may be useful calibration evidence,
+but Dupire differentiation needs a smoother cross-maturity surface. The
+[eSSVI calibration design](../volatility/essvi_calibration_design.md),
+[smooth handoff guide](../../user_guides/essvi_smooth_handoff.md), and
+[local-vol/PDE validation guide](../../user_guides/localvol_pde_validation.md)
+document that reviewed path.
 
 ## Context
 
@@ -106,7 +121,18 @@ The main warning signs are:
 When a local-vol report masks points as invalid, that usually means the differentiation problem is ill-conditioned at
 those coordinates, not that the diagnostics are being overly conservative.
 
+## Known limitations
+
+Dupire local volatility is a vanilla-surface model. It reproduces a continuum of
+vanilla prices under its assumptions, but it does not by itself validate
+path-dependent dynamics, extrapolated wings, sparse maturities, or hedging
+behavior outside the calibrated surface. Numerical derivatives remain sensitive
+to smoothing, boundary trimming, and quote quality.
+
 ## References
 
-- Bruno Dupire, *Pricing and Hedging with Smiles*
-- Jim Gatheral, *The Volatility Surface*
+The note relies on the local `Finance-books` source library:
+
+- *Dupire - Original Paper.pdf* in `02_Pricing_Models/01_Classic_Models`.
+- *Gatheral - The Volatility Surface.pdf*
+    in `03_Volatility_Surface/01_Books_Notes`.

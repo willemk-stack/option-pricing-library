@@ -1,5 +1,10 @@
 # Black–Scholes–Merton pricing (European options)
 
+!!! note "Status: mathematical background"
+    This note records the Black-Scholes-Merton pricing identities used as
+    repository baselines. Implementation contracts and numerical checks are
+    validated through the API pages and tests linked from the validation matrix.
+
 The Black–Scholes–Merton (BSM) model is the classic closed-form benchmark for pricing **European** calls and puts.
 It combines:
 
@@ -30,7 +35,7 @@ dS_t = \mu S_t\,dt + \sigma S_t\,dW_t^{\mathbb{P}}.
 * No arbitrage, and enough traded instruments to replicate the claim (market completeness).
 * No dividends (add a dividend yield $q$ by replacing $r$ with $r-q$ in the stock drift under $\mathbb{Q}$).
 
-## Derivation 1: Replication $\Rightarrow$ PDE
+## Derivation 1: replication gives the PDE
 
 Let $V(t,S)$ be the option value. Apply Itô’s lemma to $V(t,S_t)$:
 
@@ -78,7 +83,7 @@ V(T,S) = (K-S)^+.
 
 Solving the PDE with these terminal conditions gives the closed-form formulas below.
 
-## Derivation 2: Risk-neutral expectation $\Rightarrow$ same answer
+## Derivation 2: risk-neutral expectation gives the same answer
 
 From risk-neutral pricing, under $\mathbb{Q}$ (no dividends),
 
@@ -171,7 +176,7 @@ where $\varphi$ is the standard normal pdf.
 
 * Use **log-moneyness** $\ln(S/K)$ and $\tau$ to avoid loss of precision.
 * For very small $\tau$ or extreme strikes, clamp $\sigma\sqrt{\tau}$ away from 0 when computing $d_1,d_2$.
-* To back out $\sigma$ from a market price, see [Implied volatility](IV.md).
+* To back out $\sigma$ from a market price, see [Implied volatility](../volatility/implied_volatility.md).
 
 
 # Black-Scholes-Merton pricing for a digital option
@@ -199,3 +204,12 @@ Substituting in $\ln(S_T) = \ln(S_0) + (r-q-\frac{1}{2})$
 $$\ln(S_T) \geq \ln K$$
 
 ### Alt derivation (from call -> -Q * dC/dK....)
+
+## References
+
+The note relies on the local `Finance-books` source library:
+
+- *Options Futures Derivatives (2021).pdf*
+    in `01_Foundations/01_Derivatives_Overview_(Hall)`.
+- *Shreve - Stochastic Calculus for Finance II.pdf*
+    in `01_Foundations/02_Stochastic_Calculus`.

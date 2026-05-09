@@ -1,5 +1,10 @@
 # Geometric Brownian motion
 
+!!! note "Status: mathematical background"
+    This note records the baseline diffusion model used by the pricing and
+    simulation notes. Repository validation is documented on the model-specific
+    implementation pages and tests.
+
 Geometric Brownian motion (GBM) is the standard baseline model for an equity price:
 it produces **lognormal** prices and **normally distributed log-returns**.
 It is simple enough to solve in closed form and is the starting point for Black–Scholes, Monte Carlo, and binomial-tree limits.
@@ -163,5 +168,16 @@ so it is normal with variance \(\sigma^2 T\). Annualized variance over \([0,T]\)
 
 ## Where to go next
 
-- Plug \(\mu=r\) into the GBM distribution to derive the [Black–Scholes formula](bs_pricing.md).
-- Use the conditional distribution to build a [Monte Carlo pricer](mc.md).
+- Plug \(\mu=r\) into the GBM distribution to derive the [Black–Scholes formula](../pricing/bs_pricing.md).
+- Use the conditional distribution to build a [Monte Carlo pricer](../pricing/mc.md).
+
+## References
+
+The note relies on the local `Finance-books` source library:
+
+- *Shreve - Stochastic Calculus for Finance I.pdf*
+    in `01_Foundations/02_Stochastic_Calculus`.
+- *Shreve - Stochastic Calculus for Finance II.pdf*
+    in `01_Foundations/02_Stochastic_Calculus`.
+- *Options Futures Derivatives (2021).pdf*
+    in `01_Foundations/01_Derivatives_Overview_(Hall)`.

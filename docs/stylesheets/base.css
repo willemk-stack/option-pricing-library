@@ -150,6 +150,7 @@ pre,
     padding: 0.2rem 0.1rem 0.3rem;
     overflow-x: auto;
     overflow-y: hidden;
+    text-align: center;
     -webkit-overflow-scrolling: touch;
 }
 
@@ -162,6 +163,12 @@ pre,
 .md-typeset div.arithmatex mjx-container[jax="SVG"] > svg {
     display: block;
     height: auto;
+}
+
+.md-typeset mjx-container[display="true"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+    text-align: center;
 }
 
 [data-md-color-scheme="slate"] .md-typeset .arithmatex,
