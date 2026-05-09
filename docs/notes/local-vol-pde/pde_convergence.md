@@ -35,7 +35,4 @@ where $f$ denotes an option's payoff
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Convergence Remedies for Non-Smooth Payoffs in Option Pricing.pdf*
-    in `04_Numerical_Methods/01_PDE_Finite_Difference`.
+- Pooley, D. M., Vetzal, K. R., & Forsyth, P. A. (2002). Convergence remedies for non-smooth payoffs in option pricing.

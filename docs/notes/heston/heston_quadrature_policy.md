@@ -40,6 +40,11 @@ Rationale:
 - it can be configured and diagnosed panel-by-panel;
 - it supports stable benchmarking once a rule is frozen.
 
+Composite-rule and finite-interval truncation language is supported by Davis
+and Rabinowitz; Gauss-rule node and weight construction is supported by
+Gautschi and by Hale and Townsend. The choice of the concrete Heston default
+tier remains repository policy.
+
 `quad` remains valuable as a cross-check backend, but it should not be the
 default calibration backend because it evaluates scalar integrals and is much
 more expensive across strikes, maturities, and optimizer iterations.
@@ -177,6 +182,10 @@ Final capstone artifacts should state whether calibration residuals appear to be
 driven by model misspecification or by numerical integration error. The
 quadrature policy exists to make that distinction visible.
 
+Clenshaw-Curtis or other spectral fixed rules remain possible follow-up
+backends. Trefethen is useful background for that comparison, but this note
+does not claim that those alternatives are implemented or benchmarked here.
+
 ## Reference tests expected from this policy
 
 At minimum, keep tests for:
@@ -216,13 +225,10 @@ stating the quadrature tier used to produce it.
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Heston (1993).pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
-- *Gatheral - The Volatility Surface.pdf*
-    in `03_Volatility_Surface/01_Books_Notes`.
-- *HestonTrap.pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
-- *Walter Gautschi - Orthogonal Polynomials - Computation and Approximation (2004).pdf*
-    in `05_Math_Reference/02_Integration_Quadrature`.
-- *Hale and Townsend - Fast and Accurate Gauss-Legendre Quadrature.pdf*
-    in `05_Math_Reference/02_Integration_Quadrature`.
+- Heston, S. L. (1993). A closed-form solution for options with stochastic volatility with applications to bond and currency options. *The Review of Financial Studies*, 6(2), 327-343.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*. Wiley.
+- Albrecher, H., Mayer, P., Schoutens, W., & Tistaert, J. (2006). The Little Heston Trap.
+- Davis, P. J., & Rabinowitz, P. (1984). *Methods of Numerical Integration* (2nd ed.). Academic Press.
+- Gautschi, W. (2004). *Orthogonal Polynomials: Computation and Approximation*. Oxford University Press.
+- Hale, N., & Townsend, A. Fast and accurate computation of Gauss-Legendre and Gauss-Jacobi quadrature nodes and weights.
+- Trefethen, L. N. (2013). *Approximation Theory and Approximation Practice*. SIAM.

@@ -344,12 +344,14 @@ The bounded transform is useful for generic unconstrained optimizers, multi-star
 
 The Heston model is an affine stochastic-volatility extension of Black–Scholes in which variance mean reverts, spot and variance shocks are correlated, and European vanilla prices are recovered from characteristic functions through a Black–Scholes-like decomposition.
 
-Heston’s original paper emphasizes the economics and PDE structure. Gatheral emphasizes the risk-neutral implementation route and the stable numerical form of the characteristic function. These are two views of the same model.
+Heston's original paper emphasizes the economics and PDE structure. Gatheral
+emphasizes the risk-neutral implementation route, while Albrecher, Mayer,
+Schoutens, and Tistaert document why branch handling in Heston characteristic
+functions is a numerical issue rather than cosmetic algebra. These are
+complementary views of the same model.
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Heston (1993).pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
-- *Gatheral - The Volatility Surface.pdf*
-    in `03_Volatility_Surface/01_Books_Notes`.
+- Heston, S. L. (1993). A closed-form solution for options with stochastic volatility with applications to bond and currency options. *The Review of Financial Studies*, 6(2), 327-343.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*. Wiley.
+- Albrecher, H., Mayer, P., Schoutens, W., & Tistaert, J. (2006). The Little Heston Trap.

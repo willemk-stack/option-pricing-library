@@ -85,6 +85,12 @@ volatilities and the IV residuals are then reported. The fit diagnostics do
 perform that inversion where possible and report IV residuals separately from
 price residuals.
 
+Loss-function choice is therefore part of the repository calibration contract,
+not a universal Heston fact. Christoffersen and Jacobs motivate treating the
+estimation loss and evaluation loss consistently; this branch records both the
+optimized residual type and the reported IV diagnostics so the distinction is
+visible.
+
 Analytic Jacobians are default-on only on the guarded fixed Gauss-Legendre
 calibration path with `eta >= HESTON_ANALYTIC_JAC_ETA_MIN` (`1e-6`) and bounded
 parameter ranges. Price-only deterministic-limit checks near `eta=0` remain
@@ -127,10 +133,7 @@ report.tables["objective_slices"].head()
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Heston (1993).pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
-- *Gatheral - The Volatility Surface.pdf*
-    in `03_Volatility_Surface/01_Books_Notes`.
-- *FastHestonCalib-.pdf*
-    in `02_Pricing_Models/01_Classic_Models/Heston`.
+- Heston, S. L. (1993). A closed-form solution for options with stochastic volatility with applications to bond and currency options. *The Review of Financial Studies*, 6(2), 327-343.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*. Wiley.
+- Cui, Y., del Baño Rollin, S., & Germano, G. (2016). Full and fast calibration of the Heston stochastic volatility model.
+- Christoffersen, P., & Jacobs, K. (2003). The importance of the loss function in option valuation. CIRANO Scientific Series 2003s-52.

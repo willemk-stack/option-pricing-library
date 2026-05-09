@@ -122,12 +122,7 @@ If the confidence interval is narrow but the signed error stays materially away 
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Heston (1993).pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
-- *AndersenHestonSimulation.pdf*
-    in `02_Pricing_Models/01_Classic_Models/Heston`.
-- *broadie_kaya_exact_sim_or_2006.pdf*
-    in `04_Numerical_Methods/02_Monte_Carlo`.
-- *Monte Carlo Methods in Financial Engineering.pdf*
-    in `04_Numerical_Methods/02_Monte_Carlo`.
+- Heston, S. L. (1993). A closed-form solution for options with stochastic volatility with applications to bond and currency options. *The Review of Financial Studies*, 6(2), 327-343.
+- Andersen, L. (2007). Efficient simulation of the Heston stochastic volatility model.
+- Broadie, M., & Kaya, Ö. (2006). Exact simulation of stochastic volatility and other affine jump diffusion processes. *Operations Research*, 54(2), 217-231.
+- Glasserman, P. (2004). *Monte Carlo Methods in Financial Engineering*. Springer.

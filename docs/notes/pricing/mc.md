@@ -140,9 +140,4 @@ between grid points (lognormal bridges), but for more complex models you may nee
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Monte Carlo Methods in Financial Engineering.pdf*
-    in `04_Numerical_Methods/02_Monte_Carlo`.
-- *Shreve - Stochastic Calculus for Finance I.pdf*
-    in `01_Foundations/02_Stochastic_Calculus`.
+- Glasserman, P. (2004). *Monte Carlo Methods in Financial Engineering*. Springer.

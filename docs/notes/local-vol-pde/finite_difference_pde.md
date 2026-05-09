@@ -243,14 +243,9 @@ time-discretization choice.
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Duffy - Finite Difference Methods in Financial Engineering.pdf*
-    in `04_Numerical_Methods/01_PDE_Finite_Difference`.
-- *Pricing Financial Instruments - The Finite Difference Method.pdf*
-    in `04_Numerical_Methods/01_PDE_Finite_Difference`.
-- *Convergence Remedies for Non-Smooth Payoffs in Option Pricing.pdf*
-    in `04_Numerical_Methods/01_PDE_Finite_Difference`.
+- Duffy, D. J. (2006). *Finite Difference Methods in Financial Engineering: A Partial Differential Equation Approach*. Wiley.
+- Tavella, D., & Randall, C. (2000). *Pricing Financial Instruments: The Finite Difference Method*. Wiley.
+- Pooley, D. M., Vetzal, K. R., & Forsyth, P. A. (2002). Convergence remedies for non-smooth payoffs in option pricing.
 
 ---
 

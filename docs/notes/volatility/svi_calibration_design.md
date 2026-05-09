@@ -188,16 +188,10 @@ explicitly in notebook or workflow code.
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Gatheral - The Volatility Surface.pdf*
-    in `03_Volatility_Surface/01_Books_Notes`.
-- *Gatheral - No-Arbitrage SVI Presentation.pdf*
-    in `03_Volatility_Surface/02_SVI_SSVI_eSSVI`.
-- *GJ - No-Arbitrage SVI (SSVI).pdf*
-    in `03_Volatility_Surface/02_SVI_SSVI_eSSVI`.
-- *SVI Lee Moment Formula.pdf*
-    in `03_Volatility_Surface/02_SVI_SSVI_eSSVI`.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*. Wiley.
+- Gatheral, J. (2012). Arbitrage-free SVI volatility surfaces. Scuola Normale Superiore di Pisa presentation.
+- Gatheral, J., & Jacquier, A. (2013). Arbitrage-free SVI volatility surfaces.
+- Lee, R. W. (2003). The moment formula for implied volatility at extreme strikes.
 
 ## Known limitations
 

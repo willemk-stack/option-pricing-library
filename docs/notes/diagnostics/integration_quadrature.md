@@ -113,11 +113,6 @@ and can be treated as part of the pricing configuration.
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Walter Gautschi - Orthogonal Polynomials - Computation and Approximation (2004).pdf*
-    in `05_Math_Reference/02_Integration_Quadrature`.
-- *Hale and Townsend - Fast and Accurate Gauss-Legendre Quadrature.pdf*
-    in `05_Math_Reference/02_Integration_Quadrature`.
-- *Davis and Rabinowitz - Methods of Numerical Integration.pdf*
-    in `05_Math_Reference/02_Integration_Quadrature`.
+- Davis, P. J., & Rabinowitz, P. (1984). *Methods of Numerical Integration* (2nd ed.). Academic Press.
+- Gautschi, W. (2004). *Orthogonal Polynomials: Computation and Approximation*. Oxford University Press.
+- Hale, N., & Townsend, A. Fast and accurate computation of Gauss-Legendre and Gauss-Jacobi quadrature nodes and weights.

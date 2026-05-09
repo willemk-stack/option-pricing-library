@@ -42,8 +42,8 @@ kinks that are hostile to Dupire differentiation.
 ## Mathematical setup and parameterization
 
 For log-moneyness \(y = \log(K/F(T))\) and maturity \(T\), the implemented
-continuous eSSVI representation is parameterized by three maturity term
-structures:
+continuous eSSVI representation uses repository notation with three maturity
+term structures:
 
 - \(\theta(T)\), the at-the-money total variance level;
 - \(\psi(T)\), the scaled smile-slope magnitude;
@@ -56,6 +56,10 @@ The classic SSVI quantities are recovered as
 \qquad
 \rho(T) = \frac{\eta(T)}{\psi(T)}.
 \]
+
+This notation is the repository convention. The cited eSSVI sources provide
+the mathematical support for the SSVI/eSSVI constraints and cross-maturity
+construction, but they do not all use these exact symbol names.
 
 The total variance is evaluated as
 
@@ -164,16 +168,10 @@ The public evidence is intentionally split by workflow stage:
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *GJ - No-Arbitrage SVI (SSVI).pdf*
-    in `03_Volatility_Surface/02_SVI_SSVI_eSSVI`.
-- *Hendriks - Extended SSVI.pdf*
-    in `03_Volatility_Surface/02_SVI_SSVI_eSSVI`.
-- *Mingone - No-Arbitrage Global eSSVI.pdf*
-    in `03_Volatility_Surface/02_SVI_SSVI_eSSVI`.
-- *Pasquazzi - eSSVI Surface Calibration.pdf*
-    in `03_Volatility_Surface/02_SVI_SSVI_eSSVI`.
+- Gatheral, J., & Jacquier, A. (2013). Arbitrage-free SVI volatility surfaces.
+- Hendriks, S., & Martini, C. The extended SSVI volatility surface.
+- Mingone, A. (2022). No arbitrage global parametrization for the eSSVI volatility surface.
+- Pasquazzi, L. (2023). eSSVI surface calibration.
 
 ## Known limitations
 

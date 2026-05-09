@@ -480,10 +480,6 @@ QE works because it respects the shape of the Heston variance transition much be
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *AndersenHestonSimulation.pdf*
-    in `02_Pricing_Models/01_Classic_Models/Heston`.
-- *broadie_kaya_exact_sim_or_2006.pdf*
-    in `04_Numerical_Methods/02_Monte_Carlo`.
+- Andersen, L. (2007). Efficient simulation of the Heston stochastic volatility model.
+- Broadie, M., & Kaya, Ö. (2006). Exact simulation of stochastic volatility and other affine jump diffusion processes. *Operations Research*, 54(2), 217-231.
 

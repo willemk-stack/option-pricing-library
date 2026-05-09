@@ -95,9 +95,9 @@ On a discrete strike grid, these become **linear inequality constraints**, so th
 
 **Tradeoff:** More engineering (QP solver, constraint discretization).
 
-The local source library has the relevant smoothing references for this track:
-monotone cubic interpolation, no-arbitrage spline construction, PAV regression,
-Tikhonov regularization, and spline basics.
+The local source library has identifiable smoothing references for this track:
+monotone cubic interpolation, monotonic cubic splines, arbitrage-free smoothing,
+PAV regression, Tikhonov regularization, and spline basics.
 
 ---
 
@@ -164,17 +164,9 @@ If you tell me how your quotes come in (delta-quoted vs strike) and whether you‚
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Monotone Piecewise Cubic Interpolation.pdf*
-    in `03_Volatility_Surface/03_Interpolation_Smoothing`.
-- *Monotonic Spline.pdf*
-    in `03_Volatility_Surface/03_Interpolation_Smoothing`.
-- *No-Arbitrage Spline.pdf*
-    in `03_Volatility_Surface/03_Interpolation_Smoothing`.
-- *PAV Regression.pdf*
-    in `03_Volatility_Surface/03_Interpolation_Smoothing`.
-- *Tikhonov Regularization.pdf*
-    in `03_Volatility_Surface/03_Interpolation_Smoothing`.
-- *de Boor - A Practical Guide to Splines.pdf*
-    in `05_Math_Reference/03_Splines_Interpolation`.
+- Fritsch, F. N., & Carlson, R. E. (1980). Monotone piecewise cubic interpolation. *SIAM Journal on Numerical Analysis*, 17(2), 238-246.
+- Wolberg, G., & Alfy, I. (2002). An energy-minimization framework for monotonic cubic spline interpolation. *Journal of Computational and Applied Mathematics*, 143, 145-188.
+- Fengler, M. (2009). Arbitrage-free smoothing of the implied volatility surface. *Quantitative Finance*, 9(4), 417-428.
+- Busing, F. M. T. A. (2022). Monotone regression: a simple and fast O(n) PAVA implementation. *Journal of Statistical Software*, 102(1), 1-25.
+- Cr√©pey, S. (2008). Tikhonov regularization.
+- de Boor, C. *A Practical Guide to Splines*. Springer.

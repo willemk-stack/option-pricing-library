@@ -358,9 +358,8 @@ reporting logic in the diagnostics package.
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Heston (1993).pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
-- *Gatheral - The Volatility Surface.pdf*
-    in `03_Volatility_Surface/01_Books_Notes`.
-- *HestonTrap.pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
+- Heston, S. L. (1993). A closed-form solution for options with stochastic volatility with applications to bond and currency options. *The Review of Financial Studies*, 6(2), 327-343.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*. Wiley.
+- Albrecher, H., Mayer, P., Schoutens, W., & Tistaert, J. (2006). The Little Heston Trap.
+- Davis, P. J., & Rabinowitz, P. (1984). *Methods of Numerical Integration* (2nd ed.). Academic Press.
+- Hale, N., & Townsend, A. Fast and accurate computation of Gauss-Legendre and Gauss-Jacobi quadrature nodes and weights.

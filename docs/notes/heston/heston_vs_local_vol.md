@@ -123,11 +123,7 @@ comparison.meta["notes"]
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Heston (1993).pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
-- *Dupire - Original Paper.pdf* in `02_Pricing_Models/01_Classic_Models`.
-- *Gatheral - The Volatility Surface.pdf*
-    in `03_Volatility_Surface/01_Books_Notes`.
-- *GJ - No-Arbitrage SVI (SSVI).pdf*
-    in `03_Volatility_Surface/02_SVI_SSVI_eSSVI`.
+- Heston, S. L. (1993). A closed-form solution for options with stochastic volatility with applications to bond and currency options. *The Review of Financial Studies*, 6(2), 327-343.
+- Dupire, B. (1993). Pricing and hedging with smiles.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*. Wiley.
+- Gatheral, J., & Jacquier, A. (2013). Arbitrage-free SVI volatility surfaces.

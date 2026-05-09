@@ -147,10 +147,6 @@ Finally clamp into a safe domain:
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Options Futures Derivatives (2021).pdf*
-    in `01_Foundations/01_Derivatives_Overview_(Hall)`.
-- *Gatheral - The Volatility Surface.pdf*
-    in `03_Volatility_Surface/01_Books_Notes`.
-- *Euan Sinclair - Volatility Trading.pdf* in `06_Trading_and_ML`.
+- Hull, J. C. (2021). *Options, Futures, and Other Derivatives* (11th ed.). Pearson.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*. Wiley.
+- Sinclair, E. (2008). *Volatility Trading*. Wiley.

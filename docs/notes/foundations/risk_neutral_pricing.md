@@ -113,11 +113,5 @@ So the drift becomes \(r\) under the pricing measure.
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Shreve - Stochastic Calculus for Finance I.pdf*
-    in `01_Foundations/02_Stochastic_Calculus`.
-- *Shreve - Stochastic Calculus for Finance II.pdf*
-    in `01_Foundations/02_Stochastic_Calculus`.
-- *Options Futures Derivatives (2021).pdf*
-    in `01_Foundations/01_Derivatives_Overview_(Hall)`.
+- Shreve, S. E. (2004). *Stochastic Calculus for Finance II: Continuous-Time Models*. Springer.
+- Hull, J. C. (2021). *Options, Futures, and Other Derivatives* (11th ed.). Pearson.

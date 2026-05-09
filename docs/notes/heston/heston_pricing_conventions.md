@@ -628,11 +628,13 @@ Any future pricing, calibration, diagnostics, or Monte Carlo validation code sho
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Heston (1993).pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
-- *Gatheral - The Volatility Surface.pdf*
-    in `03_Volatility_Surface/01_Books_Notes`.
-- *HestonTrap.pdf* in `02_Pricing_Models/01_Classic_Models/Heston`.
-- *FastHestonCalib-.pdf*
-    in `02_Pricing_Models/01_Classic_Models/Heston`.
+- Heston, S. L. (1993). A closed-form solution for options with stochastic volatility with applications to bond and currency options. *The Review of Financial Studies*, 6(2), 327-343.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*. Wiley.
+- Albrecher, H., Mayer, P., Schoutens, W., & Tistaert, J. (2006). The Little Heston Trap.
+- Cui, Y., del Baño Rollin, S., & Germano, G. (2016). Full and fast calibration of the Heston stochastic volatility model.
+- Christoffersen, P., & Jacobs, K. (2003). The importance of the loss function in option valuation. CIRANO Scientific Series 2003s-52.
+- Andersen, L. (2007). Efficient simulation of the Heston stochastic volatility model.
+- Glasserman, P. (2004). *Monte Carlo Methods in Financial Engineering*. Springer.
+- Davis, P. J., & Rabinowitz, P. (1984). *Methods of Numerical Integration* (2nd ed.). Academic Press.
+- Gautschi, W. (2004). *Orthogonal Polynomials: Computation and Approximation*. Oxford University Press.
+- Hale, N., & Townsend, A. Fast and accurate computation of Gauss-Legendre and Gauss-Jacobi quadrature nodes and weights.

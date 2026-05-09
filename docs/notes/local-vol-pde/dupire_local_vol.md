@@ -131,8 +131,5 @@ to smoothing, boundary trimming, and quote quality.
 
 ## References
 
-The note relies on the local `Finance-books` source library:
-
-- *Dupire - Original Paper.pdf* in `02_Pricing_Models/01_Classic_Models`.
-- *Gatheral - The Volatility Surface.pdf*
-    in `03_Volatility_Surface/01_Books_Notes`.
+- Dupire, B. (1993). Pricing and hedging with smiles.
+- Gatheral, J. (2006). *The Volatility Surface: A Practitioner's Guide*. Wiley.
