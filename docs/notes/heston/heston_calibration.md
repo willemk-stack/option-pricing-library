@@ -85,6 +85,22 @@ volatilities and the IV residuals are then reported. The fit diagnostics do
 perform that inversion where possible and report IV residuals separately from
 price residuals.
 
+### Objective versus reported metrics
+
+| Quantity | Status | Interpretation |
+|---|---|---|
+| `price_rmse` | available calibration objective | Direct price residual objective |
+| `relative_price_rmse` | available calibration objective | Price residual scaled by the target price |
+| `vega_scaled_price` | available calibration objective and the default on this branch | Price residual scaled by Black-Scholes vega to approximate IV-error behavior without repeated IV inversion |
+| `bid_ask_normalized` | available calibration objective | Residual scaled by bid-ask width |
+| direct `iv_rmse` optimization | not implemented on this branch | Do not describe calibration as directly minimizing IV RMSE |
+| reported IV residuals / IV RMSE | reporting metric | Computed after repricing and Black inversion when diagnostics are available |
+
+When describing the project, say that calibration uses vega-scaled price
+residuals and reports implied-volatility residual diagnostics; do not describe
+this as direct IV-RMSE optimization unless such an objective is explicitly
+implemented.
+
 Loss-function choice is therefore part of the repository calibration contract,
 not a universal Heston fact. Christoffersen and Jacobs motivate treating the
 estimation loss and evaluation loss consistently; this branch records both the

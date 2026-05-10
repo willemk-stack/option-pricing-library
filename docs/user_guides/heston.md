@@ -43,16 +43,17 @@ entrypoints without adding root-level exports.
 The implementation parameter object is
 `option_pricing.models.heston.HestonParams`. Its exact field names are:
 
-| Code field | Common notation | Meaning |
+| Literature notation | Repo name | Meaning |
 |---|---|---|
-| `kappa` | $\kappa$ | variance mean-reversion speed |
-| `vbar` | $\theta$ | long-run mean variance |
-| `eta` | $\xi$ | volatility of variance / vol-of-vol |
-| `rho` | $\rho$ | spot/variance correlation |
-| `v` | $v_0$ | initial variance |
+| $\kappa$ | `kappa` | mean-reversion speed of variance |
+| $\theta$ | `vbar` | long-run variance |
+| $\xi$ or $\sigma_v$ | `eta` | volatility of variance / vol-of-vol |
+| $\rho$ | `rho` | spot/variance Brownian correlation |
+| $v_0$ | `v` | initial variance |
 
-Use the code names `vbar`, `eta`, and `v` when calling the library. `theta`,
-`xi`, and `v0` are notation only here.
+The repo uses `vbar`, `eta`, and `v`, while many texts write `theta`, `xi`,
+and `v0`. Those literature names are notation only here; use the repo names
+when calling the library.
 
 `HestonParams` validates the basic admissibility conditions:
 
@@ -87,6 +88,11 @@ The vanilla pricing entrypoints on this branch live in
 put helpers are there when you want the formula-specific surface.
 `heston_price_instrument(...)` and `heston_price_instrument_from_ctx(...)` are
 the instrument-based wrappers for `VanillaOption`.
+
+Implementation convention: the pricer separates the strike/cash leg from the
+forward/asset leg. Probability index `0` is `P_K`, probability index `1` is
+`P_F`, and the call helper prices vanilla options as
+`df * (forward * P_F - strike * P_K)`.
 
 The default backend is fixed-rule Gauss-Legendre integration. That is the
 production-oriented path for ordinary pricing and calibration because it is
@@ -258,19 +264,26 @@ separately. At the user level:
 - provide `iv_mid` if you want the built-in seed heuristics and IV diagnostics
     to work from actual quoted IVs rather than only prices.
 
-The currently supported objective types are:
+The current calibration/reporting split is:
 
-- `"price_rmse"`
-- `"relative_price_rmse"`
-- `"vega_scaled_price"`
-- `"bid_ask_normalized"`
+| Quantity | Status | Interpretation |
+|---|---|---|
+| `"price_rmse"` | available calibration objective | direct price residual objective |
+| `"relative_price_rmse"` | available calibration objective | price residual scaled by the target price |
+| `"vega_scaled_price"` | available calibration objective and the default on this branch | price residual scaled by Black-Scholes vega to approximate IV-error behavior without repeated IV inversion |
+| `"bid_ask_normalized"` | available calibration objective | residual scaled by bid-ask width |
+| direct IV-RMSE optimization | not implemented on this branch | do not claim calibration directly minimizes IV RMSE |
+| reported IV residuals / IV RMSE | reporting metric | evaluated after repricing and Black inversion when diagnostics are available |
 
-There is no direct IV-RMSE calibration objective on this branch. If you
-calibrate with vega-scaled price residuals, treat them as the optimizer's
-price-space proxy for IV fit, not as the same thing as direct implied-vol
-RMSE. Calibration optimizes vega-scaled price residuals; direct IV residuals
-and IV RMSE are reported later by the fit diagnostics after repricing and
-Black inversion.
+When describing the project, say that calibration uses vega-scaled price
+residuals and reports implied-volatility residual diagnostics; do not describe
+this as direct IV-RMSE optimization unless such an objective is explicitly
+implemented.
+
+There is no direct IV-RMSE calibration objective on this branch.
+`"vega_scaled_price"` stays in price space and uses Black-Scholes vega as the
+residual scale, while IV residuals and IV RMSE are reported later by the fit
+diagnostics after repricing and Black inversion.
 
 For starting points, use `default_heston_seed(...)` when you want one
 market-aware seed and `heston_seed_grid(...)` when you want the deterministic
@@ -368,6 +381,10 @@ Read the trade-off honestly:
 - The direct local-vol PDE comparison is intentionally small; distinguish model
     residuals from PDE grid, boundary, and projection error.
 - Nothing in this guide should be read as a production-trading claim.
+
+For bounded interview/CV wording, see the
+[Heston Capstone interview framing](../notes/heston/heston_interview_framing.md)
+note.
 
 ## Minimal workflow checklist
 
