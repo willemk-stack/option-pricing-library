@@ -220,7 +220,7 @@ def test_bid_ask_normalized_uses_spread_floor_for_residual_and_jac(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     bid = np.array([9.70, 0.02, 3.50], dtype=np.float64)
-    ask = np.array([10.20, 0.04, 3.50], dtype=np.float64)
+    ask = np.array([10.20, 0.04, 3.51], dtype=np.float64)
     quotes = _quotes(bid=bid, ask=ask)
     weights = np.array([1.0, 2.0, 0.5], dtype=np.float64)
     price_error = np.array([0.40, -0.20, 0.10], dtype=np.float64)
@@ -247,6 +247,18 @@ def test_bid_ask_normalized_uses_spread_floor_for_residual_and_jac(
         rtol=0.0,
         atol=1.0e-12,
     )
+
+
+def test_bid_ask_normalized_rejects_nonpositive_spread() -> None:
+    bid = np.array([9.70, 0.02, 3.50], dtype=np.float64)
+    ask = np.array([10.20, 0.04, 3.50], dtype=np.float64)
+    objective = HestonObjective(
+        quotes=_quotes(bid=bid, ask=ask),
+        objective_type="bid_ask_normalized",
+    )
+
+    with pytest.raises(ValueError, match="strictly positive"):
+        objective.residual(_u())
 
 
 def test_bid_ask_normalized_requires_bid_and_ask() -> None:

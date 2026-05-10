@@ -106,15 +106,6 @@ class HestonQuoteSet:
             if arr.shape != (n,):
                 raise ValueError(f"{name} must have shape ({n},), got {arr.shape}")
 
-        term_arrays = {
-            "discount": self.discount,
-            "forward": self.forward,
-        }
-
-        for name, arr in term_arrays.items():
-            if arr.shape != (n,):
-                raise ValueError(f"{name} must have shape ({n},), got {arr.shape}")
-
         optional_arrays = {
             "bs_vega": self.bs_vega,
             "bid": self.bid,
@@ -132,7 +123,7 @@ class HestonQuoteSet:
         if not np.isfinite(self.ctx.spot) or self.ctx.spot <= 0.0:
             raise ValueError("spot must be positive and finite")
 
-        for name, arr in {**arrays, **term_arrays}.items():
+        for name, arr in arrays.items():
             if not np.all(np.isfinite(arr)):
                 raise ValueError(f"{name} must be finite")
 
@@ -140,6 +131,20 @@ class HestonQuoteSet:
             raise ValueError("strike values must be positive")
         if np.any(self.expiry <= 0.0):
             raise ValueError("expiry values must be positive")
+
+        term_arrays = {
+            "discount": self.discount,
+            "forward": self.forward,
+        }
+
+        for name, arr in term_arrays.items():
+            if arr.shape != (n,):
+                raise ValueError(f"{name} must have shape ({n},), got {arr.shape}")
+
+        for name, arr in term_arrays.items():
+            if not np.all(np.isfinite(arr)):
+                raise ValueError(f"{name} must be finite")
+
         if np.any(self.discount <= 0.0):
             raise ValueError("discount values must be positive")
         if np.any(self.forward <= 0.0):

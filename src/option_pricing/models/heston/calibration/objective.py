@@ -252,8 +252,8 @@ class HestonObjective:
             spread = self.quotes.ask - self.quotes.bid
             if not np.all(np.isfinite(spread)):
                 raise ValueError("bid/ask spread must be finite")
-            if np.any(spread < 0.0):
-                raise ValueError("bid/ask spread must be nonnegative")
+            if np.any(spread <= 0.0):
+                raise ValueError("bid/ask spread must be strictly positive")
             # NOTE: Bid/ask-normalized residuals treat the quoted spread as
             # the residual scale and do not otherwise model quote reliability.
             return np.asarray(

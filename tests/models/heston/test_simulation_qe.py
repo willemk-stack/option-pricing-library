@@ -387,6 +387,44 @@ def test_x_timestep_qe_martingale_correction_moves_mean_toward_unity() -> None:
     assert abs(corrected_mean - 1.0) < 5e-4
 
 
+def test_heston_qe_terminal_forward_matches_theoretical_forward_within_ci() -> None:
+    params = HestonParams(
+        kappa=1.5,
+        vbar=0.04,
+        eta=0.8,
+        rho=-0.7,
+        v=0.05,
+    )
+    tau = 1.5
+    n_paths = 12_000
+    ci_multiplier = 4.0
+    small_abs_buffer = 0.05
+
+    terminal = simulate_heston_terminal(
+        ctx=_ctx(),
+        tau=tau,
+        params=params,
+        n_steps=32,
+        cfg=MCConfig(
+            n_paths=n_paths,
+            antithetic=True,
+            random=RandomConfig(seed=1234),
+        ),
+        scheme="quadratic_exponential",
+    )
+
+    expected_forward = _ctx().fwd(tau)
+    sample_mean = float(np.mean(terminal))
+    sample_std = float(np.std(terminal, ddof=1))
+    standard_error = sample_std / np.sqrt(n_paths)
+    error = abs(sample_mean - expected_forward)
+
+    # NOTE: This is a martingale/forward-consistency regression guard, not a
+    # statistical power test, so the CI is intentionally generous for CI
+    # stability while still catching broken drift or correction wiring.
+    assert error <= ci_multiplier * standard_error + small_abs_buffer
+
+
 def test_simulate_heston_qe_terminal_matches_full_path_terminal(
     heston_params: HestonParams,
 ) -> None:

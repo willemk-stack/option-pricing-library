@@ -190,6 +190,29 @@ def _all_failed_message(runs: tuple[HestonCalibrationRun, ...]) -> str:
     )
 
 
+def _validate_heston_calibration_inputs(
+    quotes: HestonQuoteSet,
+    *,
+    objective_type: HestonObjectiveType,
+) -> None:
+    if quotes.n_quotes == 0:
+        raise ValueError("Heston calibration requires at least one quote.")
+
+    if objective_type != "bid_ask_normalized":
+        return
+
+    if quotes.bid is None or quotes.ask is None:
+        raise ValueError(
+            "objective_type='bid_ask_normalized' requires quotes.bid and quotes.ask"
+        )
+
+    spread = np.asarray(quotes.ask - quotes.bid, dtype=np.float64)
+    if not np.all(np.isfinite(spread)):
+        raise ValueError("bid/ask spread must be finite")
+    if np.any(spread <= 0.0):
+        raise ValueError("bid/ask spread must be strictly positive")
+
+
 # NOTE: Use overloads for return_result so the backward-compatible fitted
 # parameter return and the diagnostics tuple return stay type-checkable without
 # casts at call sites.
@@ -300,6 +323,7 @@ def calibrate_heston(
             f"parameter_transform must be one of {supported}; "
             f"got {parameter_transform!r}"
         )
+    _validate_heston_calibration_inputs(quotes, objective_type=objective_type)
     if parameter_transform == "unconstrained" and bounds is not None:
         raise ValueError("bounds are only used with parameter_transform='bounded'.")
     if x0_params is None:
@@ -451,6 +475,7 @@ def calibrate_heston_multistart(
     # NOTE: Multi-start defaults to the bounded transform because seed-grid
     # diagnostics are most useful when every optimizer run stays inside the
     # same practical calibration box; calibrate_heston keeps its old default.
+    _validate_heston_calibration_inputs(quotes, objective_type=objective_type)
     resolved_seeds = _build_multistart_seeds(
         quotes,
         seeds=seeds,
