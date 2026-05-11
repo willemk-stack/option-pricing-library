@@ -19,6 +19,7 @@ type HestonProbabilityIndex = Literal[0, 1]
 # Semantic probability indices used by the pricing formula.
 HESTON_PROBABILITY_INDEX_K: HestonProbabilityIndex = 0
 HESTON_PROBABILITY_INDEX_F: HestonProbabilityIndex = 1
+PROBABILITY_OVERRIDE_TOL = 1.0e-12
 HESTON_PARAM_JAC_BACKEND_ERROR = (
     "Analytic Heston parameter Jacobians currently support only "
     "backend='gauss_legendre' on the fixed-rule production quadrature domain."
@@ -125,8 +126,9 @@ def _probability_array(
     Parameters
     ----------
     probability_override : float or array-like, optional
-        Precomputed probability override. Must be scalar or broadcastable to
-        ``x.shape``.
+        Precomputed probability override. Must be finite, lie within
+        ``[-PROBABILITY_OVERRIDE_TOL, 1 + PROBABILITY_OVERRIDE_TOL]``, and be
+        scalar or broadcastable to ``x.shape``.
     x : ndarray
         Log-forward moneyness slice.
     tau : float
@@ -156,6 +158,18 @@ def _probability_array(
     """
     if probability_override is not None:
         override = np.asarray(probability_override, dtype=np.float64)
+
+        if not np.all(np.isfinite(override)):
+            raise ValueError("probability_override must contain only finite values.")
+
+        if np.any(
+            (override < -PROBABILITY_OVERRIDE_TOL)
+            | (override > 1.0 + PROBABILITY_OVERRIDE_TOL)
+        ):
+            raise ValueError(
+                "probability_override must lie within "
+                f"[-{PROBABILITY_OVERRIDE_TOL:g}, {1.0 + PROBABILITY_OVERRIDE_TOL:g}]."
+            )
 
         try:
             return np.asarray(np.broadcast_to(override, x.shape), dtype=np.float64)
@@ -276,7 +290,9 @@ def heston_price_call_from_ctx(
     p0, p1 : float or array-like, optional
         Optional legacy probability overrides. ``p0`` is ``P_K`` and multiplies
         the strike/cash leg; ``p1`` is ``P_F`` and multiplies the forward/asset
-        leg. Each override must be scalar or broadcastable to ``strike.shape``.
+        leg. Each override must be finite, lie within
+        ``[-PROBABILITY_OVERRIDE_TOL, 1 + PROBABILITY_OVERRIDE_TOL]``, and be
+        scalar or broadcastable to ``strike.shape``.
     backend : {"gauss_legendre", "quad"}, default "gauss_legendre"
         Probability integration backend.
     quad_cfg : QuadratureConfig, optional
@@ -416,7 +432,9 @@ def heston_price_put_from_ctx(
     p0, p1 : float or array-like, optional
         Optional legacy probability overrides. ``p0`` is ``P_K`` and multiplies
         the strike/cash leg; ``p1`` is ``P_F`` and multiplies the forward/asset
-        leg. Each override must be scalar or broadcastable to ``strike.shape``.
+        leg. Each override must be finite, lie within
+        ``[-PROBABILITY_OVERRIDE_TOL, 1 + PROBABILITY_OVERRIDE_TOL]``, and be
+        scalar or broadcastable to ``strike.shape``.
     backend : {"gauss_legendre", "quad"}, default "gauss_legendre"
         Probability integration backend.
     quad_cfg : QuadratureConfig, optional
