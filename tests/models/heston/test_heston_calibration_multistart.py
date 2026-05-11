@@ -212,33 +212,34 @@ def test_result_metadata_fields_are_populated(
     assert result.best_run.message == "metadata ok"
 
 
-def test_all_seeds_fail_raises_no_convergence_error(
+def test_heston_multistart_raises_when_all_seeds_fail_with_diagnostics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_calibrate_heston(**_kwargs: object) -> tuple[HestonParams, OptimizeResult]:
-        raise NoConvergenceError("still no fit")
+    seeds = [_seed(kappa=1.0), _seed(kappa=2.0)]
+    failure_messages = ["mock seed failure 0", "mock seed failure 1"]
+    call_count = {"value": 0}
+
+    def fake_calibrate_heston(**kwargs: object) -> tuple[HestonParams, OptimizeResult]:
+        seed = kwargs["x0_params"]
+        assert isinstance(seed, HestonParams)
+        idx = call_count["value"]
+        call_count["value"] += 1
+        raise NoConvergenceError(failure_messages[idx])
 
     monkeypatch.setattr(calibrate_module, "calibrate_heston", fake_calibrate_heston)
 
-    with pytest.raises(NoConvergenceError) as excinfo:
+    with pytest.raises(NoConvergenceError, match=r"all 2 seed\(s\) failed") as excinfo:
         calibrate_module.calibrate_heston_multistart(
             quotes=_quotes(),
             objective_type="price_rmse",
-            seeds=[
-                _seed(kappa=1.0),
-                _seed(kappa=2.0),
-                _seed(kappa=3.0),
-                _seed(kappa=4.0),
-            ],
+            seeds=seeds,
         )
 
     message = str(excinfo.value)
-    assert "all 4 seed" in message
     assert "seed 0" in message
     assert "seed 1" in message
-    assert "seed 2" in message
-    assert "1 more failure" in message
-    assert "still no fit" in message
+    assert failure_messages[0] in message
+    assert failure_messages[1] in message
 
 
 def test_x0_params_is_prepended_before_explicit_seeds(

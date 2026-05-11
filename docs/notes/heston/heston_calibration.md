@@ -39,6 +39,14 @@ columns.
 supplied, including failed runs. Failed seeds are evidence about initialization
 sensitivity, not noise to be hidden.
 
+Invalid calibration inputs raise before optimization. During multistart
+calibration, individual seed failures are retained as failed runs when at least
+one seed succeeds, because those failures are useful initialization-sensitivity
+diagnostics. If every seed fails, `calibrate_heston_multistart(...)` raises
+`NoConvergenceError` rather than returning a result without valid `best_params`.
+This keeps the successful-result type honest: every `HestonMultistartResult`
+contains a usable `best_run` and `best_params`.
+
 `held_out_errors` is populated only when a held-out mask is supplied. Fit errors
 and held-out errors should be reported separately.
 

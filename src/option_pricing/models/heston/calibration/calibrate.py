@@ -185,7 +185,7 @@ def _all_failed_message(runs: tuple[HestonCalibrationRun, ...]) -> str:
     remaining = len(runs) - preview_count
     suffix = f"; ... {remaining} more failure(s)" if remaining > 0 else ""
     return (
-        f"Heston multistart calibration failed for all {len(runs)} seed(s). "
+        f"Heston multistart calibration failed because all {len(runs)} seed(s) failed. "
         f"Failures: {preview}{suffix}"
     )
 
@@ -471,7 +471,15 @@ def calibrate_heston_multistart(
     xtol: float | None = None,
     gtol: float | None = None,
 ) -> HestonMultistartResult:
-    """Run Heston calibration from multiple deterministic starting points."""
+    """Run Heston calibration from multiple deterministic starting points.
+
+    Invalid calibration inputs raise before any optimizer run. When at least
+    one seed succeeds, failed seeds are still retained in ``runs`` because they
+    are useful initialization-sensitivity diagnostics. If every seed fails,
+    this function raises ``NoConvergenceError`` instead of returning a
+    ``HestonMultistartResult`` without valid ``best_run`` / ``best_params``,
+    preserving the successful-result type contract.
+    """
     # NOTE: Multi-start defaults to the bounded transform because seed-grid
     # diagnostics are most useful when every optimizer run stays inside the
     # same practical calibration box; calibrate_heston keeps its old default.

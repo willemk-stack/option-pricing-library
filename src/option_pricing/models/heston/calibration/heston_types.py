@@ -56,6 +56,8 @@ class HestonCalibrationRun:
 
 @dataclass(frozen=True, slots=True)
 class HestonMultistartResult:
+    """Successful Heston multistart calibration result with usable best run."""
+
     best_params: HestonParams
     best_run: HestonCalibrationRun
     runs: tuple[HestonCalibrationRun, ...]

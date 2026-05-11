@@ -290,6 +290,12 @@ market-aware seed and `heston_seed_grid(...)` when you want the deterministic
 multistart spoke set. `calibrate_heston_multistart(...)` defaults to
 `parameter_transform="bounded"` and `max_seeds=12`.
 
+Invalid calibration inputs raise before optimization. In multistart mode,
+failed seeds are retained when at least one seed succeeds because they are
+useful diagnostics about initialization sensitivity. If every seed fails,
+`calibrate_heston_multistart(...)` raises `NoConvergenceError` instead of
+returning a result without a usable `best_run` and `best_params`.
+
 ```python
 from option_pricing.models.heston.calibration import (
     HestonCalibrationBounds,
