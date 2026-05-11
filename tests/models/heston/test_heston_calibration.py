@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from scipy.optimize import OptimizeResult
 
 import option_pricing.models.heston.calibration.calibrate as calibrate_module
 import option_pricing.models.heston.calibration.objective as objective_module
+from option_pricing.exceptions import NoConvergenceError
 from option_pricing.models.heston.calibration.calibrate import calibrate_heston
 from option_pricing.models.heston.calibration.heston_types import HestonQuoteSet
 from option_pricing.models.heston.calibration.objective import HestonObjective
@@ -308,6 +310,32 @@ def test_heston_calibration_rejects_zero_bid_ask_spread_before_optimization(
             quotes,
             objective_type="bid_ask_normalized",
             x0_params=_sample_seed(),
+        )
+
+
+def test_calibrate_heston_raises_on_optimizer_success_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_least_squares(**kwargs: object) -> OptimizeResult:
+        return OptimizeResult(
+            x=np.asarray(kwargs["x0"], dtype=np.float64),
+            success=False,
+            message="synthetic optimizer failure",
+            cost=1.0,
+            status=0,
+        )
+
+    monkeypatch.setattr(calibrate_module, "least_squares", fake_least_squares)
+
+    with pytest.raises(
+        NoConvergenceError,
+        match=r"Heston calibration failed: synthetic optimizer failure",
+    ):
+        calibrate_heston(
+            _sample_quotes(),
+            objective_type="price_rmse",
+            x0_params=_sample_seed(),
+            max_nfev=1,
         )
 
 

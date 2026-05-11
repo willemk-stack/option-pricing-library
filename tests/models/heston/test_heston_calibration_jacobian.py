@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import numpy as np
 
+from option_pricing.models.heston.calibration.bounds import HestonCalibrationBounds
 from option_pricing.models.heston.calibration.heston_types import HestonQuoteSet
 from option_pricing.models.heston.calibration.objective import HestonObjective
+from option_pricing.models.heston.charfunc import HESTON_ANALYTIC_JAC_ETA_MIN
 from option_pricing.models.heston.params import HestonParams
 from option_pricing.numerics.quadrature import QuadratureConfig
 from option_pricing.pricers.heston import heston_price_from_ctx
@@ -123,6 +125,35 @@ def test_heston_objective_jac_matches_finite_difference() -> None:
     jac_fd = central_diff_jac(objective.residual, u, eps=1.0e-5)
 
     np.testing.assert_allclose(jac, jac_fd, rtol=RTOL, atol=ATOL)
+
+
+def test_heston_objective_bounded_vega_scaled_jac_matches_finite_difference() -> None:
+    quotes = synthetic_heston_quotes()
+    bounds = HestonCalibrationBounds()
+    seed = HestonParams(
+        kappa=SEED_PARAMS.kappa,
+        vbar=SEED_PARAMS.vbar,
+        eta=max(SEED_PARAMS.eta, 2.0 * HESTON_ANALYTIC_JAC_ETA_MIN),
+        rho=SEED_PARAMS.rho,
+        v=SEED_PARAMS.v,
+    )
+    objective = HestonObjective(
+        quotes=quotes,
+        objective_type="vega_scaled_price",
+        parameter_transform="bounded",
+        bounds=bounds,
+        backend="gauss_legendre",
+        quad_cfg=QUAD_CFG,
+    )
+
+    raw = seed.transform_to_bounded_unconstrained(bounds)
+    jac = objective.jac(raw)
+    jac_fd = central_diff_jac(objective.residual, raw, eps=1.0e-5)
+
+    assert seed.eta > HESTON_ANALYTIC_JAC_ETA_MIN
+    # Guarded-domain regression for the documented bounded calibration setup,
+    # not a universal complex-plane derivative guarantee.
+    np.testing.assert_allclose(jac, jac_fd, rtol=5.0e-3, atol=5.0e-5)
 
 
 def test_heston_objective_jac_includes_residual_scaling() -> None:

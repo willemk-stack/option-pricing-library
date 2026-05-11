@@ -33,6 +33,33 @@ def test_build_heston_docs_artifacts_smoke_profile_writes_required_bundle(
     assert len(payload["held_out_policy"]["labels"]) == len(
         payload["held_out_policy"]["indices"]
     )
+    assert "not real market data" in payload["caveat"]
+
+    artifacts_by_filename = {
+        artifact["filename"]: artifact for artifact in payload["artifacts"]
+    }
+    tradeoff_summary = artifacts_by_filename["heston_comparison_tradeoff_summary.csv"]
+    assert tradeoff_summary["artifact_type"] == "data"
+    assert tradeoff_summary["source"] == "heston_comparison_tradeoff_summary.csv"
+    assert tradeoff_summary["fixture_is_synthetic"] is True
+    assert tradeoff_summary["caveats"]
+    assert (
+        "docs/user_guides/heston_model_comparison.md" in tradeoff_summary["docs_pages"]
+    )
+
+    mc_convergence = artifacts_by_filename["heston_mc_convergence_summary.csv"]
+    assert mc_convergence["artifact_type"] == "data"
+    assert mc_convergence["source"] == "heston_mc_convergence_summary.csv"
+    assert mc_convergence["fixture_is_synthetic"] is True
+    assert mc_convergence["caveats"]
+    assert "docs/performance.md" in mc_convergence["docs_pages"]
+
+    multistart_panel = artifacts_by_filename["heston_multistart_stability_panel.png"]
+    assert multistart_panel["artifact_type"] == "figure"
+    assert multistart_panel["source"] == "heston_multistart_stability_panel"
+    assert multistart_panel["fixture_is_synthetic"] is True
+    assert multistart_panel["caption"]
+    assert "docs/validation_matrix.md" in multistart_panel["docs_pages"]
 
     freshness_path = (
         output_dir

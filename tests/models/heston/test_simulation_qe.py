@@ -20,6 +20,7 @@ from option_pricing.models.heston.simulation.qe import (
     simulate_heston_qe_terminal,
 )
 from option_pricing.monte_carlo import MCConfig, RandomConfig
+from option_pricing.pricers.heston import heston_price_call_from_ctx
 from option_pricing.types import MarketData
 
 
@@ -423,6 +424,57 @@ def test_heston_qe_terminal_forward_matches_theoretical_forward_within_ci() -> N
     # statistical power test, so the CI is intentionally generous for CI
     # stability while still catching broken drift or correction wiring.
     assert error <= ci_multiplier * standard_error + small_abs_buffer
+
+
+def test_heston_qe_terminal_vanilla_price_matches_fourier_within_ci() -> None:
+    ctx = _ctx()
+    params = HestonParams(
+        kappa=1.8,
+        vbar=0.04,
+        eta=0.55,
+        rho=-0.65,
+        v=0.05,
+    )
+    tau = 1.0
+    strike = 100.0
+    ci_multiplier = 5.0
+    small_bias_buffer = 0.02
+
+    terminal = simulate_heston_terminal(
+        ctx=ctx,
+        tau=tau,
+        params=params,
+        n_steps=64,
+        cfg=MCConfig(
+            n_paths=24_000,
+            antithetic=True,
+            random=RandomConfig(seed=2026),
+        ),
+        scheme="quadratic_exponential",
+    )
+
+    discounted_payoffs = ctx.df(tau) * np.maximum(terminal - strike, 0.0)
+    mc_price = float(np.mean(discounted_payoffs))
+    standard_error = float(np.std(discounted_payoffs, ddof=1) / np.sqrt(terminal.size))
+    fourier_price = float(
+        heston_price_call_from_ctx(
+            strike=strike,
+            ctx=ctx,
+            tau=tau,
+            params=params,
+            backend="gauss_legendre",
+        )
+    )
+
+    assert np.all(np.isfinite([mc_price, standard_error, fourier_price]))
+    assert standard_error > 0.0
+    # Realized MC error can oscillate across timestep refinements, so this
+    # checks statistical consistency against the Fourier reference rather than
+    # any monotonic convergence story.
+    assert (
+        abs(mc_price - fourier_price)
+        <= ci_multiplier * standard_error + small_bias_buffer
+    )
 
 
 def test_simulate_heston_qe_terminal_matches_full_path_terminal(
