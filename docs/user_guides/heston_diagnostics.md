@@ -60,7 +60,7 @@ diagnostic, not magic: it exposes initialization sensitivity and failed seeds,
 but it does not prove parameter uniqueness.
 
 Vega-scaled price residuals are the optimization proxy used for calibration on
-this branch, but they are not direct IV RMSE unless model prices are inverted
+this library, but they are not direct IV RMSE unless model prices are inverted
 and IV residuals are reported. Calibration optimizes vega-scaled price
 residuals; the calibration-fit diagnostics report both price residuals and
 direct IV residuals when possible.

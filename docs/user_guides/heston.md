@@ -18,7 +18,7 @@ variance, vol-of-vol, and spot/variance correlation. Compared with the
 local-vol and eSSVI tooling in this repository, Heston gives a stochastic
 variance story rather than a pure vanilla-surface fit.
 
-This library currently keeps the Heston stack namespaced. On this branch, the
+This library currently keeps the Heston stack namespaced. At present, the
 package root `option_pricing` does not re-export the Heston pricers or
 calibrators, so expect imports from:
 
@@ -75,7 +75,7 @@ defaults to the bounded parameter transform for exactly that reason.
 
 ## Pricing
 
-The vanilla pricing entrypoints on this branch live in
+The vanilla pricing entrypoints live in
 `option_pricing.pricers.heston`:
 
 - `heston_price_call_from_ctx(...)`
@@ -176,7 +176,7 @@ the inversion reflects model behavior rather than mixed numerical settings.
 
 The numerical-policy note for this stack is the
 [Heston quadrature policy](../notes/heston/heston_quadrature_policy.md). The high-level
-policy on this branch is:
+policy in this library is:
 
 - fixed Gauss-Legendre is the default production backend;
 - `quad` is a cross-check backend, not the default calibration engine;
@@ -270,9 +270,9 @@ The current calibration/reporting split is:
 |---|---|---|
 | `"price_rmse"` | available calibration objective | direct price residual objective |
 | `"relative_price_rmse"` | available calibration objective | price residual scaled by the target price |
-| `"vega_scaled_price"` | available calibration objective and the default on this branch | price residual scaled by Black-Scholes vega to approximate IV-error behavior without repeated IV inversion |
+| `"vega_scaled_price"` | available calibration objective and the current default | price residual scaled by Black-Scholes vega to approximate IV-error behavior without repeated IV inversion |
 | `"bid_ask_normalized"` | available calibration objective | residual scaled by bid-ask width |
-| direct IV-RMSE optimization | not implemented on this branch | do not claim calibration directly minimizes IV RMSE |
+| direct IV-RMSE optimization | not implemented in this library | do not claim calibration directly minimizes IV RMSE |
 | reported IV residuals / IV RMSE | reporting metric | evaluated after repricing and Black inversion when diagnostics are available |
 
 When describing the project, say that calibration uses vega-scaled price
@@ -280,7 +280,7 @@ residuals and reports implied-volatility residual diagnostics; do not describe
 this as direct IV-RMSE optimization unless such an objective is explicitly
 implemented.
 
-There is no direct IV-RMSE calibration objective on this branch.
+There is no direct IV-RMSE calibration objective in this library.
 `"vega_scaled_price"` stays in price space and uses Black-Scholes vega as the
 residual scale, while IV residuals and IV RMSE are reported later by the fit
 diagnostics after repricing and Black inversion.

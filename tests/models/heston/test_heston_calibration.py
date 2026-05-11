@@ -27,6 +27,84 @@ def _sample_seed() -> HestonParams:
     return HestonParams(kappa=2.0, vbar=0.04, eta=0.55, rho=-0.70, v=0.05)
 
 
+_SYNTHETIC_HESTON_MARKET = MarketData(spot=100.0, rate=0.02, dividend_yield=0.01)
+_SYNTHETIC_HESTON_TRUE_PARAMS = HestonParams(
+    kappa=1.5,
+    vbar=0.04,
+    eta=0.45,
+    rho=-0.55,
+    v=0.04,
+)
+_SYNTHETIC_HESTON_STRIKES = np.array(
+    [85.0, 95.0, 100.0, 105.0, 115.0],
+    dtype=np.float64,
+)
+_SYNTHETIC_HESTON_EXPIRIES = np.array([0.5, 1.0, 1.5], dtype=np.float64)
+_SYNTHETIC_HESTON_NOISE = np.array(
+    [0.02, -0.01, 0.0, 0.015, -0.02] * 3,
+    dtype=np.float64,
+)
+_SYNTHETIC_HESTON_SEEDS = (
+    HestonParams(kappa=0.9, vbar=0.03, eta=0.30, rho=-0.25, v=0.03),
+    HestonParams(kappa=2.5, vbar=0.06, eta=0.80, rho=-0.80, v=0.06),
+    HestonParams(kappa=1.1, vbar=0.05, eta=0.55, rho=-0.45, v=0.05),
+)
+MAX_CLEAN_REPRICE_RMSE = 1.0e-8
+MAX_NOISY_REPRICE_RMSE = 2.0e-2
+NOISY_REPRICE_RMSE_BUFFER = 5.0e-3
+
+
+def _synthetic_heston_quotes(
+    *,
+    params: HestonParams = _SYNTHETIC_HESTON_TRUE_PARAMS,
+    price_noise: np.ndarray | None = None,
+) -> HestonQuoteSet:
+    strike_grid, expiry_grid = np.meshgrid(
+        _SYNTHETIC_HESTON_STRIKES,
+        _SYNTHETIC_HESTON_EXPIRIES,
+        indexing="xy",
+    )
+    strike = strike_grid.reshape(-1)
+    expiry = expiry_grid.reshape(-1)
+    is_call = strike >= _SYNTHETIC_HESTON_MARKET.spot
+    base_quotes = HestonQuoteSet.from_flat_market(
+        market=_SYNTHETIC_HESTON_MARKET,
+        strike=strike,
+        expiry=expiry,
+        is_call=is_call,
+        mid=np.zeros_like(strike),
+    )
+    mid = objective_module._price_heston_quotes(base_quotes, params)
+
+    if price_noise is not None:
+        mid = np.maximum(mid + np.asarray(price_noise, dtype=np.float64), 1.0e-6)
+
+    return HestonQuoteSet.from_flat_market(
+        market=_SYNTHETIC_HESTON_MARKET,
+        strike=strike,
+        expiry=expiry,
+        is_call=is_call,
+        mid=mid,
+    )
+
+
+def _reprice_rmse(quotes: HestonQuoteSet, params: HestonParams) -> float:
+    repriced = objective_module._price_heston_quotes(quotes, params)
+    return float(np.sqrt(np.mean((repriced - quotes.mid) ** 2)))
+
+
+def _calibrate_synthetic_quotes(quotes: HestonQuoteSet):
+    return calibrate_module.calibrate_heston_multistart(
+        quotes=quotes,
+        objective_type="price_rmse",
+        seeds=list(_SYNTHETIC_HESTON_SEEDS),
+        include_default_seed=False,
+        parameter_transform="bounded",
+        max_seeds=len(_SYNTHETIC_HESTON_SEEDS),
+        max_nfev=100,
+    )
+
+
 def test_heston_quote_set_from_flat_market_derives_context_arrays() -> None:
     quotes = _sample_quotes()
 
@@ -231,3 +309,36 @@ def test_heston_calibration_rejects_zero_bid_ask_spread_before_optimization(
             objective_type="bid_ask_normalized",
             x0_params=_sample_seed(),
         )
+
+
+def test_heston_calibration_recovers_synthetic_prices_with_small_repricing_rmse() -> (
+    None
+):
+    quotes = _synthetic_heston_quotes()
+
+    result = _calibrate_synthetic_quotes(quotes)
+
+    # Heston vanilla calibration can be weakly identifiable; this checks
+    # repricing recovery and valid fitted parameters rather than uniqueness.
+    assert result.success_count == len(_SYNTHETIC_HESTON_SEEDS)
+    assert result.failure_count == 0
+    assert np.all(np.isfinite(result.best_params.as_array()))
+    assert _reprice_rmse(quotes, result.best_params) <= MAX_CLEAN_REPRICE_RMSE
+
+
+def test_heston_calibration_noisy_synthetic_fixture_returns_valid_fit() -> None:
+    clean_quotes = _synthetic_heston_quotes()
+    noisy_quotes = _synthetic_heston_quotes(price_noise=_SYNTHETIC_HESTON_NOISE)
+
+    result = _calibrate_synthetic_quotes(noisy_quotes)
+    fitted_params = result.best_params
+    repricing_rmse = _reprice_rmse(noisy_quotes, fitted_params)
+    noise_rmse = float(np.sqrt(np.mean((noisy_quotes.mid - clean_quotes.mid) ** 2)))
+
+    # Heston vanilla calibration can be weakly identifiable; this checks
+    # repricing recovery and valid fitted parameters rather than uniqueness.
+    assert result.success_count == len(_SYNTHETIC_HESTON_SEEDS)
+    assert result.failure_count == 0
+    assert np.all(np.isfinite(fitted_params.as_array()))
+    assert repricing_rmse <= MAX_NOISY_REPRICE_RMSE
+    assert repricing_rmse <= noise_rmse + NOISY_REPRICE_RMSE_BUFFER

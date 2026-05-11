@@ -79,7 +79,7 @@ solutions have similar costs. It cannot make a weakly identified calibration
 unique.
 
 Calibration optimizes vega-scaled price residuals as a robust proxy for IV
-error; it does not optimize direct IV RMSE on this branch. Those residuals are
+error; it does not optimize direct IV RMSE in this library. Those residuals are
 not direct IV RMSE unless model prices are explicitly inverted back to implied
 volatilities and the IV residuals are then reported. The fit diagnostics do
 perform that inversion where possible and report IV residuals separately from
@@ -91,9 +91,9 @@ price residuals.
 |---|---|---|
 | `price_rmse` | available calibration objective | Direct price residual objective |
 | `relative_price_rmse` | available calibration objective | Price residual scaled by the target price |
-| `vega_scaled_price` | available calibration objective and the default on this branch | Price residual scaled by Black-Scholes vega to approximate IV-error behavior without repeated IV inversion |
+| `vega_scaled_price` | available calibration objective and the current default | Price residual scaled by Black-Scholes vega to approximate IV-error behavior without repeated IV inversion |
 | `bid_ask_normalized` | available calibration objective | Residual scaled by bid-ask width |
-| direct `iv_rmse` optimization | not implemented on this branch | Do not describe calibration as directly minimizing IV RMSE |
+| direct `iv_rmse` optimization | not implemented in this library | Do not describe calibration as directly minimizing IV RMSE |
 | reported IV residuals / IV RMSE | reporting metric | Computed after repricing and Black inversion when diagnostics are available |
 
 When describing the project, say that calibration uses vega-scaled price
@@ -103,7 +103,7 @@ implemented.
 
 Loss-function choice is therefore part of the repository calibration contract,
 not a universal Heston fact. Christoffersen and Jacobs motivate treating the
-estimation loss and evaluation loss consistently; this branch records both the
+estimation loss and evaluation loss consistently; the library records both the
 optimized residual type and the reported IV diagnostics so the distinction is
 visible.
 

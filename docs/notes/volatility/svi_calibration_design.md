@@ -33,7 +33,7 @@ search ranges rather than leaving every bound and sign rule to ad hoc clipping.
 Transforms also make multistart calibration easier to reason about because the
 seed grid lives in a domain with explicit interpretation.
 
-On this branch the core fitter uses `SVITransformLeeCap`, with optimizer
+In this library the core fitter uses `SVITransformLeeCap`, with optimizer
 coordinates `u = [u_a, u_R, u_L, u_m, u_sigma]`. `u_a` and `u_sigma` go through
 `softplus` to produce strictly positive `alpha` and `sigma`; `u_R` and `u_L`
 go through a sigmoid into Lee-capped right and left slope magnitudes in
@@ -81,7 +81,7 @@ The practical intent is to keep regularization visible but not dominant: strong
 enough to discourage pathological fits, weak enough that market mismatch is not
 silently relabeled as a penalty choice.
 
-This branch only partially data-scales regularization. `default_reg_from_data`
+This implementation only partially data-scales regularization. `default_reg_from_data`
 sets `m_prior` from the minimum-variance location, `m_scale` from the
 interquantile span of `y`, `sigma_floor` from the median spacing of the sorted
 quote grid, and rescales `lambda_m`, `lambda_inv_sigma`, and
@@ -91,7 +91,7 @@ those rail penalties are turned off.
 
 By contrast, `lambda_g`, `g_scale`, `g_floor`, and `g_n_grid` stay at
 configuration defaults unless the caller overrides them. There is also no
-separate surface-level normalization in the core fitter on this branch:
+separate surface-level normalization in the core fitter at present:
 `VolSurface.from_svi(...)` calibrates each expiry independently and surface
 fallback lives in workflow helpers rather than in a second SVI objective.
 
@@ -109,7 +109,7 @@ the `m` prior, the inverse-sigma hinge, the wing-slope target penalties, and
 the `g`-penalty via `gatheral_g_jac_params(...)`.
 
 That statement is intentionally scoped to the core fitter. The transform
-Jacobian is regression-tested against finite differences, but this branch does
+Jacobian is regression-tested against finite differences, but the library does
 not currently ship a separate full-objective Jacobian-versus-finite-difference
 test for the entire `SVIObjective` stack.
 
@@ -157,7 +157,7 @@ Useful diagnostics include residual summaries, no-arbitrage checks, penalty
 contributions, fit-versus-repair diffs, and downstream smoothness signals for
 the Dupire-oriented handoff.
 
-Current branch limitation: `SVIFitResult` stores only the final chosen
+Current limitation: `SVIFitResult` stores only the final chosen
 `params` plus one `SVIFitDiagnostics` bundle. If repair changes the slice,
 diagnostics are rebuilt around the repaired parameters, so callers that need a
 side-by-side pre-repair versus post-repair record must keep that comparison
