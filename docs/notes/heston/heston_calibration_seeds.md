@@ -221,6 +221,12 @@ meant to surface. If every seed fails, calibration raises `NoConvergenceError`
 with a summarized per-seed failure message rather than returning a result with
 no valid `best_run`.
 
+That includes guarded analytic-Jacobian failures. If one bounded seed falls
+outside the validated analytic-Jacobian domain, preserving the failed run shows
+which seed left the supported regime and why, while a different supported seed
+can still produce the usable best fit. This is diagnostic evidence, not noise
+to discard.
+
 ## Synthetic repricing-recovery evidence
 
 Clean synthetic repricing recovery builds a small Heston quote surface from

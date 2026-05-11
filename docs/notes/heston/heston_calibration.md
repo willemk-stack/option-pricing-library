@@ -137,6 +137,19 @@ parameter ranges. Price-only deterministic-limit checks near `eta=0` remain
 valid pricing diagnostics, but they do not validate the Cui analytic-gradient
 formula near zero vol-of-vol.
 
+Treat the analytic Jacobian path as a calibration performance and diagnostic
+option inside that validated numerical domain, not as a universal guarantee for
+every Heston pricing regime. When the request falls outside the guarded domain,
+the library is expected to fail fast with a clear error. That behavior is
+preferable to silently reusing analytic derivatives where the implementation
+has not been validated.
+
+Multistart diagnostics make those failures reviewable. If one bounded seed
+requests analytic Jacobians outside the guarded domain but another seed
+converges, the successful run still supplies `best_run` and `best_params` while
+the failed seed remains in `multistart_runs` with its message and seed metadata.
+Only the all-seeds-failed case raises `NoConvergenceError`.
+
 Held-out errors should not be mixed with fit errors. If a mask is supplied, the
 diagnostics summarize train and held-out rows separately. If no mask is
 supplied, the report leaves held-out evaluation empty instead of pretending it

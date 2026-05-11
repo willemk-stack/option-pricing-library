@@ -53,6 +53,15 @@ def _patch_zero_objective(
     monkeypatch.setattr(HestonObjective, "jac", jac)
 
 
+def _patch_optimizer_should_not_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_least_squares(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError(
+            "optimizer should not run for unsupported analytic-Jacobian setup"
+        )
+
+    monkeypatch.setattr(calibrate_module, "least_squares", fail_least_squares)
+
+
 def test_calibrate_heston_uses_analytic_jac_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -151,7 +160,11 @@ def test_calibrate_heston_return_result_true_returns_result(
     assert "fixed Gauss-Legendre" in result["heston_analytic_jacobian_supported_domain"]
 
 
-def test_calibrate_heston_analytic_jac_rejects_unsupported_backend() -> None:
+def test_calibrate_heston_analytic_jac_rejects_unsupported_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_optimizer_should_not_run(monkeypatch)
+
     with pytest.raises(NotImplementedError, match="backend='gauss_legendre'"):
         calibrate_heston(
             quotes=_quotes(),
@@ -162,8 +175,11 @@ def test_calibrate_heston_analytic_jac_rejects_unsupported_backend() -> None:
         )
 
 
-def test_calibrate_heston_analytic_jac_rejects_eta_floor_bounds() -> None:
+def test_calibrate_heston_analytic_jac_rejects_eta_floor_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     bounds = HestonCalibrationBounds(eta=(0.0, 5.0))
+    _patch_optimizer_should_not_run(monkeypatch)
 
     with pytest.raises(ValueError, match="eta lower bound"):
         calibrate_heston(
@@ -176,7 +192,9 @@ def test_calibrate_heston_analytic_jac_rejects_eta_floor_bounds() -> None:
         )
 
 
-def test_calibrate_heston_analytic_jac_rejects_seed_below_eta_floor() -> None:
+def test_calibrate_heston_analytic_jac_rejects_seed_below_eta_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     seed = HestonParams(
         kappa=1.2,
         vbar=0.035,
@@ -184,11 +202,30 @@ def test_calibrate_heston_analytic_jac_rejects_seed_below_eta_floor() -> None:
         rho=-0.45,
         v=0.04,
     )
+    _patch_optimizer_should_not_run(monkeypatch)
 
     with pytest.raises(ValueError, match="initial eta"):
         calibrate_heston(
             quotes=_quotes(),
             x0_params=seed,
+            use_analytic_jac=True,
+            max_nfev=1,
+        )
+
+
+def test_calibrate_heston_analytic_jac_rejects_initial_params_outside_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bounds = HestonCalibrationBounds(kappa=(0.05, 1.0))
+    seed = HestonParams(kappa=1.2, vbar=0.035, eta=0.35, rho=-0.45, v=0.04)
+    _patch_optimizer_should_not_run(monkeypatch)
+
+    with pytest.raises(ValueError, match=r"Initial kappa=.*outside"):
+        calibrate_heston(
+            quotes=_quotes(),
+            x0_params=seed,
+            bounds=bounds,
+            parameter_transform="bounded",
             use_analytic_jac=True,
             max_nfev=1,
         )

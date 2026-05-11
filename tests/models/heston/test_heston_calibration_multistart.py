@@ -20,6 +20,7 @@ from option_pricing.models.heston.calibration.heston_types import (
     HestonMultistartResult,
     HestonQuoteSet,
 )
+from option_pricing.models.heston.charfunc import HESTON_ANALYTIC_JAC_ETA_MIN
 from option_pricing.models.heston.params import HestonParams
 from option_pricing.types import MarketData
 
@@ -165,6 +166,62 @@ def test_failed_seed_is_retained_and_successful_seed_wins(
     assert "bad start" in result.failed_runs[0].message
     assert result.best_run.success
     assert result.best_params == fitted
+
+
+def test_multistart_analytic_jacobian_invalid_seed_is_retained_when_other_seed_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invalid_seed = _seed(eta=0.5 * HESTON_ANALYTIC_JAC_ETA_MIN)
+    valid_seed = _seed(kappa=2.0, eta=0.6)
+    optimizer_calls: list[np.ndarray] = []
+
+    def fake_least_squares(**kwargs: object) -> OptimizeResult:
+        optimizer_calls.append(np.asarray(kwargs["x0"], dtype=np.float64))
+        return OptimizeResult(
+            x=np.asarray(kwargs["x0"], dtype=np.float64),
+            success=True,
+            message="valid analytic Jacobian seed converged",
+            cost=0.25,
+            optimality=1.0e-8,
+            nfev=3,
+            njev=2,
+            status=1,
+        )
+
+    monkeypatch.setattr(calibrate_module, "least_squares", fake_least_squares)
+
+    result = calibrate_module.calibrate_heston_multistart(
+        quotes=_quotes(),
+        objective_type="price_rmse",
+        seeds=[invalid_seed, valid_seed],
+        parameter_transform="bounded",
+        use_analytic_jac=True,
+        max_nfev=1,
+    )
+
+    assert len(optimizer_calls) == 1
+    assert result.success_count >= 1
+    assert result.failure_count >= 1
+    assert result.jacobian_mode == "analytic"
+    assert result.analytic_jacobian_eta_min == HESTON_ANALYTIC_JAC_ETA_MIN
+
+    failed_run = result.failed_runs[0]
+    assert failed_run.seed_index == 0
+    assert failed_run.seed_params == invalid_seed
+    assert failed_run.fitted_params is None
+    assert failed_run.raw_x is None
+    assert "ValueError" in failed_run.message
+    assert "initial eta >=" in failed_run.message
+
+    assert result.best_run.success
+    assert result.best_run.seed_index == 1
+    assert result.best_run.message == "valid analytic Jacobian seed converged"
+    np.testing.assert_allclose(
+        result.best_params.as_array(),
+        valid_seed.as_array(),
+        atol=1.0e-12,
+        rtol=0.0,
+    )
 
 
 def test_runs_are_sorted_success_cost_then_seed_index(

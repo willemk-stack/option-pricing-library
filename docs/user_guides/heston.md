@@ -109,6 +109,12 @@ array-valued strikes return `strike.shape + (5,)`. Ordinary price-only helpers
 continue to support both `gauss_legendre` and `quad`, including the
 deterministic-variance pricing limit near `eta=0`.
 
+Treat those analytic Jacobians as a guarded calibration performance and
+diagnostic option, not as a universal mathematical guarantee over every
+numerical regime exposed by the price-only pricers. Outside the validated
+domain, calibration raises a clear error instead of silently reusing the
+analytic derivative path where it has not been validated.
+
 ```python
 import numpy as np
 
@@ -301,6 +307,15 @@ failed seeds are retained when at least one seed succeeds because they are
 useful diagnostics about initialization sensitivity. If every seed fails,
 `calibrate_heston_multistart(...)` raises `NoConvergenceError` instead of
 returning a result without a usable `best_run` and `best_params`.
+
+That policy applies to analytic Jacobians as well. They are supported only on
+the guarded bounded calibration path: compatible fixed-rule Gauss-Legendre
+backend, documented parameter bounds, and `eta` at or above the analytic-
+Jacobian floor. Requests outside that domain are expected to fail fast because
+that is preferable to silently using an unvalidated derivative path. In
+bounded multistart, one unsupported seed can still be preserved as a failed run
+while another seed succeeds, so the calibration stays usable and the failure
+remains visible for review.
 
 ```python
 from option_pricing.models.heston.calibration import (
