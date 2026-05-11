@@ -16,6 +16,7 @@ from option_pricing.models.heston.simulation.qe import (
     _v_timestep_qe,
     _v_timestep_quadratic,
     _x_timestep_qe,
+    _zero_variance_absorbing_mask,
     simulate_heston_qe_paths,
     simulate_heston_qe_terminal,
 )
@@ -282,6 +283,33 @@ def test_simulate_heston_qe_supports_zero_vol_of_vol() -> None:
     assert np.all(np.isfinite(terminal))
 
 
+def test_v_timestep_qe_returns_zero_in_absorbing_zero_variance_state() -> None:
+    params = HestonParams(kappa=1.5, vbar=0.0, eta=0.5, rho=-0.3, v=0.0)
+    v_t = np.zeros(3, dtype=np.float64)
+    z_v = np.array([0.25, -1.0, 0.75], dtype=np.float64)
+    u_v = np.array([0.9, 0.2, 0.5], dtype=np.float64)
+
+    psi = _psi(v_t=v_t, params=params, dt=0.5)
+    v_next = _v_timestep_qe(
+        v_t=v_t,
+        params=params,
+        z_v_j=z_v,
+        u_v_j=u_v,
+        dt=0.5,
+    )
+
+    np.testing.assert_array_equal(psi, np.zeros_like(v_t))
+    np.testing.assert_array_equal(v_next, np.zeros_like(v_t))
+
+
+def test_zero_variance_absorbing_mask_rejects_inconsistent_moments() -> None:
+    with pytest.raises(ValueError, match="inconsistent"):
+        _zero_variance_absorbing_mask(
+            m=np.array([0.0], dtype=np.float64),
+            s2=np.array([1e-8], dtype=np.float64),
+        )
+
+
 def test_v_timestep_qe_uses_quadratic_branch_at_cutoff(
     heston_params: HestonParams,
 ) -> None:
@@ -507,6 +535,21 @@ def test_simulate_heston_qe_terminal_matches_full_path_terminal(
     np.testing.assert_allclose(terminal, path_result.spot_paths[:, -1])
 
 
+def test_simulate_heston_qe_terminal_stays_finite_in_absorbing_zero_state() -> None:
+    params = HestonParams(kappa=1.5, vbar=0.0, eta=0.5, rho=-0.3, v=0.0)
+    terminal = simulate_heston_qe_terminal(
+        params=params,
+        x0=100.0,
+        tau=1.0,
+        n_steps=4,
+        shocks=_qe_shocks(n_paths=5, n_steps=4),
+        log_drift_increments=np.zeros(4, dtype=np.float64),
+    )
+
+    np.testing.assert_allclose(terminal, 100.0)
+    assert np.all(np.isfinite(terminal))
+
+
 def test_simulate_heston_qe_terminal_matches_full_path_terminal_when_eta_zero() -> None:
     params = HestonParams(kappa=1.5, vbar=0.04, eta=0.0, rho=0.0, v=0.08)
     rng = np.random.default_rng(321)
@@ -534,6 +577,23 @@ def test_simulate_heston_qe_terminal_matches_full_path_terminal_when_eta_zero() 
     )
 
     np.testing.assert_allclose(terminal, path_result.spot_paths[:, -1])
+
+
+def test_simulate_heston_qe_paths_stay_finite_in_absorbing_zero_state() -> None:
+    params = HestonParams(kappa=1.5, vbar=0.0, eta=0.5, rho=-0.3, v=0.0)
+    result = simulate_heston_qe_paths(
+        params=params,
+        x0=100.0,
+        tau=1.0,
+        n_steps=4,
+        shocks=_qe_shocks(n_paths=5, n_steps=4),
+        log_drift_increments=np.zeros(4, dtype=np.float64),
+    )
+
+    np.testing.assert_allclose(result.var_paths, 0.0)
+    np.testing.assert_allclose(result.spot_paths, 100.0)
+    assert np.all(np.isfinite(result.var_paths))
+    assert np.all(np.isfinite(result.spot_paths))
 
 
 def test_simulate_heston_qe_terminal_avoids_full_path_initializer(
