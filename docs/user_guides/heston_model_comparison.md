@@ -163,6 +163,7 @@ the same `n_quotes` for all three models.
 ## Generated artifact bundle
 
 - [Artifact manifest](../assets/generated/heston/data/heston_artifact_manifest.json)
+- [Freshness manifest](../assets/generated/heston/data/heston_artifact_freshness.json)
 - [Quote-level fit errors](../assets/generated/heston/data/heston_comparison_fit_errors.csv)
 - [Error summary](../assets/generated/heston/data/heston_comparison_error_summary.csv)
 - [Held-out comparison](../assets/generated/heston/data/heston_comparison_heldout.csv)
@@ -178,6 +179,8 @@ fixture caveat in machine-readable form.
 
 The bundle is produced by
 [`scripts/build_heston_docs_artifacts.py`](https://github.com/willemk-stack/option-pricing-library/blob/main/scripts/build_heston_docs_artifacts.py).
+If the freshness check fails after changing the Heston comparison builder or its
+tracked diagnostics inputs, rerun `python scripts/build_heston_docs_artifacts.py --profile release` and commit the refreshed bundle.
 The nearest regression checks are the
 [model-comparison tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/diagnostics/heston/test_heston_model_comparison.py)
 and the

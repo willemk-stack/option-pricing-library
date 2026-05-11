@@ -34,6 +34,28 @@ def test_build_heston_docs_artifacts_smoke_profile_writes_required_bundle(
         payload["held_out_policy"]["indices"]
     )
 
+    freshness_path = (
+        output_dir
+        / "data"
+        / build_heston_docs_artifacts.HESTON_ARTIFACT_FRESHNESS_MANIFEST
+    )
+    assert freshness_path.exists()
+
+    freshness_payload = json.loads(freshness_path.read_text(encoding="utf-8"))
+    assert freshness_payload["profile"] == "smoke"
+    assert freshness_payload["formats"] == ["svg", "png"]
+    assert (
+        freshness_payload["rebuild_command"]
+        == build_heston_docs_artifacts.HESTON_ARTIFACT_REBUILD_COMMAND
+    )
+    assert set(freshness_payload["source_inputs"]) == set(
+        build_heston_docs_artifacts.HESTON_ARTIFACT_SOURCE_INPUTS
+    )
+    assert any(
+        item["path"] == "data/heston_artifact_manifest.json"
+        for item in freshness_payload["generated_files"]
+    )
+
     expected_files = {
         "heston_comparison_summary_card.svg",
         "heston_comparison_summary_card.light.svg",
@@ -88,6 +110,7 @@ def test_build_heston_docs_artifacts_smoke_profile_writes_required_bundle(
         "heston_comparison_tradeoff_summary.csv",
         "heston_mc_convergence_summary.csv",
         "heston_artifact_manifest.json",
+        "heston_artifact_freshness.json",
     }
 
     artifact_names = {artifact["filename"] for artifact in payload["artifacts"]}

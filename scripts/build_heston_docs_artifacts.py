@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: E402
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -108,6 +109,21 @@ DATA_TABLE_SPECS = {
     ),
     "heston_comparison_tradeoff_summary.csv": "tradeoff_summary",
 }
+HESTON_ARTIFACT_FRESHNESS_MANIFEST = "heston_artifact_freshness.json"
+HESTON_ARTIFACT_FRESHNESS_VERSION = 1
+HESTON_ARTIFACT_REBUILD_COMMAND = (
+    "python scripts/build_heston_docs_artifacts.py --profile release"
+)
+HESTON_ARTIFACT_SOURCE_INPUTS = (
+    "scripts/build_heston_docs_artifacts.py",
+    "src/option_pricing/diagnostics/heston/fixtures.py",
+    "src/option_pricing/diagnostics/heston/calibration_fit.py",
+    "src/option_pricing/diagnostics/heston/model_comparison.py",
+    "src/option_pricing/diagnostics/heston/monte_carlo.py",
+    "src/option_pricing/diagnostics/heston/plot.py",
+    "src/option_pricing/models/heston/calibration/calibrate.py",
+    "src/option_pricing/pricers/heston.py",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -505,6 +521,28 @@ def _relative(path: Path) -> str:
         return str(path.relative_to(ROOT)).replace("\\", "/")
     except ValueError:
         return str(path).replace("\\", "/")
+
+
+def _relative_to_dir(path: Path, directory: Path) -> str:
+    return str(path.relative_to(directory)).replace("\\", "/")
+
+
+def _normalize_source_newlines(data: bytes) -> bytes:
+    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
+def _file_sha256(path: Path) -> str:
+    data = path.read_bytes()
+    if path.suffix.lower() in {".csv", ".json", ".py", ".svg", ".txt"}:
+        data = _normalize_source_newlines(data)
+    return hashlib.sha256(data).hexdigest()
+
+
+def _heston_artifact_source_payload() -> dict[str, str]:
+    return {
+        relative_path: _file_sha256(ROOT / relative_path)
+        for relative_path in HESTON_ARTIFACT_SOURCE_INPUTS
+    }
 
 
 def _git_commit() -> str | None:
@@ -1648,6 +1686,16 @@ def _write_manifest(
             generated_at=generated_at,
         )
     )
+    artifacts.append(
+        _artifact_entry(
+            filename=HESTON_ARTIFACT_FRESHNESS_MANIFEST,
+            artifact_type="data",
+            source=HESTON_ARTIFACT_FRESHNESS_MANIFEST,
+            bundle=bundle,
+            repo_commit=repo_commit,
+            generated_at=generated_at,
+        )
+    )
     payload = {
         "version": 1,
         "profile": bundle.profile.name,
@@ -1717,9 +1765,49 @@ def _required_paths(
             out_dir / "data" / "heston_comparison_tradeoff_summary.csv",
             out_dir / "data" / "heston_mc_convergence_summary.csv",
             out_dir / "data" / "heston_artifact_manifest.json",
+            out_dir / "data" / HESTON_ARTIFACT_FRESHNESS_MANIFEST,
         ]
     )
     return required
+
+
+def _freshness_tracked_paths(
+    out_dir: Path,
+    *,
+    formats: tuple[str, ...],
+) -> list[Path]:
+    return [
+        path
+        for path in _required_paths(out_dir, formats=formats)
+        if path.name != HESTON_ARTIFACT_FRESHNESS_MANIFEST
+    ]
+
+
+def _write_heston_artifact_freshness_manifest(
+    out_dir: Path,
+    *,
+    formats: tuple[str, ...],
+    profile_name: str,
+) -> Path:
+    manifest_path = out_dir / "data" / HESTON_ARTIFACT_FRESHNESS_MANIFEST
+    payload = {
+        "version": HESTON_ARTIFACT_FRESHNESS_VERSION,
+        "profile": profile_name,
+        "formats": list(formats),
+        "rebuild_command": HESTON_ARTIFACT_REBUILD_COMMAND,
+        "source_inputs": _heston_artifact_source_payload(),
+        "generated_files": [
+            {
+                "path": _relative_to_dir(path, out_dir),
+                "sha256": _file_sha256(path),
+            }
+            for path in sorted(
+                _freshness_tracked_paths(out_dir, formats=formats),
+                key=lambda candidate: _relative_to_dir(candidate, out_dir),
+            )
+        ],
+    }
+    return _write_json(payload, manifest_path)
 
 
 def _generate_artifacts(
@@ -1781,6 +1869,11 @@ def _generate_artifacts(
         written_figure_paths=written_figures,
         data_paths=data_paths,
         architecture_paths=architecture_paths,
+    )
+    _write_heston_artifact_freshness_manifest(
+        out_dir,
+        formats=formats,
+        profile_name=bundle.profile.name,
     )
 
     missing = [
