@@ -175,6 +175,29 @@ def test_calibrate_heston_analytic_jac_rejects_unsupported_backend(
         )
 
 
+def test_calibrate_heston_analytic_jac_rejects_unconstrained_transform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_optimizer_should_not_run(monkeypatch)
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Analytic Heston calibration Jacobians require "
+            r"parameter_transform='bounded'.*"
+            r"use_analytic_jac=False.*"
+            r"explicit unconstrained calibration experiments"
+        ),
+    ):
+        calibrate_heston(
+            quotes=_quotes(),
+            x0_params=_seed_params(),
+            parameter_transform="unconstrained",
+            use_analytic_jac=True,
+            max_nfev=1,
+        )
+
+
 def test_calibrate_heston_analytic_jac_rejects_eta_floor_bounds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

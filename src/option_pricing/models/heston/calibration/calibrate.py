@@ -317,6 +317,7 @@ def calibrate_heston(
     gtol: float | None = None,
     return_result: bool = False,
 ) -> HestonParams | tuple[HestonParams, OptimizeResult]:
+
     if parameter_transform not in HESTON_PARAMETER_TRANSFORMS:
         supported = ", ".join(repr(value) for value in HESTON_PARAMETER_TRANSFORMS)
         raise ValueError(
@@ -324,13 +325,23 @@ def calibrate_heston(
             f"got {parameter_transform!r}"
         )
     _validate_heston_calibration_inputs(quotes, objective_type=objective_type)
+
     if parameter_transform == "unconstrained" and bounds is not None:
         raise ValueError("bounds are only used with parameter_transform='bounded'.")
+
     if x0_params is None:
         x0_params = default_heston_seed(
             quotes,
             bounds=bounds if bounds is not None else HestonCalibrationBounds(),
         )
+
+    if use_analytic_jac and parameter_transform != "bounded":
+        raise ValueError(
+            "Analytic Heston calibration Jacobians require "
+            "parameter_transform='bounded'. Use use_analytic_jac=False for "
+            "explicit unconstrained calibration experiments."
+        )
+
     analytic_bounds = (
         _validate_analytic_jacobian_calibration_request(
             x0_params=x0_params,
@@ -340,6 +351,7 @@ def calibrate_heston(
         if use_analytic_jac
         else None
     )
+
     # NOTE: Keep the default optimizer at "trf" because the default
     # loss="soft_l1" is invalid for SciPy's method="lm"; explicit LM is still
     # allowed with loss="linear".
