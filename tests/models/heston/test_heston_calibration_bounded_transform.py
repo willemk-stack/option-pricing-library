@@ -78,6 +78,38 @@ def test_calibrate_heston_bounded_passes_bounded_raw_to_objective(
     np.testing.assert_allclose(fit.as_array(), seed.as_array(), rtol=1.0e-12)
 
 
+def test_calibrate_heston_defaults_to_bounded_transform_and_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_least_squares(**kwargs: object) -> OptimizeResult:
+        captured.update(kwargs)
+        return OptimizeResult(
+            x=np.asarray(kwargs["x0"], dtype=np.float64),
+            success=True,
+            message="ok",
+            cost=0.0,
+        )
+
+    monkeypatch.setattr(calibrate_module, "least_squares", fake_least_squares)
+    seed = _seed_params()
+
+    fit, result = calibrate_heston(
+        quotes=_quotes(),
+        objective_type="price_rmse",
+        x0_params=seed,
+        use_analytic_jac=False,
+        max_nfev=1,
+        return_result=True,
+    )
+
+    expected_x0 = seed.transform_to_bounded_unconstrained(HestonCalibrationBounds())
+    np.testing.assert_allclose(captured["x0"], expected_x0, rtol=0.0, atol=0.0)
+    assert result["heston_parameter_transform"] == "bounded"
+    np.testing.assert_allclose(fit.as_array(), seed.as_array(), rtol=1.0e-12)
+
+
 def test_calibrate_heston_bounded_result_stays_inside_default_bounds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

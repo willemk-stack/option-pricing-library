@@ -16,6 +16,7 @@ The format is based on *Keep a Changelog*, and this project aims to follow *Sema
 
 ### Changed
 - Docs workflow architecture notes now describe the single-workflow `docs-ci` validate/build/deploy contract and the split between fast local pre-push checks and heavier manual/CI browser validation.
+- `calibrate_heston(...)` now defaults to `parameter_transform="bounded"` instead of `"unconstrained"`; use the unconstrained transform only for explicit low-level experiments, and prefer bounded `calibrate_heston_multistart(...)` for production-style workflows.
 - Public Heston simulation and Monte Carlo pricing entrypoints now default to `quadratic_exponential`; pass `scheme="euler_full_truncation"` explicitly when you want the baseline Euler scheme for comparisons or educational runs.
 - Heston pricer entrypoints can now accept either a reusable quadrature config or a prebuilt composite rule and pass it through to the Fourier backend without changing the default numerical path.
 - Monte Carlo pricing entrypoints now return `MonteCarloResult` instead of `(price, stderr)` tuples, and the canonical direct path-payoff GBM entrypoint is `mc_price_path_payoff_from_ctx(...)`.

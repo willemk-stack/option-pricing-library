@@ -224,7 +224,7 @@ def calibrate_heston(
     x0_params: HestonParams | None = None,
     loss: Literal["linear", "soft_l1", "huber", "cauchy", "arctan"] = "soft_l1",
     x_scale: Literal["jac"] | float | FloatArray | None = "jac",
-    parameter_transform: HestonParameterTransform = "unconstrained",
+    parameter_transform: HestonParameterTransform = "bounded",
     vega_floor: float | None = None,
     price_floor: float | None = None,
     spread_floor: float | None = None,
@@ -250,7 +250,7 @@ def calibrate_heston(
     x0_params: HestonParams | None = None,
     loss: Literal["linear", "soft_l1", "huber", "cauchy", "arctan"] = "soft_l1",
     x_scale: Literal["jac"] | float | FloatArray | None = "jac",
-    parameter_transform: HestonParameterTransform = "unconstrained",
+    parameter_transform: HestonParameterTransform = "bounded",
     vega_floor: float | None = None,
     price_floor: float | None = None,
     spread_floor: float | None = None,
@@ -276,7 +276,7 @@ def calibrate_heston(
     x0_params: HestonParams | None = None,
     loss: Literal["linear", "soft_l1", "huber", "cauchy", "arctan"] = "soft_l1",
     x_scale: Literal["jac"] | float | FloatArray | None = "jac",
-    parameter_transform: HestonParameterTransform = "unconstrained",
+    parameter_transform: HestonParameterTransform = "bounded",
     vega_floor: float | None = None,
     price_floor: float | None = None,
     spread_floor: float | None = None,
@@ -301,7 +301,7 @@ def calibrate_heston(
     x0_params: HestonParams | None = None,
     loss: Literal["linear", "soft_l1", "huber", "cauchy", "arctan"] = "soft_l1",
     x_scale: Literal["jac"] | float | FloatArray | None = "jac",
-    parameter_transform: HestonParameterTransform = "unconstrained",
+    parameter_transform: HestonParameterTransform = "bounded",
     vega_floor: float | None = None,
     price_floor: float | None = None,
     spread_floor: float | None = None,
@@ -482,7 +482,9 @@ def calibrate_heston_multistart(
     """
     # NOTE: Multi-start defaults to the bounded transform because seed-grid
     # diagnostics are most useful when every optimizer run stays inside the
-    # same practical calibration box; calibrate_heston keeps its old default.
+    # same practical calibration box; single-start now uses the same safer
+    # public default while parameter_transform="unconstrained" remains
+    # available for explicit low-level experiments.
     _validate_heston_calibration_inputs(quotes, objective_type=objective_type)
     resolved_seeds = _build_multistart_seeds(
         quotes,

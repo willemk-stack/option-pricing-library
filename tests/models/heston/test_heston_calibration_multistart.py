@@ -106,6 +106,32 @@ def test_explicit_seeds_call_calibrator_once_per_unique_seed(
     assert result.best_params == fitted[1]
 
 
+def test_multistart_defaults_to_bounded_parameter_transform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed = _seed(kappa=1.0)
+    seen_parameter_transforms: list[str] = []
+
+    def fake_calibrate_heston(**kwargs: object) -> tuple[HestonParams, OptimizeResult]:
+        parameter_transform = kwargs["parameter_transform"]
+        assert isinstance(parameter_transform, str)
+        seen_parameter_transforms.append(parameter_transform)
+        fitted_seed = kwargs["x0_params"]
+        assert isinstance(fitted_seed, HestonParams)
+        return fitted_seed, _fake_result(cost=0.25)
+
+    monkeypatch.setattr(calibrate_module, "calibrate_heston", fake_calibrate_heston)
+
+    result = calibrate_module.calibrate_heston_multistart(
+        quotes=_quotes(),
+        objective_type="price_rmse",
+        seeds=[seed],
+    )
+
+    assert seen_parameter_transforms == ["bounded"]
+    assert result.parameter_transform == "bounded"
+
+
 def test_failed_seed_is_retained_and_successful_seed_wins(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

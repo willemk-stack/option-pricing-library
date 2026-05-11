@@ -5,6 +5,14 @@
     bounded validation evidence for configured quote sets, objective choices,
     and quadrature settings; it is not a guarantee of parameter uniqueness.
 
+!!! note "Default transform policy"
+    `calibrate_heston(...)` now defaults to `parameter_transform="bounded"`
+    because vanilla-only Heston calibration is weakly identifiable and the
+    safer public single-start workflow should stay inside a practical
+    calibration box. `parameter_transform="unconstrained"` remains available
+    for low-level experiments, but the recommended production-style workflow is
+    bounded `calibrate_heston_multistart(...)`.
+
 The final calibration diagnostics use
 `run_heston_calibration_fit_diagnostics(...)` to turn a fitted Heston parameter
 set or `HestonMultistartResult` into plain evidence tables.
@@ -13,9 +21,9 @@ The report has the standard diagnostics shape:
 
 - `meta`: objective, backend, quadrature, quote counts, Feller status, quote
   policy counts, and notes
-- `tables`: residuals, smile fit, IV residual grid, parameter recovery,
-  constraint diagnostics, quote policy, multistart runs, held-out errors, and
-  objective slices
+- `tables`: residuals, smile fit, IV residual grid, the
+    `parameter_recovery` parameter-summary table, constraint diagnostics, quote
+    policy, multistart runs, held-out errors, and objective slices
 - `arrays`: aligned quote vectors, model prices, model IVs, and parameter arrays
 
 ## What is reported
@@ -31,9 +39,11 @@ data only; plotting helpers consume it later.
 `iv_residual_grid` is returned in long form. No interpolation is applied, so
 irregular quote grids stay explicit instead of being silently reshaped.
 
-`parameter_recovery` includes truth columns when synthetic truth is supplied.
-Without truth, it becomes a fitted-parameter summary and omits unsupported truth
-columns.
+`parameter_recovery` is the historical table name for the fitted-parameter
+summary. When synthetic truth is supplied it also includes truth columns and
+deltas; without truth it omits unsupported truth columns. Treat that table as
+diagnostic context, not proof that the generating parameters are uniquely
+identified.
 
 `multistart_runs` records every optimizer run when a `HestonMultistartResult` is
 supplied, including failed runs. Failed seeds are evidence about initialization
@@ -80,6 +90,12 @@ vol-of-vol, and correlation tradeoffs. The committed evidence surface is the
 [multistart panel](../../assets/generated/heston/heston_multistart_stability_panel.svg)
 and focused
 [calibration-fit tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/diagnostics/heston/test_heston_calibration_fit.py).
+
+Synthetic calibration tests in this repo primarily validate
+pricing/calibration wiring and residual behavior on Heston-generated quotes.
+Similar vanilla repricing errors can arise from different parameter vectors,
+and multistart diagnostics expose that sensitivity; they do not prove
+uniqueness.
 
 Multistart is diagnostic, not magic. It can show whether different starts
 converge to the same basin, whether some starts fail, and whether near-best

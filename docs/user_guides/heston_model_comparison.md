@@ -25,7 +25,7 @@ model-purpose tradeoffs.
 
 The comparison uses a deterministic synthetic equity-index-style quote fixture.
 It is intentionally not generated from Heston, so the exercise is not a
-synthetic recovery victory lap. The purpose is to compare model behavior on a
+Heston-generated repricing-recovery exercise. The purpose is to compare model behavior on a
 common target: Heston gives interpretable stochastic variance dynamics, while
 eSSVI/local-vol gives flexible vanilla-surface fit and direct Dupire/PDE
 repricing diagnostics.

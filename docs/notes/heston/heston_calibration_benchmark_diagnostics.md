@@ -11,13 +11,18 @@ finite-difference (`jac="2-point"`) and the repo's analytic
 `HestonObjective.jac`.
 
 The diagnostic reports wall time, optimizer evaluation counts, final residual
-statistics, optimizer status, fitted parameters, and synthetic parameter
-recovery when a truth set is available. It returns the standard Heston
+statistics, optimizer status, fitted parameters, and synthetic
+repricing-recovery behavior when a truth set is available. It returns the standard Heston
 diagnostics topology:
 
 - `meta`: scenario, optimizer, backend, and provenance fields
 - `tables`: `runs`, `summary`, `parameter_recovery`, and `residuals`
 - `arrays`: quote vectors, fitted parameters, and residual vectors
+
+`parameter_recovery` is the historical table name for the fitted-parameter
+summary. When synthetic truth is supplied it adds truth deltas for context,
+but the benchmark still evaluates repricing/residual behavior rather than
+uniqueness of the generating parameter vector.
 
 Run the default smoke diagnostic from Python:
 

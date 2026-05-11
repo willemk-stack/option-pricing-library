@@ -311,9 +311,7 @@ def test_heston_calibration_rejects_zero_bid_ask_spread_before_optimization(
         )
 
 
-def test_heston_calibration_recovers_synthetic_prices_with_small_repricing_rmse() -> (
-    None
-):
+def test_heston_calibration_reprices_synthetic_heston_quotes_with_small_rmse() -> None:
     quotes = _synthetic_heston_quotes()
 
     result = _calibrate_synthetic_quotes(quotes)

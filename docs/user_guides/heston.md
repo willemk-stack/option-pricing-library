@@ -71,7 +71,8 @@ optional soft Feller penalty without hard-blocking violations.
 For routine calibration, use `HestonCalibrationBounds` to keep the optimizer in
 a practical box. Those bounds are optimizer safeguards, not a proof of
 identifiability, no-arbitrage, or model correctness. Multistart calibration
-defaults to the bounded parameter transform for exactly that reason.
+defaults to the bounded parameter transform for exactly that reason, and
+single-start `calibrate_heston(...)` now uses the same bounded public default.
 
 ## Pricing
 
@@ -287,7 +288,12 @@ diagnostics after repricing and Black inversion.
 
 For starting points, use `default_heston_seed(...)` when you want one
 market-aware seed and `heston_seed_grid(...)` when you want the deterministic
-multistart spoke set. `calibrate_heston_multistart(...)` defaults to
+multistart spoke set. `calibrate_heston(...)` now defaults to
+`parameter_transform="bounded"` because vanilla-only Heston calibration is
+weakly identifiable and the safer public single-start path should stay inside a
+practical box. `parameter_transform="unconstrained"` remains available for
+low-level experiments. For production-style workflows, prefer
+`calibrate_heston_multistart(...)`, which also defaults to
 `parameter_transform="bounded"` and `max_seeds=12`.
 
 Invalid calibration inputs raise before optimization. In multistart mode,
@@ -337,11 +343,19 @@ The main report families are:
     `build_market_like_heston_quote_set(...)`;
 - model comparison: `run_heston_vs_local_vol_comparison(...)`.
 
-Use benchmark diagnostics as smoke, regression, or synthetic-recovery evidence.
+Use benchmark diagnostics as smoke, regression, or synthetic repricing-recovery
+evidence.
 Do not present them as the same thing as final calibration quality on live
 quotes. The artifact builder emits separate smoke and release manifests under
 `benchmarks/artifacts/heston_calibration/` so the lightweight wiring benchmark
 and the stronger release benchmark stay distinguishable.
+
+Synthetic calibration checks in this repo are primarily repricing-recovery
+diagnostics. They validate pricing/calibration wiring and residual behavior on
+Heston-generated quotes; they do not prove unique recovery of the generating
+parameters. Similar vanilla repricing errors can arise from different
+parameter vectors, and multistart diagnostics expose that sensitivity rather
+than making the fit unique.
 
 The detailed notebook-oriented walkthrough is in the
 [Heston diagnostics guide](heston_diagnostics.md).
@@ -352,8 +366,8 @@ The detailed notebook-oriented walkthrough is in the
 against eSSVI implied-surface repricing and a direct local-vol PDE repricing
 audit on the same `HestonQuoteSet` target. The final capstone target should use
 `build_market_like_heston_quote_set(...)`, which returns a deterministic
-market-like synthetic fixture rather than market data or Heston-generated
-recovery quotes. The report packages quote-level price and IV residuals, direct
+market-like synthetic fixture rather than market data or a Heston-generated
+quote target. The report packages quote-level price and IV residuals, direct
 PDE rows, ATM and wing buckets, optional held-out splits, and a concise
 trade-off summary.
 
