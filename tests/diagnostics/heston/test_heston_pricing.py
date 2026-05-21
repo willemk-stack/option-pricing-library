@@ -14,6 +14,7 @@ from option_pricing.numerics.quadrature import (
     QuadratureConfig,
     build_gauss_legendre_rule,
 )
+from option_pricing.pricers.heston import heston_price_call_from_ctx
 from option_pricing.types import MarketData, OptionType
 
 
@@ -105,6 +106,56 @@ def test_run_heston_pricing_diagnostics_returns_required_tables_and_slice_contra
     assert {"smoothness_signal", "discontinuity_signal", "suspicious_flag"} <= set(
         report.arrays["slice"]
     )
+
+
+def test_run_heston_pricing_diagnostics_matches_public_prices_when_probability_warnings_exist() -> (
+    None
+):
+    params = _params()
+    market = _market()
+    strike = np.array([80.0, 90.0, 100.0, 110.0, 120.0], dtype=np.float64)
+
+    report = run_heston_pricing_diagnostics(
+        strike=strike,
+        tau=0.05,
+        market=market,
+        params=params,
+        kind=OptionType.CALL,
+        backend="gauss_legendre",
+        quad_cfg=_gauss_cfg(),
+        comparison_backend="quad",
+        config_sweep_cases=[
+            {
+                "label": "primary",
+                "backend": "gauss_legendre",
+                "quad_cfg": _gauss_cfg(),
+            },
+            {"label": "comparison", "backend": "quad"},
+        ],
+        parameter_perturbations=_minimal_parameter_perturbations(params),
+    )
+
+    expected = heston_price_call_from_ctx(
+        strike=strike,
+        ctx=market.to_context(),
+        tau=0.05,
+        params=params,
+        backend="gauss_legendre",
+        quad_cfg=_gauss_cfg(),
+    )
+
+    slice_table = report.tables["slice"]
+    np.testing.assert_allclose(
+        slice_table["price"].to_numpy(dtype=np.float64),
+        np.asarray(expected, dtype=np.float64),
+        atol=1.0e-12,
+        rtol=0.0,
+    )
+
+    flagged = slice_table.loc[slice_table["strike"] == 120.0]
+    assert not flagged.empty
+    assert int(flagged.iloc[0]["warning_count"]) > 0
+    assert str(flagged.iloc[0]["severity"]) != "ok"
 
 
 def test_perturbation_instability_mask_requires_relative_and_absolute_thresholds() -> (

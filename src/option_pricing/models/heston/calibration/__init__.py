@@ -6,6 +6,7 @@ from .heston_types import (
     HestonObjectiveType,
     HestonParameterTransform,
 )
+from .preflight import HestonQuotePreflight, preflight_heston_quotes
 from .seeding import default_heston_seed, heston_seed_grid
 
 type ObjectiveKind = HestonObjectiveType
@@ -16,9 +17,11 @@ __all__ = [
     "HestonCalibrationBounds",
     "HestonCalibrationRun",
     "HestonMultistartResult",
+    "HestonQuotePreflight",
     "HestonObjectiveType",
     "HestonParameterTransform",
     "ObjectiveKind",
     "default_heston_seed",
     "heston_seed_grid",
+    "preflight_heston_quotes",
 ]

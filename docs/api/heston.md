@@ -14,7 +14,7 @@
 - `option_pricing.pricers.heston` for semi-analytic vanilla pricing.
 - `option_pricing.pricers.heston_mc` for Monte Carlo pricing wrappers.
 - `option_pricing.models.heston.simulation` for lower-level path and terminal simulators.
-- `option_pricing.models.heston.calibration` for calibrators, bounds, multistart results, and seed helpers.
+- `option_pricing.models.heston.calibration` for calibrators, quote preflight helpers, bounds, multistart results, and seed helpers.
 - `option_pricing.models.heston.calibration.heston_types` for the quote-set container used by calibration and diagnostics.
 - `option_pricing.diagnostics.heston` for notebook-facing diagnostics, generated-report helpers, and model comparison.
 
@@ -90,12 +90,14 @@ for the reviewer-facing Capstone 3 evidence path.
         - HestonCalibrationBounds
         - HestonCalibrationRun
         - HestonMultistartResult
+        - HestonQuotePreflight
         - HestonObjectiveType
         - HestonParameterTransform
         - calibrate_heston
         - calibrate_heston_multistart
         - default_heston_seed
         - heston_seed_grid
+        - preflight_heston_quotes
 
 ### Quote-set container
 

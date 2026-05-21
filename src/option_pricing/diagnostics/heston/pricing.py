@@ -17,10 +17,6 @@ from ...models.heston.fourier import (
     _default_heston_quadrature_config,
 )
 from ...numerics.quadrature import CompositeRule, QuadratureConfig
-from ...pricers.heston import (
-    heston_price_call_from_ctx,
-    heston_price_put_from_ctx,
-)
 from ...types import MarketData, OptionSpec, OptionType
 from ...vol.implied_vol_scalar import implied_vol_bs
 from ._provenance import backend_config_meta
@@ -215,33 +211,23 @@ def _price_from_probabilities(
     p0: FloatArray,
     p1: FloatArray,
 ) -> FloatArray:
+    strike_arr = np.asarray(strike, dtype=np.float64)
+    p0_arr = np.asarray(p0, dtype=np.float64)
+    p1_arr = np.asarray(p1, dtype=np.float64)
+    forward = float(ctx.fwd(tau=tau))
+    df = float(ctx.df(tau=tau))
+
     if kind == OptionType.CALL:
-        prices = heston_price_call_from_ctx(
-            strike=strike,
-            ctx=ctx,
-            tau=tau,
-            params=params,
-            p0=p0,
-            p1=p1,
-            backend=backend,
-            quad_cfg=quad_cfg,
-            rule=rule,
+        return np.asarray(
+            df * (forward * p1_arr - strike_arr * p0_arr),
+            dtype=np.float64,
         )
-        return np.asarray(prices, dtype=np.float64)
 
     if kind == OptionType.PUT:
-        prices = heston_price_put_from_ctx(
-            strike=strike,
-            tau=tau,
-            ctx=ctx,
-            params=params,
-            p0=p0,
-            p1=p1,
-            backend=backend,
-            quad_cfg=quad_cfg,
-            rule=rule,
+        return np.asarray(
+            df * (strike_arr * (1.0 - p0_arr) - forward * (1.0 - p1_arr)),
+            dtype=np.float64,
         )
-        return np.asarray(prices, dtype=np.float64)
 
     raise ValueError(f"Unsupported option kind: {kind!r}")
 

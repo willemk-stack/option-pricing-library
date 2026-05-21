@@ -9,6 +9,7 @@ The format is based on *Keep a Changelog*, and this project aims to follow *Sema
 ## [Unreleased]
 ### Added
 - (Add bullets here as you work; move them into the next release at tag time.)
+- Added `preflight_heston_quotes(...)` and `HestonQuotePreflight` under `option_pricing.models.heston.calibration` for opt-in Heston quote economic validation before calibration.
 - Cached reusable Gauss-Legendre quadrature rules for the Heston Fourier path, including `option_pricing.numerics` exports for `QuadratureConfig`, `PanelSpacing`, `CompositeRule`, `CompositeIntegrationResult`, and `build_gauss_legendre_rule`.
 - Heston simulation and Monte Carlo wrappers now support the public `quadratic_exponential` scheme, wiring Andersen QE through the path and terminal simulators.
 - Heston Monte Carlo comparison diagnostics under `option_pricing.diagnostics.heston`, including bias-vs-timestep, runtime-vs-error, scheme-comparison summaries, and table-driven plotting helpers.

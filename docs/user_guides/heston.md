@@ -254,6 +254,8 @@ Calibration helpers are namespaced under `option_pricing.models.heston.calibrati
 The calibrators themselves are re-exported from that package, but
 `HestonQuoteSet` currently lives in
 `option_pricing.models.heston.calibration.heston_types`.
+`preflight_heston_quotes(...)` is also re-exported from the calibration package
+when you want an explicit economic sanity check before running an optimizer.
 
 A `HestonQuoteSet` stores:
 
@@ -270,6 +272,9 @@ separately. At the user level:
     `objective_type="bid_ask_normalized"`;
 - provide `iv_mid` if you want the built-in seed heuristics and IV diagnostics
     to work from actual quoted IVs rather than only prices.
+- call `preflight_heston_quotes(...)` when you want calibration-specific
+    validation for vanilla price bounds and mid-in-bid/ask consistency without
+    changing `HestonQuoteSet` construction.
 
 The current calibration/reporting split is:
 
