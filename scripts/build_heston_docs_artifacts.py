@@ -47,9 +47,12 @@ from option_pricing.numerics.quadrature import QuadratureConfig
 from option_pricing.types import MarketData, OptionType
 from option_pricing.viz.publishing import (
     PUBLISHING_THEMES,
+    SVG_TEXT_FONT_STACK,
+    SvgTextStyle,
     copy_light_variant,
     publishing_palette,
     publishing_style,
+    render_svg_text_block,
     save_figure,
     style_colorbar,
     themed_asset_paths,
@@ -64,6 +67,16 @@ CAVEAT = (
 SHORT_CAVEAT = "Synthetic deterministic target; not market data."
 MODEL_CHOICE_CAVEAT = (
     "Synthetic target; model-choice evidence, not universal superiority."
+)
+ARCHITECTURE_TITLE = "Heston workflow architecture"
+ARCHITECTURE_DESC = (
+    "Synthetic quote target flows into Heston Fourier pricing and calibration, "
+    "QE Monte Carlo validation, and the eSSVI/local-vol/PDE baseline before "
+    "a final model-choice comparison layer."
+)
+ARCHITECTURE_FOOTER_LINES = (
+    "Synthetic deterministic target; not market data.",
+    "Capstone 3 compares Heston against the eSSVI/local-vol baseline rather than declaring a universal winner.",
 )
 
 MODEL_COLORS = {
@@ -297,8 +310,10 @@ CAPTIONS = {
         "universal runtime claims."
     ),
     "heston_train_vs_heldout_comparison": (
-        "Train/held-out comparison helps separate calibration fit from "
-        "out-of-sample diagnostic behavior on the deterministic quote grid."
+        "Deterministic stratified holdout across expiry and moneyness buckets "
+        "separates calibration fit from reviewer-facing holdout behavior on the "
+        "synthetic quote grid. Direct local-vol PDE stays in the matched-subset "
+        "audit artifacts rather than this full-grid split chart."
     ),
     "heston_workflow_architecture": (
         "Capstone 3 uses the Capstone 2 surface/local-vol/PDE stack as a "
@@ -574,30 +589,258 @@ def _quote_label(quotes: HestonQuoteSet, index: int) -> str:
     return f"quote_{index}"
 
 
+def _held_out_target_count(n_quotes: int) -> int:
+    n = int(n_quotes)
+    if n <= 1:
+        return 0
+    if n < 9:
+        return min(max(1, n // 3), n - 1)
+    target = max(3, int(np.floor(0.24 * float(n) + 0.5)))
+    return min(target, n - 1)
+
+
+def _selected_expiry_positions(n_expiries: int, *, count: int) -> tuple[int, ...]:
+    if n_expiries <= 0 or count <= 0:
+        return ()
+    if n_expiries <= count:
+        return tuple(range(n_expiries))
+    positions = np.unique(np.linspace(0, n_expiries - 1, count, dtype=int))
+    return tuple(int(position) for position in positions)
+
+
+def _expiry_priority_positions(n_expiries: int) -> tuple[int, ...]:
+    if n_expiries <= 0:
+        return ()
+
+    positions: list[int] = []
+
+    def append(position: int) -> None:
+        if 0 <= position < n_expiries and position not in positions:
+            positions.append(position)
+
+    append(0)
+    append(n_expiries - 1)
+    left_mid = (n_expiries - 1) // 2
+    right_mid = n_expiries // 2
+    append(left_mid)
+    append(right_mid)
+
+    offset = 1
+    while len(positions) < n_expiries:
+        append(left_mid - offset)
+        append(right_mid + offset)
+        offset += 1
+    return tuple(positions)
+
+
+def _nearest_quote_for_expiry_and_log_m(
+    quotes: HestonQuoteSet,
+    *,
+    expiry: float,
+    target_log_m: float,
+    used: set[int],
+) -> int | None:
+    log_moneyness = np.asarray(quotes.log_moneyness, dtype=np.float64)
+    expiry_rows = np.flatnonzero(np.isclose(quotes.expiry, float(expiry)))
+    ordered = sorted(
+        (int(row) for row in expiry_rows if int(row) not in used),
+        key=lambda row: (
+            abs(float(log_moneyness[row]) - float(target_log_m)),
+            abs(float(log_moneyness[row])),
+            row,
+        ),
+    )
+    if not ordered:
+        return None
+    return ordered[0]
+
+
+def _append_unique_target(targets: list[float], value: float) -> None:
+    numeric_value = float(value)
+    if any(np.isclose(float(existing), numeric_value) for existing in targets):
+        return
+    targets.append(numeric_value)
+
+
+def _magnitude_order(
+    positive_levels: tuple[float, ...], *, primary: float
+) -> tuple[float, ...]:
+    ordered: list[float] = []
+    for magnitude in (primary, *reversed(positive_levels), *positive_levels):
+        if magnitude <= 0.0:
+            continue
+        _append_unique_target(ordered, float(magnitude))
+    return tuple(ordered)
+
+
+def _holdout_target_sequence(
+    positive_levels: tuple[float, ...],
+    *,
+    has_atm: bool,
+    pair_style: bool,
+    center_pair: bool,
+    direction: str,
+) -> tuple[float, ...]:
+    if not positive_levels:
+        return (0.0,) if has_atm else ()
+
+    inner = float(positive_levels[(len(positive_levels) - 1) // 2])
+    primary = (
+        float(positive_levels[-1])
+        if center_pair and len(positive_levels) > 1
+        else inner
+    )
+    magnitudes = _magnitude_order(positive_levels, primary=primary)
+
+    targets: list[float] = []
+    if pair_style:
+        _append_unique_target(targets, -primary)
+        _append_unique_target(targets, primary)
+        if has_atm:
+            _append_unique_target(targets, 0.0)
+        for magnitude in magnitudes[1:]:
+            _append_unique_target(targets, -magnitude)
+            _append_unique_target(targets, magnitude)
+        return tuple(targets)
+
+    if direction == "negative":
+        _append_unique_target(targets, -primary)
+        if has_atm:
+            _append_unique_target(targets, 0.0)
+        for magnitude in magnitudes[1:]:
+            _append_unique_target(targets, -magnitude)
+        for magnitude in magnitudes:
+            _append_unique_target(targets, magnitude)
+        return tuple(targets)
+
+    if direction == "positive":
+        _append_unique_target(targets, primary)
+        if has_atm:
+            _append_unique_target(targets, 0.0)
+        for magnitude in magnitudes[1:]:
+            _append_unique_target(targets, magnitude)
+        for magnitude in magnitudes:
+            _append_unique_target(targets, -magnitude)
+        return tuple(targets)
+
+    if has_atm:
+        _append_unique_target(targets, 0.0)
+    for magnitude in magnitudes:
+        _append_unique_target(targets, -magnitude)
+        _append_unique_target(targets, magnitude)
+    return tuple(targets)
+
+
 def _build_deterministic_held_out_mask(
     quotes: HestonQuoteSet,
 ) -> tuple[np.ndarray, tuple[int, ...], tuple[str, ...]]:
-    expiry_targets = _selected_expiries(
-        quotes.expiry, count=min(3, len(np.unique(quotes.expiry)))
+    target_count = _held_out_target_count(quotes.n_quotes)
+    mask = np.zeros(quotes.n_quotes, dtype=np.bool_)
+    if quotes.n_quotes == 0 or target_count <= 0:
+        return mask, (), ()
+
+    unique_expiries = sorted(
+        {float(value) for value in np.asarray(quotes.expiry, dtype=np.float64)}
     )
+    if not unique_expiries:
+        return mask, (), ()
+
     log_moneyness = np.asarray(quotes.log_moneyness, dtype=np.float64)
-    target_log_m = (-0.10, 0.0, 0.10)
+    expiry_rows = {
+        position: tuple(
+            int(row) for row in np.flatnonzero(np.isclose(quotes.expiry, float(expiry)))
+        )
+        for position, expiry in enumerate(unique_expiries)
+    }
+
+    n_expiries = len(unique_expiries)
+    quotas = {position: 0 for position in range(n_expiries)}
+    if target_count <= n_expiries:
+        for position in _selected_expiry_positions(n_expiries, count=target_count):
+            quotas[position] = 1
+    else:
+        for position in range(n_expiries):
+            quotas[position] = 1
+        remaining = target_count - n_expiries
+        priority_positions = _expiry_priority_positions(n_expiries)
+        while remaining > 0:
+            progressed = False
+            for position in priority_positions:
+                if remaining <= 0:
+                    break
+                if quotas[position] >= len(expiry_rows[position]):
+                    continue
+                quotas[position] += 1
+                remaining -= 1
+                progressed = True
+            if not progressed:
+                break
 
     selected: list[int] = []
     used: set[int] = set()
-    for expiry, target in zip(expiry_targets, target_log_m, strict=False):
-        expiry_rows = np.flatnonzero(np.isclose(quotes.expiry, float(expiry)))
-        ordered = sorted(
-            (int(row) for row in expiry_rows if int(row) not in used),
-            key=lambda row: (abs(float(log_moneyness[row]) - float(target)), row),
-        )
-        if not ordered:
-            continue
-        chosen = ordered[0]
-        selected.append(chosen)
-        used.add(chosen)
+    selected_positions = tuple(
+        position for position, quota in sorted(quotas.items()) if quota > 0
+    )
+    has_pair_positions = any(quotas[position] > 1 for position in selected_positions)
 
-    mask = np.zeros(quotes.n_quotes, dtype=np.bool_)
+    for position in selected_positions:
+        expiry = unique_expiries[position]
+        quota = quotas[position]
+        rows = expiry_rows[position]
+        levels = tuple(sorted({float(log_moneyness[row]) for row in rows}))
+        positive_levels = tuple(
+            sorted(abs(value) for value in levels if not np.isclose(value, 0.0))
+        )
+        has_atm = any(np.isclose(value, 0.0) for value in levels)
+        pair_style = quota > 1
+        center_pair = pair_style and n_expiries % 2 == 1 and position == n_expiries // 2
+
+        if pair_style or has_pair_positions:
+            direction = "atm"
+        elif len(selected_positions) <= 1:
+            direction = "atm"
+        elif position == selected_positions[0]:
+            direction = "negative"
+        elif position == selected_positions[-1]:
+            direction = "positive"
+        else:
+            direction = "atm"
+
+        target_sequence = _holdout_target_sequence(
+            positive_levels,
+            has_atm=has_atm,
+            pair_style=pair_style,
+            center_pair=center_pair,
+            direction=direction,
+        )
+        chosen_for_expiry = 0
+        for target in target_sequence:
+            if chosen_for_expiry >= quota:
+                break
+            chosen = _nearest_quote_for_expiry_and_log_m(
+                quotes,
+                expiry=expiry,
+                target_log_m=float(target),
+                used=used,
+            )
+            if chosen is None:
+                continue
+            selected.append(chosen)
+            used.add(chosen)
+            chosen_for_expiry += 1
+
+        if chosen_for_expiry < quota:
+            fallback_rows = sorted(
+                (row for row in rows if row not in used),
+                key=lambda row: (abs(float(log_moneyness[row])), row),
+            )
+            for row in fallback_rows:
+                if chosen_for_expiry >= quota:
+                    break
+                selected.append(int(row))
+                used.add(int(row))
+                chosen_for_expiry += 1
+
     if selected:
         mask[np.asarray(selected, dtype=np.int64)] = True
     labels = tuple(_quote_label(quotes, index) for index in selected)
@@ -1424,11 +1667,17 @@ def _build_train_vs_heldout_figure(bundle: DiagnosticsBundle, theme: str) -> Fig
         ax.axis("off")
     else:
         sample_order = ["train", "held_out"]
+        table = table.loc[table["model"].astype(str) != "Direct local-vol PDE"].copy()
         model_order = [str(value) for value in table["model"].drop_duplicates()]
         x = np.arange(len(model_order), dtype=np.float64)
         width = 0.75 / len(sample_order)
+        max_value = float(
+            np.nanmax(pd.to_numeric(table["iv_rmse_bps"], errors="coerce"))
+        )
+        label_pad = max(0.8, 0.04 * max_value) if np.isfinite(max_value) else 0.8
         for index, sample_name in enumerate(sample_order):
             values: list[float] = []
+            counts: list[int | None] = []
             for model_name in model_order:
                 rows = table.loc[
                     (table["model"].astype(str) == model_name)
@@ -1439,8 +1688,9 @@ def _build_train_vs_heldout_figure(bundle: DiagnosticsBundle, theme: str) -> Fig
                     if not rows.empty
                     else float("nan")
                 )
+                counts.append(int(rows["n_quotes"].iloc[0]) if not rows.empty else None)
             offset = (index - (len(sample_order) - 1) / 2.0) * width
-            ax.bar(
+            bars = ax.bar(
                 x + offset,
                 values,
                 width=width,
@@ -1452,15 +1702,35 @@ def _build_train_vs_heldout_figure(bundle: DiagnosticsBundle, theme: str) -> Fig
                 ),
                 alpha=(0.95 if sample_name == "train" else 0.72),
             )
+            for bar, count, value in zip(bars, counts, values, strict=True):
+                if count is None or not np.isfinite(value):
+                    continue
+                ax.text(
+                    float(bar.get_x() + bar.get_width() / 2.0),
+                    float(value + label_pad),
+                    f"n={count}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=8,
+                    color=spec.palette["text"],
+                    rotation=90,
+                )
         ax.set_xticks(x, model_order, rotation=12, ha="right")
         ax.set_ylabel("IV RMSE (bps)")
-        ax.set_title("Train vs held-out comparison", loc="left")
+        ax.set_title("IV RMSE by sample", loc="left")
         ax.grid(True, axis="y", alpha=0.45)
         ax.legend(loc="upper left")
-    fig.suptitle("Held-out honesty check", fontsize=15, fontweight="semibold")
+        if np.isfinite(max_value):
+            current_bottom, current_top = ax.get_ylim()
+            ax.set_ylim(current_bottom, max(current_top, max_value + 3.0 * label_pad))
+    fig.suptitle(
+        "Train vs stratified held-out diagnostic",
+        fontsize=15,
+        fontweight="semibold",
+    )
     _apply_footer(
         fig,
-        "Held-out split: short wing, middle ATM, long wing.",
+        "Stratified deterministic holdout across expiry and moneyness; not a market-date out-of-sample test.",
         spec,
         bottom=0.12,
     )
@@ -1469,43 +1739,444 @@ def _build_train_vs_heldout_figure(bundle: DiagnosticsBundle, theme: str) -> Fig
 
 def _write_architecture_svg(path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    svg = f"""<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1040\" height=\"650\" viewBox=\"0 0 1040 650\" role=\"img\" aria-labelledby=\"title desc\">
-  <title id=\"title\">Heston workflow architecture</title>
-  <desc id=\"desc\">Synthetic quote target flows into Heston Fourier calibration, QE Monte Carlo validation, and the eSSVI/local-vol/PDE stack before a final model-choice comparison layer.</desc>
-  <rect x=\"0\" y=\"0\" width=\"1040\" height=\"650\" rx=\"24\" fill=\"#ffffff\"/>
-  <rect x=\"80\" y=\"38\" width=\"880\" height=\"92\" rx=\"18\" fill=\"#eef6f8\" stroke=\"#0f4c5c\" stroke-width=\"2\"/>
-  <text x=\"520\" y=\"78\" text-anchor=\"middle\" font-size=\"26\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#0f172a\" font-weight=\"600\">Synthetic quote target</text>
-  <text x=\"520\" y=\"106\" text-anchor=\"middle\" font-size=\"16\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#334155\">Deterministic market-like fixture for model-choice diagnostics</text>
-  <line x1=\"520\" y1=\"130\" x2=\"520\" y2=\"175\" stroke=\"#64748b\" stroke-width=\"3\"/>
-  <polygon points=\"520,188 512,172 528,172\" fill=\"#64748b\"/>
-  <rect x=\"60\" y=\"210\" width=\"270\" height=\"165\" rx=\"18\" fill=\"#eef6f8\" stroke=\"#0f4c5c\" stroke-width=\"2\"/>
-  <text x=\"195\" y=\"248\" text-anchor=\"middle\" font-size=\"22\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#0f172a\" font-weight=\"600\">Heston Fourier pricing</text>
-  <text x=\"195\" y=\"282\" text-anchor=\"middle\" font-size=\"16\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#334155\">Multistart calibration</text>
-  <text x=\"195\" y=\"306\" text-anchor=\"middle\" font-size=\"16\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#334155\">Residual heatmaps</text>
-  <text x=\"195\" y=\"330\" text-anchor=\"middle\" font-size=\"16\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#334155\">Objective and seed stability</text>
-  <rect x=\"385\" y=\"210\" width=\"270\" height=\"165\" rx=\"18\" fill=\"#fdf4ea\" stroke=\"#d17a22\" stroke-width=\"2\"/>
-  <text x=\"520\" y=\"248\" text-anchor=\"middle\" font-size=\"22\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#0f172a\" font-weight=\"600\">QE Monte Carlo</text>
-  <text x=\"520\" y=\"282\" text-anchor=\"middle\" font-size=\"16\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#334155\">MC vs Fourier validation</text>
-  <text x=\"520\" y=\"306\" text-anchor=\"middle\" font-size=\"16\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#334155\">Bias, CI, and runtime/error tradeoff</text>
-  <text x=\"520\" y=\"330\" text-anchor=\"middle\" font-size=\"16\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#334155\">Directional evidence, not universal speed claims</text>
-  <rect x=\"710\" y=\"210\" width=\"270\" height=\"165\" rx=\"18\" fill=\"#f3f8eb\" stroke=\"#4d7c0f\" stroke-width=\"2\"/>
-  <text x=\"845\" y=\"248\" text-anchor=\"middle\" font-size=\"22\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#0f172a\" font-weight=\"600\">eSSVI / local-vol stack</text>
-  <text x=\"845\" y=\"282\" text-anchor=\"middle\" font-size=\"16\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#334155\">Flexible vanilla surface fit</text>
-  <text x=\"845\" y=\"306\" text-anchor=\"middle\" font-size=\"16\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#334155\">Direct Dupire/PDE repricing audit</text>
-  <text x=\"845\" y=\"330\" text-anchor=\"middle\" font-size=\"16\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#334155\">Capstone 2 baseline, reused not rebuilt</text>
-  <line x1=\"195\" y1=\"375\" x2=\"195\" y2=\"455\" stroke=\"#64748b\" stroke-width=\"3\"/>
-  <line x1=\"520\" y1=\"375\" x2=\"520\" y2=\"455\" stroke=\"#64748b\" stroke-width=\"3\"/>
-  <line x1=\"845\" y1=\"375\" x2=\"845\" y2=\"455\" stroke=\"#64748b\" stroke-width=\"3\"/>
-  <polygon points=\"195,468 187,452 203,452\" fill=\"#64748b\"/>
-  <polygon points=\"520,468 512,452 528,452\" fill=\"#64748b\"/>
-  <polygon points=\"845,468 837,452 853,452\" fill=\"#64748b\"/>
-  <rect x=\"160\" y=\"480\" width=\"720\" height=\"112\" rx=\"22\" fill=\"#f8fafc\" stroke=\"#1e293b\" stroke-width=\"2.5\"/>
-  <text x=\"520\" y=\"520\" text-anchor=\"middle\" font-size=\"28\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#0f172a\" font-weight=\"700\">Model-choice comparison</text>
-  <text x=\"520\" y=\"552\" text-anchor=\"middle\" font-size=\"18\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#334155\">fit quality | stability | dynamics | failure modes</text>
-  <text x=\"520\" y=\"625\" text-anchor=\"middle\" font-size=\"13\" font-family=\"DejaVu Sans, Arial, sans-serif\" fill=\"#475569\">{SHORT_CAVEAT} Capstone 3 compares Heston against the same eSSVI/local-vol baseline rather than declaring a universal winner.</text>
-</svg>
-"""
-    path.write_text(svg, encoding="utf-8")
+    path.write_text(_render_architecture_svg(theme="light"), encoding="utf-8")
+    return path
+
+
+def _architecture_colors(theme: str) -> dict[str, str]:
+    spec = _theme_spec(theme)
+    if theme == "dark":
+        return {
+            "page": "#08101f",
+            "top_fill": "#111c31",
+            "bottom_fill": "#0d1628",
+            "left_fill": "#162033",
+            "middle_fill": "#231c12",
+            "right_fill": "#10231f",
+            "stroke": "#314056",
+            "text": spec.palette["text"],
+            "muted": spec.palette["muted_text"],
+            "connector": "#7c8ba0",
+            "accent": "#8cc9ff",
+            "warm": "#f3b562",
+            "green": "#91e0d7",
+        }
+    return {
+        "page": "#ffffff",
+        "top_fill": "#eef6f8",
+        "bottom_fill": "#f8fafc",
+        "left_fill": "#eef6f8",
+        "middle_fill": "#fdf4ea",
+        "right_fill": "#f3f8eb",
+        "stroke": "#d7e0ea",
+        "text": spec.palette["text"],
+        "muted": spec.palette["muted_text"],
+        "connector": "#64748b",
+        "accent": "#0f4c5c",
+        "warm": "#d17a22",
+        "green": "#4d7c0f",
+    }
+
+
+def _svg_rect(
+    *,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    rx: float,
+    fill: str,
+    stroke: str | None = None,
+    stroke_width: float | None = None,
+) -> str:
+    parts = [
+        f'<rect x="{x:g}" y="{y:g}" width="{width:g}" height="{height:g}" rx="{rx:g}" fill="{fill}"'
+    ]
+    if stroke is not None:
+        parts.append(f' stroke="{stroke}"')
+    if stroke_width is not None:
+        parts.append(f' stroke-width="{stroke_width:g}"')
+    parts.append("/>")
+    return "".join(parts)
+
+
+def _svg_line(
+    *,
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    stroke: str,
+    stroke_width: float,
+) -> str:
+    return (
+        f'<line x1="{x1:g}" y1="{y1:g}" x2="{x2:g}" y2="{y2:g}" '
+        f'stroke="{stroke}" stroke-width="{stroke_width:g}" '
+        'stroke-linecap="round"/>'
+    )
+
+
+def _svg_arrow(*, x: float, y1: float, y2: float, color: str) -> str:
+    shaft_end = y2 - 16
+    return "\n".join(
+        [
+            _svg_line(
+                x1=x,
+                y1=y1,
+                x2=x,
+                y2=shaft_end,
+                stroke=color,
+                stroke_width=3,
+            ),
+            (
+                f'<polygon points="{x:g},{y2:g} {x - 8:g},{shaft_end:g} '
+                f'{x + 8:g},{shaft_end:g}" fill="{color}"/>'
+            ),
+        ]
+    )
+
+
+def _svg_text_block(
+    *,
+    block_id: str,
+    x: float,
+    y: float,
+    lines: list[str],
+    font_size: int,
+    line_height: int,
+    fill: str,
+    max_width: float,
+    max_height: float | None,
+    weight: str | None = None,
+    anchor: str = "middle",
+) -> str:
+    style = SvgTextStyle(
+        font_family=SVG_TEXT_FONT_STACK,
+        font_size=float(font_size),
+        font_weight=weight or "400",
+        fill=fill,
+        line_height=float(line_height),
+    )
+    return render_svg_text_block(
+        block_id=block_id,
+        text="\n".join(lines),
+        x=x,
+        y=y,
+        max_width=max_width,
+        max_height=max_height,
+        style=style,
+        overflow_label=block_id,
+        extra_attrs={"text-anchor": anchor},
+    )
+
+
+def _svg_card(
+    *,
+    block_id: str,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    fill: str,
+    stroke: str,
+    title: str,
+    lines: list[str],
+    title_fill: str,
+    body_fill: str,
+) -> str:
+    center_x = x + width / 2.0
+    inner_width = width - 56.0
+    return "\n".join(
+        [
+            _svg_rect(
+                x=x,
+                y=y,
+                width=width,
+                height=height,
+                rx=20,
+                fill=fill,
+                stroke=stroke,
+                stroke_width=2,
+            ),
+            _svg_line(
+                x1=x + 30,
+                y1=y + 72,
+                x2=x + width - 30,
+                y2=y + 72,
+                stroke=stroke,
+                stroke_width=1.5,
+            ),
+            _svg_text_block(
+                block_id=f"{block_id}-title",
+                x=center_x,
+                y=y + 46,
+                lines=[title],
+                font_size=24,
+                line_height=28,
+                fill=title_fill,
+                max_width=inner_width,
+                max_height=30,
+                weight="700",
+            ),
+            _svg_text_block(
+                block_id=f"{block_id}-body",
+                x=center_x,
+                y=y + 106,
+                lines=lines,
+                font_size=17,
+                line_height=24,
+                fill=body_fill,
+                max_width=inner_width,
+                max_height=80,
+                weight="500",
+            ),
+        ]
+    )
+
+
+def _render_architecture_svg(*, theme: str) -> str:
+    colors = _architecture_colors(theme)
+    width = 1180
+    height = 760
+
+    top_x = 100
+    top_y = 44
+    top_width = 980
+    top_height = 96
+    cards_y = 224
+    card_width = 300
+    card_height = 192
+    card_xs = (100, 440, 780)
+    card_centers = tuple(x + card_width / 2.0 for x in card_xs)
+    top_bus_y = 178
+    bottom_bus_y = 454
+    comparison_x = 180
+    comparison_y = 500
+    comparison_width = 820
+    comparison_height = 118
+
+    elements = [
+        _svg_rect(
+            x=0,
+            y=0,
+            width=width,
+            height=height,
+            rx=24,
+            fill=colors["page"],
+        ),
+        _svg_rect(
+            x=top_x,
+            y=top_y,
+            width=top_width,
+            height=top_height,
+            rx=20,
+            fill=colors["top_fill"],
+            stroke=colors["accent"],
+            stroke_width=2,
+        ),
+        _svg_text_block(
+            block_id="architecture-source-title",
+            x=width / 2.0,
+            y=84,
+            lines=["Synthetic quote target"],
+            font_size=28,
+            line_height=32,
+            fill=colors["text"],
+            max_width=820,
+            max_height=34,
+            weight="700",
+        ),
+        _svg_text_block(
+            block_id="architecture-source-subtitle",
+            x=width / 2.0,
+            y=114,
+            lines=["Deterministic market-like fixture"],
+            font_size=17,
+            line_height=22,
+            fill=colors["muted"],
+            max_width=820,
+            max_height=24,
+            weight="500",
+        ),
+        _svg_line(
+            x1=width / 2.0,
+            y1=top_y + top_height,
+            x2=width / 2.0,
+            y2=top_bus_y,
+            stroke=colors["connector"],
+            stroke_width=3,
+        ),
+        _svg_line(
+            x1=card_centers[0],
+            y1=top_bus_y,
+            x2=card_centers[-1],
+            y2=top_bus_y,
+            stroke=colors["connector"],
+            stroke_width=3,
+        ),
+        _svg_card(
+            block_id="architecture-card-heston",
+            x=card_xs[0],
+            y=cards_y,
+            width=card_width,
+            height=card_height,
+            fill=colors["left_fill"],
+            stroke=colors["accent"],
+            title="Heston",
+            lines=[
+                "Fourier pricing",
+                "Multistart fit",
+                "Residual diagnostics",
+            ],
+            title_fill=colors["text"],
+            body_fill=colors["muted"],
+        ),
+        _svg_card(
+            block_id="architecture-card-monte-carlo",
+            x=card_xs[1],
+            y=cards_y,
+            width=card_width,
+            height=card_height,
+            fill=colors["middle_fill"],
+            stroke=colors["warm"],
+            title="Monte Carlo",
+            lines=[
+                "QE paths",
+                "CI vs Fourier",
+                "Bias/runtime check",
+            ],
+            title_fill=colors["text"],
+            body_fill=colors["muted"],
+        ),
+        _svg_card(
+            block_id="architecture-card-surface-baseline",
+            x=card_xs[2],
+            y=cards_y,
+            width=card_width,
+            height=card_height,
+            fill=colors["right_fill"],
+            stroke=colors["green"],
+            title="Surface baseline",
+            lines=[
+                "eSSVI fit",
+                "Dupire handoff",
+                "PDE audit",
+            ],
+            title_fill=colors["text"],
+            body_fill=colors["muted"],
+        ),
+    ]
+
+    for center_x in card_centers:
+        elements.append(
+            _svg_arrow(
+                x=center_x,
+                y1=top_bus_y,
+                y2=cards_y - 14,
+                color=colors["connector"],
+            )
+        )
+
+    for center_x in card_centers:
+        elements.append(
+            _svg_line(
+                x1=center_x,
+                y1=cards_y + card_height,
+                x2=center_x,
+                y2=bottom_bus_y,
+                stroke=colors["connector"],
+                stroke_width=3,
+            )
+        )
+
+    elements.extend(
+        [
+            _svg_line(
+                x1=card_centers[0],
+                y1=bottom_bus_y,
+                x2=card_centers[-1],
+                y2=bottom_bus_y,
+                stroke=colors["connector"],
+                stroke_width=3,
+            ),
+            _svg_arrow(
+                x=width / 2.0,
+                y1=bottom_bus_y,
+                y2=comparison_y - 8,
+                color=colors["connector"],
+            ),
+            _svg_rect(
+                x=comparison_x,
+                y=comparison_y,
+                width=comparison_width,
+                height=comparison_height,
+                rx=24,
+                fill=colors["bottom_fill"],
+                stroke=colors["stroke"],
+                stroke_width=2.5,
+            ),
+            _svg_text_block(
+                block_id="architecture-comparison-title",
+                x=width / 2.0,
+                y=546,
+                lines=["Model-choice comparison"],
+                font_size=30,
+                line_height=34,
+                fill=colors["text"],
+                max_width=700,
+                max_height=36,
+                weight="700",
+            ),
+            _svg_text_block(
+                block_id="architecture-comparison-subtitle",
+                x=width / 2.0,
+                y=582,
+                lines=["Fit | stability | dynamics | failure modes"],
+                font_size=19,
+                line_height=24,
+                fill=colors["muted"],
+                max_width=760,
+                max_height=24,
+                weight="500",
+            ),
+            _svg_line(
+                x1=150,
+                y1=646,
+                x2=1030,
+                y2=646,
+                stroke=colors["stroke"],
+                stroke_width=1.5,
+            ),
+            _svg_text_block(
+                block_id="architecture-footer",
+                x=width / 2.0,
+                y=670,
+                lines=list(ARCHITECTURE_FOOTER_LINES),
+                font_size=14,
+                line_height=19,
+                fill=colors["muted"],
+                max_width=920,
+                max_height=42,
+                weight="500",
+            ),
+        ]
+    )
+
+    body = "\n  ".join(elements)
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" '
+        f'height="{height}" viewBox="0 0 {width} {height}" role="img" '
+        'aria-labelledby="title desc">\n'
+        f'  <title id="title">{ARCHITECTURE_TITLE}</title>\n'
+        f'  <desc id="desc">{ARCHITECTURE_DESC}</desc>\n'
+        f"  {body}\n"
+        "</svg>\n"
+    )
+
+
+def _write_architecture_svg(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_render_architecture_svg(theme="light"), encoding="utf-8")
     return path
 
 
@@ -1513,70 +2184,9 @@ def _write_themed_architecture_svgs(out_dir: Path) -> list[Path]:
     variants = themed_asset_paths(out_dir / "heston_workflow_architecture.svg")
     paths: list[Path] = []
     for theme in PUBLISHING_THEMES:
-        spec = _theme_spec(theme)
-        if theme == "dark":
-            colors = {
-                "page": "#08101f",
-                "surface": "#0f172a",
-                "soft": "#162033",
-                "stroke": "#314056",
-                "text": spec.palette["text"],
-                "muted": spec.palette["muted_text"],
-                "accent": "#8cc9ff",
-                "warm": "#f3b562",
-                "green": "#91e0d7",
-            }
-        else:
-            colors = {
-                "page": "#ffffff",
-                "surface": "#f8fafc",
-                "soft": "#eef6f8",
-                "stroke": "#d7e0ea",
-                "text": spec.palette["text"],
-                "muted": spec.palette["muted_text"],
-                "accent": "#0f4c5c",
-                "warm": "#d17a22",
-                "green": "#4d7c0f",
-            }
-        svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="650" viewBox="0 0 1040 650" role="img" aria-labelledby="title desc">
-  <title id="title">Heston workflow architecture</title>
-  <desc id="desc">Synthetic quote target flows into Heston Fourier calibration, QE Monte Carlo validation, and the eSSVI/local-vol/PDE stack before a final model-choice comparison layer.</desc>
-  <rect x="0" y="0" width="1040" height="650" rx="24" fill="{colors['page']}"/>
-  <rect x="80" y="38" width="880" height="92" rx="18" fill="{colors['soft']}" stroke="{colors['accent']}" stroke-width="2"/>
-  <text x="520" y="78" text-anchor="middle" font-size="26" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['text']}" font-weight="600">Synthetic quote target</text>
-  <text x="520" y="106" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['muted']}">Deterministic market-like fixture for model-choice diagnostics</text>
-  <line x1="520" y1="130" x2="520" y2="175" stroke="{colors['muted']}" stroke-width="3"/>
-  <polygon points="520,188 512,172 528,172" fill="{colors['muted']}"/>
-  <rect x="60" y="210" width="270" height="165" rx="18" fill="{colors['soft']}" stroke="{colors['accent']}" stroke-width="2"/>
-  <text x="195" y="248" text-anchor="middle" font-size="22" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['text']}" font-weight="600">Heston Fourier pricing</text>
-  <text x="195" y="282" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['muted']}">Multistart calibration</text>
-  <text x="195" y="306" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['muted']}">Residual heatmaps</text>
-  <text x="195" y="330" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['muted']}">Objective and seed stability</text>
-  <rect x="385" y="210" width="270" height="165" rx="18" fill="{colors['surface']}" stroke="{colors['warm']}" stroke-width="2"/>
-  <text x="520" y="248" text-anchor="middle" font-size="22" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['text']}" font-weight="600">QE Monte Carlo</text>
-  <text x="520" y="282" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['muted']}">MC vs Fourier validation</text>
-  <text x="520" y="306" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['muted']}">Bias, CI, and runtime/error tradeoff</text>
-  <text x="520" y="330" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['muted']}">Directional evidence, not universal speed claims</text>
-  <rect x="710" y="210" width="270" height="165" rx="18" fill="{colors['surface']}" stroke="{colors['green']}" stroke-width="2"/>
-  <text x="845" y="248" text-anchor="middle" font-size="22" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['text']}" font-weight="600">eSSVI / local-vol stack</text>
-  <text x="845" y="282" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['muted']}">Flexible vanilla surface fit</text>
-  <text x="845" y="306" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['muted']}">Direct Dupire/PDE repricing audit</text>
-  <text x="845" y="330" text-anchor="middle" font-size="16" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['muted']}">Capstone 2 baseline, reused not rebuilt</text>
-  <line x1="195" y1="375" x2="195" y2="455" stroke="{colors['muted']}" stroke-width="3"/>
-  <line x1="520" y1="375" x2="520" y2="455" stroke="{colors['muted']}" stroke-width="3"/>
-  <line x1="845" y1="375" x2="845" y2="455" stroke="{colors['muted']}" stroke-width="3"/>
-  <polygon points="195,468 187,452 203,452" fill="{colors['muted']}"/>
-  <polygon points="520,468 512,452 528,452" fill="{colors['muted']}"/>
-  <polygon points="845,468 837,452 853,452" fill="{colors['muted']}"/>
-  <rect x="160" y="480" width="720" height="112" rx="22" fill="{colors['surface']}" stroke="{colors['stroke']}" stroke-width="2.5"/>
-  <text x="520" y="520" text-anchor="middle" font-size="28" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['text']}" font-weight="700">Model-choice comparison</text>
-  <text x="520" y="552" text-anchor="middle" font-size="18" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['muted']}">fit quality | stability | dynamics | failure modes</text>
-  <text x="520" y="625" text-anchor="middle" font-size="13" font-family="DejaVu Sans, Arial, sans-serif" fill="{colors['muted']}">{SHORT_CAVEAT} Capstone 3 compares Heston against the same eSSVI/local-vol baseline rather than declaring a universal winner.</text>
-</svg>
-"""
         path = variants.path_for(theme)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(svg, encoding="utf-8")
+        path.write_text(_render_architecture_svg(theme=theme), encoding="utf-8")
         paths.append(path)
     copy_light_variant(variants)
     paths.append(variants.base)
@@ -1717,8 +2327,8 @@ def _write_manifest(
         },
         "held_out_policy": {
             "description": (
-                "Deterministic three-point split: one downside wing at short expiry, "
-                "one ATM point at middle expiry, and one upside wing at long expiry."
+                "Deterministic stratified holdout across expiry and moneyness "
+                "buckets; selected independently of model residuals."
             ),
             "indices": [int(index) for index in bundle.held_out_indices],
             "labels": list(bundle.held_out_labels),
