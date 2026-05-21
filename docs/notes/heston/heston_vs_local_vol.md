@@ -20,7 +20,7 @@ same selected quotes.
 
 The final target is a deterministic market-like synthetic fixture. It is not
 market data and is not generated from the fitted Heston model. This avoids
-advantaging Heston with Heston-generated recovery data while keeping the
+advantaging Heston with a Heston-generated quote target while keeping the
 comparison deterministic and version-controlled.
 
 ## What Is Compared

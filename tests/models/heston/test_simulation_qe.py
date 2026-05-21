@@ -16,10 +16,12 @@ from option_pricing.models.heston.simulation.qe import (
     _v_timestep_qe,
     _v_timestep_quadratic,
     _x_timestep_qe,
+    _zero_variance_absorbing_mask,
     simulate_heston_qe_paths,
     simulate_heston_qe_terminal,
 )
 from option_pricing.monte_carlo import MCConfig, RandomConfig
+from option_pricing.pricers.heston import heston_price_call_from_ctx
 from option_pricing.types import MarketData
 
 
@@ -281,6 +283,33 @@ def test_simulate_heston_qe_supports_zero_vol_of_vol() -> None:
     assert np.all(np.isfinite(terminal))
 
 
+def test_v_timestep_qe_returns_zero_in_absorbing_zero_variance_state() -> None:
+    params = HestonParams(kappa=1.5, vbar=0.0, eta=0.5, rho=-0.3, v=0.0)
+    v_t = np.zeros(3, dtype=np.float64)
+    z_v = np.array([0.25, -1.0, 0.75], dtype=np.float64)
+    u_v = np.array([0.9, 0.2, 0.5], dtype=np.float64)
+
+    psi = _psi(v_t=v_t, params=params, dt=0.5)
+    v_next = _v_timestep_qe(
+        v_t=v_t,
+        params=params,
+        z_v_j=z_v,
+        u_v_j=u_v,
+        dt=0.5,
+    )
+
+    np.testing.assert_array_equal(psi, np.zeros_like(v_t))
+    np.testing.assert_array_equal(v_next, np.zeros_like(v_t))
+
+
+def test_zero_variance_absorbing_mask_rejects_inconsistent_moments() -> None:
+    with pytest.raises(ValueError, match="inconsistent"):
+        _zero_variance_absorbing_mask(
+            m=np.array([0.0], dtype=np.float64),
+            s2=np.array([1e-8], dtype=np.float64),
+        )
+
+
 def test_v_timestep_qe_uses_quadratic_branch_at_cutoff(
     heston_params: HestonParams,
 ) -> None:
@@ -387,6 +416,95 @@ def test_x_timestep_qe_martingale_correction_moves_mean_toward_unity() -> None:
     assert abs(corrected_mean - 1.0) < 5e-4
 
 
+def test_heston_qe_terminal_forward_matches_theoretical_forward_within_ci() -> None:
+    params = HestonParams(
+        kappa=1.5,
+        vbar=0.04,
+        eta=0.8,
+        rho=-0.7,
+        v=0.05,
+    )
+    tau = 1.5
+    n_paths = 12_000
+    ci_multiplier = 4.0
+    small_abs_buffer = 0.05
+
+    terminal = simulate_heston_terminal(
+        ctx=_ctx(),
+        tau=tau,
+        params=params,
+        n_steps=32,
+        cfg=MCConfig(
+            n_paths=n_paths,
+            antithetic=True,
+            random=RandomConfig(seed=1234),
+        ),
+        scheme="quadratic_exponential",
+    )
+
+    expected_forward = _ctx().fwd(tau)
+    sample_mean = float(np.mean(terminal))
+    sample_std = float(np.std(terminal, ddof=1))
+    standard_error = sample_std / np.sqrt(n_paths)
+    error = abs(sample_mean - expected_forward)
+
+    # NOTE: This is a martingale/forward-consistency regression guard, not a
+    # statistical power test, so the CI is intentionally generous for CI
+    # stability while still catching broken drift or correction wiring.
+    assert error <= ci_multiplier * standard_error + small_abs_buffer
+
+
+def test_heston_qe_terminal_vanilla_price_matches_fourier_within_ci() -> None:
+    ctx = _ctx()
+    params = HestonParams(
+        kappa=1.8,
+        vbar=0.04,
+        eta=0.55,
+        rho=-0.65,
+        v=0.05,
+    )
+    tau = 1.0
+    strike = 100.0
+    ci_multiplier = 5.0
+    small_bias_buffer = 0.02
+
+    terminal = simulate_heston_terminal(
+        ctx=ctx,
+        tau=tau,
+        params=params,
+        n_steps=64,
+        cfg=MCConfig(
+            n_paths=24_000,
+            antithetic=True,
+            random=RandomConfig(seed=2026),
+        ),
+        scheme="quadratic_exponential",
+    )
+
+    discounted_payoffs = ctx.df(tau) * np.maximum(terminal - strike, 0.0)
+    mc_price = float(np.mean(discounted_payoffs))
+    standard_error = float(np.std(discounted_payoffs, ddof=1) / np.sqrt(terminal.size))
+    fourier_price = float(
+        heston_price_call_from_ctx(
+            strike=strike,
+            ctx=ctx,
+            tau=tau,
+            params=params,
+            backend="gauss_legendre",
+        )
+    )
+
+    assert np.all(np.isfinite([mc_price, standard_error, fourier_price]))
+    assert standard_error > 0.0
+    # Realized MC error can oscillate across timestep refinements, so this
+    # checks statistical consistency against the Fourier reference rather than
+    # any monotonic convergence story.
+    assert (
+        abs(mc_price - fourier_price)
+        <= ci_multiplier * standard_error + small_bias_buffer
+    )
+
+
 def test_simulate_heston_qe_terminal_matches_full_path_terminal(
     heston_params: HestonParams,
 ) -> None:
@@ -417,6 +535,21 @@ def test_simulate_heston_qe_terminal_matches_full_path_terminal(
     np.testing.assert_allclose(terminal, path_result.spot_paths[:, -1])
 
 
+def test_simulate_heston_qe_terminal_stays_finite_in_absorbing_zero_state() -> None:
+    params = HestonParams(kappa=1.5, vbar=0.0, eta=0.5, rho=-0.3, v=0.0)
+    terminal = simulate_heston_qe_terminal(
+        params=params,
+        x0=100.0,
+        tau=1.0,
+        n_steps=4,
+        shocks=_qe_shocks(n_paths=5, n_steps=4),
+        log_drift_increments=np.zeros(4, dtype=np.float64),
+    )
+
+    np.testing.assert_allclose(terminal, 100.0)
+    assert np.all(np.isfinite(terminal))
+
+
 def test_simulate_heston_qe_terminal_matches_full_path_terminal_when_eta_zero() -> None:
     params = HestonParams(kappa=1.5, vbar=0.04, eta=0.0, rho=0.0, v=0.08)
     rng = np.random.default_rng(321)
@@ -444,6 +577,23 @@ def test_simulate_heston_qe_terminal_matches_full_path_terminal_when_eta_zero() 
     )
 
     np.testing.assert_allclose(terminal, path_result.spot_paths[:, -1])
+
+
+def test_simulate_heston_qe_paths_stay_finite_in_absorbing_zero_state() -> None:
+    params = HestonParams(kappa=1.5, vbar=0.0, eta=0.5, rho=-0.3, v=0.0)
+    result = simulate_heston_qe_paths(
+        params=params,
+        x0=100.0,
+        tau=1.0,
+        n_steps=4,
+        shocks=_qe_shocks(n_paths=5, n_steps=4),
+        log_drift_increments=np.zeros(4, dtype=np.float64),
+    )
+
+    np.testing.assert_allclose(result.var_paths, 0.0)
+    np.testing.assert_allclose(result.spot_paths, 100.0)
+    assert np.all(np.isfinite(result.var_paths))
+    assert np.all(np.isfinite(result.spot_paths))
 
 
 def test_simulate_heston_qe_terminal_avoids_full_path_initializer(

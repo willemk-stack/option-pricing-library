@@ -184,6 +184,7 @@ nav:
           - Calibration seeds: notes/heston/heston_calibration_seeds.md
           - Calibration benchmark diagnostics: notes/heston/heston_calibration_benchmark_diagnostics.md
           - Heston vs local vol: notes/heston/heston_vs_local_vol.md
+          - Interview framing: notes/heston/heston_interview_framing.md
           - Monte Carlo diagnostics: notes/heston/heston_monte_carlo.md
           - Andersen QE scheme: notes/heston/heston_qe_notes.md
       - Diagnostics and numerical methods:

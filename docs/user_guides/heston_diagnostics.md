@@ -33,7 +33,7 @@ without rerunning the optimizer:
 - quote-level price and implied-vol residuals
 - smile overlay data by maturity
 - long-form IV residual grids
-- parameter recovery when synthetic truth is supplied
+- fitted-parameter summary and truth deltas when synthetic truth is supplied
 - multistart run metadata when a `HestonMultistartResult` is supplied
 - held-out error summaries when a mask is supplied
 - lightweight objective slices around the fitted point
@@ -59,8 +59,13 @@ Heston calibration may be weakly identifiable from vanilla quotes. Multistart is
 diagnostic, not magic: it exposes initialization sensitivity and failed seeds,
 but it does not prove parameter uniqueness.
 
+Synthetic calibration checks in this stack primarily validate
+pricing/calibration wiring and residual behavior on Heston-generated quotes.
+Similar vanilla repricing errors can arise with different parameter vectors,
+so multistart exposes sensitivity rather than proving uniqueness.
+
 Vega-scaled price residuals are the optimization proxy used for calibration on
-this branch, but they are not direct IV RMSE unless model prices are inverted
+this library, but they are not direct IV RMSE unless model prices are inverted
 and IV residuals are reported. Calibration optimizes vega-scaled price
 residuals; the calibration-fit diagnostics report both price residuals and
 direct IV residuals when possible.

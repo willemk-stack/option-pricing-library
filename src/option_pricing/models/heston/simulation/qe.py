@@ -21,6 +21,8 @@ from .types import HestonSimulationResult
 
 type BoolArray = NDArray[np.bool_]
 
+_ZERO_VARIANCE_EPS = float(np.finfo(np.float64).eps)
+
 
 def _as_float_array(array: object) -> FloatArray:
     return cast(FloatArray, np.asarray(array, dtype=np.float64))
@@ -28,6 +30,61 @@ def _as_float_array(array: object) -> FloatArray:
 
 def _as_bool_array(array: object) -> BoolArray:
     return cast(BoolArray, np.asarray(array, dtype=np.bool_))
+
+
+def _zero_variance_absorbing_mask(
+    m: FloatArray,
+    s2: FloatArray,
+    eps: float = _ZERO_VARIANCE_EPS,
+) -> BoolArray:
+    """Return the mask for the absorbing zero-variance QE corner."""
+
+    m_arr, s2_arr = np.broadcast_arrays(m, s2)
+    m = _as_float_array(m_arr)
+    s2 = _as_float_array(s2_arr)
+
+    if np.any(~np.isfinite(m)) or np.any(~np.isfinite(s2)):
+        raise ValueError("QE conditional moments must be finite.")
+
+    near_zero_m = _as_bool_array(np.abs(m) <= eps)
+    near_zero_s2 = _as_bool_array(np.abs(s2) <= eps)
+
+    inconsistent_mask = _as_bool_array(
+        np.logical_and(near_zero_m, np.logical_not(near_zero_s2))
+    )
+    if np.any(inconsistent_mask):
+        raise ValueError(
+            "QE conditional moments are inconsistent: mean is near zero "
+            "but conditional variance is not."
+        )
+
+    return _as_bool_array(np.logical_and(near_zero_m, near_zero_s2))
+
+
+def _psi_from_m_s2(
+    m: FloatArray,
+    s2: FloatArray,
+    eps: float = _ZERO_VARIANCE_EPS,
+) -> FloatArray:
+    """QE switching statistic from conditional moments."""
+
+    m_arr, s2_arr = np.broadcast_arrays(m, s2)
+    m = _as_float_array(m_arr)
+    s2 = _as_float_array(s2_arr)
+
+    absorbing_mask = _zero_variance_absorbing_mask(m=m, s2=s2, eps=eps)
+    active_mask = _as_bool_array(np.logical_not(absorbing_mask))
+
+    psi = _as_float_array(np.empty_like(m, dtype=np.float64))
+    psi[absorbing_mask] = 0.0
+
+    if np.any(active_mask):
+        psi[active_mask] = s2[active_mask] / (m[active_mask] ** 2)
+
+    if np.any(~np.isfinite(psi)):
+        raise ValueError("QE switching statistic psi must be finite.")
+
+    return psi
 
 
 def _m(
@@ -69,7 +126,7 @@ def _psi(
     m = _m(v_t=v_t, params=params, dt=dt)
     s2 = _s2(v_t=v_t, params=params, dt=dt)
 
-    return _as_float_array(s2 / (m**2))
+    return _psi_from_m_s2(m=m, s2=s2)
 
 
 def _validate_psi_c(psi_c: float) -> None:
@@ -226,23 +283,32 @@ def _v_timestep_qe(
 
     _validate_psi_c(psi_c)
 
-    psi = _psi(v_t=v_t, params=params, dt=dt)
+    m = _m(v_t=v_t, params=params, dt=dt)
+    s2 = _s2(v_t=v_t, params=params, dt=dt)
+    absorbing_mask = _zero_variance_absorbing_mask(m=m, s2=s2)
+    psi = _psi_from_m_s2(m=m, s2=s2)
 
-    v_t_arr, z_v_j_arr, u_v_j_arr, psi_arr = np.broadcast_arrays(
+    v_t_arr, z_v_j_arr, u_v_j_arr, psi_arr, absorbing_mask_arr = np.broadcast_arrays(
         v_t,
         z_v_j,
         u_v_j,
         psi,
+        absorbing_mask,
     )
     v_t = _as_float_array(v_t_arr)
     z_v_j = _as_float_array(z_v_j_arr)
     u_v_j = _as_float_array(u_v_j_arr)
     psi = _as_float_array(psi_arr)
+    absorbing_mask = _as_bool_array(absorbing_mask_arr)
 
     v_next = _as_float_array(np.empty_like(psi, dtype=np.float64))
+    v_next[absorbing_mask] = 0.0
 
-    quadratic_mask = _as_bool_array(psi <= psi_c)
-    exponential_mask = _as_bool_array(np.logical_not(quadratic_mask))
+    active_mask = _as_bool_array(np.logical_not(absorbing_mask))
+    quadratic_mask = _as_bool_array(np.logical_and(active_mask, psi <= psi_c))
+    exponential_mask = _as_bool_array(
+        np.logical_and(active_mask, np.logical_not(quadratic_mask))
+    )
 
     if np.any(quadratic_mask):
         v_next[quadratic_mask] = _v_timestep_quadratic(
@@ -346,7 +412,7 @@ def _qe_branch_params(
     params: HestonParams,
     dt: float,
     psi_c: float = 1.5,
-) -> tuple[FloatArray, FloatArray, BoolArray]:
+) -> tuple[FloatArray, FloatArray, BoolArray, BoolArray]:
     """
     Return m, psi, and the quadratic-branch mask.
 
@@ -356,11 +422,15 @@ def _qe_branch_params(
     _validate_psi_c(psi_c)
 
     m = _m(v_t=v_t, params=params, dt=dt)
-    psi = _psi(v_t=v_t, params=params, dt=dt)
+    s2 = _s2(v_t=v_t, params=params, dt=dt)
+    absorbing_mask = _zero_variance_absorbing_mask(m=m, s2=s2)
+    psi = _psi_from_m_s2(m=m, s2=s2)
 
-    quadratic_mask = _as_bool_array(psi <= psi_c)
+    quadratic_mask = _as_bool_array(
+        np.logical_and(np.logical_not(absorbing_mask), psi <= psi_c)
+    )
 
-    return m, psi, quadratic_mask
+    return m, psi, quadratic_mask, absorbing_mask
 
 
 def _qe_martingale_k0_star(
@@ -407,27 +477,34 @@ def _qe_martingale_k0_star(
 
     v_t = _as_float_array(v_t)
 
-    m, psi, quadratic_mask = _qe_branch_params(
+    m, psi, quadratic_mask, absorbing_mask = _qe_branch_params(
         v_t=v_t,
         params=params,
         dt=dt,
         psi_c=psi_c,
     )
 
-    v_t_arr, m_arr, psi_arr, quadratic_mask_arr = np.broadcast_arrays(
-        v_t,
-        m,
-        psi,
-        quadratic_mask,
+    v_t_arr, m_arr, psi_arr, quadratic_mask_arr, absorbing_mask_arr = (
+        np.broadcast_arrays(
+            v_t,
+            m,
+            psi,
+            quadratic_mask,
+            absorbing_mask,
+        )
     )
     v_t = _as_float_array(v_t_arr)
     m = _as_float_array(m_arr)
     psi = _as_float_array(psi_arr)
     quadratic_mask = _as_bool_array(quadratic_mask_arr)
+    absorbing_mask = _as_bool_array(absorbing_mask_arr)
 
     log_m = _as_float_array(np.empty_like(v_t, dtype=np.float64))
+    log_m[absorbing_mask] = 0.0
 
-    exponential_mask = _as_bool_array(np.logical_not(quadratic_mask))
+    exponential_mask = _as_bool_array(
+        np.logical_and(np.logical_not(absorbing_mask), np.logical_not(quadratic_mask))
+    )
 
     if np.any(quadratic_mask):
         m_q = m[quadratic_mask]

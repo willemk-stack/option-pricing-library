@@ -51,6 +51,94 @@ def _recommended_quad_cfg_for_slice(
     )
 
 
+def test_probability_array_accepts_scalar_override() -> None:
+    x = np.array([-0.2, 0.0, 0.2], dtype=np.float64)
+
+    override = heston_pricer._probability_array(
+        probability_override=0.35,
+        x=x,
+        tau=1.0,
+        params=_params(),
+        j=heston_pricer.HESTON_PROBABILITY_INDEX_K,
+        backend="gauss_legendre",
+        quad_cfg=None,
+        rule=None,
+    )
+
+    np.testing.assert_allclose(override, np.full_like(x, 0.35))
+    assert override.dtype == np.float64
+
+
+def test_probability_array_accepts_array_override() -> None:
+    x = np.array([-0.3, 0.1, 0.4], dtype=np.float64)
+    probability_override = np.array([0.2, 0.5, 1.0], dtype=np.float32)
+
+    override = heston_pricer._probability_array(
+        probability_override=probability_override,
+        x=x,
+        tau=1.0,
+        params=_params(),
+        j=heston_pricer.HESTON_PROBABILITY_INDEX_F,
+        backend="gauss_legendre",
+        quad_cfg=None,
+        rule=None,
+    )
+
+    np.testing.assert_allclose(override, probability_override.astype(np.float64))
+    assert override.dtype == np.float64
+
+
+def test_probability_array_broadcasts_valid_override() -> None:
+    x = np.array([[-0.2, 0.0, 0.2], [-0.1, 0.1, 0.3]], dtype=np.float64)
+    probability_override = np.array([[0.25], [0.75]], dtype=np.float64)
+
+    override = heston_pricer._probability_array(
+        probability_override=probability_override,
+        x=x,
+        tau=1.0,
+        params=_params(),
+        j=heston_pricer.HESTON_PROBABILITY_INDEX_K,
+        backend="gauss_legendre",
+        quad_cfg=None,
+        rule=None,
+    )
+
+    expected = np.array([[0.25, 0.25, 0.25], [0.75, 0.75, 0.75]], dtype=np.float64)
+    np.testing.assert_allclose(override, expected)
+
+
+@pytest.mark.parametrize(
+    ("probability_override", "expected_message"),
+    [
+        (
+            np.array([0.2, np.nan]),
+            "probability_override must contain only finite values",
+        ),
+        (
+            np.array([0.2, np.inf]),
+            "probability_override must contain only finite values",
+        ),
+        (-2.0e-12, "probability_override must lie within"),
+        (1.0 + 2.0e-12, "probability_override must lie within"),
+    ],
+)
+def test_probability_array_rejects_invalid_override_values(
+    probability_override: float | np.ndarray,
+    expected_message: str,
+) -> None:
+    with pytest.raises(ValueError, match=expected_message):
+        heston_pricer._probability_array(
+            probability_override=probability_override,
+            x=np.array([-0.2, 0.0], dtype=np.float64),
+            tau=1.0,
+            params=_params(),
+            j=heston_pricer.HESTON_PROBABILITY_INDEX_F,
+            backend="gauss_legendre",
+            quad_cfg=None,
+            rule=None,
+        )
+
+
 @pytest.mark.parametrize("backend", ["gauss_legendre", "quad"])
 def test_heston_call_slice_matches_scalar_loop_for_same_backend(
     backend: str,

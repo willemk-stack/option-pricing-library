@@ -18,7 +18,7 @@ variance, vol-of-vol, and spot/variance correlation. Compared with the
 local-vol and eSSVI tooling in this repository, Heston gives a stochastic
 variance story rather than a pure vanilla-surface fit.
 
-This library currently keeps the Heston stack namespaced. On this branch, the
+This library currently keeps the Heston stack namespaced. At present, the
 package root `option_pricing` does not re-export the Heston pricers or
 calibrators, so expect imports from:
 
@@ -43,16 +43,17 @@ entrypoints without adding root-level exports.
 The implementation parameter object is
 `option_pricing.models.heston.HestonParams`. Its exact field names are:
 
-| Code field | Common notation | Meaning |
+| Literature notation | Repo name | Meaning |
 |---|---|---|
-| `kappa` | $\kappa$ | variance mean-reversion speed |
-| `vbar` | $\theta$ | long-run mean variance |
-| `eta` | $\xi$ | volatility of variance / vol-of-vol |
-| `rho` | $\rho$ | spot/variance correlation |
-| `v` | $v_0$ | initial variance |
+| $\kappa$ | `kappa` | mean-reversion speed of variance |
+| $\theta$ | `vbar` | long-run variance |
+| $\xi$ or $\sigma_v$ | `eta` | volatility of variance / vol-of-vol |
+| $\rho$ | `rho` | spot/variance Brownian correlation |
+| $v_0$ | `v` | initial variance |
 
-Use the code names `vbar`, `eta`, and `v` when calling the library. `theta`,
-`xi`, and `v0` are notation only here.
+The repo uses `vbar`, `eta`, and `v`, while many texts write `theta`, `xi`,
+and `v0`. Those literature names are notation only here; use the repo names
+when calling the library.
 
 `HestonParams` validates the basic admissibility conditions:
 
@@ -70,11 +71,12 @@ optional soft Feller penalty without hard-blocking violations.
 For routine calibration, use `HestonCalibrationBounds` to keep the optimizer in
 a practical box. Those bounds are optimizer safeguards, not a proof of
 identifiability, no-arbitrage, or model correctness. Multistart calibration
-defaults to the bounded parameter transform for exactly that reason.
+defaults to the bounded parameter transform for exactly that reason, and
+single-start `calibrate_heston(...)` now uses the same bounded public default.
 
 ## Pricing
 
-The vanilla pricing entrypoints on this branch live in
+The vanilla pricing entrypoints live in
 `option_pricing.pricers.heston`:
 
 - `heston_price_call_from_ctx(...)`
@@ -87,6 +89,11 @@ The vanilla pricing entrypoints on this branch live in
 put helpers are there when you want the formula-specific surface.
 `heston_price_instrument(...)` and `heston_price_instrument_from_ctx(...)` are
 the instrument-based wrappers for `VanillaOption`.
+
+Implementation convention: the pricer separates the strike/cash leg from the
+forward/asset leg. Probability index `0` is `P_K`, probability index `1` is
+`P_F`, and the call helper prices vanilla options as
+`df * (forward * P_F - strike * P_K)`.
 
 The default backend is fixed-rule Gauss-Legendre integration. That is the
 production-oriented path for ordinary pricing and calibration because it is
@@ -101,6 +108,12 @@ inside the documented calibration bounds. They return columns in the order
 array-valued strikes return `strike.shape + (5,)`. Ordinary price-only helpers
 continue to support both `gauss_legendre` and `quad`, including the
 deterministic-variance pricing limit near `eta=0`.
+
+Treat those analytic Jacobians as a guarded calibration performance and
+diagnostic option, not as a universal mathematical guarantee over every
+numerical regime exposed by the price-only pricers. Outside the validated
+domain, calibration raises a clear error instead of silently reusing the
+analytic derivative path where it has not been validated.
 
 ```python
 import numpy as np
@@ -170,7 +183,7 @@ the inversion reflects model behavior rather than mixed numerical settings.
 
 The numerical-policy note for this stack is the
 [Heston quadrature policy](../notes/heston/heston_quadrature_policy.md). The high-level
-policy on this branch is:
+policy in this library is:
 
 - fixed Gauss-Legendre is the default production backend;
 - `quad` is a cross-check backend, not the default calibration engine;
@@ -241,6 +254,8 @@ Calibration helpers are namespaced under `option_pricing.models.heston.calibrati
 The calibrators themselves are re-exported from that package, but
 `HestonQuoteSet` currently lives in
 `option_pricing.models.heston.calibration.heston_types`.
+`preflight_heston_quotes(...)` is also re-exported from the calibration package
+when you want an explicit economic sanity check before running an optimizer.
 
 A `HestonQuoteSet` stores:
 
@@ -257,25 +272,55 @@ separately. At the user level:
     `objective_type="bid_ask_normalized"`;
 - provide `iv_mid` if you want the built-in seed heuristics and IV diagnostics
     to work from actual quoted IVs rather than only prices.
+- call `preflight_heston_quotes(...)` when you want calibration-specific
+    validation for vanilla price bounds and mid-in-bid/ask consistency without
+    changing `HestonQuoteSet` construction.
 
-The currently supported objective types are:
+The current calibration/reporting split is:
 
-- `"price_rmse"`
-- `"relative_price_rmse"`
-- `"vega_scaled_price"`
-- `"bid_ask_normalized"`
+| Quantity | Status | Interpretation |
+|---|---|---|
+| `"price_rmse"` | available calibration objective | direct price residual objective |
+| `"relative_price_rmse"` | available calibration objective | price residual scaled by the target price |
+| `"vega_scaled_price"` | available calibration objective and the current default | price residual scaled by Black-Scholes vega to approximate IV-error behavior without repeated IV inversion |
+| `"bid_ask_normalized"` | available calibration objective | residual scaled by bid-ask width |
+| direct IV-RMSE optimization | not implemented in this library | do not claim calibration directly minimizes IV RMSE |
+| reported IV residuals / IV RMSE | reporting metric | evaluated after repricing and Black inversion when diagnostics are available |
 
-There is no direct IV-RMSE calibration objective on this branch. If you
-calibrate with vega-scaled price residuals, treat them as the optimizer's
-price-space proxy for IV fit, not as the same thing as direct implied-vol
-RMSE. Calibration optimizes vega-scaled price residuals; direct IV residuals
-and IV RMSE are reported later by the fit diagnostics after repricing and
-Black inversion.
+When describing the project, say that calibration uses vega-scaled price
+residuals and reports implied-volatility residual diagnostics; do not describe
+this as direct IV-RMSE optimization unless such an objective is explicitly
+implemented.
+
+There is no direct IV-RMSE calibration objective in this library.
+`"vega_scaled_price"` stays in price space and uses Black-Scholes vega as the
+residual scale, while IV residuals and IV RMSE are reported later by the fit
+diagnostics after repricing and Black inversion.
 
 For starting points, use `default_heston_seed(...)` when you want one
 market-aware seed and `heston_seed_grid(...)` when you want the deterministic
-multistart spoke set. `calibrate_heston_multistart(...)` defaults to
+multistart spoke set. `calibrate_heston(...)` now defaults to
+`parameter_transform="bounded"` because vanilla-only Heston calibration is
+weakly identifiable and the safer public single-start path should stay inside a
+practical box. `parameter_transform="unconstrained"` remains available for
+low-level experiments. For production-style workflows, prefer
+`calibrate_heston_multistart(...)`, which also defaults to
 `parameter_transform="bounded"` and `max_seeds=12`.
+
+Invalid calibration inputs raise before optimization. In multistart mode,
+failed seeds are retained when at least one seed succeeds because they are
+useful diagnostics about initialization sensitivity. If every seed fails,
+`calibrate_heston_multistart(...)` raises `NoConvergenceError` instead of
+returning a result without a usable `best_run` and `best_params`.
+
+That policy applies to analytic Jacobians as well. They are supported only on
+the guarded bounded calibration path: compatible fixed-rule Gauss-Legendre
+backend, documented parameter bounds, and `eta` at or above the analytic-
+Jacobian floor. Requests outside that domain are expected to fail fast because
+that is preferable to silently using an unvalidated derivative path. In
+bounded multistart, one unsupported seed can still be preserved as a failed run
+while another seed succeeds, so the calibration stays usable and the failure
+remains visible for review.
 
 ```python
 from option_pricing.models.heston.calibration import (
@@ -318,11 +363,19 @@ The main report families are:
     `build_market_like_heston_quote_set(...)`;
 - model comparison: `run_heston_vs_local_vol_comparison(...)`.
 
-Use benchmark diagnostics as smoke, regression, or synthetic-recovery evidence.
+Use benchmark diagnostics as smoke, regression, or synthetic repricing-recovery
+evidence.
 Do not present them as the same thing as final calibration quality on live
 quotes. The artifact builder emits separate smoke and release manifests under
 `benchmarks/artifacts/heston_calibration/` so the lightweight wiring benchmark
 and the stronger release benchmark stay distinguishable.
+
+Synthetic calibration checks in this repo are primarily repricing-recovery
+diagnostics. They validate pricing/calibration wiring and residual behavior on
+Heston-generated quotes; they do not prove unique recovery of the generating
+parameters. Similar vanilla repricing errors can arise from different
+parameter vectors, and multistart diagnostics expose that sensitivity rather
+than making the fit unique.
 
 The detailed notebook-oriented walkthrough is in the
 [Heston diagnostics guide](heston_diagnostics.md).
@@ -333,8 +386,8 @@ The detailed notebook-oriented walkthrough is in the
 against eSSVI implied-surface repricing and a direct local-vol PDE repricing
 audit on the same `HestonQuoteSet` target. The final capstone target should use
 `build_market_like_heston_quote_set(...)`, which returns a deterministic
-market-like synthetic fixture rather than market data or Heston-generated
-recovery quotes. The report packages quote-level price and IV residuals, direct
+market-like synthetic fixture rather than market data or a Heston-generated
+quote target. The report packages quote-level price and IV residuals, direct
 PDE rows, ATM and wing buckets, optional held-out splits, and a concise
 trade-off summary.
 
@@ -368,6 +421,10 @@ Read the trade-off honestly:
 - The direct local-vol PDE comparison is intentionally small; distinguish model
     residuals from PDE grid, boundary, and projection error.
 - Nothing in this guide should be read as a production-trading claim.
+
+For bounded interview/CV wording, see the
+[Heston Capstone interview framing](../notes/heston/heston_interview_framing.md)
+note.
 
 ## Minimal workflow checklist
 

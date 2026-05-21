@@ -75,7 +75,7 @@ For the flat-input, curves-first, and implied-vol workflows, start with the [Ins
 
 Capstone 3 compares Heston stochastic-volatility calibration against the existing eSSVI/local-vol stack on one deterministic quote target. The summary card makes the review surface explicit: fitted smile behavior, IV residual structure, multistart calibration stability, and bucketed model-comparison errors all stay visible in one generated artifact.
 
-Synthetic deterministic quote fixture; not real market data. The comparison is diagnostic evidence for model-choice judgment, not a claim that Heston is universally superior.
+Evidence is based on deterministic synthetic fixtures and reference-price tests, not live-market calibration or production trading validation. The comparison is diagnostic evidence for model-choice judgment on a controlled target, not a claim that Heston is universally superior.
 
 ![README proof card summarizing surface repair, smooth Dupire handoff, local-vol and PDE validation, and benchmark plus delivery evidence.](./docs/assets/generated/showcase/readme_proof_card.light.svg#gh-light-mode-only)
 ![README proof card summarizing surface repair, smooth Dupire handoff, local-vol and PDE validation, and benchmark plus delivery evidence.](./docs/assets/generated/showcase/readme_proof_card.dark.svg#gh-dark-mode-only)

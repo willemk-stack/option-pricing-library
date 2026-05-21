@@ -60,7 +60,7 @@ def build_market_like_heston_quote_set(
 
     The fixture is synthetic and deterministic. It is intentionally not sampled
     from a Heston model, which keeps the final model-comparison target from
-    advantaging Heston through recovery data.
+    advantaging Heston through a Heston-generated quote target.
     """
     resolved_market = (
         MarketData(spot=100.0, rate=0.020, dividend_yield=0.010)

@@ -20,6 +20,7 @@ from option_pricing.models.heston.calibration.heston_types import (
     HestonMultistartResult,
     HestonQuoteSet,
 )
+from option_pricing.models.heston.charfunc import HESTON_ANALYTIC_JAC_ETA_MIN
 from option_pricing.models.heston.params import HestonParams
 from option_pricing.types import MarketData
 
@@ -106,6 +107,32 @@ def test_explicit_seeds_call_calibrator_once_per_unique_seed(
     assert result.best_params == fitted[1]
 
 
+def test_multistart_defaults_to_bounded_parameter_transform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed = _seed(kappa=1.0)
+    seen_parameter_transforms: list[str] = []
+
+    def fake_calibrate_heston(**kwargs: object) -> tuple[HestonParams, OptimizeResult]:
+        parameter_transform = kwargs["parameter_transform"]
+        assert isinstance(parameter_transform, str)
+        seen_parameter_transforms.append(parameter_transform)
+        fitted_seed = kwargs["x0_params"]
+        assert isinstance(fitted_seed, HestonParams)
+        return fitted_seed, _fake_result(cost=0.25)
+
+    monkeypatch.setattr(calibrate_module, "calibrate_heston", fake_calibrate_heston)
+
+    result = calibrate_module.calibrate_heston_multistart(
+        quotes=_quotes(),
+        objective_type="price_rmse",
+        seeds=[seed],
+    )
+
+    assert seen_parameter_transforms == ["bounded"]
+    assert result.parameter_transform == "bounded"
+
+
 def test_failed_seed_is_retained_and_successful_seed_wins(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -139,6 +166,62 @@ def test_failed_seed_is_retained_and_successful_seed_wins(
     assert "bad start" in result.failed_runs[0].message
     assert result.best_run.success
     assert result.best_params == fitted
+
+
+def test_multistart_analytic_jacobian_invalid_seed_is_retained_when_other_seed_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    invalid_seed = _seed(eta=0.5 * HESTON_ANALYTIC_JAC_ETA_MIN)
+    valid_seed = _seed(kappa=2.0, eta=0.6)
+    optimizer_calls: list[np.ndarray] = []
+
+    def fake_least_squares(**kwargs: object) -> OptimizeResult:
+        optimizer_calls.append(np.asarray(kwargs["x0"], dtype=np.float64))
+        return OptimizeResult(
+            x=np.asarray(kwargs["x0"], dtype=np.float64),
+            success=True,
+            message="valid analytic Jacobian seed converged",
+            cost=0.25,
+            optimality=1.0e-8,
+            nfev=3,
+            njev=2,
+            status=1,
+        )
+
+    monkeypatch.setattr(calibrate_module, "least_squares", fake_least_squares)
+
+    result = calibrate_module.calibrate_heston_multistart(
+        quotes=_quotes(),
+        objective_type="price_rmse",
+        seeds=[invalid_seed, valid_seed],
+        parameter_transform="bounded",
+        use_analytic_jac=True,
+        max_nfev=1,
+    )
+
+    assert len(optimizer_calls) == 1
+    assert result.success_count >= 1
+    assert result.failure_count >= 1
+    assert result.jacobian_mode == "analytic"
+    assert result.analytic_jacobian_eta_min == HESTON_ANALYTIC_JAC_ETA_MIN
+
+    failed_run = result.failed_runs[0]
+    assert failed_run.seed_index == 0
+    assert failed_run.seed_params == invalid_seed
+    assert failed_run.fitted_params is None
+    assert failed_run.raw_x is None
+    assert "ValueError" in failed_run.message
+    assert "initial eta >=" in failed_run.message
+
+    assert result.best_run.success
+    assert result.best_run.seed_index == 1
+    assert result.best_run.message == "valid analytic Jacobian seed converged"
+    np.testing.assert_allclose(
+        result.best_params.as_array(),
+        valid_seed.as_array(),
+        atol=1.0e-12,
+        rtol=0.0,
+    )
 
 
 def test_runs_are_sorted_success_cost_then_seed_index(
@@ -212,33 +295,34 @@ def test_result_metadata_fields_are_populated(
     assert result.best_run.message == "metadata ok"
 
 
-def test_all_seeds_fail_raises_no_convergence_error(
+def test_heston_multistart_raises_when_all_seeds_fail_with_diagnostics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def fake_calibrate_heston(**_kwargs: object) -> tuple[HestonParams, OptimizeResult]:
-        raise NoConvergenceError("still no fit")
+    seeds = [_seed(kappa=1.0), _seed(kappa=2.0)]
+    failure_messages = ["mock seed failure 0", "mock seed failure 1"]
+    call_count = {"value": 0}
+
+    def fake_calibrate_heston(**kwargs: object) -> tuple[HestonParams, OptimizeResult]:
+        seed = kwargs["x0_params"]
+        assert isinstance(seed, HestonParams)
+        idx = call_count["value"]
+        call_count["value"] += 1
+        raise NoConvergenceError(failure_messages[idx])
 
     monkeypatch.setattr(calibrate_module, "calibrate_heston", fake_calibrate_heston)
 
-    with pytest.raises(NoConvergenceError) as excinfo:
+    with pytest.raises(NoConvergenceError, match=r"all 2 seed\(s\) failed") as excinfo:
         calibrate_module.calibrate_heston_multistart(
             quotes=_quotes(),
             objective_type="price_rmse",
-            seeds=[
-                _seed(kappa=1.0),
-                _seed(kappa=2.0),
-                _seed(kappa=3.0),
-                _seed(kappa=4.0),
-            ],
+            seeds=seeds,
         )
 
     message = str(excinfo.value)
-    assert "all 4 seed" in message
     assert "seed 0" in message
     assert "seed 1" in message
-    assert "seed 2" in message
-    assert "1 more failure" in message
-    assert "still no fit" in message
+    assert failure_messages[0] in message
+    assert failure_messages[1] in message
 
 
 def test_x0_params_is_prepended_before_explicit_seeds(

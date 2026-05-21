@@ -22,7 +22,7 @@ def _true_params() -> HestonParams:
 
 
 def _quad_cfg() -> QuadratureConfig:
-    # NOTE: Recovery tests use the same modest fixed-rule quadrature for
+    # NOTE: Repricing-recovery tests use the same modest fixed-rule quadrature for
     # synthetic generation and calibration to keep the suite fast and focused.
     return QuadratureConfig(u_max=50.0, n_panels=6, nodes_per_panel=6)
 
@@ -112,7 +112,7 @@ def _assert_inside_bounds(
     assert np.all(values <= bounds.upper_array())
 
 
-def test_clean_synthetic_surface_recovers_heston_parameters_and_fit_quality() -> None:
+def test_clean_synthetic_surface_reprices_heston_generated_quotes() -> None:
     quotes = _synthetic_quotes()
     bounds = HestonCalibrationBounds()
     default_seed = default_heston_seed(quotes, bounds=bounds)
@@ -141,16 +141,8 @@ def test_clean_synthetic_surface_recovers_heston_parameters_and_fit_quality() ->
     assert float(np.max(np.abs(price_residual))) < 1.0e-8
     assert float(np.sqrt(np.mean(price_residual * price_residual))) < 1.0e-9
 
-    # NOTE: Exact parameter recovery can be fragile under weak Heston
-    # identifiability, so these tolerances are intentionally looser than this
-    # deterministic clean surface currently achieves.
-    tolerances = np.array([5.0e-2, 2.0e-3, 2.0e-2, 2.0e-2, 2.0e-3])
-    assert np.all(
-        np.abs(result.best_params.as_array() - _true_params().as_array()) <= tolerances
-    )
 
-
-def test_noisy_synthetic_surface_prioritizes_fit_stability_over_exact_params() -> None:
+def test_noisy_synthetic_surface_prioritizes_repricing_stability() -> None:
     # NOTE: Two vol basis points is a small deterministic quote perturbation
     # for a stability smoke test, not a universal market-data noise model.
     quotes = _synthetic_quotes(noise_vol_bps=2.0)
@@ -177,8 +169,8 @@ def test_noisy_synthetic_surface_prioritizes_fit_stability_over_exact_params() -
     assert result.best_run.cost < default_cost * 1.0e-2
 
     # NOTE: With noisy quotes, repricing/IV error and bounded stability are
-    # the primary assertions; exact true-parameter recovery is deliberately not
-    # required.
+    # the primary assertions; closeness to the generating parameters is
+    # deliberately not required.
     iv_residual_bps = _model_iv_residual_bps(quotes, result.best_params)
     assert float(np.sqrt(np.mean(iv_residual_bps * iv_residual_bps))) < 3.0
     assert float(np.max(np.abs(iv_residual_bps))) < 5.0

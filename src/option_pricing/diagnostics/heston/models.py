@@ -505,7 +505,7 @@ class HestonCalibrationFitDiagnostics:
 
     - quote-level price and implied-vol residuals
     - smile overlay data
-    - parameter recovery or fitted-parameter summary
+    - fitted-parameter summary and truth deltas when synthetic truth is supplied
     - multistart run metadata when available
     - held-out error summaries when a mask is supplied
     - lightweight objective slices around the fitted point

@@ -5,6 +5,14 @@
     bounded validation evidence for configured quote sets, objective choices,
     and quadrature settings; it is not a guarantee of parameter uniqueness.
 
+!!! note "Default transform policy"
+    `calibrate_heston(...)` now defaults to `parameter_transform="bounded"`
+    because vanilla-only Heston calibration is weakly identifiable and the
+    safer public single-start workflow should stay inside a practical
+    calibration box. `parameter_transform="unconstrained"` remains available
+    for low-level experiments, but the recommended production-style workflow is
+    bounded `calibrate_heston_multistart(...)`.
+
 The final calibration diagnostics use
 `run_heston_calibration_fit_diagnostics(...)` to turn a fitted Heston parameter
 set or `HestonMultistartResult` into plain evidence tables.
@@ -13,9 +21,9 @@ The report has the standard diagnostics shape:
 
 - `meta`: objective, backend, quadrature, quote counts, Feller status, quote
   policy counts, and notes
-- `tables`: residuals, smile fit, IV residual grid, parameter recovery,
-  constraint diagnostics, quote policy, multistart runs, held-out errors, and
-  objective slices
+- `tables`: residuals, smile fit, IV residual grid, the
+    `parameter_recovery` parameter-summary table, constraint diagnostics, quote
+    policy, multistart runs, held-out errors, and objective slices
 - `arrays`: aligned quote vectors, model prices, model IVs, and parameter arrays
 
 ## What is reported
@@ -31,13 +39,23 @@ data only; plotting helpers consume it later.
 `iv_residual_grid` is returned in long form. No interpolation is applied, so
 irregular quote grids stay explicit instead of being silently reshaped.
 
-`parameter_recovery` includes truth columns when synthetic truth is supplied.
-Without truth, it becomes a fitted-parameter summary and omits unsupported truth
-columns.
+`parameter_recovery` is the historical table name for the fitted-parameter
+summary. When synthetic truth is supplied it also includes truth columns and
+deltas; without truth it omits unsupported truth columns. Treat that table as
+diagnostic context, not proof that the generating parameters are uniquely
+identified.
 
 `multistart_runs` records every optimizer run when a `HestonMultistartResult` is
 supplied, including failed runs. Failed seeds are evidence about initialization
 sensitivity, not noise to be hidden.
+
+Invalid calibration inputs raise before optimization. During multistart
+calibration, individual seed failures are retained as failed runs when at least
+one seed succeeds, because those failures are useful initialization-sensitivity
+diagnostics. If every seed fails, `calibrate_heston_multistart(...)` raises
+`NoConvergenceError` rather than returning a result without valid `best_params`.
+This keeps the successful-result type honest: every `HestonMultistartResult`
+contains a usable `best_run` and `best_params`.
 
 `held_out_errors` is populated only when a held-out mask is supplied. Fit errors
 and held-out errors should be reported separately.
@@ -73,21 +91,43 @@ vol-of-vol, and correlation tradeoffs. The committed evidence surface is the
 and focused
 [calibration-fit tests](https://github.com/willemk-stack/option-pricing-library/blob/main/tests/diagnostics/heston/test_heston_calibration_fit.py).
 
+Synthetic calibration tests in this repo primarily validate
+pricing/calibration wiring and residual behavior on Heston-generated quotes.
+Similar vanilla repricing errors can arise from different parameter vectors,
+and multistart diagnostics expose that sensitivity; they do not prove
+uniqueness.
+
 Multistart is diagnostic, not magic. It can show whether different starts
 converge to the same basin, whether some starts fail, and whether near-best
 solutions have similar costs. It cannot make a weakly identified calibration
 unique.
 
 Calibration optimizes vega-scaled price residuals as a robust proxy for IV
-error; it does not optimize direct IV RMSE on this branch. Those residuals are
+error; it does not optimize direct IV RMSE in this library. Those residuals are
 not direct IV RMSE unless model prices are explicitly inverted back to implied
 volatilities and the IV residuals are then reported. The fit diagnostics do
 perform that inversion where possible and report IV residuals separately from
 price residuals.
 
+### Objective versus reported metrics
+
+| Quantity | Status | Interpretation |
+|---|---|---|
+| `price_rmse` | available calibration objective | Direct price residual objective |
+| `relative_price_rmse` | available calibration objective | Price residual scaled by the target price |
+| `vega_scaled_price` | available calibration objective and the current default | Price residual scaled by Black-Scholes vega to approximate IV-error behavior without repeated IV inversion |
+| `bid_ask_normalized` | available calibration objective | Residual scaled by bid-ask width |
+| direct `iv_rmse` optimization | not implemented in this library | Do not describe calibration as directly minimizing IV RMSE |
+| reported IV residuals / IV RMSE | reporting metric | Computed after repricing and Black inversion when diagnostics are available |
+
+When describing the project, say that calibration uses vega-scaled price
+residuals and reports implied-volatility residual diagnostics; do not describe
+this as direct IV-RMSE optimization unless such an objective is explicitly
+implemented.
+
 Loss-function choice is therefore part of the repository calibration contract,
 not a universal Heston fact. Christoffersen and Jacobs motivate treating the
-estimation loss and evaluation loss consistently; this branch records both the
+estimation loss and evaluation loss consistently; the library records both the
 optimized residual type and the reported IV diagnostics so the distinction is
 visible.
 
@@ -96,6 +136,19 @@ calibration path with `eta >= HESTON_ANALYTIC_JAC_ETA_MIN` (`1e-6`) and bounded
 parameter ranges. Price-only deterministic-limit checks near `eta=0` remain
 valid pricing diagnostics, but they do not validate the Cui analytic-gradient
 formula near zero vol-of-vol.
+
+Treat the analytic Jacobian path as a calibration performance and diagnostic
+option inside that validated numerical domain, not as a universal guarantee for
+every Heston pricing regime. When the request falls outside the guarded domain,
+the library is expected to fail fast with a clear error. That behavior is
+preferable to silently reusing analytic derivatives where the implementation
+has not been validated.
+
+Multistart diagnostics make those failures reviewable. If one bounded seed
+requests analytic Jacobians outside the guarded domain but another seed
+converges, the successful run still supplies `best_run` and `best_params` while
+the failed seed remains in `multistart_runs` with its message and seed metadata.
+Only the all-seeds-failed case raises `NoConvergenceError`.
 
 Held-out errors should not be mixed with fit errors. If a mask is supplied, the
 diagnostics summarize train and held-out rows separately. If no mask is

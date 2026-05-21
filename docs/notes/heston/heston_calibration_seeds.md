@@ -221,38 +221,44 @@ meant to surface. If every seed fails, calibration raises `NoConvergenceError`
 with a summarized per-seed failure message rather than returning a result with
 no valid `best_run`.
 
-## Synthetic recovery evidence
+That includes guarded analytic-Jacobian failures. If one bounded seed falls
+outside the validated analytic-Jacobian domain, preserving the failed run shows
+which seed left the supported regime and why, while a different supported seed
+can still produce the usable best fit. This is diagnostic evidence, not noise
+to discard.
 
-Clean synthetic recovery builds a small Heston quote surface from known
-parameters, computes Black implied vols and vegas for those quotes, and then
-runs the real `calibrate_heston_multistart` path. A clean recovery test proves
-that, on internally consistent data and fixed numerical settings, the
-calibration pipeline can improve materially over the default seed, produce
-admissible parameters, and reprice the generated surface with small residuals.
+## Synthetic repricing-recovery evidence
+
+Clean synthetic repricing recovery builds a small Heston quote surface from
+known parameters, computes Black implied vols and vegas for those quotes, and
+then runs the real `calibrate_heston_multistart` path. A clean
+repricing-recovery test checks that, on internally consistent data and fixed
+numerical settings, the calibration pipeline can improve materially over the
+default seed, produce admissible parameters, and reprice the generated surface
+with small residuals.
 
 It does not prove that Heston parameters are uniquely identified from arbitrary
 market smiles. Even a clean surface can contain shallow directions where
 different combinations of `kappa`, `vbar`, `eta`, `rho`, and `v` fit nearly the
 same prices.
 
-NOTE: Clean-recovery parameter tolerances are diagnostic guardrails. They
-should remain looser than the deterministic synthetic case currently achieves
-because exact parameter equality can become brittle under modest grid,
-quadrature, or objective changes.
+NOTE: Clean synthetic tests primarily validate pricing/calibration wiring and
+residual behavior under fixed numerical settings. Similar vanilla repricing
+errors can still arise from different parameter vectors.
 
-Noisy synthetic recovery perturbs the generated implied vols by a deterministic
-small number of vol basis points, reprices those perturbed vols through
-Black-76, and calibrates to the resulting quote surface. Under noise, the
-primary success metric should be fit quality and stability: successful runs,
-bounded fitted parameters, materially lower cost than the default seed, and
-reasonable repricing or IV residuals. Exact equality to the synthetic truth is
-not required because the quotes no longer come from a single exact Heston
-surface.
+Noisy synthetic repricing recovery perturbs the generated implied vols by a
+deterministic small number of vol basis points, reprices those perturbed vols
+through Black-76, and calibrates to the resulting quote surface. Under noise,
+the primary success metric should be fit quality and stability: successful
+runs, bounded fitted parameters, materially lower cost than the default seed,
+and reasonable repricing or IV residuals. Exact equality to the synthetic
+truth is not required because the quotes no longer come from a single exact
+Heston surface.
 
-LIMITATION: The current noisy-recovery noise level and IV residual thresholds are
-capstone smoke thresholds, not market microstructure claims. For final
-calibration evidence, state the chosen noise level and whether repricing error
-or parameter closeness is the primary success metric.
+LIMITATION: The current noisy repricing-recovery noise level and IV residual
+thresholds are capstone smoke thresholds, not market microstructure claims.
+For final calibration evidence, state the chosen noise level and whether
+repricing error or parameter stability is the primary success metric.
 
 ## Interpreting seed sensitivity
 
@@ -289,7 +295,8 @@ The default seed is intentionally simple:
 The seed and seed grid are designed to make calibration runnable without
 hand-picking parameters. They are not designed to prove that the resulting
 parameters are unique or economically meaningful. That responsibility belongs to
-calibration diagnostics: residual plots, synthetic recovery, objective slices,
+calibration diagnostics: residual plots, synthetic repricing recovery,
+objective slices,
 and multi-start sensitivity.
 
 ## References

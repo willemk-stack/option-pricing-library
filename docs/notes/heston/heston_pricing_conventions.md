@@ -165,6 +165,10 @@ Equivalently:
 | `P_K`, `p0`, `probability_index=0` | strike-discount term |
 | `P_F`, `p1`, `probability_index=1` | forward-discount term |
 
+This mapping is verified against `option_pricing.pricers.heston`, where the
+call helper computes `df * (forward * P_F - strike * P_K)` and passes
+probability index `0` to the strike leg and `1` to the forward leg.
+
 This naming should be treated as part of the public implementation contract.
 
 ---

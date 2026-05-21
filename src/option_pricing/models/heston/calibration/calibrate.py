@@ -185,9 +185,32 @@ def _all_failed_message(runs: tuple[HestonCalibrationRun, ...]) -> str:
     remaining = len(runs) - preview_count
     suffix = f"; ... {remaining} more failure(s)" if remaining > 0 else ""
     return (
-        f"Heston multistart calibration failed for all {len(runs)} seed(s). "
+        f"Heston multistart calibration failed because all {len(runs)} seed(s) failed. "
         f"Failures: {preview}{suffix}"
     )
+
+
+def _validate_heston_calibration_inputs(
+    quotes: HestonQuoteSet,
+    *,
+    objective_type: HestonObjectiveType,
+) -> None:
+    if quotes.n_quotes == 0:
+        raise ValueError("Heston calibration requires at least one quote.")
+
+    if objective_type != "bid_ask_normalized":
+        return
+
+    if quotes.bid is None or quotes.ask is None:
+        raise ValueError(
+            "objective_type='bid_ask_normalized' requires quotes.bid and quotes.ask"
+        )
+
+    spread = np.asarray(quotes.ask - quotes.bid, dtype=np.float64)
+    if not np.all(np.isfinite(spread)):
+        raise ValueError("bid/ask spread must be finite")
+    if np.any(spread <= 0.0):
+        raise ValueError("bid/ask spread must be strictly positive")
 
 
 # NOTE: Use overloads for return_result so the backward-compatible fitted
@@ -201,7 +224,7 @@ def calibrate_heston(
     x0_params: HestonParams | None = None,
     loss: Literal["linear", "soft_l1", "huber", "cauchy", "arctan"] = "soft_l1",
     x_scale: Literal["jac"] | float | FloatArray | None = "jac",
-    parameter_transform: HestonParameterTransform = "unconstrained",
+    parameter_transform: HestonParameterTransform = "bounded",
     vega_floor: float | None = None,
     price_floor: float | None = None,
     spread_floor: float | None = None,
@@ -227,7 +250,7 @@ def calibrate_heston(
     x0_params: HestonParams | None = None,
     loss: Literal["linear", "soft_l1", "huber", "cauchy", "arctan"] = "soft_l1",
     x_scale: Literal["jac"] | float | FloatArray | None = "jac",
-    parameter_transform: HestonParameterTransform = "unconstrained",
+    parameter_transform: HestonParameterTransform = "bounded",
     vega_floor: float | None = None,
     price_floor: float | None = None,
     spread_floor: float | None = None,
@@ -253,7 +276,7 @@ def calibrate_heston(
     x0_params: HestonParams | None = None,
     loss: Literal["linear", "soft_l1", "huber", "cauchy", "arctan"] = "soft_l1",
     x_scale: Literal["jac"] | float | FloatArray | None = "jac",
-    parameter_transform: HestonParameterTransform = "unconstrained",
+    parameter_transform: HestonParameterTransform = "bounded",
     vega_floor: float | None = None,
     price_floor: float | None = None,
     spread_floor: float | None = None,
@@ -278,7 +301,7 @@ def calibrate_heston(
     x0_params: HestonParams | None = None,
     loss: Literal["linear", "soft_l1", "huber", "cauchy", "arctan"] = "soft_l1",
     x_scale: Literal["jac"] | float | FloatArray | None = "jac",
-    parameter_transform: HestonParameterTransform = "unconstrained",
+    parameter_transform: HestonParameterTransform = "bounded",
     vega_floor: float | None = None,
     price_floor: float | None = None,
     spread_floor: float | None = None,
@@ -294,19 +317,31 @@ def calibrate_heston(
     gtol: float | None = None,
     return_result: bool = False,
 ) -> HestonParams | tuple[HestonParams, OptimizeResult]:
+
     if parameter_transform not in HESTON_PARAMETER_TRANSFORMS:
         supported = ", ".join(repr(value) for value in HESTON_PARAMETER_TRANSFORMS)
         raise ValueError(
             f"parameter_transform must be one of {supported}; "
             f"got {parameter_transform!r}"
         )
+    _validate_heston_calibration_inputs(quotes, objective_type=objective_type)
+
     if parameter_transform == "unconstrained" and bounds is not None:
         raise ValueError("bounds are only used with parameter_transform='bounded'.")
+
     if x0_params is None:
         x0_params = default_heston_seed(
             quotes,
             bounds=bounds if bounds is not None else HestonCalibrationBounds(),
         )
+
+    if use_analytic_jac and parameter_transform != "bounded":
+        raise ValueError(
+            "Analytic Heston calibration Jacobians require "
+            "parameter_transform='bounded'. Use use_analytic_jac=False for "
+            "explicit unconstrained calibration experiments."
+        )
+
     analytic_bounds = (
         _validate_analytic_jacobian_calibration_request(
             x0_params=x0_params,
@@ -316,6 +351,7 @@ def calibrate_heston(
         if use_analytic_jac
         else None
     )
+
     # NOTE: Keep the default optimizer at "trf" because the default
     # loss="soft_l1" is invalid for SciPy's method="lm"; explicit LM is still
     # allowed with loss="linear".
@@ -447,10 +483,21 @@ def calibrate_heston_multistart(
     xtol: float | None = None,
     gtol: float | None = None,
 ) -> HestonMultistartResult:
-    """Run Heston calibration from multiple deterministic starting points."""
+    """Run Heston calibration from multiple deterministic starting points.
+
+    Invalid calibration inputs raise before any optimizer run. When at least
+    one seed succeeds, failed seeds are still retained in ``runs`` because they
+    are useful initialization-sensitivity diagnostics. If every seed fails,
+    this function raises ``NoConvergenceError`` instead of returning a
+    ``HestonMultistartResult`` without valid ``best_run`` / ``best_params``,
+    preserving the successful-result type contract.
+    """
     # NOTE: Multi-start defaults to the bounded transform because seed-grid
     # diagnostics are most useful when every optimizer run stays inside the
-    # same practical calibration box; calibrate_heston keeps its old default.
+    # same practical calibration box; single-start now uses the same safer
+    # public default while parameter_transform="unconstrained" remains
+    # available for explicit low-level experiments.
+    _validate_heston_calibration_inputs(quotes, objective_type=objective_type)
     resolved_seeds = _build_multistart_seeds(
         quotes,
         seeds=seeds,
