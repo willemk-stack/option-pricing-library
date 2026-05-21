@@ -7,7 +7,7 @@
   ],
   "rebuild_command": "python scripts/build_heston_docs_artifacts.py --profile release",
   "source_inputs": {
-    "scripts/build_heston_docs_artifacts.py": "3d4fc605d0ac0806c5ac4dedf23a07e90f2358f392b2885aa0be0a2fd59eb439",
+    "scripts/build_heston_docs_artifacts.py": "a6dbb135ca46d2bf7488bb80d8c1a309d5894f3e1348ee743818cc519c90c4bd",
     "src/option_pricing/diagnostics/heston/fixtures.py": "8ddaf4799b980ea7652ffa3a8ec27f8a07a9325e578fd59b7c156ef53174a505",
     "src/option_pricing/diagnostics/heston/calibration_fit.py": "722607db733004e45702a7632e48ac6039325ba29ee400a42742aedf7301e34c",
     "src/option_pricing/diagnostics/heston/model_comparison.py": "1a56e9c3755953caac3ccb44fba86350fe51a2500954029e534eca5e0848ef3f",
@@ -19,11 +19,11 @@
   "generated_files": [
     {
       "path": "data/heston_artifact_manifest.json",
-      "sha256": "b7dc3e4be25e3816db9e050f09448efa3166a602343586657e5267429e6e7104"
+      "sha256": "481a72e7d6e9a6f4f4d2bc175ef8b535419a3c5e0f23edecc749bda75a65d1c1"
     },
     {
       "path": "data/heston_comparison_direct_local_vol_pde.csv",
-      "sha256": "67adfcd80d6312f651da9ba91ee69b1e6d44d26030cf77b6b34466a143fc79a3"
+      "sha256": "02998c3b8708a35a22d1ad1f778f579a29b5ac1cb30d087736d4528fbcb02ece"
     },
     {
       "path": "data/heston_comparison_direct_pde_matched_error_summary.csv",
@@ -47,7 +47,7 @@
     },
     {
       "path": "data/heston_mc_convergence_summary.csv",
-      "sha256": "34e6c7bcc29b42a93f01e69cf8d3e963794a6606ef6e7109b040725c10bd7a7d"
+      "sha256": "522fab84d5803bdd6ccfe17e78940aaf6fabaf2cdf0f01784f498a10ff18b97a"
     },
     {
       "path": "heston_comparison_summary_card.dark.png",
@@ -55,7 +55,7 @@
     },
     {
       "path": "heston_comparison_summary_card.dark.svg",
-      "sha256": "61032aecfd3c07158eb7e112550e5f3f199fb12f5ee7b1d9d481d72cfae246c6"
+      "sha256": "6a61e17fbfcbeda70fd2571756021ebfbc31a92ea6a5f8e8de6dcb13f67f06fc"
     },
     {
       "path": "heston_comparison_summary_card.light.png",
@@ -63,7 +63,7 @@
     },
     {
       "path": "heston_comparison_summary_card.light.svg",
-      "sha256": "d38bb1fdac78a65475433c0dd0f842abb98d8ad69a310d140dd8e0f23d591d1f"
+      "sha256": "a1a7896a74851a2eaf4f2270d1182f35484024a822b83759dd1b23a4a1a57944"
     },
     {
       "path": "heston_comparison_summary_card.png",
@@ -71,7 +71,7 @@
     },
     {
       "path": "heston_comparison_summary_card.svg",
-      "sha256": "d38bb1fdac78a65475433c0dd0f842abb98d8ad69a310d140dd8e0f23d591d1f"
+      "sha256": "a1a7896a74851a2eaf4f2270d1182f35484024a822b83759dd1b23a4a1a57944"
     },
     {
       "path": "heston_iv_residual_heatmap.dark.png",
@@ -79,7 +79,7 @@
     },
     {
       "path": "heston_iv_residual_heatmap.dark.svg",
-      "sha256": "3d623c730f5bb5df89b3b8d729e42b0369c2f2e8fc6f18d25d5cb524be9e087a"
+      "sha256": "55f523c732b6b86adcab7b7d708372e2218b14515b56f09e61ce495fe541a40f"
     },
     {
       "path": "heston_iv_residual_heatmap.light.png",
@@ -87,7 +87,7 @@
     },
     {
       "path": "heston_iv_residual_heatmap.light.svg",
-      "sha256": "3fa87aa44470a4bcee441686a92a285c05d574f6394f7e2a4d9ffac736fa9cbd"
+      "sha256": "ade0fcbd5d1441a87df70e4f6b582ebda092b85f99c505fd98dcd952c2a63c90"
     },
     {
       "path": "heston_iv_residual_heatmap.png",
@@ -95,31 +95,31 @@
     },
     {
       "path": "heston_iv_residual_heatmap.svg",
-      "sha256": "3fa87aa44470a4bcee441686a92a285c05d574f6394f7e2a4d9ffac736fa9cbd"
+      "sha256": "ade0fcbd5d1441a87df70e4f6b582ebda092b85f99c505fd98dcd952c2a63c90"
     },
     {
       "path": "heston_mc_vs_fourier_convergence.dark.png",
-      "sha256": "00d733ff6112c255552c31e0215c95e6b6b76047809a088200fa597b6012223c"
+      "sha256": "2eea06537f286351400594c74ba6e3089c5b953a9d8757c8a2de9d2b8a2e4323"
     },
     {
       "path": "heston_mc_vs_fourier_convergence.dark.svg",
-      "sha256": "1f20d95042aff9e7e18dfd3cbfe6d46c340f63d01ab62f9564734bba8fb2f4f2"
+      "sha256": "2853d439b2e44578a776c08aee80f42a799bbd3d9cef96c4b4a329f07c5bd5a1"
     },
     {
       "path": "heston_mc_vs_fourier_convergence.light.png",
-      "sha256": "3f6802b0915db06a43a0e6c51b28e56023addeee82542879b229558457da3d9d"
+      "sha256": "37ba09c43b869fb179b5dac3b6a00588bd3ff4171b2b4c2d780225293d59fb39"
     },
     {
       "path": "heston_mc_vs_fourier_convergence.light.svg",
-      "sha256": "3ec7d8e2feb358fad167326b6f0f1e7cb89aa927d389f49887f791df1ba33835"
+      "sha256": "8471e912b0bf97bd7b1a30acf2d835d15e5784dff71f8598278dd443910cd443"
     },
     {
       "path": "heston_mc_vs_fourier_convergence.png",
-      "sha256": "3f6802b0915db06a43a0e6c51b28e56023addeee82542879b229558457da3d9d"
+      "sha256": "37ba09c43b869fb179b5dac3b6a00588bd3ff4171b2b4c2d780225293d59fb39"
     },
     {
       "path": "heston_mc_vs_fourier_convergence.svg",
-      "sha256": "3ec7d8e2feb358fad167326b6f0f1e7cb89aa927d389f49887f791df1ba33835"
+      "sha256": "8471e912b0bf97bd7b1a30acf2d835d15e5784dff71f8598278dd443910cd443"
     },
     {
       "path": "heston_model_comparison_error_buckets.dark.png",
@@ -127,7 +127,7 @@
     },
     {
       "path": "heston_model_comparison_error_buckets.dark.svg",
-      "sha256": "fe987bd647600efa0761878bf76701623aa79998851e83de66ece53d88f6f2e7"
+      "sha256": "f5c9d1568d08aecf0a5497a4cb4a5054c30bde90a1df43a01d24f85869d45fdc"
     },
     {
       "path": "heston_model_comparison_error_buckets.light.png",
@@ -135,7 +135,7 @@
     },
     {
       "path": "heston_model_comparison_error_buckets.light.svg",
-      "sha256": "5ce39f29554c6dbd2e34e9e87991d51e81f4166b99e7937c669d2c569554d63f"
+      "sha256": "ba0f6f2d5b83815f39b6840c7aa892c58b4c121e264e56c241fbff56a3fd29fa"
     },
     {
       "path": "heston_model_comparison_error_buckets.png",
@@ -143,7 +143,7 @@
     },
     {
       "path": "heston_model_comparison_error_buckets.svg",
-      "sha256": "5ce39f29554c6dbd2e34e9e87991d51e81f4166b99e7937c669d2c569554d63f"
+      "sha256": "ba0f6f2d5b83815f39b6840c7aa892c58b4c121e264e56c241fbff56a3fd29fa"
     },
     {
       "path": "heston_model_comparison_smile_overlay.dark.png",
@@ -151,7 +151,7 @@
     },
     {
       "path": "heston_model_comparison_smile_overlay.dark.svg",
-      "sha256": "aaf8638a01e1960321da879556f71e05e1be51a901e532c63ea53f5f4b94ac4f"
+      "sha256": "a2ad908be7c6209b83399de7fa32c6e63c93cb6625f480b8bf16c011782b1317"
     },
     {
       "path": "heston_model_comparison_smile_overlay.light.png",
@@ -159,7 +159,7 @@
     },
     {
       "path": "heston_model_comparison_smile_overlay.light.svg",
-      "sha256": "87e534f13e68e222ad175d43424b12cb2320535063e3e7dd6013d4d562e4a303"
+      "sha256": "3d33c24612b70134ac74464d2377f90d15eba9d9932d4513ce57c7dc31285041"
     },
     {
       "path": "heston_model_comparison_smile_overlay.png",
@@ -167,7 +167,7 @@
     },
     {
       "path": "heston_model_comparison_smile_overlay.svg",
-      "sha256": "87e534f13e68e222ad175d43424b12cb2320535063e3e7dd6013d4d562e4a303"
+      "sha256": "3d33c24612b70134ac74464d2377f90d15eba9d9932d4513ce57c7dc31285041"
     },
     {
       "path": "heston_multistart_stability_panel.dark.png",
@@ -175,7 +175,7 @@
     },
     {
       "path": "heston_multistart_stability_panel.dark.svg",
-      "sha256": "437158884ed7dd0cd6fd684b0735958ba2409d8ab50ae4c7a10c10d75cfd4b63"
+      "sha256": "0ae671f13917449a40cbf7e8200cd56c625a6d1491080ee60190729c8aaaa9b5"
     },
     {
       "path": "heston_multistart_stability_panel.light.png",
@@ -183,7 +183,7 @@
     },
     {
       "path": "heston_multistart_stability_panel.light.svg",
-      "sha256": "f5496e7ffe7dfa0526e5ee9a38eef50f2a639eecd065b4e266c4674b5584a2fc"
+      "sha256": "ec3904dc37688b7d0ab0c27ea5cd77882a28ed41f03d2a6cbb1dc8f16f935ff3"
     },
     {
       "path": "heston_multistart_stability_panel.png",
@@ -191,7 +191,7 @@
     },
     {
       "path": "heston_multistart_stability_panel.svg",
-      "sha256": "f5496e7ffe7dfa0526e5ee9a38eef50f2a639eecd065b4e266c4674b5584a2fc"
+      "sha256": "ec3904dc37688b7d0ab0c27ea5cd77882a28ed41f03d2a6cbb1dc8f16f935ff3"
     },
     {
       "path": "heston_train_vs_heldout_comparison.dark.png",
@@ -199,7 +199,7 @@
     },
     {
       "path": "heston_train_vs_heldout_comparison.dark.svg",
-      "sha256": "a42141e7672d43f3f1f09cca7e47c7b3ee9927a98eeb6a20185d08d555f635e7"
+      "sha256": "ce5c8d41b00568cd8cae0f6b2a70231476097c67ee8fa1052c191a2c6b821176"
     },
     {
       "path": "heston_train_vs_heldout_comparison.light.png",
@@ -207,7 +207,7 @@
     },
     {
       "path": "heston_train_vs_heldout_comparison.light.svg",
-      "sha256": "4ca5a849e4613156072d4a1c6a010e9339e499f9d54093691c3dce1cf23ed3c5"
+      "sha256": "145cc28d7331ec64ab44f13e98b32efebaacbd0b21689d8f3b2a829a95e2fff6"
     },
     {
       "path": "heston_train_vs_heldout_comparison.png",
@@ -215,7 +215,7 @@
     },
     {
       "path": "heston_train_vs_heldout_comparison.svg",
-      "sha256": "4ca5a849e4613156072d4a1c6a010e9339e499f9d54093691c3dce1cf23ed3c5"
+      "sha256": "145cc28d7331ec64ab44f13e98b32efebaacbd0b21689d8f3b2a829a95e2fff6"
     },
     {
       "path": "heston_workflow_architecture.dark.svg",

@@ -2,8 +2,8 @@
   "version": 1,
   "profile": "release",
   "seed": 30,
-  "generated_at": "2026-05-21T08:50:39.538702+00:00",
-  "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
+  "generated_at": "2026-05-21T10:17:41.383054+00:00",
+  "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
   "fixture": {
     "label": "deterministic market-like synthetic fixture",
     "construction": "Black-76 calls from a deterministic equity-index-style implied-vol skew/smile and flat forward/discount assumptions.",
@@ -64,8 +64,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Capstone 3 model-comparison summary. A deterministic synthetic quote target is fitted with Heston, checked for calibration stability, and compared against the existing eSSVI/local-vol stack. This is diagnostic evidence, not a claim that Heston is universally superior.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -87,8 +87,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Capstone 3 model-comparison summary. A deterministic synthetic quote target is fitted with Heston, checked for calibration stability, and compared against the existing eSSVI/local-vol stack. This is diagnostic evidence, not a claim that Heston is universally superior.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -110,8 +110,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Capstone 3 model-comparison summary. A deterministic synthetic quote target is fitted with Heston, checked for calibration stability, and compared against the existing eSSVI/local-vol stack. This is diagnostic evidence, not a claim that Heston is universally superior.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -133,8 +133,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Capstone 3 model-comparison summary. A deterministic synthetic quote target is fitted with Heston, checked for calibration stability, and compared against the existing eSSVI/local-vol stack. This is diagnostic evidence, not a claim that Heston is universally superior.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -156,8 +156,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Capstone 3 model-comparison summary. A deterministic synthetic quote target is fitted with Heston, checked for calibration stability, and compared against the existing eSSVI/local-vol stack. This is diagnostic evidence, not a claim that Heston is universally superior.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -179,8 +179,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Capstone 3 model-comparison summary. A deterministic synthetic quote target is fitted with Heston, checked for calibration stability, and compared against the existing eSSVI/local-vol stack. This is diagnostic evidence, not a claim that Heston is universally superior.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -202,8 +202,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston and eSSVI/local-vol are compared on the same deterministic quote target. The plot highlights model-purpose tradeoffs: Heston provides stochastic-variance dynamics, while eSSVI/local vol can flexibly fit vanilla surface geometry.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -222,8 +222,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston and eSSVI/local-vol are compared on the same deterministic quote target. The plot highlights model-purpose tradeoffs: Heston provides stochastic-variance dynamics, while eSSVI/local vol can flexibly fit vanilla surface geometry.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -242,8 +242,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston and eSSVI/local-vol are compared on the same deterministic quote target. The plot highlights model-purpose tradeoffs: Heston provides stochastic-variance dynamics, while eSSVI/local vol can flexibly fit vanilla surface geometry.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -262,8 +262,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston and eSSVI/local-vol are compared on the same deterministic quote target. The plot highlights model-purpose tradeoffs: Heston provides stochastic-variance dynamics, while eSSVI/local vol can flexibly fit vanilla surface geometry.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -282,8 +282,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston and eSSVI/local-vol are compared on the same deterministic quote target. The plot highlights model-purpose tradeoffs: Heston provides stochastic-variance dynamics, while eSSVI/local vol can flexibly fit vanilla surface geometry.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -302,8 +302,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston and eSSVI/local-vol are compared on the same deterministic quote target. The plot highlights model-purpose tradeoffs: Heston provides stochastic-variance dynamics, while eSSVI/local vol can flexibly fit vanilla surface geometry.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -322,8 +322,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston IV residuals by expiry and log-moneyness. Structured residuals are part of the diagnostic story: the model is interpretable, but not an unconstrained surface fitter.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -343,8 +343,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston IV residuals by expiry and log-moneyness. Structured residuals are part of the diagnostic story: the model is interpretable, but not an unconstrained surface fitter.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -364,8 +364,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston IV residuals by expiry and log-moneyness. Structured residuals are part of the diagnostic story: the model is interpretable, but not an unconstrained surface fitter.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -385,8 +385,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston IV residuals by expiry and log-moneyness. Structured residuals are part of the diagnostic story: the model is interpretable, but not an unconstrained surface fitter.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -406,8 +406,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston IV residuals by expiry and log-moneyness. Structured residuals are part of the diagnostic story: the model is interpretable, but not an unconstrained surface fitter.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -427,8 +427,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston IV residuals by expiry and log-moneyness. Structured residuals are part of the diagnostic story: the model is interpretable, but not an unconstrained surface fitter.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -448,8 +448,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Error buckets summarize model fit by moneyness region. Heston and eSSVI full-set rows are retained; direct PDE rows are selected Dupire/PDE audit quotes, so proxy-vs-direct-PDE comparisons should use the matched-subset CSV.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -469,8 +469,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Error buckets summarize model fit by moneyness region. Heston and eSSVI full-set rows are retained; direct PDE rows are selected Dupire/PDE audit quotes, so proxy-vs-direct-PDE comparisons should use the matched-subset CSV.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -490,8 +490,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Error buckets summarize model fit by moneyness region. Heston and eSSVI full-set rows are retained; direct PDE rows are selected Dupire/PDE audit quotes, so proxy-vs-direct-PDE comparisons should use the matched-subset CSV.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -511,8 +511,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Error buckets summarize model fit by moneyness region. Heston and eSSVI full-set rows are retained; direct PDE rows are selected Dupire/PDE audit quotes, so proxy-vs-direct-PDE comparisons should use the matched-subset CSV.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -532,8 +532,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Error buckets summarize model fit by moneyness region. Heston and eSSVI full-set rows are retained; direct PDE rows are selected Dupire/PDE audit quotes, so proxy-vs-direct-PDE comparisons should use the matched-subset CSV.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -553,8 +553,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Error buckets summarize model fit by moneyness region. Heston and eSSVI full-set rows are retained; direct PDE rows are selected Dupire/PDE audit quotes, so proxy-vs-direct-PDE comparisons should use the matched-subset CSV.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -574,8 +574,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston calibration can be weakly identifiable. Multistart diagnostics make optimizer dependence and parameter stability visible before interpreting a fit.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -595,8 +595,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston calibration can be weakly identifiable. Multistart diagnostics make optimizer dependence and parameter stability visible before interpreting a fit.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -616,8 +616,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston calibration can be weakly identifiable. Multistart diagnostics make optimizer dependence and parameter stability visible before interpreting a fit.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -637,8 +637,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston calibration can be weakly identifiable. Multistart diagnostics make optimizer dependence and parameter stability visible before interpreting a fit.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -658,8 +658,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston calibration can be weakly identifiable. Multistart diagnostics make optimizer dependence and parameter stability visible before interpreting a fit.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -679,8 +679,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston calibration can be weakly identifiable. Multistart diagnostics make optimizer dependence and parameter stability visible before interpreting a fit.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -700,8 +700,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston Monte Carlo is checked against semi-analytic Fourier pricing. QE and Euler behavior are shown as numerical validation evidence, not as universal runtime claims.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -722,8 +722,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston Monte Carlo is checked against semi-analytic Fourier pricing. QE and Euler behavior are shown as numerical validation evidence, not as universal runtime claims.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -744,8 +744,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston Monte Carlo is checked against semi-analytic Fourier pricing. QE and Euler behavior are shown as numerical validation evidence, not as universal runtime claims.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -766,8 +766,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston Monte Carlo is checked against semi-analytic Fourier pricing. QE and Euler behavior are shown as numerical validation evidence, not as universal runtime claims.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -788,8 +788,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston Monte Carlo is checked against semi-analytic Fourier pricing. QE and Euler behavior are shown as numerical validation evidence, not as universal runtime claims.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -810,8 +810,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Heston Monte Carlo is checked against semi-analytic Fourier pricing. QE and Euler behavior are shown as numerical validation evidence, not as universal runtime claims.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -832,8 +832,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Deterministic stratified holdout across expiry and moneyness buckets separates calibration fit from reviewer-facing holdout behavior on the synthetic quote grid. Direct local-vol PDE stays in the matched-subset audit artifacts rather than this full-grid split chart.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -852,8 +852,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Deterministic stratified holdout across expiry and moneyness buckets separates calibration fit from reviewer-facing holdout behavior on the synthetic quote grid. Direct local-vol PDE stays in the matched-subset audit artifacts rather than this full-grid split chart.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -872,8 +872,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Deterministic stratified holdout across expiry and moneyness buckets separates calibration fit from reviewer-facing holdout behavior on the synthetic quote grid. Direct local-vol PDE stays in the matched-subset audit artifacts rather than this full-grid split chart.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -892,8 +892,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Deterministic stratified holdout across expiry and moneyness buckets separates calibration fit from reviewer-facing holdout behavior on the synthetic quote grid. Direct local-vol PDE stays in the matched-subset audit artifacts rather than this full-grid split chart.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -912,8 +912,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Deterministic stratified holdout across expiry and moneyness buckets separates calibration fit from reviewer-facing holdout behavior on the synthetic quote grid. Direct local-vol PDE stays in the matched-subset audit artifacts rather than this full-grid split chart.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -932,8 +932,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Deterministic stratified holdout across expiry and moneyness buckets separates calibration fit from reviewer-facing holdout behavior on the synthetic quote grid. Direct local-vol PDE stays in the matched-subset audit artifacts rather than this full-grid split chart.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -952,8 +952,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -972,8 +972,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -993,8 +993,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -1013,8 +1013,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -1033,8 +1033,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -1054,8 +1054,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -1074,8 +1074,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -1095,8 +1095,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Capstone 3 uses the Capstone 2 surface/local-vol/PDE stack as a comparison baseline for Heston stochastic-volatility calibration and validation.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -1115,8 +1115,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Capstone 3 uses the Capstone 2 surface/local-vol/PDE stack as a comparison baseline for Heston stochastic-volatility calibration and validation.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -1135,8 +1135,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "Capstone 3 uses the Capstone 2 surface/local-vol/PDE stack as a comparison baseline for Heston stochastic-volatility calibration and validation.",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -1155,8 +1155,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
@@ -1176,8 +1176,8 @@
       "generated_from_heston": false,
       "seed": 30,
       "profile": "release",
-      "repo_commit": "f606e6a9e0f5628ecae21b6f4e79c31184b4dc96",
-      "generated_at": "2026-05-21T08:50:39.538702+00:00",
+      "repo_commit": "9ac5d722e492ae362093b3e9d643dbd41bfcddfb",
+      "generated_at": "2026-05-21T10:17:41.383054+00:00",
       "caption": "",
       "caveats": [
         "Synthetic deterministic quote fixture; not real market data. Heston is compared against eSSVI/local vol on the same target, not presented as universally superior."
