@@ -21,6 +21,7 @@ repos:
     hooks:
       - id: mypy
         stages: [pre-commit, pre-push]
+        entry: python -X utf8 -m mypy
         args: [--config-file=pyproject.toml]
         pass_filenames: false
         # .pre-commit-config.yaml
