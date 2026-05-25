@@ -152,6 +152,17 @@ def _relative_posix(root: Path, path: Path) -> str:
         return path.as_posix()
 
 
+def _filename_with_suffix(filename: str, suffix: str) -> str:
+    return filename if filename.lower().endswith(suffix) else f"{filename}{suffix}"
+
+
+def _raise_if_target_exists(path: Path, *, overwrite: bool) -> None:
+    if path.exists() and not overwrite:
+        raise FileExistsError(
+            f"{path} already exists; pass overwrite=True to replace it"
+        )
+
+
 class LocalStorage:
     """Persist market-data artifacts on the local filesystem."""
 
@@ -203,10 +214,7 @@ class LocalStorage:
 
         target_path = target_dir / self._frame_filename(filename)
         parquet_compression = compression or self.config.compression
-        if target_path.exists() and not overwrite:
-            raise FileExistsError(
-                f"{target_path} already exists; pass overwrite=True to replace it"
-            )
+        _raise_if_target_exists(target_path, overwrite=overwrite)
 
         try:
             frame.to_parquet(
@@ -316,10 +324,7 @@ class LocalStorage:
         target_dir.mkdir(parents=True, exist_ok=True)
 
         manifest_path = target_dir / self._json_filename(filename)
-        if manifest_path.exists() and not overwrite:
-            raise FileExistsError(
-                f"{manifest_path} already exists; pass overwrite=True to replace it"
-            )
+        _raise_if_target_exists(manifest_path, overwrite=overwrite)
 
         payload = _jsonify_object(manifest)
         payload.setdefault("dataset", dataset_name)
@@ -482,12 +487,10 @@ class LocalStorage:
         if filename is None:
             timestamp = _utcnow().strftime("%Y%m%dT%H%M%SZ")
             return f"part-{timestamp}-{uuid4().hex[:8]}.parquet"
-        if filename.endswith(".parquet"):
-            return filename
-        return f"{filename}.parquet"
+        return _filename_with_suffix(filename, ".parquet")
 
     def _json_filename(self, filename: str) -> str:
-        return filename if filename.endswith(".json") else f"{filename}.json"
+        return _filename_with_suffix(filename, ".json")
 
     def _append_jsonl(self, path: Path, payload: Mapping[str, Any]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
