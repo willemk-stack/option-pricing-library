@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
-from .schemas import RunMetadata, StorageConfig
+from .schemas import RunMetadata, StorageConfig, validate_model_validation_manifest
 
 if TYPE_CHECKING:
     from pandas import DataFrame
@@ -50,9 +50,15 @@ _PARTITION_ORDERS: dict[tuple[str, str], tuple[str, ...]] = {
     ("silver", "equity_bars"): ("symbol", "timeframe", "date"),
     ("silver", "option_chain"): ("underlying", "asof_date"),
     ("silver", "fred_series"): ("series_id", "date"),
+    ("silver", "market_inputs"): ("underlying", "date", "run_id"),
+    ("silver", "cleaned_quotes"): ("underlying", "date", "run_id"),
+    ("silver", "rejected_quotes"): ("underlying", "date", "run_id"),
     ("gold", "market_snapshot"): ("underlying", "date"),
     ("gold", "curves"): ("date",),
     ("gold", "vol_inputs"): ("underlying", "date"),
+    ("gold", "heston_quotes"): ("underlying", "date", "run_id"),
+    ("gold", "surface_inputs"): ("underlying", "date", "run_id"),
+    ("gold", "model_validation_bundle"): ("underlying", "date", "run_id"),
 }
 
 
@@ -173,6 +179,7 @@ class LocalStorage:
         filename: str | None = None,
         compression: str | None = None,
         index: bool = False,
+        overwrite: bool = False,
     ) -> Path:
         """Write a DataFrame to a partitioned Parquet file."""
 
@@ -196,6 +203,10 @@ class LocalStorage:
 
         target_path = target_dir / self._frame_filename(filename)
         parquet_compression = compression or self.config.compression
+        if target_path.exists() and not overwrite:
+            raise FileExistsError(
+                f"{target_path} already exists; pass overwrite=True to replace it"
+            )
 
         try:
             frame.to_parquet(
@@ -286,6 +297,7 @@ class LocalStorage:
         layer: str = "bronze",
         partitions: Mapping[str, PartitionValue] | None = None,
         filename: str = "manifest.json",
+        overwrite: bool = False,
     ) -> Path:
         """Write a JSON manifest next to a dataset partition."""
 
@@ -304,11 +316,19 @@ class LocalStorage:
         target_dir.mkdir(parents=True, exist_ok=True)
 
         manifest_path = target_dir / self._json_filename(filename)
+        if manifest_path.exists() and not overwrite:
+            raise FileExistsError(
+                f"{manifest_path} already exists; pass overwrite=True to replace it"
+            )
+
         payload = _jsonify_object(manifest)
         payload.setdefault("dataset", dataset_name)
         payload.setdefault("layer", layer_name)
         payload.setdefault("partitions", self._serialise_partitions(ordered_partitions))
         payload.setdefault("written_at", _utcnow().isoformat())
+
+        if dataset_name == "model_validation_bundle":
+            validate_model_validation_manifest(payload)
 
         self._write_json_atomic(manifest_path, payload)
         self._append_jsonl(

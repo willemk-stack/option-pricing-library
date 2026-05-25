@@ -1,13 +1,19 @@
-from dataclasses import dataclass
-from pathlib import Path
-from typing import TypeVar
+"""Compatibility exports for marketdata contract result objects."""
 
-T = TypeVar("T")
+from .schemas import (
+    BackfillResult,
+    ModelValidationBundleResult,
+    PipelineResult,
+    ResearchBundleResult,
+    ResultStats,
+    SnapshotResult,
+)
 
-
-@dataclass(frozen=True, slots=True)
-class ResultStats:
-    rows_in: int = 0
-    rows_out: int = 0
-    files_written: tuple[Path, ...] = ()
-    warnings: tuple[str, ...] = ()
+__all__ = [
+    "BackfillResult",
+    "ModelValidationBundleResult",
+    "PipelineResult",
+    "ResearchBundleResult",
+    "ResultStats",
+    "SnapshotResult",
+]
