@@ -6,7 +6,11 @@ from datetime import UTC, date, datetime
 import pandas as pd
 import pytest
 
-from option_pricing.marketdata.schemas import RunMetadata, StorageConfig
+from option_pricing.marketdata.schemas import (
+    MODEL_VALIDATION_BUNDLE_VERSION,
+    RunMetadata,
+    StorageConfig,
+)
 from option_pricing.marketdata.storage import LocalStorage
 
 
@@ -33,6 +37,26 @@ def fake_parquet(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(pd.DataFrame, "to_parquet", _fake_to_parquet)
     monkeypatch.setattr(pd, "read_parquet", _fake_read_parquet)
+
+
+def _valid_model_validation_manifest() -> dict[str, object]:
+    return {
+        "artifact_schema_version": MODEL_VALIDATION_BUNDLE_VERSION,
+        "run_id": "test-run",
+        "created_at_utc": "2026-05-22T14:35:00Z",
+        "library_commit": "abc123",
+        "underlying": "SPY",
+        "valuation_timestamp_utc": "2026-05-22T14:31:00Z",
+        "spot_source": "fixture",
+        "rate_source": "fixture",
+        "rate_compounding": "continuous",
+        "dividend_yield_source": "fixture",
+        "day_count": "ACT/365",
+        "quote_cleaning_policy": "phase_a_default",
+        "rows": {"cleaned_quotes": 1},
+        "warnings": [],
+        "artifacts": {"cleaned_quotes": "silver/cleaned_quotes"},
+    }
 
 
 def test_write_and_read_frame_round_trips_partitioned_data(
@@ -178,4 +202,139 @@ def test_write_frame_raises_helpful_error_when_parquet_engine_is_missing(
             frame,
             dataset="equity_quotes",
             partitions={"date": "2026-03-16"},
+        )
+
+
+def test_phase_a_frame_paths_and_overwrite_policy(tmp_path, fake_parquet: None) -> None:
+    storage = LocalStorage(tmp_path)
+    frame = pd.DataFrame({"quote_id": ["quote-001"], "mid": [12.4]})
+
+    path = storage.write_frame(
+        frame,
+        dataset="cleaned_quotes",
+        layer="silver",
+        partitions={
+            "run_id": "test-run",
+            "date": "2026-05-22",
+            "underlying": "SPY",
+        },
+        filename="cleaned_quotes",
+    )
+
+    expected_path = (
+        tmp_path
+        / "silver"
+        / "cleaned_quotes"
+        / "underlying=SPY"
+        / "date=2026-05-22"
+        / "run_id=test-run"
+        / "cleaned_quotes.parquet"
+    )
+    assert path == expected_path
+    assert path.exists()
+
+    with pytest.raises(FileExistsError, match="overwrite=True"):
+        storage.write_frame(
+            frame,
+            dataset="cleaned_quotes",
+            layer="silver",
+            partitions={
+                "underlying": "SPY",
+                "date": "2026-05-22",
+                "run_id": "test-run",
+            },
+            filename="cleaned_quotes",
+        )
+
+    assert (
+        storage.write_frame(
+            frame,
+            dataset="cleaned_quotes",
+            layer="silver",
+            partitions={
+                "underlying": "SPY",
+                "date": "2026-05-22",
+                "run_id": "test-run",
+            },
+            filename="cleaned_quotes",
+            overwrite=True,
+        )
+        == expected_path
+    )
+
+
+def test_model_validation_manifest_path_validation_and_overwrite_policy(
+    tmp_path,
+) -> None:
+    storage = LocalStorage(tmp_path)
+
+    manifest_path = storage.write_manifest(
+        _valid_model_validation_manifest(),
+        dataset="model_validation_bundle",
+        layer="gold",
+        partitions={
+            "date": "2026-05-22",
+            "run_id": "test-run",
+            "underlying": "SPY",
+        },
+    )
+
+    expected_path = (
+        tmp_path
+        / "gold"
+        / "model_validation_bundle"
+        / "underlying=SPY"
+        / "date=2026-05-22"
+        / "run_id=test-run"
+        / "manifest.json"
+    )
+    assert manifest_path == expected_path
+
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert payload["dataset"] == "model_validation_bundle"
+    assert payload["artifact_schema_version"] == MODEL_VALIDATION_BUNDLE_VERSION
+
+    with pytest.raises(FileExistsError, match="overwrite=True"):
+        storage.write_manifest(
+            _valid_model_validation_manifest(),
+            dataset="model_validation_bundle",
+            layer="gold",
+            partitions={
+                "underlying": "SPY",
+                "date": "2026-05-22",
+                "run_id": "test-run",
+            },
+        )
+
+    assert (
+        storage.write_manifest(
+            _valid_model_validation_manifest(),
+            dataset="model_validation_bundle",
+            layer="gold",
+            partitions={
+                "underlying": "SPY",
+                "date": "2026-05-22",
+                "run_id": "test-run",
+            },
+            overwrite=True,
+        )
+        == expected_path
+    )
+
+
+def test_model_validation_manifest_rejects_secret_keys(tmp_path) -> None:
+    storage = LocalStorage(tmp_path)
+    manifest = _valid_model_validation_manifest()
+    manifest["api_key"] = "do-not-write"
+
+    with pytest.raises(ValueError, match="secret-looking keys"):
+        storage.write_manifest(
+            manifest,
+            dataset="model_validation_bundle",
+            layer="gold",
+            partitions={
+                "underlying": "SPY",
+                "date": "2026-05-22",
+                "run_id": "test-run",
+            },
         )
