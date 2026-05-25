@@ -26,7 +26,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
-from .schemas import RunMetadata, StorageConfig, validate_model_validation_manifest
+from .config import StorageConfig
+from .contracts import RunMetadata
+from .manifests import validate_model_validation_manifest
 
 if TYPE_CHECKING:
     from pandas import DataFrame

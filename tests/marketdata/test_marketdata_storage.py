@@ -6,11 +6,9 @@ from datetime import UTC, date, datetime
 import pandas as pd
 import pytest
 
-from option_pricing.marketdata.schemas import (
-    MODEL_VALIDATION_BUNDLE_VERSION,
-    RunMetadata,
-    StorageConfig,
-)
+from option_pricing.marketdata.config import StorageConfig
+from option_pricing.marketdata.contracts import RunMetadata
+from option_pricing.marketdata.schemas import MODEL_VALIDATION_BUNDLE_VERSION
 from option_pricing.marketdata.storage import LocalStorage
 
 

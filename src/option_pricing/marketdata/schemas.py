@@ -1,15 +1,9 @@
-"""Marketdata schema contracts and validation helpers."""
+"""Dataset schema registry for marketdata DataFrame contracts."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from enum import StrEnum
-from pathlib import Path
 from typing import Literal
-
-import pandas as pd
 
 type PandasSchemaDtype = Literal[
     "datetime64[ns, UTC]",
@@ -19,109 +13,6 @@ type PandasSchemaDtype = Literal[
     "string",
 ]
 
-
-def _require_aware_utc(name: str, value: datetime) -> None:
-    if value.tzinfo is None or value.utcoffset() is None:
-        raise ValueError(f"{name} must be timezone-aware")
-    if value.tzinfo != UTC and value.astimezone(UTC) != value:
-        # optional: drop this branch if you only care that it is aware, not UTC
-        pass
-
-
-@dataclass(frozen=True, slots=True)
-class AlpacaConfig:
-    api_key_env: str = "ALPACA_API_KEY"
-    secret_key_env: str = "ALPACA_SECRET_KEY"
-    feed: str = "indicative"
-    sandbox: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class FredConfig:
-    api_key_env: str = "FRED_API_KEY"
-    base_url: str = "https://api.stlouisfed.org/fred"
-
-
-@dataclass(frozen=True, slots=True)
-class StorageConfig:
-    root: Path
-    compression: str = "zstd"
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.root, Path):
-            raise TypeError("storage.root must be a pathlib.Path")
-
-
-@dataclass(frozen=True, slots=True)
-class PipelineConfig:
-    alpaca: AlpacaConfig
-    fred: FredConfig
-    storage: StorageConfig
-
-
-@dataclass(frozen=True, slots=True)
-class RunMetadata:
-    run_id: str
-    asof: datetime
-    started_at: datetime
-    git_sha: str | None = None
-
-    def __post_init__(self) -> None:
-        _require_aware_utc("asof", self.asof)
-        _require_aware_utc("started_at", self.started_at)
-
-
-@dataclass(frozen=True, slots=True)
-class ResultStats:
-    rows_in: int = 0
-    rows_out: int = 0
-    files_written: tuple[Path, ...] = ()
-    warnings: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class PipelineResult[T]:
-    value: T
-    metadata: RunMetadata
-    stats: ResultStats = field(default_factory=ResultStats)
-
-
-@dataclass(frozen=True, slots=True)
-class SnapshotResult:
-    frame: pd.DataFrame
-    metadata: RunMetadata
-    stats: ResultStats = field(default_factory=ResultStats)
-
-
-@dataclass(frozen=True, slots=True)
-class ModelValidationBundleResult:
-    manifest: Mapping[str, object]
-    manifest_path: Path
-    metadata: RunMetadata
-    artifact_paths: tuple[Path, ...] = ()
-    stats: ResultStats = field(default_factory=ResultStats)
-
-
-@dataclass(frozen=True, slots=True)
-class ResearchBundleResult:
-    root_path: Path
-    metadata: RunMetadata
-    artifact_paths: tuple[Path, ...] = ()
-    stats: ResultStats = field(default_factory=ResultStats)
-
-
-@dataclass(frozen=True, slots=True)
-class BackfillResult:
-    metadata: RunMetadata
-    run_ids: tuple[str, ...] = ()
-    artifact_paths: tuple[Path, ...] = ()
-    stats: ResultStats = field(default_factory=ResultStats)
-
-
-#########
-# Constants
-#########
-
 MARKET_INPUTS_SCHEMA_VERSION = "market_inputs.v1"
 OPTION_CHAIN_SCHEMA_VERSION = "option_chain.v1"
 CLEANED_QUOTES_SCHEMA_VERSION = "cleaned_quotes.v1"
@@ -129,36 +20,6 @@ REJECTED_QUOTES_SCHEMA_VERSION = "rejected_quotes.v1"
 HESTON_QUOTES_SCHEMA_VERSION = "heston_quotes.v1"
 SURFACE_INPUTS_SCHEMA_VERSION = "surface_inputs.v1"
 MODEL_VALIDATION_BUNDLE_VERSION = "model_validation_bundle.v1"
-
-MODEL_VALIDATION_MANIFEST_REQUIRED_FIELDS = (
-    "artifact_schema_version",
-    "run_id",
-    "created_at_utc",
-    "library_commit",
-    "underlying",
-    "valuation_timestamp_utc",
-    "spot_source",
-    "rate_source",
-    "rate_compounding",
-    "dividend_yield_source",
-    "day_count",
-    "quote_cleaning_policy",
-    "rows",
-    "warnings",
-    "artifacts",
-)
-
-_SECRET_MANIFEST_KEY_TERMS = frozenset(
-    {
-        "api_key",
-        "secret_key",
-        "token",
-        "password",
-        "alpaca_api_key",
-        "alpaca_secret_key",
-        "fred_api_key",
-    }
-)
 
 EQUITY_QUOTES_COLUMNS = (
     "symbol",
@@ -242,7 +103,7 @@ OPTION_CHAIN_DTYPES: dict[str, PandasSchemaDtype] = {
     "quote_ts": "datetime64[ns, UTC]",
     "expiry": "datetime64[ns]",
     "strike": "Float64",
-    "right": "string",  # can later narrow to Right enum at code boundary
+    "right": "string",
     "bid": "Float64",
     "ask": "Float64",
     "mid": "Float64",
@@ -495,9 +356,7 @@ MODEL_VALIDATION_BUNDLE_DTYPES: dict[str, PandasSchemaDtype] = {}
 
 
 class DatasetName(StrEnum):
-    """
-    Enum object for safe internal handling of dataset_name calling
-    """
+    """Enum object for safe internal handling of dataset_name calling."""
 
     EQUITY_QUOTES = "equity_quotes"
     EQUITY_BARS = "equity_bars"
@@ -510,6 +369,27 @@ class DatasetName(StrEnum):
     MARKET_INPUTS = "market_inputs"
     SURFACE_INPUTS = "surface_inputs"
     MODEL_VALIDATION_BUNDLE = "model_validation_bundle"
+
+
+def parse_dataset_name(dataset_name: DatasetName | str) -> DatasetName:
+    """Normalize a dataset name into a DatasetName enum."""
+
+    if isinstance(dataset_name, DatasetName):
+        return dataset_name
+
+    if not isinstance(dataset_name, str):
+        raise TypeError(
+            f"dataset_name must be a DatasetName or str, got {type(dataset_name).__name__}"
+        )
+
+    try:
+        return DatasetName(dataset_name.strip().lower())
+    except ValueError as exc:
+        known = ", ".join(item.value for item in DatasetName)
+        raise ValueError(
+            f"Unknown marketdata dataset_name {dataset_name!r}. "
+            f"Expected one of: {known}"
+        ) from exc
 
 
 DATASET_COLUMNS: dict[DatasetName, tuple[str, ...]] = {
@@ -541,231 +421,39 @@ DATASET_DTYPES: dict[DatasetName, dict[str, PandasSchemaDtype]] = {
 }
 
 
-###########
-# Validation helpers
-###########
-
-
-def parse_dataset_name(dataset_name: DatasetName | str) -> DatasetName:
-    """Normalize a dataset name into a DatasetName enum."""
-
-    if isinstance(dataset_name, DatasetName):
-        return dataset_name
-
-    if not isinstance(dataset_name, str):
-        raise TypeError(
-            f"dataset_name must be a DatasetName or str, got {type(dataset_name).__name__}"
-        )
-
-    try:
-        return DatasetName(dataset_name.strip().lower())
-    except ValueError as exc:
-        known = ", ".join(item.value for item in DatasetName)
-        raise ValueError(
-            f"Unknown marketdata dataset_name {dataset_name!r}. "
-            f"Expected one of: {known}"
-        ) from exc
-
-
-def dataset_columns(dataset_name: DatasetName | str) -> tuple[str, ...]:
-    """Return required canonical columns for a marketdata dataset."""
-
-    parsed_name = parse_dataset_name(dataset_name)
-    return DATASET_COLUMNS[parsed_name]
-
-
-def dataset_dtypes(dataset_name: DatasetName | str) -> dict[str, PandasSchemaDtype]:
-    """Return expected pandas dtypes for a marketdata dataset."""
-
-    parsed_name = parse_dataset_name(dataset_name)
-    return DATASET_DTYPES[parsed_name]
-
-
-def validate_columns(
-    frame: pd.DataFrame,
-    dataset_name: DatasetName | str,
-    *,
-    allow_extra: bool = True,
-) -> None:
-    """Validate that a DataFrame has the required columns for a dataset."""
-
-    parsed_name = parse_dataset_name(dataset_name)
-    required = dataset_columns(parsed_name)
-    actual = tuple(frame.columns)
-
-    missing = [column for column in required if column not in actual]
-
-    if missing:
-        raise ValueError(f"{parsed_name.value} is missing required columns: {missing}")
-
-    if not allow_extra:
-        extra = [column for column in actual if column not in required]
-
-        if extra:
-            raise ValueError(
-                f"{parsed_name.value} has unexpected extra columns: {extra}"
-            )
-
-
-def validate_dtypes(
-    frame: pd.DataFrame,
-    dataset_name: DatasetName | str,
-    *,
-    allow_extra: bool = True,
-) -> None:
-    """Validate that a DataFrame has the expected pandas dtypes for a dataset."""
-
-    parsed_name = parse_dataset_name(dataset_name)
-
-    # First make sure the required columns are present.
-    validate_columns(frame, parsed_name, allow_extra=allow_extra)
-
-    expected_dtypes = dataset_dtypes(parsed_name)
-
-    mismatches: dict[str, tuple[str, str]] = {}
-
-    for column, expected_dtype in expected_dtypes.items():
-        actual_dtype = str(frame[column].dtype)
-
-        if actual_dtype != expected_dtype:
-            mismatches[column] = (actual_dtype, expected_dtype)
-
-    if mismatches:
-        details = ", ".join(
-            f"{column}: actual={actual!r}, expected={expected!r}"
-            for column, (actual, expected) in mismatches.items()
-        )
-
-        raise TypeError(f"{parsed_name.value} has dtype mismatches: {details}")
-
-
-def order_columns(frame: pd.DataFrame, dataset_name: DatasetName | str) -> pd.DataFrame:
-    """Return frame with canonical columns first and extras after."""
-
-    required = dataset_columns(dataset_name)
-    extra = [column for column in frame.columns if column not in required]
-    return frame.loc[:, [*required, *extra]]
-
-
-def coerce_frame(
-    frame: pd.DataFrame,
-    dataset_name: DatasetName | str,
-    *,
-    allow_extra: bool = True,
-) -> pd.DataFrame:
-    """Return a copy of frame coerced to the expected pandas dtypes."""
-
-    parsed_name = parse_dataset_name(dataset_name)
-    validate_columns(frame, parsed_name, allow_extra=allow_extra)
-
-    out = frame.copy()
-    expected_dtypes = dataset_dtypes(parsed_name)
-
-    for column, dtype in expected_dtypes.items():
-        try:
-            if dtype == "datetime64[ns, UTC]":
-                out[column] = pd.to_datetime(out[column], utc=True)
-
-            elif dtype == "datetime64[ns]":
-                out[column] = pd.to_datetime(out[column]).dt.tz_localize(None)
-
-            elif dtype == "Float64":
-                out[column] = pd.to_numeric(out[column], errors="raise").astype(
-                    pd.Float64Dtype()
-                )
-
-            elif dtype == "Int64":
-                out[column] = pd.to_numeric(out[column], errors="raise").astype(
-                    pd.Int64Dtype()
-                )
-
-            else:
-                out[column] = out[column].astype(dtype)
-
-        except Exception as exc:
-            raise TypeError(
-                f"Could not coerce column {column!r} in dataset "
-                f"{parsed_name.value!r} to dtype {dtype!r}"
-            ) from exc
-
-    validate_dtypes(out, parsed_name, allow_extra=allow_extra)
-
-    return out
-
-
-def _is_secret_manifest_key(key: str) -> bool:
-    normalized = key.strip().lower()
-    return (
-        normalized in _SECRET_MANIFEST_KEY_TERMS
-        or "api_key" in normalized
-        or "secret_key" in normalized
-        or normalized.endswith("token")
-        or "password" in normalized
-    )
-
-
-def _find_secret_manifest_keys(value: object, path: str = "") -> list[str]:
-    secret_keys: list[str] = []
-
-    if isinstance(value, Mapping):
-        for key, item in value.items():
-            key_text = str(key)
-            key_path = f"{path}.{key_text}" if path else key_text
-
-            if _is_secret_manifest_key(key_text):
-                secret_keys.append(key_path)
-
-            secret_keys.extend(_find_secret_manifest_keys(item, key_path))
-
-    elif isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
-        for index, item in enumerate(value):
-            item_path = f"{path}[{index}]" if path else f"[{index}]"
-            secret_keys.extend(_find_secret_manifest_keys(item, item_path))
-
-    return secret_keys
-
-
-def validate_model_validation_manifest(manifest: Mapping[str, object]) -> None:
-    """Validate the minimum model-validation bundle manifest contract."""
-
-    if not isinstance(manifest, Mapping):
-        raise TypeError("manifest must be a mapping")
-
-    missing = [
-        field
-        for field in MODEL_VALIDATION_MANIFEST_REQUIRED_FIELDS
-        if field not in manifest
-    ]
-
-    if missing:
-        raise ValueError(
-            "model_validation_bundle manifest is missing required fields: " f"{missing}"
-        )
-
-    artifact_schema_version = manifest["artifact_schema_version"]
-    if artifact_schema_version != MODEL_VALIDATION_BUNDLE_VERSION:
-        raise ValueError(
-            "model_validation_bundle manifest has artifact_schema_version "
-            f"{artifact_schema_version!r}; expected "
-            f"{MODEL_VALIDATION_BUNDLE_VERSION!r}"
-        )
-
-    secret_keys = _find_secret_manifest_keys(manifest)
-    if secret_keys:
-        raise ValueError(
-            "model_validation_bundle manifest contains secret-looking keys: "
-            f"{secret_keys}"
-        )
-
-
-def validate_manifest(
-    manifest: Mapping[str, object],
-    dataset_name: DatasetName | str = DatasetName.MODEL_VALIDATION_BUNDLE,
-) -> None:
-    """Validate a dataset manifest when a manifest-level contract exists."""
-
-    parsed_name = parse_dataset_name(dataset_name)
-    if parsed_name != DatasetName.MODEL_VALIDATION_BUNDLE:
-        raise ValueError(f"No manifest validator is defined for {parsed_name.value!r}")
-
-    validate_model_validation_manifest(manifest)
+__all__ = [
+    "CLEANED_QUOTES_COLUMNS",
+    "CLEANED_QUOTES_DTYPES",
+    "CLEANED_QUOTES_SCHEMA_VERSION",
+    "DATASET_COLUMNS",
+    "DATASET_DTYPES",
+    "EQUITY_BARS_COLUMNS",
+    "EQUITY_BARS_DTYPES",
+    "EQUITY_QUOTES_COLUMNS",
+    "EQUITY_QUOTES_DTYPES",
+    "FRED_SERIES_COLUMNS",
+    "FRED_SERIES_DTYPES",
+    "HESTON_QUOTES_COLUMNS",
+    "HESTON_QUOTES_DTYPES",
+    "HESTON_QUOTES_SCHEMA_VERSION",
+    "MARKET_INPUTS_COLUMNS",
+    "MARKET_INPUTS_DTYPES",
+    "MARKET_INPUTS_SCHEMA_VERSION",
+    "MARKET_SNAPSHOT_COLUMNS",
+    "MARKET_SNAPSHOT_DTYPES",
+    "MODEL_VALIDATION_BUNDLE_COLUMNS",
+    "MODEL_VALIDATION_BUNDLE_DTYPES",
+    "MODEL_VALIDATION_BUNDLE_VERSION",
+    "OPTION_CHAIN_COLUMNS",
+    "OPTION_CHAIN_DTYPES",
+    "OPTION_CHAIN_SCHEMA_VERSION",
+    "PandasSchemaDtype",
+    "REJECTED_QUOTES_COLUMNS",
+    "REJECTED_QUOTES_DTYPES",
+    "REJECTED_QUOTES_SCHEMA_VERSION",
+    "SURFACE_INPUTS_COLUMNS",
+    "SURFACE_INPUTS_DTYPES",
+    "SURFACE_INPUTS_SCHEMA_VERSION",
+    "DatasetName",
+    "parse_dataset_name",
+]

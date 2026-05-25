@@ -3,13 +3,10 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from option_pricing.marketdata.schemas import (
-    MODEL_VALIDATION_BUNDLE_VERSION,
-    StorageConfig,
-    coerce_frame,
-    validate_columns,
-)
+from option_pricing.marketdata.config import StorageConfig
+from option_pricing.marketdata.schemas import MODEL_VALIDATION_BUNDLE_VERSION
 from option_pricing.marketdata.storage import LocalStorage
+from option_pricing.marketdata.validation import coerce_frame, validate_columns
 
 
 @pytest.fixture
