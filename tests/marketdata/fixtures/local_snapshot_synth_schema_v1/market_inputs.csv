@@ -1,0 +1,2 @@
+underlying,asof,spot,spot_source,rate,rate_source,rate_observation_date,rate_compounding,dividend_yield,dividend_yield_source,day_count
+SYNTH,2026-05-22T15:30:00Z,100.00,local_fixture,0.04,local_fixture,2026-05-22,continuous,0.00,assumption,ACT/365

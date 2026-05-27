@@ -1,0 +1,29 @@
+{
+  "asof": "2026-05-22T15:30:00Z",
+  "assumptions": {
+    "day_count": "ACT/365",
+    "dividend_yield": 0.0,
+    "dividend_yield_source": "assumption",
+    "dividend_yield_units": "annualized_decimal",
+    "rate": 0.04,
+    "rate_compounding": "continuous",
+    "rate_source": "local_fixture",
+    "rate_units": "annualized_decimal"
+  },
+  "datasets": {
+    "market_inputs": "market_inputs.v1",
+    "option_chain": "option_chain.v1"
+  },
+  "description": "Provider-neutral synthetic local market snapshot fixture for A2-S1 schema loading.",
+  "files": {
+    "market_inputs": "market_inputs.csv",
+    "option_chain": "option_chain.csv"
+  },
+  "fixture_name": "local_snapshot_synth_schema_v1",
+  "fixture_schema_version": "local_snapshot_fixture.v1",
+  "provider_neutral": true,
+  "scope": "schema_only",
+  "source": "local_fixture",
+  "synthetic": true,
+  "underlying": "SYNTH"
+}
