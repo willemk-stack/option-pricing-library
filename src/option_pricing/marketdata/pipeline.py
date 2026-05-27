@@ -1,5 +1,7 @@
 """Marketdata pipeline orchestration hooks.
 
-Phase A1 defines the contracts and storage safeguards only. Provider loading,
-normalization, and bundle export are intentionally left to later phases.
+A2 includes a deterministic local fixture provider and a Bronze local snapshot
+evidence writer. General orchestration, live provider loading, normalization,
+quote cleaning, Silver/Gold bundle creation, and CLI workflows remain later
+phase work.
 """

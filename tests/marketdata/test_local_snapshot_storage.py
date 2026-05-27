@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -88,6 +88,11 @@ def test_a2_local_snapshot_loads_and_writes_bronze(
     result = _load_fixture(run_id="test-run")
 
     paths = write_local_snapshot_bronze(storage, result, overwrite=False)
+    partitions = {
+        "underlying": "SYNTH",
+        "date": date(2026, 5, 22),
+        "run_id": "test-run",
+    }
 
     expected_root = (
         tmp_path
@@ -132,6 +137,20 @@ def test_a2_local_snapshot_loads_and_writes_bronze(
         result.asof.to_pydatetime()
     )
 
+    local_snapshot = storage.read_frame(
+        dataset="local_snapshot",
+        layer="bronze",
+        partitions=partitions,
+    )
+    assert len(local_snapshot) == (
+        len(result.market_inputs_raw) + len(result.option_chain_raw)
+    )
+    assert set(local_snapshot["date"].astype(str)) == {"2026-05-22"}
+    assert set(local_snapshot["run_id"].astype(str)) == {"test-run"}
+
+    # LocalStorage.read_frame reads the whole local_snapshot partition and
+    # concatenates both deterministic files, so per-artifact row counts stay
+    # anchored to the bundle paths written above.
     market_inputs = pd.read_parquet(paths.market_inputs)
     option_chain = pd.read_parquet(paths.option_chain)
     assert len(market_inputs) == len(result.market_inputs_raw)
