@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import sys
@@ -10,6 +11,7 @@ import pytest
 
 from option_pricing.marketdata.providers.local import (
     LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1,
+    LocalSnapshotConfig,
     LocalSnapshotProvider,
     LocalSnapshotResult,
 )
@@ -21,9 +23,13 @@ from option_pricing.marketdata.validation import (
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures"
 LIVE_PROVIDER_MODULES = (
+    "alpaca",
+    "fredapi",
     "option_pricing.marketdata.providers.alpaca",
     "option_pricing.marketdata.providers.fred",
     "option_pricing.marketdata.providers.yahoo",
+    "requests",
+    "yfinance",
 )
 PROVIDER_CREDENTIAL_ENV_VARS = (
     "ALPACA_API_KEY",
@@ -37,6 +43,23 @@ def _load_fixture() -> LocalSnapshotResult:
     return provider.load_snapshot(LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1)
 
 
+def _copy_fixture(tmp_path: Path) -> Path:
+    target = tmp_path / LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1
+    shutil.copytree(FIXTURE_ROOT / LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1, target)
+    return target
+
+
+def _read_manifest(path: Path) -> dict[str, object]:
+    return json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+
+
+def _write_manifest(path: Path, payload: dict[str, object]) -> None:
+    (path / "manifest.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def test_local_snapshot_fixture_loads_without_credentials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -48,12 +71,37 @@ def test_local_snapshot_fixture_loads_without_credentials(
 
     result = _load_fixture()
 
+    assert result.fixture_name == LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1
     assert result.name == LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1
-    assert not result.market_inputs.empty
-    assert not result.option_chain.empty
+    assert result.underlying == "SYNTH"
+    assert result.asof == pd.Timestamp("2026-05-22T15:30:00Z")
+    assert result.run_id is None
+    assert result.snapshot_id == (
+        "local_snapshot_synth_schema_v1:SYNTH:2026-05-22T15:30:00+00:00"
+    )
+    assert result.row_counts == {"market_inputs": 1, "option_chain": 18}
+    assert result.market_inputs is result.market_inputs_raw
+    assert result.option_chain is result.option_chain_raw
+    assert not result.market_inputs_raw.empty
+    assert not result.option_chain_raw.empty
     assert result.warnings == ()
     for module_name in LIVE_PROVIDER_MODULES:
         assert module_name not in sys.modules
+
+
+def test_local_snapshot_config_loads_by_path_with_run_id() -> None:
+    config = LocalSnapshotConfig(
+        fixture_path=FIXTURE_ROOT / LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1,
+        expected_underlying="SYNTH",
+        run_id="unit-test-run",
+    )
+
+    result = LocalSnapshotProvider(config).load_snapshot()
+
+    assert result.fixture_name == LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1
+    assert result.run_id == "unit-test-run"
+    assert result.underlying == "SYNTH"
+    assert result.metadata["source"] == "local_fixture"
 
 
 def test_local_snapshot_fixture_has_expected_metadata() -> None:
@@ -78,7 +126,7 @@ def test_local_snapshot_fixture_has_expected_metadata() -> None:
 
 def test_local_snapshot_market_inputs_validate_against_schema() -> None:
     result = _load_fixture()
-    market_inputs = result.market_inputs
+    market_inputs = result.market_inputs_raw
 
     validate_columns(market_inputs, "market_inputs", allow_extra=False)
     validate_dtypes(market_inputs, "market_inputs", allow_extra=False)
@@ -102,7 +150,7 @@ def test_local_snapshot_market_inputs_validate_against_schema() -> None:
 
 def test_local_snapshot_option_chain_validate_against_schema() -> None:
     result = _load_fixture()
-    option_chain = result.option_chain
+    option_chain = result.option_chain_raw
 
     validate_columns(option_chain, "option_chain", allow_extra=False)
     validate_dtypes(option_chain, "option_chain", allow_extra=False)
@@ -145,6 +193,29 @@ def test_unknown_local_snapshot_name_fails_clearly() -> None:
 
 
 @pytest.mark.parametrize(
+    "name",
+    ["", ".", "..", "../outside", r"..\outside", "/absolute"],
+)
+def test_fixture_name_path_traversal_is_rejected(name: str) -> None:
+    provider = LocalSnapshotProvider(FIXTURE_ROOT)
+
+    with pytest.raises(ValueError, match="simple directory name"):
+        provider.load_snapshot(name)
+
+
+def test_config_fixture_name_path_traversal_is_rejected() -> None:
+    provider = LocalSnapshotProvider(
+        LocalSnapshotConfig(
+            fixture_path=FIXTURE_ROOT / LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1,
+            fixture_name="../outside",
+        )
+    )
+
+    with pytest.raises(ValueError, match="simple directory name"):
+        provider.load_snapshot()
+
+
+@pytest.mark.parametrize(
     "missing_file",
     ["manifest.json", "market_inputs.csv", "option_chain.csv"],
 )
@@ -152,8 +223,7 @@ def test_missing_fixture_file_fails_clearly(
     tmp_path: Path,
     missing_file: str,
 ) -> None:
-    target = tmp_path / LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1
-    shutil.copytree(FIXTURE_ROOT / LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1, target)
+    target = _copy_fixture(tmp_path)
     (target / missing_file).unlink()
 
     provider = LocalSnapshotProvider(tmp_path)
@@ -163,3 +233,95 @@ def test_missing_fixture_file_fails_clearly(
         match=f"missing required file: {re.escape(missing_file)}",
     ):
         provider.load_snapshot(LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1)
+
+
+def test_missing_manifest_key_fails_clearly(tmp_path: Path) -> None:
+    target = _copy_fixture(tmp_path)
+    manifest = _read_manifest(target)
+    del manifest["underlying"]
+    _write_manifest(target, manifest)
+
+    provider = LocalSnapshotProvider(tmp_path)
+
+    with pytest.raises(ValueError, match=r"missing required keys: \['underlying'\]"):
+        provider.load_snapshot(LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1)
+
+
+def test_manifest_files_section_must_match_actual_files(tmp_path: Path) -> None:
+    target = _copy_fixture(tmp_path)
+    manifest = _read_manifest(target)
+    files = manifest["files"]
+    assert isinstance(files, dict)
+    files["market_inputs"] = "renamed_market_inputs.csv"
+    _write_manifest(target, manifest)
+
+    provider = LocalSnapshotProvider(tmp_path)
+
+    with pytest.raises(
+        ValueError, match="files section must match actual fixture files"
+    ):
+        provider.load_snapshot(LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1)
+
+
+def test_underlying_mismatch_fails_clearly(tmp_path: Path) -> None:
+    target = _copy_fixture(tmp_path)
+    market_inputs = pd.read_csv(target / "market_inputs.csv")
+    market_inputs.loc[0, "underlying"] = "OTHER"
+    market_inputs.to_csv(target / "market_inputs.csv", index=False)
+
+    provider = LocalSnapshotProvider(tmp_path)
+
+    with pytest.raises(ValueError, match="market_inputs underlying .* manifest"):
+        provider.load_snapshot(LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1)
+
+
+def test_expected_underlying_mismatch_fails_clearly() -> None:
+    config = LocalSnapshotConfig(
+        fixture_root=FIXTURE_ROOT,
+        fixture_name=LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1,
+        expected_underlying="OTHER",
+    )
+
+    with pytest.raises(ValueError, match="expected 'OTHER'"):
+        LocalSnapshotProvider(config).load_snapshot()
+
+
+def test_market_inputs_must_have_exactly_one_row(tmp_path: Path) -> None:
+    target = _copy_fixture(tmp_path)
+    market_inputs = pd.read_csv(target / "market_inputs.csv")
+    market_inputs = pd.concat([market_inputs, market_inputs], ignore_index=True)
+    market_inputs.to_csv(target / "market_inputs.csv", index=False)
+
+    provider = LocalSnapshotProvider(tmp_path)
+
+    with pytest.raises(ValueError, match="exactly one market_inputs row; found 2"):
+        provider.load_snapshot(LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1)
+
+
+def test_duplicate_contract_symbol_fails_clearly(tmp_path: Path) -> None:
+    target = _copy_fixture(tmp_path)
+    option_chain = pd.read_csv(target / "option_chain.csv")
+    option_chain.loc[1, "contract_symbol"] = option_chain.loc[0, "contract_symbol"]
+    option_chain.to_csv(target / "option_chain.csv", index=False)
+
+    provider = LocalSnapshotProvider(tmp_path)
+
+    with pytest.raises(ValueError, match="duplicate contract_symbol"):
+        provider.load_snapshot(LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1)
+
+
+def test_repeated_local_snapshot_loads_are_deterministic() -> None:
+    provider = LocalSnapshotProvider(FIXTURE_ROOT)
+
+    first = provider.load_snapshot(LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1)
+    second = provider.load_snapshot(LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1)
+
+    assert first == second
+    pd.testing.assert_frame_equal(first.market_inputs_raw, second.market_inputs_raw)
+    pd.testing.assert_frame_equal(first.option_chain_raw, second.option_chain_raw)
+
+    sorted_option_chain = first.option_chain_raw.sort_values(
+        ["expiry", "strike", "right", "contract_symbol"],
+        kind="mergesort",
+    ).reset_index(drop=True)
+    pd.testing.assert_frame_equal(first.option_chain_raw, sorted_option_chain)
