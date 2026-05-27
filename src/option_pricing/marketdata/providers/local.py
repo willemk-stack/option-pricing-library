@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Final, cast
 
@@ -14,9 +15,11 @@ from option_pricing.marketdata.schemas import (
     MARKET_INPUTS_SCHEMA_VERSION,
     OPTION_CHAIN_SCHEMA_VERSION,
 )
+from option_pricing.marketdata.storage import LocalStorage
 from option_pricing.marketdata.validation import coerce_frame, order_columns
 
 LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1: Final = "local_snapshot_synth_schema_v1"
+LOCAL_SNAPSHOT_BRONZE_SCHEMA_VERSION: Final = "local_snapshot_bronze.v1"
 _REQUIRED_FILES: Final = ("manifest.json", "market_inputs.csv", "option_chain.csv")
 _REQUIRED_MANIFEST_KEYS: Final = (
     "asof",
@@ -108,6 +111,16 @@ class LocalSnapshotResult:
             and self.market_inputs_raw.equals(other.market_inputs_raw)
             and self.option_chain_raw.equals(other.option_chain_raw)
         )
+
+
+@dataclass(frozen=True, slots=True)
+class LocalSnapshotBronzePaths:
+    """Filesystem paths for one Bronze local snapshot evidence bundle."""
+
+    root: Path
+    manifest: Path
+    market_inputs: Path
+    option_chain: Path
 
 
 class LocalSnapshotProvider:
@@ -232,6 +245,151 @@ class LocalSnapshotProvider:
                 )
             paths[filename] = path
         return paths
+
+
+def write_local_snapshot_bronze(
+    storage: LocalStorage,
+    result: LocalSnapshotResult,
+    *,
+    overwrite: bool = False,
+    library_commit: str | None = None,
+) -> LocalSnapshotBronzePaths:
+    """Write one local snapshot as a single Bronze evidence bundle."""
+
+    run_id = _required_run_id(result.run_id)
+    valuation_timestamp = _utc_timestamp(result.asof)
+    partitions: dict[str, str | date] = {
+        "underlying": result.underlying,
+        "date": valuation_timestamp.date(),
+        "run_id": run_id,
+    }
+    root = _local_snapshot_bronze_root(storage, partitions)
+    _ensure_local_snapshot_targets_available(root, overwrite=overwrite)
+
+    market_inputs_path = storage.write_frame(
+        result.market_inputs_raw,
+        dataset="local_snapshot",
+        layer="bronze",
+        partitions=partitions,
+        filename="market_inputs.parquet",
+        overwrite=overwrite,
+    )
+    option_chain_path = storage.write_frame(
+        result.option_chain_raw,
+        dataset="local_snapshot",
+        layer="bronze",
+        partitions=partitions,
+        filename="option_chain.parquet",
+        overwrite=overwrite,
+    )
+    manifest_path = storage.write_manifest(
+        _local_snapshot_bronze_manifest(
+            result,
+            run_id=run_id,
+            valuation_timestamp=valuation_timestamp,
+            library_commit=library_commit,
+        ),
+        dataset="local_snapshot",
+        layer="bronze",
+        partitions=partitions,
+        filename="manifest.json",
+        overwrite=overwrite,
+    )
+
+    return LocalSnapshotBronzePaths(
+        root=manifest_path.parent,
+        manifest=manifest_path,
+        market_inputs=market_inputs_path,
+        option_chain=option_chain_path,
+    )
+
+
+def _required_run_id(value: str | None) -> str:
+    run_id = _clean_optional_text(value, "run_id")
+    if run_id is None:
+        raise ValueError("run_id is required to write Bronze local snapshot evidence")
+    return run_id
+
+
+def _utc_timestamp(value: pd.Timestamp) -> pd.Timestamp:
+    timestamp = pd.Timestamp(value)
+    if timestamp.tzinfo is None:
+        return timestamp.tz_localize(UTC)
+    return timestamp.tz_convert(UTC)
+
+
+def _utc_isoformat(value: datetime | pd.Timestamp) -> str:
+    if isinstance(value, pd.Timestamp):
+        dt = value.to_pydatetime()
+    else:
+        dt = value
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _local_snapshot_bronze_manifest(
+    result: LocalSnapshotResult,
+    *,
+    run_id: str,
+    valuation_timestamp: pd.Timestamp,
+    library_commit: str | None,
+) -> dict[str, object]:
+    return {
+        "local_snapshot_schema_version": LOCAL_SNAPSHOT_BRONZE_SCHEMA_VERSION,
+        "fixture_schema_version": _manifest_text(
+            result.manifest,
+            "fixture_schema_version",
+        ),
+        "fixture_name": result.fixture_name,
+        "snapshot_id": result.snapshot_id,
+        "run_id": run_id,
+        "created_at_utc": _utc_isoformat(datetime.now(UTC)),
+        "library_commit": _clean_optional_text(library_commit, "library_commit"),
+        "source_type": "local_fixture",
+        "underlying": result.underlying,
+        "valuation_timestamp_utc": _utc_isoformat(valuation_timestamp),
+        "rows": {
+            "market_inputs_raw": int(len(result.market_inputs_raw)),
+            "option_chain_raw": int(len(result.option_chain_raw)),
+        },
+        "warnings": list(result.warnings),
+        "artifacts": {
+            "market_inputs": "market_inputs.parquet",
+            "option_chain": "option_chain.parquet",
+        },
+    }
+
+
+def _local_snapshot_bronze_root(
+    storage: LocalStorage,
+    partitions: Mapping[str, str | date],
+) -> Path:
+    ordered_partitions = storage._ordered_partitions(
+        layer="bronze",
+        dataset="local_snapshot",
+        partitions=partitions,
+    )
+    return storage._dataset_dir(
+        layer="bronze",
+        dataset="local_snapshot",
+        ordered_partitions=ordered_partitions,
+    )
+
+
+def _ensure_local_snapshot_targets_available(
+    root: Path,
+    *,
+    overwrite: bool,
+) -> None:
+    if overwrite:
+        return
+    for filename in ("market_inputs.parquet", "option_chain.parquet", "manifest.json"):
+        path = root / filename
+        if path.exists():
+            raise FileExistsError(
+                f"{path} already exists; pass overwrite=True to replace it"
+            )
 
 
 def _coerce_config(config: LocalSnapshotConfig | Path | None) -> LocalSnapshotConfig:
@@ -449,8 +607,11 @@ def _snapshot_id(
 
 
 __all__ = [
+    "LOCAL_SNAPSHOT_BRONZE_SCHEMA_VERSION",
     "LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1",
+    "LocalSnapshotBronzePaths",
     "LocalSnapshotConfig",
     "LocalSnapshotProvider",
     "LocalSnapshotResult",
+    "write_local_snapshot_bronze",
 ]

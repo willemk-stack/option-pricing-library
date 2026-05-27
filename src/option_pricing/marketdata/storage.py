@@ -47,6 +47,7 @@ _PARTITION_ORDERS: dict[tuple[str, str], tuple[str, ...]] = {
     ("bronze", "equity_quotes"): ("date",),
     ("bronze", "equity_bars"): ("symbol", "timeframe", "date"),
     ("bronze", "option_chain"): ("underlying", "asof_date"),
+    ("bronze", "local_snapshot"): ("underlying", "date", "run_id"),
     ("bronze", "fred_series"): ("series_id", "date"),
     ("silver", "equity_quotes"): ("date",),
     ("silver", "equity_bars"): ("symbol", "timeframe", "date"),
