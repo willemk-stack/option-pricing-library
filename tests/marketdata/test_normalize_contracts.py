@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import get_type_hints
 
 import pandas as pd
-import pytest
 
 from option_pricing.marketdata.normalize import (
     normalize_market_inputs,
@@ -17,20 +16,16 @@ from option_pricing.marketdata.schemas import (
 from option_pricing.marketdata.validation import dataset_columns, dataset_dtypes
 
 
-def test_normalize_market_inputs_signature_and_deferred_contract() -> None:
+def test_normalize_market_inputs_signature() -> None:
     hints = get_type_hints(normalize_market_inputs)
 
     assert hints == {"frame": pd.DataFrame, "return": pd.DataFrame}
-    with pytest.raises(NotImplementedError, match="A3-S1"):
-        normalize_market_inputs(pd.DataFrame())
 
 
-def test_normalize_option_chain_signature_and_deferred_contract() -> None:
+def test_normalize_option_chain_signature() -> None:
     hints = get_type_hints(normalize_option_chain)
 
     assert hints == {"frame": pd.DataFrame, "return": pd.DataFrame}
-    with pytest.raises(NotImplementedError, match="A3-S1"):
-        normalize_option_chain(pd.DataFrame())
 
 
 def test_normalization_contracts_reuse_existing_marketdata_schemas() -> None:
