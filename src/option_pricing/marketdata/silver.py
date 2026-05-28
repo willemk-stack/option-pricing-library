@@ -187,6 +187,8 @@ def _target_path(
     partitions: Mapping[str, str | date],
     filename: str,
 ) -> Path:
+    # Mirror the local Bronze writer's preflight path checks so Silver writes
+    # fail before any artifact is created when overwrite is disabled.
     ordered_partitions = storage._ordered_partitions(
         layer="silver",
         dataset=dataset,

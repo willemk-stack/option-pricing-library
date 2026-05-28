@@ -11,6 +11,7 @@ import pytest
 
 from option_pricing.marketdata.cleaning import (
     QuoteCleaningResult,
+    QuoteRejectionReason,
     clean_option_quotes,
 )
 from option_pricing.marketdata.config import StorageConfig
@@ -38,9 +39,20 @@ from option_pricing.marketdata.silver import (
 from option_pricing.marketdata.storage import LocalStorage
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures"
+DOCS_GUIDE = Path("docs/user_guides/market_snapshot_validation.md")
 S4_FILES = (
     Path("src/option_pricing/marketdata/silver.py"),
     Path("tests/marketdata/test_a3_local_snapshot_cleaning_integration.py"),
+)
+A3_DOCS_NON_GOALS = (
+    "no live providers",
+    "no credentials",
+    "no CLI",
+    "no Gold",
+    "no Heston",
+    "no MarketData/PricingContext construction",
+    "no model-validation bundle",
+    "no research exports",
 )
 DISALLOWED_IMPORT_ROOTS = {
     "alpaca",
@@ -382,6 +394,17 @@ def test_silver_cleaning_uses_expected_partition_layout(
         "silver/rejected_quotes/underlying=SYNTH/date=2026-05-22/run_id=test-run/"
         in paths.rejected_quotes.as_posix()
     )
+
+
+def test_a3_docs_cover_rejection_reasons_and_non_goal_boundaries() -> None:
+    docs = DOCS_GUIDE.read_text(encoding="utf-8")
+
+    assert [
+        reason.value
+        for reason in QuoteRejectionReason
+        if docs.count(f"`{reason.value}`") != 1
+    ] == []
+    assert [boundary for boundary in A3_DOCS_NON_GOALS if boundary not in docs] == []
 
 
 def _import_root(name: str) -> str:

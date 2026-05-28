@@ -1,12 +1,13 @@
 # Local Snapshot SYNTH Schema V1
 
-This fixture is synthetic, provider-neutral, and schema-only. It does not
-represent historical SYNTH, SPY, or any other real market data.
+This fixture is synthetic, clean-only, provider-neutral, and schema-only. It
+does not represent historical SYNTH, SPY, or any other real market data.
 
-A2-S1 only proves that a deterministic local snapshot fixture can be discovered,
-loaded, parsed, and validated against the A1 marketdata schema helpers. A3 owns
-normalization and quote cleaning. A4/A5 own Gold conversion, Heston-compatible
-artifacts, and model-validation bundles.
+A2 proves that a deterministic local snapshot fixture can be discovered, loaded,
+parsed, validated against the A1 marketdata schema helpers, and written as
+Bronze evidence. A3 now normalizes the local handoff, cleans quotes, and writes
+Silver outputs. A4/A5 later own Gold conversion, Heston-compatible artifacts,
+and model-validation bundles.
 
 A2-S3 writes one auditable Bronze `local_snapshot` bundle for this fixture. The
 bundle contains `manifest.json`, `market_inputs.parquet`, and
@@ -42,16 +43,20 @@ storage = LocalStorage(StorageConfig(root="out/marketdata"))
 paths = write_local_snapshot_bronze(storage, result)
 ```
 
-The returned `LocalSnapshotResult` is the A3 handoff. A3 should consume
-`fixture_name`, `snapshot_id`, `run_id`, `underlying`, `asof`, `manifest`,
-`market_inputs_raw`, `option_chain_raw`, `metadata`, `row_counts`, and
-`warnings`, then produce any normalized, cleaned, rejected, pricing, Silver, or
-Gold outputs in later code.
+The returned `LocalSnapshotResult` is the A3 handoff. A3 consumes `fixture_name`,
+`snapshot_id`, `run_id`, `underlying`, `asof`, `manifest`, `market_inputs_raw`,
+`option_chain_raw`, `metadata`, `row_counts`, and `warnings`, then produces
+normalized `market_inputs`, `cleaned_quotes`, `rejected_quotes`, quote-cleaning
+metadata, and Silver artifacts.
+
+For the full A3 normalization and quote-cleaning guide, see
+[`docs/user_guides/market_snapshot_validation.md`](../../../../docs/user_guides/market_snapshot_validation.md).
 
 Rates and dividend yields are annualized decimals. The rate is already
 continuously compounded. The day-count convention is ACT/365. Dividend yield is
 zero by explicit assumption.
 
 The fixture contains clean synthetic rows only. It does not include invalid
-quotes, provider payloads, credentials, live-provider metadata, or historical
-market claims.
+quotes, provider payloads, credentials, live-provider metadata, Gold outputs,
+Heston-compatible artifacts, model-validation bundles, or historical market
+claims.
