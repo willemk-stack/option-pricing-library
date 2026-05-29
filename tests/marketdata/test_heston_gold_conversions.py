@@ -107,6 +107,33 @@ def test_build_heston_quotes_returns_exact_schema_and_valid_artifact() -> None:
     assert set(heston_quotes["option_type"].astype(str)) == {"call", "put"}
     assert heston_quotes["option_type"].equals(heston_quotes["right"])
     assert heston_quotes["label"].equals(heston_quotes["contract_symbol"])
+
+    source = cleaned.reset_index(drop=True)
+    column_mapping = {
+        "underlying": "underlying",
+        "contract_symbol": "contract_symbol",
+        "quote_id": "quote_id",
+        "asof": "asof",
+        "expiry": "expiry",
+        "expiry_years": "expiry_years",
+        "strike": "strike",
+        "right": "right",
+        "mid": "mid",
+        "bid": "bid",
+        "ask": "ask",
+        "iv": "iv",
+        "vega": "vega",
+        "option_type": "right",
+        "label": "contract_symbol",
+        "source": "source",
+        "cleaning_policy": "cleaning_policy",
+    }
+    for target_column, source_column in column_mapping.items():
+        pd.testing.assert_series_equal(
+            heston_quotes[target_column],
+            source[source_column],
+            check_names=False,
+        )
     pd.testing.assert_series_equal(
         heston_quotes["expiry_years"],
         cleaned["expiry_years"].reset_index(drop=True),
@@ -200,4 +227,28 @@ def test_heston_quote_set_from_frame_rejects_empty_heston_quotes() -> None:
     heston_quotes = build_heston_quotes(_cleaned_quotes()).heston_quotes.iloc[0:0]
 
     with pytest.raises(ValueError, match="heston_quotes.*at least one quote"):
+        heston_quote_set_from_frame(heston_quotes, _market_data())
+
+
+def test_heston_quote_set_from_frame_rejects_invalid_option_type() -> None:
+    heston_quotes = build_heston_quotes(_cleaned_quotes()).heston_quotes
+    heston_quotes.loc[0, "option_type"] = "C"
+
+    with pytest.raises(ValueError, match="option_type.*call.*put"):
+        heston_quote_set_from_frame(heston_quotes, _market_data())
+
+
+def test_heston_quote_set_from_frame_rejects_option_type_mismatch() -> None:
+    heston_quotes = build_heston_quotes(_cleaned_quotes()).heston_quotes
+    heston_quotes.loc[0, "option_type"] = "put"
+
+    with pytest.raises(ValueError, match="option_type must match right"):
+        heston_quote_set_from_frame(heston_quotes, _market_data())
+
+
+def test_heston_quote_set_from_frame_rejects_label_mismatch() -> None:
+    heston_quotes = build_heston_quotes(_cleaned_quotes()).heston_quotes
+    heston_quotes.loc[0, "label"] = "wrong-label"
+
+    with pytest.raises(ValueError, match="label must match contract_symbol"):
         heston_quote_set_from_frame(heston_quotes, _market_data())

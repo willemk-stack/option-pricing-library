@@ -11,6 +11,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+import option_pricing.marketdata.gold as gold_module
 from option_pricing.marketdata.config import StorageConfig
 from option_pricing.marketdata.gold import (
     GOLD_CONVERSION_MANIFEST_VERSION,
@@ -91,6 +92,21 @@ def _with_value(column: str, value: object) -> Callable[[pd.DataFrame], pd.DataF
 def test_gold_public_contracts_exist() -> None:
     assert GOLD_MARKET_DATA_SCHEMA_VERSION == "gold_market_data.v1"
     assert GOLD_CONVERSION_MANIFEST_VERSION == "gold_conversion_manifest.v1"
+    assert tuple(gold_module.__all__) == (
+        "GOLD_CONVERSION_MANIFEST_VERSION",
+        "GOLD_MARKET_DATA_SCHEMA_VERSION",
+        "GoldConversionPaths",
+        "GoldHestonQuotesResult",
+        "GoldMarketDataSnapshot",
+        "build_heston_quotes",
+        "build_market_data_snapshot",
+        "heston_quote_set_from_frame",
+        "market_data_snapshot_from_json",
+        "market_data_snapshot_to_json",
+        "write_gold_artifacts",
+        "write_heston_quotes_gold",
+        "write_market_data_gold",
+    )
     assert tuple(field.name for field in fields(GoldMarketDataSnapshot)) == (
         "market_data",
         "metadata",
@@ -189,6 +205,10 @@ def test_market_data_json_round_trips_and_context_is_usable() -> None:
             _with_value("day_count", "ACT/360"),
             "day_count must be 'ACT/365'",
         ),
+        (
+            lambda frame: frame.assign(unexpected_column=1),
+            "unexpected extra columns",
+        ),
     ],
 )
 def test_build_market_data_snapshot_rejects_invalid_market_inputs(
@@ -199,6 +219,16 @@ def test_build_market_data_snapshot_rejects_invalid_market_inputs(
 
     with pytest.raises((ValueError, TypeError), match=message):
         _snapshot(frame)
+
+
+def test_build_market_data_snapshot_requires_dataframe() -> None:
+    with pytest.raises(TypeError, match="pandas DataFrame"):
+        build_market_data_snapshot(  # type: ignore[arg-type]
+            [],
+            run_id="test-run",
+            snapshot_id="snapshot-001",
+            cleaning_policy="quote_cleaning_policy.v1",
+        )
 
 
 def test_market_data_snapshot_requires_gold_schema_version() -> None:
@@ -214,6 +244,60 @@ def test_market_data_snapshot_rejects_invalid_loaded_conventions() -> None:
     payload["day_count"] = "ACT/360"
 
     with pytest.raises(ValueError, match="ACT/365"):
+        market_data_snapshot_from_json(payload)
+
+
+@pytest.mark.parametrize(
+    ("market_data", "message"),
+    [
+        (MarketData(spot=0.0, rate=0.04, dividend_yield=0.0), "spot"),
+        (MarketData(spot=100.0, rate=float("inf"), dividend_yield=0.0), "rate"),
+        (
+            MarketData(spot=100.0, rate=0.04, dividend_yield=float("nan")),
+            "dividend_yield",
+        ),
+    ],
+)
+def test_market_data_snapshot_to_json_rejects_invalid_market_data(
+    market_data: MarketData,
+    message: str,
+) -> None:
+    snapshot = GoldMarketDataSnapshot(
+        market_data=market_data,
+        metadata=_snapshot().metadata,
+    )
+
+    with pytest.raises(ValueError, match=message):
+        market_data_snapshot_to_json(snapshot)
+
+
+def test_market_data_snapshot_from_json_requires_market_data_object() -> None:
+    payload = market_data_snapshot_to_json(_snapshot())
+    payload.pop("market_data")
+
+    with pytest.raises(ValueError, match="market_data object"):
+        market_data_snapshot_from_json(payload)
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "message"),
+    [
+        ("spot", -1.0, "spot"),
+        ("rate", float("inf"), "rate"),
+        ("dividend_yield", float("nan"), "dividend_yield"),
+    ],
+)
+def test_market_data_snapshot_from_json_rejects_invalid_market_data_values(
+    key: str,
+    value: object,
+    message: str,
+) -> None:
+    payload = market_data_snapshot_to_json(_snapshot())
+    market_data = payload["market_data"]
+    assert isinstance(market_data, dict)
+    market_data[key] = value
+
+    with pytest.raises(ValueError, match=message):
         market_data_snapshot_from_json(payload)
 
 

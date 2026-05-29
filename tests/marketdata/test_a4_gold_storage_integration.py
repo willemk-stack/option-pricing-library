@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 
@@ -188,6 +188,33 @@ def test_write_heston_quotes_gold_writes_expected_path(
     )
     assert path.exists()
 
+    read_back = storage.read_frame(
+        dataset=DatasetName.HESTON_QUOTES.value,
+        layer="gold",
+        partitions=_partitions(),
+        columns=list(HESTON_QUOTES_COLUMNS),
+    )
+    pd.testing.assert_frame_equal(
+        read_back.reset_index(drop=True),
+        heston_quotes.reset_index(drop=True),
+    )
+
+
+def test_write_heston_quotes_gold_rejects_non_reconstructable_conventions(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    storage = _storage(tmp_path)
+    heston_quotes = build_heston_quotes(_a3_outputs().cleaned_quotes).heston_quotes
+    heston_quotes.loc[0, "label"] = "wrong-label"
+
+    with pytest.raises(ValueError, match="label must match contract_symbol"):
+        write_heston_quotes_gold(
+            storage,
+            heston_quotes=heston_quotes,
+            partitions=_partitions(),
+        )
+
 
 def test_write_gold_artifacts_writes_paths_and_readback_is_usable(
     tmp_path: Path,
@@ -285,6 +312,14 @@ def test_gold_manifests_summarize_outputs_without_rejected_rows(
     )
     assert market_manifest["artifact_schema_version"] == GOLD_MARKET_DATA_SCHEMA_VERSION
     assert heston_manifest["artifact_schema_version"] == HESTON_QUOTES_SCHEMA_VERSION
+    assert market_manifest["artifact"] == "market_data"
+    assert heston_manifest["artifact"] == "heston_quotes"
+    assert market_manifest["library_commit"] == "abc123"
+    assert heston_manifest["library_commit"] == "abc123"
+    assert market_manifest["quote_cleaning_policy"] == "quote_cleaning_policy.v1"
+    assert heston_manifest["quote_cleaning_policy"] == "quote_cleaning_policy.v1"
+    assert market_manifest["rate_compounding"] == "continuous"
+    assert market_manifest["day_count"] == "ACT/365"
     for manifest in (market_manifest, heston_manifest):
         assert manifest["run_id"] == "test-run"
         assert manifest["snapshot_id"] == outputs.local_snapshot.snapshot_id
@@ -359,16 +394,49 @@ def test_write_gold_artifacts_requires_matching_market_inputs_asof(
         )
 
 
-def test_write_gold_artifacts_preflights_all_targets(
+def test_write_gold_artifacts_requires_matching_underlying(
     tmp_path: Path,
     fake_parquet: None,
 ) -> None:
     storage = _storage(tmp_path)
     outputs = _a3_outputs()
-    existing_target = _gold_path(
-        tmp_path,
-        DatasetName.HESTON_QUOTES.value,
-        "heston_quotes.parquet",
+    local_snapshot = replace(outputs.local_snapshot, underlying="OTHER")
+
+    with pytest.raises(ValueError, match="underlying.*match"):
+        write_gold_artifacts(
+            storage,
+            local_snapshot=local_snapshot,
+            market_inputs=outputs.market_inputs,
+            cleaned_quotes=outputs.cleaned_quotes,
+            rejected_quotes=outputs.rejected_quotes,
+            reason_counts=outputs.reason_counts,
+            warnings=outputs.warnings,
+        )
+
+
+@pytest.mark.parametrize(
+    ("dataset", "filename"),
+    [
+        (DatasetName.MARKET_SNAPSHOT.value, "market_data.json"),
+        (DatasetName.MARKET_SNAPSHOT.value, "manifest.json"),
+        (DatasetName.HESTON_QUOTES.value, "heston_quotes.parquet"),
+        (DatasetName.HESTON_QUOTES.value, "manifest.json"),
+    ],
+)
+def test_write_gold_artifacts_preflights_all_targets(
+    tmp_path: Path,
+    fake_parquet: None,
+    dataset: str,
+    filename: str,
+) -> None:
+    storage = _storage(tmp_path)
+    outputs = _a3_outputs()
+    existing_target = _gold_path(tmp_path, dataset, filename)
+    all_targets = (
+        _gold_path(tmp_path, DatasetName.MARKET_SNAPSHOT.value, "market_data.json"),
+        _gold_path(tmp_path, DatasetName.MARKET_SNAPSHOT.value, "manifest.json"),
+        _gold_path(tmp_path, DatasetName.HESTON_QUOTES.value, "heston_quotes.parquet"),
+        _gold_path(tmp_path, DatasetName.HESTON_QUOTES.value, "manifest.json"),
     )
     existing_target.parent.mkdir(parents=True)
     existing_target.write_text("existing", encoding="utf-8")
@@ -377,21 +445,10 @@ def test_write_gold_artifacts_preflights_all_targets(
         _write_gold(storage, outputs)
 
     assert existing_target.read_text(encoding="utf-8") == "existing"
-    assert not _gold_path(
-        tmp_path,
-        DatasetName.MARKET_SNAPSHOT.value,
-        "market_data.json",
-    ).exists()
-    assert not _gold_path(
-        tmp_path,
-        DatasetName.MARKET_SNAPSHOT.value,
-        "manifest.json",
-    ).exists()
-    assert not _gold_path(
-        tmp_path,
-        DatasetName.HESTON_QUOTES.value,
-        "manifest.json",
-    ).exists()
+    for target in all_targets:
+        if target == existing_target:
+            continue
+        assert not target.exists()
     assert not (tmp_path / "_meta" / "artifacts.jsonl").exists()
 
 

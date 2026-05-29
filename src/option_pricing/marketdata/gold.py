@@ -178,9 +178,7 @@ def heston_quote_set_from_frame(
     _require_heston_quotes_frame(heston_quotes)
     _require_non_empty_frame(heston_quotes, "heston_quotes")
     _require_market_data(market_data)
-    _require_call_put_values(heston_quotes, "right", "heston_quotes")
-    _require_call_put_values(heston_quotes, "option_type", "heston_quotes")
-    _require_matching_option_type(heston_quotes)
+    _require_heston_quote_conventions(heston_quotes)
 
     iv_mid = _optional_heston_float_array(
         heston_quotes,
@@ -238,6 +236,7 @@ def market_data_snapshot_to_json(
             f"{GOLD_MARKET_DATA_SCHEMA_VERSION!r}"
         )
 
+    _require_market_data(snapshot.market_data)
     payload = dict(snapshot.metadata)
     payload["market_data"] = {
         "spot": float(snapshot.market_data.spot),
@@ -294,6 +293,7 @@ def write_market_data_gold(
 ) -> Path:
     """Write a Gold ``market_data.json`` snapshot to local storage."""
 
+    _require_local_storage(storage)
     return storage.write_json(
         market_data_snapshot_to_json(snapshot),
         layer="gold",
@@ -315,6 +315,7 @@ def write_heston_quotes_gold(
 
     _require_local_storage(storage)
     _require_heston_quotes_frame(heston_quotes)
+    _require_heston_quote_conventions(heston_quotes)
     return storage.write_frame(
         heston_quotes,
         layer="gold",
@@ -371,6 +372,22 @@ def write_gold_artifacts(
             f"got local_snapshot.asof={_utc_isoformat(valuation_timestamp)} and "
             f"market_inputs asof={_utc_isoformat(market_asof)}"
         )
+
+    _require_matching_underlying(
+        market_inputs,
+        frame_name="market_inputs",
+        expected=underlying,
+    )
+    _require_matching_underlying(
+        cleaned_quotes,
+        frame_name="cleaned_quotes",
+        expected=underlying,
+    )
+    _require_matching_underlying(
+        rejected_quotes,
+        frame_name="rejected_quotes",
+        expected=underlying,
+    )
 
     cleaning_policy = _cleaning_policy_from_cleaned_quotes(cleaned_quotes)
     partitions: dict[str, PartitionValue] = {
@@ -851,6 +868,51 @@ def _require_matching_option_type(heston_quotes: pd.DataFrame) -> None:
     ].astype("string")
     if bool(mismatch.any()):
         raise ValueError("heston_quotes option_type must match right for every quote")
+
+
+def _require_heston_quote_conventions(heston_quotes: pd.DataFrame) -> None:
+    _require_call_put_values(heston_quotes, "right", "heston_quotes")
+    _require_call_put_values(heston_quotes, "option_type", "heston_quotes")
+    _require_matching_option_type(heston_quotes)
+    _require_matching_label(heston_quotes)
+
+
+def _require_matching_label(heston_quotes: pd.DataFrame) -> None:
+    mismatch = heston_quotes["label"].astype("string") != heston_quotes[
+        "contract_symbol"
+    ].astype("string")
+    if bool(mismatch.any()):
+        raise ValueError(
+            "heston_quotes label must match contract_symbol for every quote"
+        )
+
+
+def _require_matching_underlying(
+    frame: pd.DataFrame,
+    *,
+    frame_name: str,
+    expected: str,
+) -> None:
+    if frame.empty:
+        return
+
+    values: list[str] = []
+    for value in frame["underlying"]:
+        if pd.isna(value):
+            rendered = ""
+        else:
+            rendered = str(value).strip()
+        if rendered and rendered not in values:
+            values.append(rendered)
+
+    if values == [expected]:
+        return
+
+    found = ", ".join(repr(value) for value in values) or "<missing>"
+    raise ValueError(
+        f"{frame_name} underlying must match local_snapshot.underlying "
+        f"{expected!r}; found {found}"
+    )
 
 
 def _require_market_data(market_data: MarketData) -> None:
