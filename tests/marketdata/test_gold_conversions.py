@@ -5,11 +5,13 @@ import json
 import math
 from collections.abc import Callable
 from dataclasses import fields
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
+from option_pricing.marketdata.config import StorageConfig
 from option_pricing.marketdata.gold import (
     GOLD_CONVERSION_MANIFEST_VERSION,
     GOLD_MARKET_DATA_SCHEMA_VERSION,
@@ -19,8 +21,10 @@ from option_pricing.marketdata.gold import (
     build_market_data_snapshot,
     market_data_snapshot_from_json,
     market_data_snapshot_to_json,
+    write_market_data_gold,
 )
 from option_pricing.marketdata.normalize import normalize_market_inputs
+from option_pricing.marketdata.storage import LocalStorage
 from option_pricing.types import MarketData
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "local_snapshot_synth_schema_v1"
@@ -47,14 +51,26 @@ def _fixture_market_inputs() -> pd.DataFrame:
     return normalize_market_inputs(pd.read_csv(FIXTURE_ROOT / "market_inputs.csv"))
 
 
-def _snapshot(frame: pd.DataFrame | None = None) -> GoldMarketDataSnapshot:
+def _snapshot(
+    frame: pd.DataFrame | None = None,
+    *,
+    library_commit: str | None = "abc123",
+) -> GoldMarketDataSnapshot:
     return build_market_data_snapshot(
         _fixture_market_inputs() if frame is None else frame,
         run_id="test-run",
         snapshot_id="snapshot-001",
         cleaning_policy="quote_cleaning_policy.v1",
-        library_commit="abc123",
+        library_commit=library_commit,
     )
+
+
+def _gold_partitions() -> dict[str, str | date]:
+    return {
+        "run_id": "test-run",
+        "date": date(2026, 5, 22),
+        "underlying": "SYNTH",
+    }
 
 
 def _with_value(column: str, value: object) -> Callable[[pd.DataFrame], pd.DataFrame]:
@@ -193,6 +209,84 @@ def test_market_data_snapshot_rejects_invalid_loaded_conventions() -> None:
 
     with pytest.raises(ValueError, match="ACT/365"):
         market_data_snapshot_from_json(payload)
+
+
+def test_write_market_data_gold_persists_reloadable_market_data_json(
+    tmp_path: Path,
+) -> None:
+    storage = LocalStorage(StorageConfig(root=tmp_path))
+    snapshot = _snapshot()
+
+    path = write_market_data_gold(
+        storage,
+        snapshot=snapshot,
+        partitions=_gold_partitions(),
+    )
+
+    assert path == (
+        tmp_path
+        / "gold"
+        / "market_snapshot"
+        / "underlying=SYNTH"
+        / "date=2026-05-22"
+        / "run_id=test-run"
+        / "market_data.json"
+    )
+    assert path.exists()
+    assert "run_id=test-run" in path.as_posix()
+
+    payload = storage.read_json(
+        dataset="market_snapshot",
+        layer="gold",
+        partitions=_gold_partitions(),
+        filename="market_data.json",
+    )
+    loaded = market_data_snapshot_from_json(payload)
+
+    assert loaded == snapshot
+    assert loaded.market_data == MarketData(
+        spot=100.0,
+        rate=0.04,
+        dividend_yield=0.0,
+    )
+
+
+def test_write_market_data_gold_respects_overwrite_policy(tmp_path: Path) -> None:
+    storage = LocalStorage(StorageConfig(root=tmp_path))
+    partitions = _gold_partitions()
+    first = _snapshot(library_commit="first")
+    replacement = _snapshot(library_commit="replacement")
+
+    first_path = write_market_data_gold(
+        storage,
+        snapshot=first,
+        partitions=partitions,
+    )
+
+    with pytest.raises(FileExistsError, match="overwrite=True"):
+        write_market_data_gold(
+            storage,
+            snapshot=replacement,
+            partitions=partitions,
+        )
+
+    replacement_path = write_market_data_gold(
+        storage,
+        snapshot=replacement,
+        partitions=partitions,
+        overwrite=True,
+    )
+
+    assert replacement_path == first_path
+    loaded = market_data_snapshot_from_json(
+        storage.read_json(
+            dataset="market_snapshot",
+            layer="gold",
+            partitions=partitions,
+            filename="market_data.json",
+        )
+    )
+    assert loaded == replacement
 
 
 def _import_root(name: str) -> str:

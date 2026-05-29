@@ -115,6 +115,57 @@ def test_write_and_read_frame_round_trips_partitioned_data(
     assert artifact["rows"] == 1
 
 
+def test_write_and_read_json_round_trips_partitioned_object(tmp_path) -> None:
+    storage = LocalStorage(StorageConfig(root=tmp_path))
+
+    path = storage.write_json(
+        {"row_count": 1, "asof_date": date(2026, 5, 22)},
+        dataset="market_snapshot",
+        layer="gold",
+        partitions={
+            "run_id": "test-run",
+            "date": date(2026, 5, 22),
+            "underlying": "SYNTH",
+        },
+        filename="market_data",
+    )
+
+    expected_path = (
+        tmp_path
+        / "gold"
+        / "market_snapshot"
+        / "underlying=SYNTH"
+        / "date=2026-05-22"
+        / "run_id=test-run"
+        / "market_data.json"
+    )
+    assert path == expected_path
+    assert path.exists()
+    assert storage.read_json(
+        dataset="market_snapshot",
+        layer="gold",
+        partitions={
+            "underlying": "SYNTH",
+            "date": date(2026, 5, 22),
+            "run_id": "test-run",
+        },
+        filename="market_data.json",
+    ) == {"row_count": 1, "asof_date": "2026-05-22"}
+
+    artifact_lines = (
+        (tmp_path / "_meta" / "artifacts.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    )
+    assert len(artifact_lines) == 1
+    artifact = json.loads(artifact_lines[0])
+    assert artifact["artifact_type"] == "json"
+    assert artifact["path"] == (
+        "gold/market_snapshot/underlying=SYNTH/"
+        "date=2026-05-22/run_id=test-run/market_data.json"
+    )
+
+
 def test_manifest_run_registry_and_checkpoints_are_persisted(tmp_path) -> None:
     storage = LocalStorage(tmp_path)
 

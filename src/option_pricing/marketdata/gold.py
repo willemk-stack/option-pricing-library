@@ -12,6 +12,7 @@ from typing import Any, cast
 import pandas as pd
 
 from option_pricing.marketdata.schemas import DatasetName
+from option_pricing.marketdata.storage import LocalStorage, PartitionValue
 from option_pricing.marketdata.validation import validate_dtypes
 from option_pricing.types import MarketData
 
@@ -170,6 +171,25 @@ def market_data_snapshot_from_json(
     )
 
 
+def write_market_data_gold(
+    storage: LocalStorage,
+    *,
+    snapshot: GoldMarketDataSnapshot,
+    partitions: Mapping[str, PartitionValue],
+    overwrite: bool = False,
+) -> Path:
+    """Write a Gold ``market_data.json`` snapshot to local storage."""
+
+    return storage.write_json(
+        market_data_snapshot_to_json(snapshot),
+        layer="gold",
+        dataset=DatasetName.MARKET_SNAPSHOT.value,
+        partitions=partitions,
+        filename="market_data.json",
+        overwrite=overwrite,
+    )
+
+
 def _require_market_inputs_frame(market_inputs: pd.DataFrame) -> None:
     if not isinstance(market_inputs, pd.DataFrame):
         raise TypeError(
@@ -287,4 +307,5 @@ __all__ = [
     "build_market_data_snapshot",
     "market_data_snapshot_from_json",
     "market_data_snapshot_to_json",
+    "write_market_data_gold",
 ]
