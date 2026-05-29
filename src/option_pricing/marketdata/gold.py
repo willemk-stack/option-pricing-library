@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import numpy as np
 import pandas as pd
@@ -26,7 +26,16 @@ if TYPE_CHECKING:
 
 GOLD_MARKET_DATA_SCHEMA_VERSION = "gold_market_data.v1"
 GOLD_CONVERSION_MANIFEST_VERSION = "gold_conversion_manifest.v1"
+_DEFAULT_CLEANING_POLICY_ID = "quote_cleaning_policy.v1"
 _OPTION_RIGHTS = frozenset({"call", "put"})
+
+
+class _GoldLocalSnapshot(Protocol):
+    fixture_name: str
+    snapshot_id: str
+    run_id: str | None
+    underlying: str
+    asof: pd.Timestamp
 
 
 @dataclass(frozen=True, slots=True)
@@ -295,6 +304,158 @@ def write_market_data_gold(
     )
 
 
+def write_heston_quotes_gold(
+    storage: LocalStorage,
+    *,
+    heston_quotes: pd.DataFrame,
+    partitions: Mapping[str, PartitionValue],
+    overwrite: bool = False,
+) -> Path:
+    """Write a Gold Heston quote artifact to local storage."""
+
+    _require_local_storage(storage)
+    _require_heston_quotes_frame(heston_quotes)
+    return storage.write_frame(
+        heston_quotes,
+        layer="gold",
+        dataset=DatasetName.HESTON_QUOTES.value,
+        partitions=partitions,
+        filename="heston_quotes.parquet",
+        overwrite=overwrite,
+    )
+
+
+def write_gold_artifacts(
+    storage: LocalStorage,
+    *,
+    local_snapshot: _GoldLocalSnapshot,
+    market_inputs: pd.DataFrame,
+    cleaned_quotes: pd.DataFrame,
+    rejected_quotes: pd.DataFrame,
+    reason_counts: Mapping[str, int],
+    warnings: Sequence[str],
+    overwrite: bool = False,
+    library_commit: str | None = None,
+) -> GoldConversionPaths:
+    """Write the A4 Gold MarketData and Heston quote artifacts."""
+
+    _require_local_storage(storage)
+    run_id = _required_run_id(local_snapshot.run_id)
+    underlying = _required_text_value(
+        "local_snapshot.underlying", local_snapshot.underlying
+    )
+    snapshot_id = _required_text_value(
+        "local_snapshot.snapshot_id", local_snapshot.snapshot_id
+    )
+    fixture_name = _required_text_value(
+        "local_snapshot.fixture_name", local_snapshot.fixture_name
+    )
+    library_commit = _optional_text("library_commit", library_commit)
+
+    _require_market_inputs_frame(market_inputs)
+    _require_single_row(market_inputs)
+    _require_cleaned_quotes_frame(cleaned_quotes)
+    _require_rejected_quotes_frame(rejected_quotes)
+
+    valuation_timestamp = _utc_timestamp(
+        local_snapshot.asof,
+        field_name="local_snapshot.asof",
+    )
+    market_asof = _utc_timestamp(
+        market_inputs.iloc[0]["asof"],
+        field_name="market_inputs asof",
+    )
+    if market_asof != valuation_timestamp:
+        raise ValueError(
+            "local_snapshot.asof and market_inputs asof must match in UTC; "
+            f"got local_snapshot.asof={_utc_isoformat(valuation_timestamp)} and "
+            f"market_inputs asof={_utc_isoformat(market_asof)}"
+        )
+
+    cleaning_policy = _cleaning_policy_from_cleaned_quotes(cleaned_quotes)
+    partitions: dict[str, PartitionValue] = {
+        "underlying": underlying,
+        "date": valuation_timestamp.date(),
+        "run_id": run_id,
+    }
+    expected_paths = _expected_gold_paths(storage, partitions)
+    _ensure_gold_targets_available(expected_paths, overwrite=overwrite)
+
+    snapshot = build_market_data_snapshot(
+        market_inputs,
+        run_id=run_id,
+        snapshot_id=snapshot_id,
+        cleaning_policy=cleaning_policy,
+        library_commit=library_commit,
+    )
+    market_payload = market_data_snapshot_to_json(snapshot)
+    heston_result = build_heston_quotes(cleaned_quotes)
+
+    market_manifest = _market_snapshot_manifest(
+        local_snapshot,
+        run_id=run_id,
+        snapshot_id=snapshot_id,
+        fixture_name=fixture_name,
+        valuation_timestamp=valuation_timestamp,
+        market_payload=market_payload,
+        market_inputs=market_inputs,
+        cleaned_quotes=cleaned_quotes,
+        rejected_quotes=rejected_quotes,
+        reason_counts=reason_counts,
+        warnings=warnings,
+        library_commit=library_commit,
+    )
+    heston_manifest = _heston_quotes_manifest(
+        local_snapshot,
+        run_id=run_id,
+        snapshot_id=snapshot_id,
+        fixture_name=fixture_name,
+        valuation_timestamp=valuation_timestamp,
+        cleaned_quotes=cleaned_quotes,
+        rejected_quotes=rejected_quotes,
+        heston_result=heston_result,
+        reason_counts=reason_counts,
+        warnings=warnings,
+        library_commit=library_commit,
+    )
+
+    market_data_path = write_market_data_gold(
+        storage,
+        snapshot=snapshot,
+        partitions=partitions,
+        overwrite=overwrite,
+    )
+    heston_quotes_path = write_heston_quotes_gold(
+        storage,
+        heston_quotes=heston_result.heston_quotes,
+        partitions=partitions,
+        overwrite=overwrite,
+    )
+    market_manifest_path = storage.write_manifest(
+        market_manifest,
+        layer="gold",
+        dataset=DatasetName.MARKET_SNAPSHOT.value,
+        partitions=partitions,
+        filename="manifest.json",
+        overwrite=overwrite,
+    )
+    heston_manifest_path = storage.write_manifest(
+        heston_manifest,
+        layer="gold",
+        dataset=DatasetName.HESTON_QUOTES.value,
+        partitions=partitions,
+        filename="manifest.json",
+        overwrite=overwrite,
+    )
+
+    return GoldConversionPaths(
+        market_data=market_data_path,
+        market_manifest=market_manifest_path,
+        heston_quotes=heston_quotes_path,
+        heston_manifest=heston_manifest_path,
+    )
+
+
 def _require_market_inputs_frame(market_inputs: pd.DataFrame) -> None:
     if not isinstance(market_inputs, pd.DataFrame):
         raise TypeError(
@@ -313,6 +474,15 @@ def _require_cleaned_quotes_frame(cleaned_quotes: pd.DataFrame) -> None:
     validate_dtypes(cleaned_quotes, DatasetName.CLEANED_QUOTES, allow_extra=False)
 
 
+def _require_rejected_quotes_frame(rejected_quotes: pd.DataFrame) -> None:
+    if not isinstance(rejected_quotes, pd.DataFrame):
+        raise TypeError(
+            "rejected_quotes must be a pandas DataFrame, "
+            f"got {type(rejected_quotes).__name__}"
+        )
+    validate_dtypes(rejected_quotes, DatasetName.REJECTED_QUOTES, allow_extra=False)
+
+
 def _require_heston_quotes_frame(heston_quotes: pd.DataFrame) -> None:
     if not isinstance(heston_quotes, pd.DataFrame):
         raise TypeError(
@@ -320,6 +490,13 @@ def _require_heston_quotes_frame(heston_quotes: pd.DataFrame) -> None:
             f"got {type(heston_quotes).__name__}"
         )
     validate_dtypes(heston_quotes, DatasetName.HESTON_QUOTES, allow_extra=False)
+
+
+def _require_local_storage(storage: LocalStorage) -> None:
+    if not isinstance(storage, LocalStorage):
+        raise TypeError(
+            "storage must be a LocalStorage instance, " f"got {type(storage).__name__}"
+        )
 
 
 def _require_non_empty_frame(frame: pd.DataFrame, name: str) -> None:
@@ -333,6 +510,255 @@ def _require_single_row(market_inputs: pd.DataFrame) -> None:
             "market_inputs must contain exactly one row for Gold MarketData "
             f"conversion; found {len(market_inputs)}"
         )
+
+
+def _required_run_id(value: str | None) -> str:
+    if value is None:
+        raise ValueError("local_snapshot.run_id is required to write Gold artifacts")
+    run_id = value.strip()
+    if not run_id:
+        raise ValueError("local_snapshot.run_id is required to write Gold artifacts")
+    return run_id
+
+
+def _expected_gold_paths(
+    storage: LocalStorage,
+    partitions: Mapping[str, PartitionValue],
+) -> GoldConversionPaths:
+    return GoldConversionPaths(
+        market_data=_gold_target_path(
+            storage,
+            dataset=DatasetName.MARKET_SNAPSHOT.value,
+            partitions=partitions,
+            filename="market_data.json",
+        ),
+        market_manifest=_gold_target_path(
+            storage,
+            dataset=DatasetName.MARKET_SNAPSHOT.value,
+            partitions=partitions,
+            filename="manifest.json",
+        ),
+        heston_quotes=_gold_target_path(
+            storage,
+            dataset=DatasetName.HESTON_QUOTES.value,
+            partitions=partitions,
+            filename="heston_quotes.parquet",
+        ),
+        heston_manifest=_gold_target_path(
+            storage,
+            dataset=DatasetName.HESTON_QUOTES.value,
+            partitions=partitions,
+            filename="manifest.json",
+        ),
+    )
+
+
+def _gold_target_path(
+    storage: LocalStorage,
+    *,
+    dataset: str,
+    partitions: Mapping[str, PartitionValue],
+    filename: str,
+) -> Path:
+    ordered_partitions = storage._ordered_partitions(
+        layer="gold",
+        dataset=dataset,
+        partitions=partitions,
+    )
+    return (
+        storage._dataset_dir(
+            layer="gold",
+            dataset=dataset,
+            ordered_partitions=ordered_partitions,
+        )
+        / filename
+    )
+
+
+def _ensure_gold_targets_available(
+    paths: GoldConversionPaths,
+    *,
+    overwrite: bool,
+) -> None:
+    if overwrite:
+        return
+    for path in (
+        paths.market_data,
+        paths.market_manifest,
+        paths.heston_quotes,
+        paths.heston_manifest,
+    ):
+        if path.exists():
+            raise FileExistsError(
+                f"{path} already exists; pass overwrite=True to replace it"
+            )
+
+
+def _cleaning_policy_from_cleaned_quotes(cleaned_quotes: pd.DataFrame) -> str:
+    if cleaned_quotes.empty:
+        return _DEFAULT_CLEANING_POLICY_ID
+
+    policies: list[str] = []
+    for value in cleaned_quotes["cleaning_policy"]:
+        if pd.isna(value):
+            rendered = ""
+        else:
+            rendered = str(value).strip()
+        if rendered and rendered not in policies:
+            policies.append(rendered)
+
+    if len(policies) != 1:
+        raise ValueError(
+            "cleaned_quotes cleaning_policy must contain exactly one non-empty value"
+        )
+    return policies[0]
+
+
+def _market_snapshot_manifest(
+    local_snapshot: _GoldLocalSnapshot,
+    *,
+    run_id: str,
+    snapshot_id: str,
+    fixture_name: str,
+    valuation_timestamp: pd.Timestamp,
+    market_payload: Mapping[str, object],
+    market_inputs: pd.DataFrame,
+    cleaned_quotes: pd.DataFrame,
+    rejected_quotes: pd.DataFrame,
+    reason_counts: Mapping[str, int],
+    warnings: Sequence[str],
+    library_commit: str | None,
+) -> dict[str, object]:
+    market_data = market_payload.get("market_data")
+    if not isinstance(market_data, Mapping):
+        raise ValueError("market_data payload must contain market_data object")
+
+    return {
+        "conversion_manifest_version": GOLD_CONVERSION_MANIFEST_VERSION,
+        "artifact": "market_data",
+        "artifact_schema_version": GOLD_MARKET_DATA_SCHEMA_VERSION,
+        "run_id": run_id,
+        "snapshot_id": snapshot_id,
+        "underlying": _required_text_value(
+            "local_snapshot.underlying",
+            local_snapshot.underlying,
+        ),
+        "valuation_timestamp_utc": _utc_isoformat(valuation_timestamp),
+        "library_commit": library_commit,
+        "quote_cleaning_policy": _required_mapping_text(
+            market_payload,
+            "quote_cleaning_policy",
+        ),
+        "rate_compounding": _required_mapping_text(
+            market_payload,
+            "rate_compounding",
+        ),
+        "day_count": _required_mapping_text(market_payload, "day_count"),
+        "spot": _payload_finite_float(market_data, "spot"),
+        "rate": _payload_finite_float(market_data, "rate"),
+        "dividend_yield": _payload_finite_float(market_data, "dividend_yield"),
+        "sources": _market_payload_sources(market_payload),
+        "row_counts": {
+            "market_inputs": int(len(market_inputs)),
+            "cleaned_quotes": int(len(cleaned_quotes)),
+            "rejected_quotes": int(len(rejected_quotes)),
+        },
+        "reason_counts": _reason_counts_payload(reason_counts),
+        "warnings": _warnings_payload(warnings),
+        "artifacts": {
+            "market_data": "market_data.json",
+        },
+        "source": {
+            "source_type": "local_fixture",
+            "fixture_name": fixture_name,
+        },
+    }
+
+
+def _heston_quotes_manifest(
+    local_snapshot: _GoldLocalSnapshot,
+    *,
+    run_id: str,
+    snapshot_id: str,
+    fixture_name: str,
+    valuation_timestamp: pd.Timestamp,
+    cleaned_quotes: pd.DataFrame,
+    rejected_quotes: pd.DataFrame,
+    heston_result: GoldHestonQuotesResult,
+    reason_counts: Mapping[str, int],
+    warnings: Sequence[str],
+    library_commit: str | None,
+) -> dict[str, object]:
+    return {
+        "conversion_manifest_version": GOLD_CONVERSION_MANIFEST_VERSION,
+        "artifact": "heston_quotes",
+        "artifact_schema_version": HESTON_QUOTES_SCHEMA_VERSION,
+        "run_id": run_id,
+        "snapshot_id": snapshot_id,
+        "underlying": _required_text_value(
+            "local_snapshot.underlying",
+            local_snapshot.underlying,
+        ),
+        "valuation_timestamp_utc": _utc_isoformat(valuation_timestamp),
+        "library_commit": library_commit,
+        "quote_cleaning_policy": _cleaning_policy_from_cleaned_quotes(cleaned_quotes),
+        "row_counts": {
+            "cleaned_quotes": int(len(cleaned_quotes)),
+            "rejected_quotes": int(len(rejected_quotes)),
+            "heston_quotes": int(heston_result.quote_count),
+        },
+        "reason_counts": _reason_counts_payload(reason_counts),
+        "warnings": _warnings_payload(warnings),
+        "optional_data_warnings": list(heston_result.warnings),
+        "iv_mid_policy": (
+            "included for HestonQuoteSet reconstruction only when every IV is "
+            "finite and > 0"
+        ),
+        "bs_vega_policy": (
+            "included for HestonQuoteSet reconstruction only when every vega is "
+            "finite and >= 0"
+        ),
+        "artifacts": {
+            "heston_quotes": "heston_quotes.parquet",
+        },
+        "source": {
+            "source_type": "local_fixture",
+            "fixture_name": fixture_name,
+        },
+    }
+
+
+def _market_payload_sources(
+    market_payload: Mapping[str, object],
+) -> dict[str, str]:
+    sources = market_payload.get("sources")
+    if not isinstance(sources, Mapping):
+        raise ValueError("market_data payload must contain sources object")
+    return {
+        "spot_source": _required_mapping_text(sources, "spot_source"),
+        "rate_source": _required_mapping_text(sources, "rate_source"),
+        "dividend_yield_source": _required_mapping_text(
+            sources,
+            "dividend_yield_source",
+        ),
+    }
+
+
+def _reason_counts_payload(reason_counts: Mapping[str, int]) -> dict[str, int]:
+    if not isinstance(reason_counts, Mapping):
+        raise TypeError("reason_counts must be a mapping")
+    return {
+        str(reason): int(count)
+        for reason, count in sorted(
+            reason_counts.items(), key=lambda item: str(item[0])
+        )
+    }
+
+
+def _warnings_payload(warnings: Sequence[str]) -> list[str]:
+    if isinstance(warnings, (str, bytes, bytearray)):
+        raise TypeError("warnings must be a sequence of strings")
+    return [str(warning) for warning in warnings]
 
 
 def _required_finite_float(row: pd.Series, column: str) -> float:
@@ -495,14 +921,17 @@ def _optional_text(name: str, value: str | None) -> str | None:
     return _required_text_value(name, value)
 
 
-def _utc_isoformat(value: object) -> str:
+def _utc_timestamp(value: object, *, field_name: str) -> pd.Timestamp:
     timestamp = pd.Timestamp(cast(Any, value))
     if pd.isna(timestamp):
-        raise ValueError("market_inputs asof must not be missing")
+        raise ValueError(f"{field_name} must not be missing")
     if timestamp.tzinfo is None:
-        timestamp = timestamp.tz_localize(UTC)
-    else:
-        timestamp = timestamp.tz_convert(UTC)
+        return timestamp.tz_localize(UTC)
+    return timestamp.tz_convert(UTC)
+
+
+def _utc_isoformat(value: object) -> str:
+    timestamp = _utc_timestamp(value, field_name="market_inputs asof")
     return timestamp.to_pydatetime().isoformat().replace("+00:00", "Z")
 
 
@@ -550,5 +979,7 @@ __all__ = [
     "heston_quote_set_from_frame",
     "market_data_snapshot_from_json",
     "market_data_snapshot_to_json",
+    "write_gold_artifacts",
+    "write_heston_quotes_gold",
     "write_market_data_gold",
 ]

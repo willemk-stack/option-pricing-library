@@ -33,6 +33,7 @@ GOLD_FILES = (
     REPO_ROOT / "src/option_pricing/marketdata/gold.py",
     Path(__file__).resolve(),
     REPO_ROOT / "tests/marketdata/test_heston_gold_conversions.py",
+    REPO_ROOT / "tests/marketdata/test_a4_gold_storage_integration.py",
 )
 DISALLOWED_IMPORT_ROOTS = {
     "alpaca",
