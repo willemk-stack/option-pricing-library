@@ -32,6 +32,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 GOLD_FILES = (
     REPO_ROOT / "src/option_pricing/marketdata/gold.py",
     Path(__file__).resolve(),
+    REPO_ROOT / "tests/marketdata/test_heston_gold_conversions.py",
 )
 DISALLOWED_IMPORT_ROOTS = {
     "alpaca",
@@ -44,6 +45,10 @@ DISALLOWED_IMPORT_PARTS = {
     "cli",
     "providers",
     "research",
+}
+ALLOWED_HESTON_QUOTESET_IMPORTS = {
+    "option_pricing.models.heston.calibration.heston_types",
+    "option_pricing.models.heston.calibration.heston_types.HestonQuoteSet",
 }
 
 
@@ -312,6 +317,8 @@ def _imported_names(path: Path) -> list[str]:
 
 
 def _is_disallowed_import(name: str) -> bool:
+    if name in ALLOWED_HESTON_QUOTESET_IMPORTS:
+        return False
     lowered_parts = {part.lower() for part in name.split(".")}
     if _import_root(name) in DISALLOWED_IMPORT_ROOTS:
         return True
