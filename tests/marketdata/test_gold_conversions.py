@@ -34,10 +34,13 @@ GOLD_FILES = (
     REPO_ROOT / "src/option_pricing/marketdata/gold.py",
     Path(__file__).resolve(),
     REPO_ROOT / "tests/marketdata/test_heston_gold_conversions.py",
+    REPO_ROOT / "tests/marketdata/test_a4_gold_integration.py",
     REPO_ROOT / "tests/marketdata/test_a4_gold_storage_integration.py",
 )
 DISALLOWED_IMPORT_ROOTS = {
     "alpaca",
+    "argparse",
+    "click",
     "fredapi",
     "requests",
     "yfinance",
@@ -45,13 +48,37 @@ DISALLOWED_IMPORT_ROOTS = {
 DISALLOWED_IMPORT_PARTS = {
     "calibration",
     "cli",
-    "providers",
     "research",
 }
 ALLOWED_HESTON_QUOTESET_IMPORTS = {
     "option_pricing.models.heston.calibration.heston_types",
     "option_pricing.models.heston.calibration.heston_types.HestonQuoteSet",
 }
+ALLOWED_LOCAL_PROVIDER_IMPORTS = {
+    "option_pricing.marketdata.providers.local",
+    "option_pricing.marketdata.providers.local.LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1",
+    "option_pricing.marketdata.providers.local.LocalSnapshotConfig",
+    "option_pricing.marketdata.providers.local.LocalSnapshotProvider",
+}
+DISALLOWED_SOURCE_STRINGS = frozenset(
+    {
+        "".join(("api", "_key")),
+        "".join(("secret", "_key")),
+        "".join(("credential", "s")),
+        "".join(("model_validation", "_bundle")),
+        "".join(("research", "_export")),
+        "".join(("surface_inputs", ".parquet")),
+    }
+)
+DISALLOWED_CALL_NAMES = frozenset(
+    {
+        "".join(("build_model_validation", "_bundle")),
+        "".join(("calibr", "ate")),
+        "".join(("refresh", "_providers")),
+        "".join(("run_calibr", "ation")),
+        "".join(("write_surface", "_inputs")),
+    }
+)
 
 
 def _fixture_market_inputs() -> pd.DataFrame:
@@ -402,10 +429,17 @@ def _imported_names(path: Path) -> list[str]:
 
 
 def _is_disallowed_import(name: str) -> bool:
-    if name in ALLOWED_HESTON_QUOTESET_IMPORTS:
+    if (
+        name in ALLOWED_HESTON_QUOTESET_IMPORTS
+        or name in ALLOWED_LOCAL_PROVIDER_IMPORTS
+    ):
         return False
     lowered_parts = {part.lower() for part in name.split(".")}
     if _import_root(name) in DISALLOWED_IMPORT_ROOTS:
+        return True
+    if name.startswith("option_pricing.marketdata.providers") and not name.startswith(
+        "option_pricing.marketdata.providers.local"
+    ):
         return True
     if name.startswith("option_pricing.") and lowered_parts.intersection(
         DISALLOWED_IMPORT_PARTS
@@ -423,3 +457,49 @@ def test_gold_files_do_not_import_live_providers_cli_research_or_calibration() -
     }
 
     assert forbidden == {path.as_posix(): [] for path in GOLD_FILES}
+
+
+def _string_constants(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=path.as_posix())
+    return [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    ]
+
+
+def _call_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return None
+
+
+def _called_names(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=path.as_posix())
+    return [
+        name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and (name := _call_name(node.func)) is not None
+    ]
+
+
+def test_gold_files_do_not_write_out_of_scope_artifacts_or_run_calibration() -> None:
+    forbidden_strings: dict[str, list[str]] = {
+        path.as_posix(): [
+            value
+            for value in _string_constants(path)
+            if value in DISALLOWED_SOURCE_STRINGS
+        ]
+        for path in GOLD_FILES
+    }
+    forbidden_calls: dict[str, list[str]] = {
+        path.as_posix(): [
+            name for name in _called_names(path) if name in DISALLOWED_CALL_NAMES
+        ]
+        for path in GOLD_FILES
+    }
+
+    assert forbidden_strings == {path.as_posix(): [] for path in GOLD_FILES}
+    assert forbidden_calls == {path.as_posix(): [] for path in GOLD_FILES}

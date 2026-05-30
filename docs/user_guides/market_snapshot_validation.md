@@ -1,24 +1,25 @@
 # Market Snapshot Validation
 
-Phase A keeps model-validation inputs local, deterministic, and auditable. A3 is
-the Silver-layer normalization and quote-cleaning step for local snapshots: it
-takes schema-compatible local inputs, normalizes them, separates accepted quotes
-from rejected quotes, and writes those evidence frames locally. It does not
-connect to live market providers or build pricing/model-validation objects.
+Phase A keeps market snapshot validation local-first, deterministic, and
+auditable. The phase separates fixture evidence, cleaned evidence, and
+library-ready conversion artifacts without connecting to live providers or
+starting model workflows.
 
 ## Phase A Boundary
 
-The Phase A local model-validation boundary is intentionally narrow:
+The local model-validation handoff is intentionally narrow:
 
-- Bronze captures local snapshot evidence as loaded from deterministic fixtures.
-- Silver normalizes Bronze-style inputs and records quote-cleaning evidence.
-- Gold is the later model-facing layer that will own converted artifacts and
-  model-validation bundles.
+- Bronze = local fixture evidence loaded from deterministic snapshots.
+- Silver = normalized `market_inputs`, `cleaned_quotes`, `rejected_quotes`, and
+  the cleaning manifest.
+- Gold = library-ready converted artifacts.
 
-A3 sits entirely in Silver. It preserves the local-first handoff while making
-quote acceptance, rejection, and provenance explicit enough for review.
+A3 owns the Silver normalization and quote-cleaning evidence. A4 consumes those
+Silver outputs and writes Gold artifacts that existing library types can reload.
+Pricing and Heston compatibility are proved by reconstruction only; Phase A does
+not run calibration, build bundles, or refresh providers.
 
-## A3 Scope
+## A3 Silver Scope
 
 A3 covers these functions:
 
@@ -107,10 +108,23 @@ Intrinsic and spread conventions:
 storage root:
 
 ```text
-silver/market_inputs/underlying=<...>/date=<...>/run_id=<...>/market_inputs.parquet
-silver/cleaned_quotes/underlying=<...>/date=<...>/run_id=<...>/cleaned_quotes.parquet
-silver/cleaned_quotes/underlying=<...>/date=<...>/run_id=<...>/manifest.json
-silver/rejected_quotes/underlying=<...>/date=<...>/run_id=<...>/rejected_quotes.parquet
+silver/
+  market_inputs/
+    underlying=<...>/
+      date=<...>/
+        run_id=<...>/
+          market_inputs.parquet
+  cleaned_quotes/
+    underlying=<...>/
+      date=<...>/
+        run_id=<...>/
+          cleaned_quotes.parquet
+          manifest.json
+  rejected_quotes/
+    underlying=<...>/
+      date=<...>/
+        run_id=<...>/
+          rejected_quotes.parquet
 ```
 
 At a high level, the manifest records the Silver schema version, cleaning policy,
@@ -118,42 +132,140 @@ input/output schema versions, fixture and snapshot identity, `run_id`, local
 source type, underlying, valuation timestamp, market-input values, row counts,
 `reason_counts`, `warnings`, artifact filenames, and optional library commit.
 
+## A4 Gold Scope
+
+A4 consumes:
+
+- normalized `market_inputs`
+- `cleaned_quotes`
+- rejected quote summary metadata
+- cleaning `reason_counts` and `warnings`
+
+A4 produces:
+
+- `market_data.json`
+- `market_snapshot` `manifest.json`
+- `heston_quotes.parquet`
+- `heston_quotes` `manifest.json`
+
+`market_data.json` reloads into `MarketData`. `PricingContext` is reconstructed
+through `MarketData.to_context()`; it is not serialized directly.
+
+`heston_quotes.parquet` uses the existing `HESTON_QUOTES_COLUMNS` exactly.
+`HestonQuoteSet` reconstruction is a compatibility proof only.
+
+Optional IV/vega policy:
+
+- The artifact can contain nullable `iv` and `vega`.
+- `iv_mid` is passed to `HestonQuoteSet` only when every IV is finite and `> 0`.
+- `bs_vega` is passed only when every vega is finite and `>= 0`.
+
+Gold manifests summarize rejected quote counts, reasons, and warnings, but they
+do not duplicate rejected quote rows.
+
+A4 non-goals are:
+
+- no live providers
+- no credentials
+- no CLI
+- no provider refresh
+- no calibration execution
+- no model-validation bundle
+- no research exports
+- no `surface_inputs.parquet`
+
+## Gold Artifacts
+
+`write_gold_artifacts` writes one Gold output set under the local storage root:
+
+```text
+gold/
+  market_snapshot/
+    underlying=<...>/
+      date=<...>/
+        run_id=<...>/
+          market_data.json
+          manifest.json
+  heston_quotes/
+    underlying=<...>/
+      date=<...>/
+        run_id=<...>/
+          heston_quotes.parquet
+          manifest.json
+```
+
+The market snapshot manifest references `market_data.json`. The Heston quote
+manifest references `heston_quotes.parquet` and records the IV/vega
+reconstruction policy. Both manifests record `run_id`, `snapshot_id`, schema
+versions, row counts, warnings, reason counts, source fixture metadata, artifact
+paths, and optional library commit.
+
 ## Example
 
 ```python
 from option_pricing.marketdata.cleaning import clean_option_quotes
 from option_pricing.marketdata.config import StorageConfig
+from option_pricing.marketdata.gold import write_gold_artifacts
 from option_pricing.marketdata.normalize import (
     normalize_market_inputs,
     normalize_option_chain,
 )
 from option_pricing.marketdata.providers.local import (
+    LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1,
     LocalSnapshotConfig,
     LocalSnapshotProvider,
 )
 from option_pricing.marketdata.silver import write_cleaned_quotes_silver
 from option_pricing.marketdata.storage import LocalStorage
 
-provider = LocalSnapshotProvider(
+local = LocalSnapshotProvider(
     LocalSnapshotConfig(
-        fixture_name="local_snapshot_synth_schema_v1",
+        fixture_name=LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1,
         run_id="run-001",
     )
-)
-snapshot = provider.load_snapshot()
+).load_snapshot()
 
-market_inputs = normalize_market_inputs(snapshot.market_inputs_raw)
-option_chain = normalize_option_chain(snapshot.option_chain_raw)
+market_inputs = normalize_market_inputs(local.market_inputs_raw)
+option_chain = normalize_option_chain(local.option_chain_raw)
 cleaning = clean_option_quotes(option_chain, market_inputs)
 
 storage = LocalStorage(StorageConfig(root="out/marketdata"))
-paths = write_cleaned_quotes_silver(
+
+silver_paths = write_cleaned_quotes_silver(
     storage,
-    local_snapshot=snapshot,
+    local_snapshot=local,
     market_inputs=market_inputs,
     result=cleaning,
 )
+
+gold_paths = write_gold_artifacts(
+    storage,
+    local_snapshot=local,
+    market_inputs=market_inputs,
+    cleaned_quotes=cleaning.cleaned_quotes,
+    rejected_quotes=cleaning.rejected_quotes,
+    reason_counts=cleaning.reason_counts,
+    warnings=cleaning.warnings,
+)
 ```
+
+## A4 Acceptance Checklist
+
+- `marketdata/gold.py` owns Gold conversion logic.
+- `market_inputs` converts into `MarketData`.
+- `market_data.json` serializes and reloads.
+- `MarketData.to_context()` works.
+- `cleaned_quotes` converts into exact `HESTON_QUOTES_COLUMNS`.
+- `heston_quotes.parquet` writes and reads locally.
+- `HestonQuoteSet` reconstructs successfully.
+- `expiry_years` is preserved from A3.
+- `right` maps deterministically to `is_call`.
+- Optional IV/vega behavior is deterministic.
+- Gold artifacts partition by underlying, date, and `run_id`.
+- Manifests record `run_id`, `snapshot_id`, schema versions, row counts,
+  warnings, and artifact paths.
+- No credentials, providers, CLI, research exports, calibration execution, or
+  model-validation bundles are added.
 
 ## Testing
 
@@ -161,8 +273,8 @@ paths = write_cleaned_quotes_silver(
 ruff check .
 black --check .
 mypy
-pytest -q tests/marketdata/test_normalize.py
-pytest -q tests/marketdata/test_quote_cleaning.py
-pytest -q tests/marketdata/test_a3_local_snapshot_cleaning_integration.py
+pytest -q tests/marketdata/test_gold_conversions.py
+pytest -q tests/marketdata/test_heston_gold_conversions.py
+pytest -q tests/marketdata/test_a4_gold_integration.py
 pytest -q tests
 ```
