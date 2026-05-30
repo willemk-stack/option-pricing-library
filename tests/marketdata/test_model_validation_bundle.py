@@ -29,6 +29,11 @@ from option_pricing.marketdata.schemas import (
 )
 from option_pricing.marketdata.storage import LocalStorage
 from option_pricing.marketdata.validation import coerce_frame, validate_dtypes
+from option_pricing.models.heston.calibration.heston_types import (
+    HestonCalibrationRun,
+    HestonMultistartResult,
+)
+from option_pricing.models.heston.params import HestonParams
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "local_snapshot_synth_schema_v1"
 FIXTURE_NAME = "local_snapshot_synth_schema_v1"
@@ -44,6 +49,24 @@ EXPECTED_ARTIFACTS = {
     "warnings": "warnings.json",
 }
 EXPECTED_FILES = ("manifest.json", *EXPECTED_ARTIFACTS.values())
+EXPECTED_HESTON_FIT_SUMMARY_COLUMNS = (
+    "status",
+    "message",
+    "objective_type",
+    "quote_count",
+    "success_count",
+    "failure_count",
+    "best_cost",
+    "kappa",
+    "vbar",
+    "eta",
+    "rho",
+    "v",
+    "jacobian_mode",
+    "backend",
+    "max_seeds",
+    "max_nfev",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,6 +177,11 @@ def _write_bundle(
     overwrite: bool = False,
     library_commit: str | None = "abc123",
 ):
+    effective_config = (
+        ModelValidationBundleConfig(run_heston_smoke=False)
+        if config is None
+        else config
+    )
     return bundles_module._write_model_validation_bundle_artifacts(
         storage,
         local_snapshot=outputs.local_snapshot,
@@ -164,7 +192,7 @@ def _write_bundle(
         ),
         reason_counts=outputs.reason_counts if reason_counts is None else reason_counts,
         warnings=outputs.warnings if warnings is None else warnings,
-        config=config,
+        config=effective_config,
         overwrite=overwrite,
         library_commit=library_commit,
     )
@@ -198,6 +226,47 @@ def _rejected_quotes_with_unique_detail(outputs: _A3Outputs) -> pd.DataFrame:
         ),
         DatasetName.REJECTED_QUOTES,
         allow_extra=False,
+    )
+
+
+def _heston_params() -> HestonParams:
+    return HestonParams(kappa=1.4, vbar=0.045, eta=0.55, rho=-0.35, v=0.04)
+
+
+def _fake_multistart_result(
+    *,
+    quote_count: int,
+    objective_type: str = "price_rmse",
+    cost: float = 0.125,
+    success_count: int = 1,
+    failure_count: int = 0,
+) -> HestonMultistartResult:
+    params = _heston_params()
+    best_run = HestonCalibrationRun(
+        seed_index=0,
+        seed_params=params,
+        fitted_params=params,
+        success=True,
+        cost=cost,
+        optimality=1.0e-8,
+        nfev=1,
+        njev=1,
+        status=1,
+        message="synthetic smoke success",
+        raw_x=None,
+    )
+    return HestonMultistartResult(
+        best_params=params,
+        best_run=best_run,
+        runs=(best_run,),
+        objective_type=objective_type,  # type: ignore[arg-type]
+        parameter_transform="bounded",
+        backend="gauss_legendre",
+        quote_count=quote_count,
+        success_count=success_count,
+        failure_count=failure_count,
+        jacobian_mode="analytic",
+        analytic_jacobian_eta_min=None,
     )
 
 
@@ -317,24 +386,250 @@ def test_rejected_quote_rows_are_not_embedded_in_manifest_json(
     assert "rejected_quote_rows" not in manifest_text
 
 
-def test_heston_fit_summary_records_skipped_status_in_a5_s2(
+def test_heston_smoke_success_records_manifest_and_summary(
     tmp_path: Path,
     fake_parquet: None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     storage = _storage(tmp_path)
     outputs = _a3_outputs()
+    calls: list[dict[str, object]] = []
+
+    def fake_calibrate_heston_multistart(
+        quotes: object,
+        **kwargs: object,
+    ) -> HestonMultistartResult:
+        calls.append({"quotes": quotes, **kwargs})
+        return _fake_multistart_result(
+            quote_count=int(quotes.n_quotes),
+            objective_type=str(kwargs["objective_type"]),
+            cost=0.25,
+            success_count=1,
+            failure_count=0,
+        )
+
+    monkeypatch.setattr(
+        bundles_module,
+        "calibrate_heston_multistart",
+        fake_calibrate_heston_multistart,
+    )
 
     _write_bundle(
         storage,
         outputs,
-        config=ModelValidationBundleConfig(heston_objective_type="iv_rmse"),
+        config=ModelValidationBundleConfig(run_heston_smoke=True),
     )
 
+    manifest = json.loads(_bundle_path(tmp_path, "manifest.json").read_text())
+    smoke = manifest["heston_smoke"]
+    assert smoke["status"] == "success"
+    assert smoke["objective_type"] == "price_rmse"
+    assert smoke["quote_count"] == len(outputs.cleaned_quotes)
+    assert smoke["success_count"] == 1
+    assert smoke["failure_count"] == 0
+    assert smoke["best_cost"] == 0.25
+    assert smoke["parameters"] == {
+        "eta": 0.55,
+        "kappa": 1.4,
+        "rho": -0.35,
+        "v": 0.04,
+        "vbar": 0.045,
+    }
+    assert "completed" in str(smoke["message"])
+    assert int(calls[0]["quotes"].n_quotes) == len(outputs.cleaned_quotes)
+
     summary = pd.read_csv(_bundle_path(tmp_path, "heston_fit_summary.csv"))
+    assert tuple(summary.columns) == EXPECTED_HESTON_FIT_SUMMARY_COLUMNS
+    assert summary.loc[0, "status"] == "success"
+    assert int(cast(int, summary.loc[0, "success_count"])) == 1
+    assert int(cast(int, summary.loc[0, "failure_count"])) == 0
+    assert float(cast(float, summary.loc[0, "best_cost"])) == pytest.approx(0.25)
+    assert float(cast(float, summary.loc[0, "kappa"])) == pytest.approx(1.4)
+    assert float(cast(float, summary.loc[0, "vbar"])) == pytest.approx(0.045)
+    assert float(cast(float, summary.loc[0, "eta"])) == pytest.approx(0.55)
+    assert float(cast(float, summary.loc[0, "rho"])) == pytest.approx(-0.35)
+    assert float(cast(float, summary.loc[0, "v"])) == pytest.approx(0.04)
+    assert summary.loc[0, "jacobian_mode"] == "analytic"
+    assert summary.loc[0, "backend"] == "gauss_legendre"
+
+
+def test_heston_smoke_failure_writes_auditable_bundle_by_default(
+    tmp_path: Path,
+    fake_parquet: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = _storage(tmp_path)
+    outputs = _a3_outputs()
+
+    def fake_calibrate_heston_multistart(
+        _quotes: object,
+        **_kwargs: object,
+    ) -> HestonMultistartResult:
+        raise ValueError("synthetic calibration failure")
+
+    monkeypatch.setattr(
+        bundles_module,
+        "calibrate_heston_multistart",
+        fake_calibrate_heston_multistart,
+    )
+
+    _write_bundle(
+        storage,
+        outputs,
+        config=ModelValidationBundleConfig(run_heston_smoke=True),
+    )
+
+    manifest = json.loads(_bundle_path(tmp_path, "manifest.json").read_text())
+    smoke = manifest["heston_smoke"]
+    assert smoke["status"] == "failed"
+    assert smoke["message"] == "ValueError: synthetic calibration failure"
+    assert smoke["objective_type"] == "price_rmse"
+    assert smoke["quote_count"] == len(outputs.cleaned_quotes)
+    assert smoke["success_count"] is None
+    assert smoke["failure_count"] is None
+    assert smoke["best_cost"] is None
+    assert smoke["parameters"] is None
+
+    summary = pd.read_csv(_bundle_path(tmp_path, "heston_fit_summary.csv"))
+    assert tuple(summary.columns) == EXPECTED_HESTON_FIT_SUMMARY_COLUMNS
+    assert summary.loc[0, "status"] == "failed"
+    assert summary.loc[0, "message"] == "ValueError: synthetic calibration failure"
+    assert pd.isna(summary.loc[0, "success_count"])
+    assert pd.isna(summary.loc[0, "failure_count"])
+    assert pd.isna(summary.loc[0, "best_cost"])
+    assert pd.isna(summary.loc[0, "kappa"])
+
+    warnings_payload = json.loads(_bundle_path(tmp_path, "warnings.json").read_text())
+    assert warnings_payload["heston_smoke"] == [
+        "ValueError: synthetic calibration failure"
+    ]
+
+
+def test_heston_smoke_skipped_when_config_disables_it(
+    tmp_path: Path,
+    fake_parquet: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = _storage(tmp_path)
+    outputs = _a3_outputs()
+    calls: list[object] = []
+
+    def fake_calibrate_heston_multistart(
+        quotes: object,
+        **_kwargs: object,
+    ) -> HestonMultistartResult:
+        calls.append(quotes)
+        return _fake_multistart_result(quote_count=1)
+
+    monkeypatch.setattr(
+        bundles_module,
+        "calibrate_heston_multistart",
+        fake_calibrate_heston_multistart,
+    )
+
+    _write_bundle(
+        storage,
+        outputs,
+        config=ModelValidationBundleConfig(
+            run_heston_smoke=False,
+            heston_objective_type="iv_rmse",
+        ),
+    )
+
+    assert calls == []
+    manifest = json.loads(_bundle_path(tmp_path, "manifest.json").read_text())
+    smoke = manifest["heston_smoke"]
+    assert smoke["status"] == "skipped"
+    assert "config.run_heston_smoke is False" in str(smoke["message"])
+    assert smoke["objective_type"] == "iv_rmse"
+    assert smoke["quote_count"] == len(outputs.cleaned_quotes)
+
+    summary = pd.read_csv(_bundle_path(tmp_path, "heston_fit_summary.csv"))
+    assert tuple(summary.columns) == EXPECTED_HESTON_FIT_SUMMARY_COLUMNS
     assert summary.loc[0, "status"] == "skipped"
-    assert "A5-S3" in str(summary.loc[0, "message"])
     assert summary.loc[0, "objective_type"] == "iv_rmse"
     assert int(cast(int, summary.loc[0, "quote_count"])) == len(outputs.cleaned_quotes)
+    assert pd.isna(summary.loc[0, "success_count"])
+    assert pd.isna(summary.loc[0, "max_seeds"])
+
+
+def test_heston_smoke_failure_can_fail_fast_without_writing_bundle(
+    tmp_path: Path,
+    fake_parquet: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = _storage(tmp_path)
+
+    def fake_calibrate_heston_multistart(
+        _quotes: object,
+        **_kwargs: object,
+    ) -> HestonMultistartResult:
+        raise RuntimeError("synthetic smoke failure")
+
+    monkeypatch.setattr(
+        bundles_module,
+        "calibrate_heston_multistart",
+        fake_calibrate_heston_multistart,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="Heston smoke failed: RuntimeError: synthetic smoke failure",
+    ):
+        _write_bundle(
+            storage,
+            _a3_outputs(),
+            config=ModelValidationBundleConfig(
+                run_heston_smoke=True,
+                fail_on_heston_smoke_failure=True,
+            ),
+        )
+
+    assert not _bundle_path(tmp_path, "manifest.json").exists()
+    assert not any(
+        _bundle_path(tmp_path, filename).exists() for filename in EXPECTED_FILES
+    )
+    assert not (tmp_path / "_meta" / "artifacts.jsonl").exists()
+
+
+def test_heston_smoke_forwards_config_to_calibrator(
+    tmp_path: Path,
+    fake_parquet: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = _storage(tmp_path)
+    captured: dict[str, object] = {}
+
+    def fake_calibrate_heston_multistart(
+        quotes: object,
+        **kwargs: object,
+    ) -> HestonMultistartResult:
+        captured.update(kwargs)
+        return _fake_multistart_result(
+            quote_count=int(quotes.n_quotes),
+            objective_type=str(kwargs["objective_type"]),
+        )
+
+    monkeypatch.setattr(
+        bundles_module,
+        "calibrate_heston_multistart",
+        fake_calibrate_heston_multistart,
+    )
+
+    _write_bundle(
+        storage,
+        _a3_outputs(),
+        config=ModelValidationBundleConfig(
+            run_heston_smoke=True,
+            heston_objective_type="relative_price_rmse",
+            heston_max_seeds=3,
+            heston_max_nfev=7,
+        ),
+    )
+
+    assert captured["objective_type"] == "relative_price_rmse"
+    assert captured["max_seeds"] == 3
+    assert captured["max_nfev"] == 7
 
 
 @pytest.mark.parametrize("filename", EXPECTED_FILES)
@@ -445,6 +740,10 @@ def _string_constants(path: Path) -> list[str]:
 
 
 def _is_disallowed_import(name: str) -> bool:
+    allowed_calibration_imports = {
+        "option_pricing.models.heston.calibration",
+        "option_pricing.models.heston.calibration.calibrate_heston_multistart",
+    }
     disallowed_roots = {
         "alpaca",
         "argparse",
@@ -461,6 +760,8 @@ def _is_disallowed_import(name: str) -> bool:
         return True
     if name.startswith("option_pricing.diagnostics.heston"):
         return True
+    if name in allowed_calibration_imports:
+        return False
     if name.startswith("option_pricing.models.heston.calibration"):
         return True
     if "research" in lowered_parts:
@@ -475,7 +776,7 @@ def test_boundary_guard_excludes_out_of_scope_work() -> None:
     forbidden_calls = [
         name
         for name in _called_names(BUNDLES_FILE)
-        if "calibr" in name.lower()
+        if ("calibr" in name.lower() and name != "calibrate_heston_multistart")
         or name
         in {
             "refresh_providers",

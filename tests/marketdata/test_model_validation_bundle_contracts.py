@@ -490,6 +490,10 @@ def _imported_names(path: Path) -> list[str]:
 
 
 def _is_disallowed_import(name: str) -> bool:
+    allowed_calibration_imports = {
+        "option_pricing.models.heston.calibration",
+        "option_pricing.models.heston.calibration.calibrate_heston_multistart",
+    }
     disallowed_roots = {
         "alpaca",
         "argparse",
@@ -506,6 +510,8 @@ def _is_disallowed_import(name: str) -> bool:
         return True
     if name.startswith("option_pricing.diagnostics.heston"):
         return True
+    if name in allowed_calibration_imports:
+        return False
     if name.startswith("option_pricing.models.heston.calibration"):
         return True
     if "research" in lowered_parts:

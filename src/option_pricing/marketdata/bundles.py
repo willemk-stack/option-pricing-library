@@ -16,9 +16,12 @@ from option_pricing.marketdata.contracts import (
     RunMetadata,
 )
 from option_pricing.marketdata.gold import (
+    GoldHestonQuotesResult,
+    GoldMarketDataSnapshot,
     _cleaning_policy_from_cleaned_quotes,
     build_heston_quotes,
     build_market_data_snapshot,
+    heston_quote_set_from_frame,
     market_data_snapshot_to_json,
 )
 from option_pricing.marketdata.manifests import validate_model_validation_manifest
@@ -29,6 +32,7 @@ from option_pricing.marketdata.schemas import (
 )
 from option_pricing.marketdata.storage import LocalStorage, PartitionValue
 from option_pricing.marketdata.validation import coerce_frame, validate_dtypes
+from option_pricing.models.heston.calibration import calibrate_heston_multistart
 
 _MODEL_VALIDATION_ARTIFACTS = {
     "market_data": "market_data.json",
@@ -73,6 +77,58 @@ class ModelValidationBundleConfig:
     heston_max_seeds: int = 1
     heston_max_nfev: int | None = 1
     fail_on_heston_smoke_failure: bool = False
+
+
+class _HestonParamsLike(Protocol):
+    @property
+    def kappa(self) -> float: ...
+
+    @property
+    def vbar(self) -> float: ...
+
+    @property
+    def eta(self) -> float: ...
+
+    @property
+    def rho(self) -> float: ...
+
+    @property
+    def v(self) -> float: ...
+
+
+class _HestonCalibrationRunLike(Protocol):
+    @property
+    def cost(self) -> float: ...
+
+
+class _HestonMultistartResultLike(Protocol):
+    @property
+    def best_params(self) -> _HestonParamsLike: ...
+
+    @property
+    def best_run(self) -> _HestonCalibrationRunLike: ...
+
+    @property
+    def quote_count(self) -> int: ...
+
+    @property
+    def success_count(self) -> int: ...
+
+    @property
+    def failure_count(self) -> int: ...
+
+    @property
+    def jacobian_mode(self) -> str: ...
+
+    @property
+    def backend(self) -> str: ...
+
+
+@dataclass(frozen=True, slots=True)
+class _HestonSmokeRun:
+    result: HestonSmokeResult
+    jacobian_mode: str | None = None
+    backend: str | None = None
 
 
 class _ModelValidationLocalSnapshot(Protocol):
@@ -247,10 +303,15 @@ def _write_model_validation_bundle_artifacts(
     paths = _expected_model_validation_bundle_paths(storage, partitions)
     _ensure_model_validation_bundle_targets_available(paths, overwrite=overwrite)
 
-    heston_smoke = _skipped_heston_smoke_result(
-        config,
-        quote_count=heston_result.quote_count,
+    heston_smoke_run = _heston_smoke_run(
+        config=config,
+        market_data_snapshot=market_snapshot,
+        heston_result=heston_result,
     )
+    heston_smoke = heston_smoke_run.result
+    if heston_smoke.status == "failed" and config.fail_on_heston_smoke_failure:
+        raise RuntimeError(f"Heston smoke failed: {heston_smoke.message}")
+
     warning_payload = _warnings_payload(warnings)
     data_quality_warnings = list(heston_result.warnings)
     bundle_warnings = [*warning_payload, *data_quality_warnings]
@@ -317,6 +378,8 @@ def _write_model_validation_bundle_artifacts(
     _write_heston_fit_summary_csv(
         paths.heston_fit_summary,
         heston_smoke=heston_smoke,
+        config=config,
+        smoke_run=heston_smoke_run,
     )
     warnings_path = storage.write_json(
         {
@@ -431,7 +494,11 @@ def _write_heston_fit_summary_csv(
     path: Path,
     *,
     heston_smoke: HestonSmokeResult,
+    config: ModelValidationBundleConfig,
+    smoke_run: _HestonSmokeRun,
 ) -> None:
+    parameters = heston_smoke.parameters or {}
+    attempted_smoke = heston_smoke.status != "skipped"
     path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(
         [
@@ -443,6 +510,21 @@ def _write_heston_fit_summary_csv(
                 "success_count": heston_smoke.success_count,
                 "failure_count": heston_smoke.failure_count,
                 "best_cost": heston_smoke.best_cost,
+                "kappa": parameters.get("kappa"),
+                "vbar": parameters.get("vbar"),
+                "eta": parameters.get("eta"),
+                "rho": parameters.get("rho"),
+                "v": parameters.get("v"),
+                "jacobian_mode": smoke_run.jacobian_mode,
+                "backend": smoke_run.backend,
+                "max_seeds": (
+                    int(config.heston_max_seeds) if attempted_smoke else None
+                ),
+                "max_nfev": (
+                    None
+                    if config.heston_max_nfev is None or not attempted_smoke
+                    else int(config.heston_max_nfev)
+                ),
             }
         ],
         columns=(
@@ -453,6 +535,15 @@ def _write_heston_fit_summary_csv(
             "success_count",
             "failure_count",
             "best_cost",
+            "kappa",
+            "vbar",
+            "eta",
+            "rho",
+            "v",
+            "jacobian_mode",
+            "backend",
+            "max_seeds",
+            "max_nfev",
         ),
     ).to_csv(path, index=False)
 
@@ -477,15 +568,117 @@ def _skipped_heston_smoke_result(
 ) -> HestonSmokeResult:
     return HestonSmokeResult(
         status="skipped",
-        message=(
-            "A5-S2 packages a deterministic skipped Heston smoke result; "
-            "real Heston smoke execution is A5-S3."
-        ),
+        message="Heston smoke skipped because config.run_heston_smoke is False.",
         objective_type=_required_text(
             "config.heston_objective_type",
             config.heston_objective_type,
         ),
         quote_count=int(quote_count),
+    )
+
+
+def _heston_smoke_run(
+    *,
+    config: ModelValidationBundleConfig,
+    market_data_snapshot: GoldMarketDataSnapshot,
+    heston_result: GoldHestonQuotesResult,
+) -> _HestonSmokeRun:
+    if not config.run_heston_smoke:
+        return _HestonSmokeRun(
+            result=_skipped_heston_smoke_result(
+                config,
+                quote_count=heston_result.quote_count,
+            )
+        )
+    return _run_heston_smoke(
+        config=config,
+        market_data_snapshot=market_data_snapshot,
+        heston_result=heston_result,
+    )
+
+
+def _run_heston_smoke(
+    *,
+    config: ModelValidationBundleConfig,
+    market_data_snapshot: GoldMarketDataSnapshot,
+    heston_result: GoldHestonQuotesResult,
+) -> _HestonSmokeRun:
+    objective_type = _required_text(
+        "config.heston_objective_type",
+        config.heston_objective_type,
+    )
+    quote_count = int(heston_result.quote_count)
+    try:
+        quote_set = heston_quote_set_from_frame(
+            heston_result.heston_quotes,
+            market_data_snapshot.market_data,
+        )
+        quote_count = int(quote_set.n_quotes)
+        calibration_result = calibrate_heston_multistart(
+            quote_set,
+            objective_type=cast(Any, objective_type),
+            max_seeds=config.heston_max_seeds,
+            max_nfev=config.heston_max_nfev,
+        )
+    except Exception as exc:
+        return _HestonSmokeRun(
+            result=_failed_heston_smoke_result(
+                exc,
+                objective_type=objective_type,
+                quote_count=quote_count,
+            )
+        )
+
+    return _HestonSmokeRun(
+        result=_successful_heston_smoke_result(
+            calibration_result,
+            objective_type=objective_type,
+        ),
+        jacobian_mode=str(calibration_result.jacobian_mode),
+        backend=str(calibration_result.backend),
+    )
+
+
+def _failed_heston_smoke_result(
+    exc: Exception,
+    *,
+    objective_type: str,
+    quote_count: int = 0,
+) -> HestonSmokeResult:
+    return HestonSmokeResult(
+        status="failed",
+        message=f"{type(exc).__name__}: {exc}",
+        objective_type=objective_type,
+        quote_count=int(quote_count),
+    )
+
+
+def _successful_heston_smoke_result(
+    calibration_result: _HestonMultistartResultLike,
+    *,
+    objective_type: str,
+) -> HestonSmokeResult:
+    parameters = calibration_result.best_params
+    return HestonSmokeResult(
+        status="success",
+        message=(
+            "Heston smoke calibration completed "
+            f"with {int(calibration_result.success_count)} successful seed(s), "
+            f"{int(calibration_result.failure_count)} failed seed(s), "
+            f"best_cost={float(calibration_result.best_run.cost):.6g}."
+        ),
+        objective_type=objective_type,
+        quote_count=int(calibration_result.quote_count),
+        success_count=int(calibration_result.success_count),
+        failure_count=int(calibration_result.failure_count),
+        best_cost=float(calibration_result.best_run.cost),
+        parameters={
+            "kappa": float(parameters.kappa),
+            "vbar": float(parameters.vbar),
+            "eta": float(parameters.eta),
+            "rho": float(parameters.rho),
+            "v": float(parameters.v),
+        },
     )
 
 
