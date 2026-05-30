@@ -41,6 +41,7 @@ def _valid_model_validation_manifest() -> dict[str, object]:
     return {
         "artifact_schema_version": MODEL_VALIDATION_BUNDLE_VERSION,
         "run_id": "test-run",
+        "snapshot_id": "snapshot-001",
         "created_at_utc": "2026-05-22T14:35:00Z",
         "library_commit": "abc123",
         "underlying": "SPY",
@@ -52,8 +53,15 @@ def _valid_model_validation_manifest() -> dict[str, object]:
         "day_count": "ACT/365",
         "quote_cleaning_policy": "phase_a_default",
         "rows": {"cleaned_quotes": 1},
+        "reason_counts": {},
         "warnings": [],
         "artifacts": {"cleaned_quotes": "silver/cleaned_quotes"},
+        "heston_smoke": {
+            "status": "skipped",
+            "message": "not run in A5-S1",
+            "objective_type": "price_rmse",
+            "quote_count": 1,
+        },
     }
 
 

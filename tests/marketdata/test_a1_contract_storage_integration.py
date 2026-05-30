@@ -152,6 +152,7 @@ def test_a1_contracts_and_storage_support_model_validation_layout(
         {
             "artifact_schema_version": MODEL_VALIDATION_BUNDLE_VERSION,
             "run_id": "test-run",
+            "snapshot_id": "snapshot-001",
             "created_at_utc": "2026-05-22T14:35:00Z",
             "library_commit": "abc123",
             "underlying": "SPY",
@@ -167,11 +168,18 @@ def test_a1_contracts_and_storage_support_model_validation_layout(
                 "rejected_quotes": int(len(rejected)),
                 "heston_quotes": int(len(heston)),
             },
+            "reason_counts": {"wide_or_stale": int(len(rejected))},
             "warnings": [],
             "artifacts": {
                 "cleaned_quotes": cleaned_path.as_posix(),
                 "rejected_quotes": rejected_path.as_posix(),
                 "heston_quotes": heston_path.as_posix(),
+            },
+            "heston_smoke": {
+                "status": "skipped",
+                "message": "not run in A5-S1",
+                "objective_type": "price_rmse",
+                "quote_count": int(len(heston)),
             },
         },
         dataset="model_validation_bundle",

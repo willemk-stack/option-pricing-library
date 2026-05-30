@@ -55,6 +55,7 @@ def _valid_manifest() -> dict[str, object]:
     return {
         "artifact_schema_version": MODEL_VALIDATION_BUNDLE_VERSION,
         "run_id": "test-run",
+        "snapshot_id": "snapshot-001",
         "created_at_utc": "2026-05-22T14:35:00Z",
         "library_commit": "abc123",
         "underlying": "SPY",
@@ -66,8 +67,15 @@ def _valid_manifest() -> dict[str, object]:
         "day_count": "ACT/365",
         "quote_cleaning_policy": "phase_a_default",
         "rows": {"cleaned_quotes": 1},
+        "reason_counts": {},
         "warnings": [],
         "artifacts": {"cleaned_quotes": "silver/cleaned_quotes"},
+        "heston_smoke": {
+            "status": "skipped",
+            "message": "not run in A5-S1",
+            "objective_type": "price_rmse",
+            "quote_count": 1,
+        },
     }
 
 
@@ -149,4 +157,23 @@ def test_model_validation_manifest_contract() -> None:
     with pytest.raises(ValueError, match="secret-looking keys"):
         validate_model_validation_manifest(secret)
 
-    assert "artifacts" in MODEL_VALIDATION_MANIFEST_REQUIRED_FIELDS
+    assert MODEL_VALIDATION_MANIFEST_REQUIRED_FIELDS == (
+        "artifact_schema_version",
+        "run_id",
+        "snapshot_id",
+        "created_at_utc",
+        "library_commit",
+        "underlying",
+        "valuation_timestamp_utc",
+        "spot_source",
+        "rate_source",
+        "rate_compounding",
+        "dividend_yield_source",
+        "day_count",
+        "quote_cleaning_policy",
+        "rows",
+        "reason_counts",
+        "warnings",
+        "artifacts",
+        "heston_smoke",
+    )

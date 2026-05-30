@@ -16,7 +16,10 @@ from option_pricing.marketdata.bundles import (
     build_model_validation_manifest,
 )
 from option_pricing.marketdata.contracts import ModelValidationBundleResult
-from option_pricing.marketdata.manifests import validate_model_validation_manifest
+from option_pricing.marketdata.manifests import (
+    MODEL_VALIDATION_MANIFEST_REQUIRED_FIELDS,
+    validate_model_validation_manifest,
+)
 from option_pricing.marketdata.schemas import MODEL_VALIDATION_BUNDLE_VERSION
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +33,26 @@ EXPECTED_ARTIFACTS = {
     "heston_fit_summary": "heston_fit_summary.csv",
     "warnings": "warnings.json",
 }
+EXPECTED_REQUIRED_MANIFEST_FIELDS = (
+    "artifact_schema_version",
+    "run_id",
+    "snapshot_id",
+    "created_at_utc",
+    "library_commit",
+    "underlying",
+    "valuation_timestamp_utc",
+    "spot_source",
+    "rate_source",
+    "rate_compounding",
+    "dividend_yield_source",
+    "day_count",
+    "quote_cleaning_policy",
+    "rows",
+    "reason_counts",
+    "warnings",
+    "artifacts",
+    "heston_smoke",
+)
 
 
 def _market_data_payload() -> dict[str, object]:
@@ -69,6 +92,7 @@ def _manifest(
     *,
     market_data_payload: dict[str, object] | None = None,
     artifacts: dict[str, str] | None = None,
+    heston_smoke: HestonSmokeResult | None = None,
 ) -> dict[str, object]:
     return build_model_validation_manifest(
         run_id="test-run",
@@ -90,7 +114,7 @@ def _manifest(
         reason_counts={"expired": 1, "bad_mid": 2},
         warnings=["surface grid is sparse"],
         artifacts=EXPECTED_ARTIFACTS if artifacts is None else artifacts,
-        heston_smoke=_heston_smoke(),
+        heston_smoke=_heston_smoke() if heston_smoke is None else heston_smoke,
         library_commit="abc123",
     )
 
@@ -137,6 +161,12 @@ def test_bundle_all_exposes_intended_a5_s1_api() -> None:
     assert bundles_module.ModelValidationBundleResult is ModelValidationBundleResult
     for symbol in bundles_module.__all__:
         assert getattr(bundles_module, symbol) is not None
+
+
+def test_model_validation_manifest_required_fields_are_a5_s1_contract() -> None:
+    assert (
+        MODEL_VALIDATION_MANIFEST_REQUIRED_FIELDS == EXPECTED_REQUIRED_MANIFEST_FIELDS
+    )
 
 
 def test_model_validation_bundle_config_defaults_are_frozen() -> None:
@@ -189,8 +219,185 @@ def test_build_model_validation_manifest_returns_s1_shape() -> None:
     assert "schema_version" not in manifest
 
 
+def test_heston_smoke_payload_serialization_is_stable() -> None:
+    manifest = _manifest(
+        heston_smoke=HestonSmokeResult(
+            status="success",
+            message="tiny smoke passed",
+            objective_type="price_rmse",
+            quote_count=2,
+            success_count=1,
+            failure_count=0,
+            best_cost=0.125,
+            parameters={"theta": 0.04, "kappa": 1.5},
+        )
+    )
+
+    assert manifest["heston_smoke"] == {
+        "status": "success",
+        "message": "tiny smoke passed",
+        "objective_type": "price_rmse",
+        "quote_count": 2,
+        "success_count": 1,
+        "failure_count": 0,
+        "best_cost": 0.125,
+        "parameters": {"kappa": 1.5, "theta": 0.04},
+    }
+
+
 def test_model_validation_manifest_passes_existing_validator() -> None:
     validate_model_validation_manifest(_manifest())
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("run_id", ""),
+        ("snapshot_id", "  "),
+        ("underlying", None),
+        ("valuation_timestamp_utc", 123),
+    ],
+)
+def test_build_model_validation_manifest_rejects_invalid_required_text_fields(
+    field: str,
+    value: object,
+) -> None:
+    kwargs = {
+        "run_id": "test-run",
+        "snapshot_id": "snapshot-001",
+        "underlying": "SYNTH",
+        "valuation_timestamp_utc": "2026-05-22T15:30:00Z",
+        "market_data_payload": _market_data_payload(),
+        "rows": {"cleaned_quotes": 1},
+        "reason_counts": {},
+        "warnings": [],
+        "artifacts": EXPECTED_ARTIFACTS,
+        "heston_smoke": _heston_smoke(),
+        "library_commit": "abc123",
+    }
+    kwargs[field] = value
+
+    with pytest.raises((TypeError, ValueError), match=field):
+        build_model_validation_manifest(**kwargs)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("payload_key", "source_name"),
+    [
+        ("rate_compounding", "market_data_payload.rate_compounding"),
+        ("day_count", "market_data_payload.day_count"),
+        ("quote_cleaning_policy", "market_data_payload.quote_cleaning_policy"),
+    ],
+)
+def test_build_model_validation_manifest_rejects_missing_market_data_text_fields(
+    payload_key: str,
+    source_name: str,
+) -> None:
+    payload = _market_data_payload()
+    payload.pop(payload_key)
+
+    with pytest.raises((TypeError, ValueError), match=source_name):
+        _manifest(market_data_payload=payload)
+
+
+@pytest.mark.parametrize(
+    "source_key", ["spot_source", "rate_source", "dividend_yield_source"]
+)
+def test_build_model_validation_manifest_rejects_missing_nested_source_fields(
+    source_key: str,
+) -> None:
+    payload = _market_data_payload()
+    sources = dict(payload["sources"])  # type: ignore[arg-type]
+    sources.pop(source_key)
+    payload["sources"] = sources
+
+    with pytest.raises((TypeError, ValueError), match=source_key):
+        _manifest(market_data_payload=payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "values"),
+    [
+        ("rows", {"cleaned_quotes": -1}),
+        ("reason_counts", {"bad_mid": -1}),
+    ],
+)
+def test_build_model_validation_manifest_rejects_negative_counts(
+    field: str,
+    values: dict[str, int],
+) -> None:
+    kwargs = {
+        "run_id": "test-run",
+        "snapshot_id": "snapshot-001",
+        "underlying": "SYNTH",
+        "valuation_timestamp_utc": "2026-05-22T15:30:00Z",
+        "market_data_payload": _market_data_payload(),
+        "rows": {"cleaned_quotes": 1},
+        "reason_counts": {},
+        "warnings": [],
+        "artifacts": EXPECTED_ARTIFACTS,
+        "heston_smoke": _heston_smoke(),
+        "library_commit": "abc123",
+    }
+    kwargs[field] = values
+
+    with pytest.raises(ValueError, match=f"{field} counts must be non-negative"):
+        build_model_validation_manifest(**kwargs)  # type: ignore[arg-type]
+
+
+def test_build_model_validation_manifest_rejects_non_string_warnings() -> None:
+    with pytest.raises(TypeError, match="warnings must be a sequence of strings"):
+        build_model_validation_manifest(
+            run_id="test-run",
+            snapshot_id="snapshot-001",
+            underlying="SYNTH",
+            valuation_timestamp_utc="2026-05-22T15:30:00Z",
+            market_data_payload=_market_data_payload(),
+            rows={"cleaned_quotes": 1},
+            reason_counts={},
+            warnings=["ok", 123],  # type: ignore[list-item]
+            artifacts=EXPECTED_ARTIFACTS,
+            heston_smoke=_heston_smoke(),
+            library_commit="abc123",
+        )
+
+
+def test_build_model_validation_manifest_rejects_invalid_heston_smoke_object() -> None:
+    with pytest.raises(TypeError, match="heston_smoke must be a HestonSmokeResult"):
+        build_model_validation_manifest(
+            run_id="test-run",
+            snapshot_id="snapshot-001",
+            underlying="SYNTH",
+            valuation_timestamp_utc="2026-05-22T15:30:00Z",
+            market_data_payload=_market_data_payload(),
+            rows={"cleaned_quotes": 1},
+            reason_counts={},
+            warnings=[],
+            artifacts=EXPECTED_ARTIFACTS,
+            heston_smoke={"status": "skipped"},  # type: ignore[arg-type]
+            library_commit="abc123",
+        )
+
+
+def test_validate_model_validation_manifest_rejects_secret_looking_nested_keys() -> (
+    None
+):
+    manifest = _manifest()
+    manifest["provenance"] = {"fred_api_key": "do-not-write"}
+
+    with pytest.raises(ValueError, match="secret-looking keys"):
+        validate_model_validation_manifest(manifest)
+
+
+@pytest.mark.parametrize("field", ["snapshot_id", "reason_counts", "heston_smoke"])
+def test_validate_model_validation_manifest_rejects_missing_a5_s1_fields(
+    field: str,
+) -> None:
+    manifest = _manifest()
+    manifest.pop(field)
+
+    with pytest.raises(ValueError, match="missing required fields"):
+        validate_model_validation_manifest(manifest)
 
 
 def test_artifact_map_uses_frozen_bundle_local_filenames() -> None:

@@ -9,6 +9,7 @@ from .schemas import MODEL_VALIDATION_BUNDLE_VERSION, DatasetName, parse_dataset
 MODEL_VALIDATION_MANIFEST_REQUIRED_FIELDS = (
     "artifact_schema_version",
     "run_id",
+    "snapshot_id",
     "created_at_utc",
     "library_commit",
     "underlying",
@@ -20,8 +21,10 @@ MODEL_VALIDATION_MANIFEST_REQUIRED_FIELDS = (
     "day_count",
     "quote_cleaning_policy",
     "rows",
+    "reason_counts",
     "warnings",
     "artifacts",
+    "heston_smoke",
 )
 
 _SECRET_MANIFEST_KEY_TERMS = frozenset(
