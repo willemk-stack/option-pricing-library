@@ -159,6 +159,7 @@ def test_bundle_all_exposes_intended_a5_s1_api() -> None:
         "ModelValidationBundleResult",
         "build_model_validation_manifest",
         "build_surface_inputs",
+        "write_model_validation_bundle_artifacts",
     )
     assert bundles_module.ModelValidationBundleResult is ModelValidationBundleResult
     assert bundles_module.build_surface_inputs is build_surface_inputs

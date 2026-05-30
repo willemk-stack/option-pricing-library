@@ -231,6 +231,35 @@ def build_model_validation_manifest(
     return manifest
 
 
+def write_model_validation_bundle_artifacts(
+    storage: LocalStorage,
+    *,
+    local_snapshot: _ModelValidationLocalSnapshot,
+    market_inputs: pd.DataFrame,
+    cleaned_quotes: pd.DataFrame,
+    rejected_quotes: pd.DataFrame,
+    reason_counts: Mapping[str, int],
+    warnings: Sequence[str],
+    config: ModelValidationBundleConfig | None = None,
+    overwrite: bool = False,
+    library_commit: str | None = None,
+) -> ModelValidationBundleResult:
+    """Write the public A5 local model-validation bundle artifact set."""
+
+    return _write_model_validation_bundle_artifacts(
+        storage,
+        local_snapshot=local_snapshot,
+        market_inputs=market_inputs,
+        cleaned_quotes=cleaned_quotes,
+        rejected_quotes=rejected_quotes,
+        reason_counts=reason_counts,
+        warnings=warnings,
+        config=config,
+        overwrite=overwrite,
+        library_commit=library_commit,
+    )
+
+
 def _write_model_validation_bundle_artifacts(
     storage: LocalStorage,
     *,
@@ -894,4 +923,5 @@ __all__ = [
     "ModelValidationBundleResult",
     "build_model_validation_manifest",
     "build_surface_inputs",
+    "write_model_validation_bundle_artifacts",
 ]

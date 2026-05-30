@@ -2,8 +2,8 @@
 
 Phase A keeps market snapshot validation local-first, deterministic, and
 auditable. The phase separates fixture evidence, cleaned evidence, and
-library-ready conversion artifacts without connecting to live providers or
-starting model workflows.
+library-ready conversion artifacts without connecting to live providers,
+requiring credentials, adding a CLI, or writing research exports.
 
 ## Phase A Boundary
 
@@ -13,11 +13,15 @@ The local model-validation handoff is intentionally narrow:
 - Silver = normalized `market_inputs`, `cleaned_quotes`, `rejected_quotes`, and
   the cleaning manifest.
 - Gold = library-ready converted artifacts.
+- A5 bundle = a local model-validation evidence bundle assembled from the same
+  Bronze, Silver, and Gold contracts.
 
 A3 owns the Silver normalization and quote-cleaning evidence. A4 consumes those
 Silver outputs and writes Gold artifacts that existing library types can reload.
-Pricing and Heston compatibility are proved by reconstruction only; Phase A does
-not run calibration, build bundles, or refresh providers.
+Through A4, pricing and Heston compatibility are proved by reconstruction only.
+A5 adds a local bundle writer and orchestration function; it still does not
+refresh providers, call live services, require credentials, add a CLI, or write
+research exports.
 
 ## A3 Silver Scope
 
@@ -200,9 +204,59 @@ reconstruction policy. Both manifests record `run_id`, `snapshot_id`, schema
 versions, row counts, warnings, reason counts, source fixture metadata, artifact
 paths, and optional library commit.
 
+## A5 Local Model-Validation Bundle
+
+A5 is a narrow local orchestration layer over the existing A2-A4 contracts. It
+does not introduce live providers, credentials, CLI commands, provider refreshes,
+research exports, or new storage layouts.
+
+A5 exposes:
+
+- `write_model_validation_bundle_artifacts`, a public wrapper around the existing
+  model-validation bundle artifact writer.
+- `run_local_model_validation_pipeline`, a local fixture-to-bundle pipeline that
+  requires an explicit `run_id`.
+
+The local pipeline flow is fixed:
+
+1. Load a local snapshot with `LocalSnapshotProvider`.
+2. Write Bronze local fixture evidence.
+3. Normalize `market_inputs` and `option_chain`.
+4. Clean option quotes.
+5. Write Silver cleaned quote evidence.
+6. Write A4 Gold artifacts.
+7. Write the A5 model-validation bundle.
+8. Return a typed result with the local snapshot, normalized frames, cleaning
+   result, Bronze/Silver/Gold paths, and bundle result.
+
+The A5 bundle is written under:
+
+```text
+gold/
+  model_validation_bundle/
+    underlying=<...>/
+      date=<...>/
+        run_id=<...>/
+          manifest.json
+          market_data.json
+          cleaned_quotes.parquet
+          rejected_quotes.parquet
+          heston_quotes.parquet
+          surface_inputs.parquet
+          heston_fit_summary.csv
+          warnings.json
+```
+
+The bundle manifest records only summary metadata and artifact filenames; it
+does not embed rejected quote row details. `ModelValidationBundleConfig` controls
+the Heston smoke behavior, and its defaults are part of the bundle contract.
+
 ## Example
 
 ```python
+from pathlib import Path
+
+from option_pricing.marketdata.bundles import ModelValidationBundleConfig
 from option_pricing.marketdata.cleaning import clean_option_quotes
 from option_pricing.marketdata.config import StorageConfig
 from option_pricing.marketdata.gold import write_gold_artifacts
@@ -210,6 +264,7 @@ from option_pricing.marketdata.normalize import (
     normalize_market_inputs,
     normalize_option_chain,
 )
+from option_pricing.marketdata.pipeline import run_local_model_validation_pipeline
 from option_pricing.marketdata.providers.local import (
     LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1,
     LocalSnapshotConfig,
@@ -229,7 +284,7 @@ market_inputs = normalize_market_inputs(local.market_inputs_raw)
 option_chain = normalize_option_chain(local.option_chain_raw)
 cleaning = clean_option_quotes(option_chain, market_inputs)
 
-storage = LocalStorage(StorageConfig(root="out/marketdata"))
+storage = LocalStorage(StorageConfig(root=Path("out/marketdata")))
 
 silver_paths = write_cleaned_quotes_silver(
     storage,
@@ -246,6 +301,12 @@ gold_paths = write_gold_artifacts(
     rejected_quotes=cleaning.rejected_quotes,
     reason_counts=cleaning.reason_counts,
     warnings=cleaning.warnings,
+)
+
+pipeline_result = run_local_model_validation_pipeline(
+    storage=storage,
+    run_id="run-002",
+    bundle_config=ModelValidationBundleConfig(run_heston_smoke=False),
 )
 ```
 
@@ -264,8 +325,23 @@ gold_paths = write_gold_artifacts(
 - Gold artifacts partition by underlying, date, and `run_id`.
 - Manifests record `run_id`, `snapshot_id`, schema versions, row counts,
   warnings, and artifact paths.
-- No credentials, providers, CLI, research exports, calibration execution, or
-  model-validation bundles are added.
+- A4 adds no credentials, providers, CLI, research exports, calibration
+  execution, or model-validation bundles.
+
+## A5 Acceptance Checklist
+
+- `write_model_validation_bundle_artifacts` is exported from
+  `marketdata/bundles.py`.
+- The private bundle writer remains available for backwards compatibility.
+- `run_local_model_validation_pipeline` requires an explicit `run_id`.
+- The pipeline accepts local storage as `LocalStorage`, `StorageConfig`, or
+  `Path`.
+- Bronze, Silver, A4 Gold, and A5 bundle artifacts are all written for the same
+  local snapshot.
+- `overwrite=False` fails on existing deterministic outputs before replacement.
+- `overwrite=True` replaces the deterministic local output set.
+- No live providers, credentials, CLI, provider refresh, research exports, new
+  dependencies, public pricing API changes, or storage layout changes are added.
 
 ## Testing
 
@@ -276,5 +352,6 @@ mypy
 pytest -q tests/marketdata/test_gold_conversions.py
 pytest -q tests/marketdata/test_heston_gold_conversions.py
 pytest -q tests/marketdata/test_a4_gold_integration.py
+pytest -q tests/marketdata/test_a5_local_pipeline.py
 pytest -q tests
 ```
