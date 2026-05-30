@@ -6,11 +6,29 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, Protocol, cast
 
-from option_pricing.marketdata.contracts import ModelValidationBundleResult
+import pandas as pd
+
+from option_pricing.marketdata.contracts import (
+    ModelValidationBundleResult,
+    ResultStats,
+    RunMetadata,
+)
+from option_pricing.marketdata.gold import (
+    _cleaning_policy_from_cleaned_quotes,
+    build_heston_quotes,
+    build_market_data_snapshot,
+    market_data_snapshot_to_json,
+)
 from option_pricing.marketdata.manifests import validate_model_validation_manifest
-from option_pricing.marketdata.schemas import MODEL_VALIDATION_BUNDLE_VERSION
+from option_pricing.marketdata.schemas import (
+    MODEL_VALIDATION_BUNDLE_VERSION,
+    SURFACE_INPUTS_COLUMNS,
+    DatasetName,
+)
+from option_pricing.marketdata.storage import LocalStorage, PartitionValue
+from option_pricing.marketdata.validation import coerce_frame, validate_dtypes
 
 _MODEL_VALIDATION_ARTIFACTS = {
     "market_data": "market_data.json",
@@ -55,6 +73,44 @@ class ModelValidationBundleConfig:
     heston_max_seeds: int = 1
     heston_max_nfev: int | None = 1
     fail_on_heston_smoke_failure: bool = False
+
+
+class _ModelValidationLocalSnapshot(Protocol):
+    @property
+    def snapshot_id(self) -> str: ...
+
+    @property
+    def run_id(self) -> str | None: ...
+
+    @property
+    def underlying(self) -> str: ...
+
+    @property
+    def asof(self) -> object: ...
+
+
+def build_surface_inputs(cleaned_quotes: pd.DataFrame) -> pd.DataFrame:
+    """Build the schema-stable surface-input frame from cleaned quotes."""
+
+    if not isinstance(cleaned_quotes, pd.DataFrame):
+        raise TypeError(
+            "cleaned_quotes must be a pandas DataFrame, "
+            f"got {type(cleaned_quotes).__name__}"
+        )
+    validate_dtypes(cleaned_quotes, DatasetName.CLEANED_QUOTES, allow_extra=False)
+
+    source = cleaned_quotes.reset_index(drop=True)
+    surface_inputs = pd.DataFrame(
+        {column: source[column] for column in SURFACE_INPUTS_COLUMNS},
+        columns=SURFACE_INPUTS_COLUMNS,
+    )
+    coerced = coerce_frame(
+        surface_inputs,
+        DatasetName.SURFACE_INPUTS,
+        allow_extra=False,
+    )
+    validate_dtypes(coerced, DatasetName.SURFACE_INPUTS, allow_extra=False)
+    return coerced.reset_index(drop=True)
 
 
 def build_model_validation_manifest(
@@ -117,6 +173,408 @@ def build_model_validation_manifest(
     }
     validate_model_validation_manifest(manifest)
     return manifest
+
+
+def _write_model_validation_bundle_artifacts(
+    storage: LocalStorage,
+    *,
+    local_snapshot: _ModelValidationLocalSnapshot,
+    market_inputs: pd.DataFrame,
+    cleaned_quotes: pd.DataFrame,
+    rejected_quotes: pd.DataFrame,
+    reason_counts: Mapping[str, int],
+    warnings: Sequence[str],
+    config: ModelValidationBundleConfig | None = None,
+    overwrite: bool = False,
+    library_commit: str | None = None,
+) -> ModelValidationBundleResult:
+    """Write the A5-S2 self-contained model-validation bundle artifacts."""
+
+    _require_local_storage(storage)
+    config = _model_validation_config(config)
+
+    run_id = _required_run_id(local_snapshot.run_id)
+    snapshot_id = _required_text(
+        "local_snapshot.snapshot_id", local_snapshot.snapshot_id
+    )
+    underlying = _required_text("local_snapshot.underlying", local_snapshot.underlying)
+    valuation_timestamp = _utc_timestamp(
+        local_snapshot.asof,
+        field_name="local_snapshot.asof",
+    )
+    library_commit = _optional_text("library_commit", library_commit)
+
+    validate_dtypes(rejected_quotes, DatasetName.REJECTED_QUOTES, allow_extra=False)
+    _require_matching_underlying(
+        rejected_quotes,
+        frame_name="rejected_quotes",
+        expected=underlying,
+    )
+
+    cleaning_policy = _cleaning_policy_from_cleaned_quotes(cleaned_quotes)
+    market_snapshot = build_market_data_snapshot(
+        market_inputs,
+        run_id=run_id,
+        snapshot_id=snapshot_id,
+        cleaning_policy=cleaning_policy,
+        library_commit=library_commit,
+    )
+    market_data_payload = market_data_snapshot_to_json(market_snapshot)
+    _require_payload_matches_snapshot(
+        market_data_payload,
+        underlying=underlying,
+        valuation_timestamp=valuation_timestamp,
+    )
+
+    heston_result = build_heston_quotes(cleaned_quotes)
+    _require_matching_underlying(
+        heston_result.heston_quotes,
+        frame_name="heston_quotes",
+        expected=underlying,
+    )
+    surface_inputs = build_surface_inputs(cleaned_quotes)
+    _require_matching_underlying(
+        surface_inputs,
+        frame_name="surface_inputs",
+        expected=underlying,
+    )
+
+    partitions: dict[str, PartitionValue] = {
+        "underlying": underlying,
+        "date": valuation_timestamp.date(),
+        "run_id": run_id,
+    }
+    paths = _expected_model_validation_bundle_paths(storage, partitions)
+    _ensure_model_validation_bundle_targets_available(paths, overwrite=overwrite)
+
+    heston_smoke = _skipped_heston_smoke_result(
+        config,
+        quote_count=heston_result.quote_count,
+    )
+    warning_payload = _warnings_payload(warnings)
+    data_quality_warnings = list(heston_result.warnings)
+    bundle_warnings = [*warning_payload, *data_quality_warnings]
+    manifest = build_model_validation_manifest(
+        run_id=run_id,
+        snapshot_id=snapshot_id,
+        underlying=underlying,
+        valuation_timestamp_utc=_utc_isoformat(valuation_timestamp),
+        market_data_payload=market_data_payload,
+        rows={
+            "market_inputs": int(len(market_inputs)),
+            "cleaned_quotes": int(len(cleaned_quotes)),
+            "rejected_quotes": int(len(rejected_quotes)),
+            "heston_quotes": int(heston_result.quote_count),
+            "surface_inputs": int(len(surface_inputs)),
+        },
+        reason_counts=reason_counts,
+        warnings=bundle_warnings,
+        artifacts=_MODEL_VALIDATION_ARTIFACTS,
+        heston_smoke=heston_smoke,
+        library_commit=library_commit,
+    )
+
+    market_data_path = storage.write_json(
+        market_data_payload,
+        layer="gold",
+        dataset=DatasetName.MODEL_VALIDATION_BUNDLE.value,
+        partitions=partitions,
+        filename=_MODEL_VALIDATION_ARTIFACTS["market_data"],
+        overwrite=overwrite,
+    )
+    cleaned_quotes_path = storage.write_frame(
+        cleaned_quotes,
+        layer="gold",
+        dataset=DatasetName.MODEL_VALIDATION_BUNDLE.value,
+        partitions=partitions,
+        filename=_MODEL_VALIDATION_ARTIFACTS["cleaned_quotes"],
+        overwrite=overwrite,
+    )
+    rejected_quotes_path = storage.write_frame(
+        rejected_quotes,
+        layer="gold",
+        dataset=DatasetName.MODEL_VALIDATION_BUNDLE.value,
+        partitions=partitions,
+        filename=_MODEL_VALIDATION_ARTIFACTS["rejected_quotes"],
+        overwrite=overwrite,
+    )
+    heston_quotes_path = storage.write_frame(
+        heston_result.heston_quotes,
+        layer="gold",
+        dataset=DatasetName.MODEL_VALIDATION_BUNDLE.value,
+        partitions=partitions,
+        filename=_MODEL_VALIDATION_ARTIFACTS["heston_quotes"],
+        overwrite=overwrite,
+    )
+    surface_inputs_path = storage.write_frame(
+        surface_inputs,
+        layer="gold",
+        dataset=DatasetName.MODEL_VALIDATION_BUNDLE.value,
+        partitions=partitions,
+        filename=_MODEL_VALIDATION_ARTIFACTS["surface_inputs"],
+        overwrite=overwrite,
+    )
+    _write_heston_fit_summary_csv(
+        paths.heston_fit_summary,
+        heston_smoke=heston_smoke,
+    )
+    warnings_path = storage.write_json(
+        {
+            "warnings": warning_payload,
+            "data_quality": data_quality_warnings,
+            "heston_smoke": [heston_smoke.message],
+        },
+        layer="gold",
+        dataset=DatasetName.MODEL_VALIDATION_BUNDLE.value,
+        partitions=partitions,
+        filename=_MODEL_VALIDATION_ARTIFACTS["warnings"],
+        overwrite=overwrite,
+    )
+    manifest_path = storage.write_manifest(
+        manifest,
+        layer="gold",
+        dataset=DatasetName.MODEL_VALIDATION_BUNDLE.value,
+        partitions=partitions,
+        filename="manifest.json",
+        overwrite=overwrite,
+    )
+
+    artifact_paths = (
+        market_data_path,
+        cleaned_quotes_path,
+        rejected_quotes_path,
+        heston_quotes_path,
+        surface_inputs_path,
+        paths.heston_fit_summary,
+        warnings_path,
+    )
+    return ModelValidationBundleResult(
+        manifest=manifest,
+        manifest_path=manifest_path,
+        metadata=RunMetadata(
+            run_id=run_id,
+            asof=valuation_timestamp.to_pydatetime(),
+            started_at=datetime.now(UTC),
+            git_sha=library_commit,
+        ),
+        artifact_paths=artifact_paths,
+        stats=ResultStats(
+            rows_in=int(
+                len(market_inputs) + len(cleaned_quotes) + len(rejected_quotes)
+            ),
+            rows_out=int(len(heston_result.heston_quotes) + len(surface_inputs)),
+            files_written=(*artifact_paths, manifest_path),
+            warnings=tuple(bundle_warnings),
+        ),
+    )
+
+
+def _expected_model_validation_bundle_paths(
+    storage: LocalStorage,
+    partitions: Mapping[str, PartitionValue],
+) -> ModelValidationBundlePaths:
+    root = _model_validation_bundle_root(storage, partitions)
+    return ModelValidationBundlePaths(
+        root=root,
+        manifest=root / "manifest.json",
+        market_data=root / _MODEL_VALIDATION_ARTIFACTS["market_data"],
+        cleaned_quotes=root / _MODEL_VALIDATION_ARTIFACTS["cleaned_quotes"],
+        rejected_quotes=root / _MODEL_VALIDATION_ARTIFACTS["rejected_quotes"],
+        heston_quotes=root / _MODEL_VALIDATION_ARTIFACTS["heston_quotes"],
+        surface_inputs=root / _MODEL_VALIDATION_ARTIFACTS["surface_inputs"],
+        heston_fit_summary=root / _MODEL_VALIDATION_ARTIFACTS["heston_fit_summary"],
+        warnings=root / _MODEL_VALIDATION_ARTIFACTS["warnings"],
+    )
+
+
+def _model_validation_bundle_root(
+    storage: LocalStorage,
+    partitions: Mapping[str, PartitionValue],
+) -> Path:
+    dataset = DatasetName.MODEL_VALIDATION_BUNDLE.value
+    ordered_partitions = storage._ordered_partitions(
+        layer="gold",
+        dataset=dataset,
+        partitions=partitions,
+    )
+    return storage._dataset_dir(
+        layer="gold",
+        dataset=dataset,
+        ordered_partitions=ordered_partitions,
+    )
+
+
+def _ensure_model_validation_bundle_targets_available(
+    paths: ModelValidationBundlePaths,
+    *,
+    overwrite: bool,
+) -> None:
+    if overwrite:
+        return
+    for path in (
+        paths.manifest,
+        paths.market_data,
+        paths.cleaned_quotes,
+        paths.rejected_quotes,
+        paths.heston_quotes,
+        paths.surface_inputs,
+        paths.heston_fit_summary,
+        paths.warnings,
+    ):
+        if path.exists():
+            raise FileExistsError(
+                f"{path} already exists; pass overwrite=True to replace it"
+            )
+
+
+def _write_heston_fit_summary_csv(
+    path: Path,
+    *,
+    heston_smoke: HestonSmokeResult,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(
+        [
+            {
+                "status": heston_smoke.status,
+                "message": heston_smoke.message,
+                "objective_type": heston_smoke.objective_type,
+                "quote_count": heston_smoke.quote_count,
+                "success_count": heston_smoke.success_count,
+                "failure_count": heston_smoke.failure_count,
+                "best_cost": heston_smoke.best_cost,
+            }
+        ],
+        columns=(
+            "status",
+            "message",
+            "objective_type",
+            "quote_count",
+            "success_count",
+            "failure_count",
+            "best_cost",
+        ),
+    ).to_csv(path, index=False)
+
+
+def _model_validation_config(
+    config: ModelValidationBundleConfig | None,
+) -> ModelValidationBundleConfig:
+    if config is None:
+        return ModelValidationBundleConfig()
+    if not isinstance(config, ModelValidationBundleConfig):
+        raise TypeError(
+            "config must be a ModelValidationBundleConfig, "
+            f"got {type(config).__name__}"
+        )
+    return config
+
+
+def _skipped_heston_smoke_result(
+    config: ModelValidationBundleConfig,
+    *,
+    quote_count: int,
+) -> HestonSmokeResult:
+    return HestonSmokeResult(
+        status="skipped",
+        message=(
+            "A5-S2 packages a deterministic skipped Heston smoke result; "
+            "real Heston smoke execution is A5-S3."
+        ),
+        objective_type=_required_text(
+            "config.heston_objective_type",
+            config.heston_objective_type,
+        ),
+        quote_count=int(quote_count),
+    )
+
+
+def _require_payload_matches_snapshot(
+    payload: Mapping[str, object],
+    *,
+    underlying: str,
+    valuation_timestamp: pd.Timestamp,
+) -> None:
+    payload_underlying = _required_mapping_text(
+        payload,
+        "underlying",
+        source_name="market_data_payload",
+    )
+    if payload_underlying != underlying:
+        raise ValueError(
+            "market_data underlying must match local_snapshot.underlying "
+            f"{underlying!r}; found {payload_underlying!r}"
+        )
+
+    payload_asof = _required_mapping_text(
+        payload,
+        "valuation_timestamp_utc",
+        source_name="market_data_payload",
+    )
+    if payload_asof != _utc_isoformat(valuation_timestamp):
+        raise ValueError(
+            "market_data valuation_timestamp_utc must match local_snapshot.asof "
+            f"{_utc_isoformat(valuation_timestamp)!r}; found {payload_asof!r}"
+        )
+
+
+def _require_matching_underlying(
+    frame: pd.DataFrame,
+    *,
+    frame_name: str,
+    expected: str,
+) -> None:
+    if frame.empty:
+        return
+
+    values: list[str] = []
+    for value in frame["underlying"]:
+        if pd.isna(value):
+            rendered = ""
+        else:
+            rendered = str(value).strip()
+        if rendered and rendered not in values:
+            values.append(rendered)
+
+    if values == [expected]:
+        return
+
+    found = ", ".join(repr(value) for value in values) or "<missing>"
+    raise ValueError(
+        f"{frame_name} underlying must match local_snapshot.underlying "
+        f"{expected!r}; found {found}"
+    )
+
+
+def _require_run_id_text(name: str, value: object) -> str:
+    return _required_text(name, value)
+
+
+def _required_run_id(value: str | None) -> str:
+    if value is None:
+        raise ValueError("local_snapshot.run_id is required")
+    return _require_run_id_text("local_snapshot.run_id", value)
+
+
+def _require_local_storage(storage: LocalStorage) -> None:
+    if not isinstance(storage, LocalStorage):
+        raise TypeError(
+            "storage must be a LocalStorage instance, " f"got {type(storage).__name__}"
+        )
+
+
+def _utc_timestamp(value: object, *, field_name: str) -> pd.Timestamp:
+    timestamp = pd.Timestamp(cast(Any, value))
+    if pd.isna(timestamp):
+        raise ValueError(f"{field_name} must not be missing")
+    if timestamp.tzinfo is None:
+        return timestamp.tz_localize(UTC)
+    return timestamp.tz_convert(UTC)
+
+
+def _utc_isoformat(value: object) -> str:
+    timestamp = _utc_timestamp(value, field_name="valuation_timestamp")
+    return timestamp.to_pydatetime().isoformat().replace("+00:00", "Z")
 
 
 def _artifact_payload(artifacts: Mapping[str, str]) -> dict[str, str]:
@@ -242,4 +700,5 @@ __all__ = [
     "ModelValidationBundlePaths",
     "ModelValidationBundleResult",
     "build_model_validation_manifest",
+    "build_surface_inputs",
 ]

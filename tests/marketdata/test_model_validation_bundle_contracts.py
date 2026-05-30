@@ -14,6 +14,7 @@ from option_pricing.marketdata.bundles import (
     ModelValidationBundleConfig,
     ModelValidationBundlePaths,
     build_model_validation_manifest,
+    build_surface_inputs,
 )
 from option_pricing.marketdata.contracts import ModelValidationBundleResult
 from option_pricing.marketdata.manifests import (
@@ -157,8 +158,10 @@ def test_bundle_all_exposes_intended_a5_s1_api() -> None:
         "ModelValidationBundlePaths",
         "ModelValidationBundleResult",
         "build_model_validation_manifest",
+        "build_surface_inputs",
     )
     assert bundles_module.ModelValidationBundleResult is ModelValidationBundleResult
+    assert bundles_module.build_surface_inputs is build_surface_inputs
     for symbol in bundles_module.__all__:
         assert getattr(bundles_module, symbol) is not None
 
