@@ -20,6 +20,7 @@ from option_pricing.marketdata.gold import (
     GoldHestonQuotesResult,
     GoldMarketDataSnapshot,
     build_market_data_snapshot,
+    cleaning_policy_from_cleaned_quotes,
     market_data_snapshot_from_json,
     market_data_snapshot_to_json,
     write_market_data_gold,
@@ -127,6 +128,7 @@ def test_gold_public_contracts_exist() -> None:
         "GoldMarketDataSnapshot",
         "build_heston_quotes",
         "build_market_data_snapshot",
+        "cleaning_policy_from_cleaned_quotes",
         "heston_quote_set_from_frame",
         "market_data_snapshot_from_json",
         "market_data_snapshot_to_json",
@@ -149,6 +151,7 @@ def test_gold_public_contracts_exist() -> None:
         "heston_quotes",
         "heston_manifest",
     )
+    assert callable(cleaning_policy_from_cleaned_quotes)
 
 
 def test_market_inputs_build_gold_market_data_snapshot() -> None:

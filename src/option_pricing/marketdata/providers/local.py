@@ -19,6 +19,9 @@ from option_pricing.marketdata.storage import LocalStorage
 from option_pricing.marketdata.validation import coerce_frame, order_columns
 
 LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1: Final = "local_snapshot_synth_schema_v1"
+LOCAL_SNAPSHOT_SYNTH_WITH_REJECTIONS_V1: Final = (
+    "local_snapshot_synth_with_rejections_v1"
+)
 LOCAL_SNAPSHOT_BRONZE_SCHEMA_VERSION: Final = "local_snapshot_bronze.v1"
 _REQUIRED_FILES: Final = ("manifest.json", "market_inputs.csv", "option_chain.csv")
 _REQUIRED_MANIFEST_KEYS: Final = (
@@ -124,7 +127,12 @@ class LocalSnapshotBronzePaths:
 
 
 class LocalSnapshotProvider:
-    """Load provider-neutral synthetic local market snapshot fixtures."""
+    """Load provider-neutral synthetic local market snapshot fixtures.
+
+    When no fixture root is provided, the provider looks under the checked-out
+    repository test fixtures. Packaged callers should pass an explicit fixture
+    root or fixture path.
+    """
 
     def __init__(self, config: LocalSnapshotConfig | Path | None = None) -> None:
         self.config = _coerce_config(config)
@@ -230,7 +238,10 @@ class LocalSnapshotProvider:
         _ensure_relative_to(fixture_dir, self.fixture_root)
         if not fixture_dir.is_dir():
             raise FileNotFoundError(
-                f"Unknown local snapshot fixture {name!r} under {self.fixture_root}"
+                f"Unknown local snapshot fixture {name!r} under {self.fixture_root}. "
+                "The default fixture root is a checked-out repository test "
+                "fixture path; pass fixture_root or fixture_path explicitly "
+                "outside a development checkout."
             )
         return fixture_dir
 
@@ -365,15 +376,10 @@ def _local_snapshot_bronze_root(
     storage: LocalStorage,
     partitions: Mapping[str, str | date],
 ) -> Path:
-    ordered_partitions = storage._ordered_partitions(
+    return storage.dataset_dir(
         layer="bronze",
         dataset="local_snapshot",
         partitions=partitions,
-    )
-    return storage._dataset_dir(
-        layer="bronze",
-        dataset="local_snapshot",
-        ordered_partitions=ordered_partitions,
     )
 
 
@@ -609,6 +615,7 @@ def _snapshot_id(
 __all__ = [
     "LOCAL_SNAPSHOT_BRONZE_SCHEMA_VERSION",
     "LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1",
+    "LOCAL_SNAPSHOT_SYNTH_WITH_REJECTIONS_V1",
     "LocalSnapshotBronzePaths",
     "LocalSnapshotConfig",
     "LocalSnapshotProvider",

@@ -106,6 +106,33 @@ def _a3_outputs(run_id: str | None = "test-run") -> _A3Outputs:
     )
 
 
+def _all_rejected_a3_outputs(run_id: str | None = "test-run") -> _A3Outputs:
+    market_inputs = normalize_market_inputs(
+        pd.read_csv(FIXTURE_ROOT / "market_inputs.csv")
+    )
+    option_chain = normalize_option_chain(
+        pd.read_csv(FIXTURE_ROOT / "option_chain.csv")
+    )
+    option_chain["bid"] = -1.0
+    result = clean_option_quotes(option_chain, market_inputs)
+    asof = pd.Timestamp(market_inputs.iloc[0]["asof"])
+    local_snapshot = _LocalSnapshotStub(
+        fixture_name=FIXTURE_NAME,
+        snapshot_id=f"{FIXTURE_NAME}:SYNTH:{asof.isoformat()}",
+        run_id=run_id,
+        underlying="SYNTH",
+        asof=asof,
+    )
+    return _A3Outputs(
+        local_snapshot=local_snapshot,
+        market_inputs=market_inputs,
+        cleaned_quotes=result.cleaned_quotes,
+        rejected_quotes=result.rejected_quotes,
+        reason_counts=result.reason_counts,
+        warnings=result.warnings,
+    )
+
+
 def _storage(tmp_path: Path) -> LocalStorage:
     return LocalStorage(StorageConfig(root=tmp_path))
 
@@ -360,6 +387,57 @@ def test_gold_manifests_summarize_outputs_without_rejected_rows(
     assert heston_manifest["optional_data_warnings"] == []
     assert "every IV is finite and > 0" in heston_manifest["iv_mid_policy"]
     assert "every vega is finite and >= 0" in heston_manifest["bs_vega_policy"]
+
+
+def test_write_gold_artifacts_handles_all_quotes_rejected_auditably(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    storage = _storage(tmp_path)
+    outputs = _all_rejected_a3_outputs()
+
+    paths = _write_gold(storage, outputs)
+
+    assert outputs.cleaned_quotes.empty
+    assert not outputs.rejected_quotes.empty
+    assert outputs.warnings == ("all_quotes_rejected",)
+    assert paths.market_data.exists()
+    assert paths.market_manifest.exists()
+    assert paths.heston_quotes.exists()
+    assert paths.heston_manifest.exists()
+
+    heston_quotes = storage.read_frame(
+        dataset=DatasetName.HESTON_QUOTES.value,
+        layer="gold",
+        partitions=_partitions(),
+        columns=list(HESTON_QUOTES_COLUMNS),
+    )
+    assert heston_quotes.empty
+    assert tuple(heston_quotes.columns) == HESTON_QUOTES_COLUMNS
+    validate_dtypes(heston_quotes, DatasetName.HESTON_QUOTES, allow_extra=False)
+
+    market_manifest = _read_gold_json(
+        storage,
+        dataset=DatasetName.MARKET_SNAPSHOT,
+        filename="manifest.json",
+    )
+    heston_manifest = _read_gold_json(
+        storage,
+        dataset=DatasetName.HESTON_QUOTES,
+        filename="manifest.json",
+    )
+    assert market_manifest["row_counts"] == {
+        "market_inputs": 1,
+        "cleaned_quotes": 0,
+        "rejected_quotes": len(outputs.rejected_quotes),
+    }
+    assert heston_manifest["row_counts"] == {
+        "cleaned_quotes": 0,
+        "rejected_quotes": len(outputs.rejected_quotes),
+        "heston_quotes": 0,
+    }
+    assert heston_manifest["reason_counts"] == outputs.reason_counts
+    assert heston_manifest["warnings"] == ["all_quotes_rejected"]
 
 
 def test_write_gold_artifacts_requires_run_id(

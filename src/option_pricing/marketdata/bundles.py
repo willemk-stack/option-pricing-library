@@ -18,14 +18,15 @@ from option_pricing.marketdata.contracts import (
 from option_pricing.marketdata.gold import (
     GoldHestonQuotesResult,
     GoldMarketDataSnapshot,
-    _cleaning_policy_from_cleaned_quotes,
     build_heston_quotes,
     build_market_data_snapshot,
+    cleaning_policy_from_cleaned_quotes,
     heston_quote_set_from_frame,
     market_data_snapshot_to_json,
 )
 from option_pricing.marketdata.manifests import validate_model_validation_manifest
 from option_pricing.marketdata.schemas import (
+    HESTON_QUOTES_COLUMNS,
     MODEL_VALIDATION_BUNDLE_VERSION,
     SURFACE_INPUTS_COLUMNS,
     DatasetName,
@@ -43,6 +44,9 @@ _MODEL_VALIDATION_ARTIFACTS = {
     "heston_fit_summary": "heston_fit_summary.csv",
     "warnings": "warnings.json",
 }
+_NO_CLEANED_QUOTES_HESTON_SMOKE_MESSAGE = (
+    "Heston smoke skipped because no cleaned quotes are available."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,7 +300,7 @@ def _write_model_validation_bundle_artifacts(
         expected=underlying,
     )
 
-    cleaning_policy = _cleaning_policy_from_cleaned_quotes(cleaned_quotes)
+    cleaning_policy = cleaning_policy_from_cleaned_quotes(cleaned_quotes)
     market_snapshot = build_market_data_snapshot(
         market_inputs,
         run_id=run_id,
@@ -311,7 +315,7 @@ def _write_model_validation_bundle_artifacts(
         valuation_timestamp=valuation_timestamp,
     )
 
-    heston_result = build_heston_quotes(cleaned_quotes)
+    heston_result = _build_heston_quotes_for_artifacts(cleaned_quotes)
     _require_matching_underlying(
         heston_result.heston_quotes,
         frame_name="heston_quotes",
@@ -484,15 +488,10 @@ def _model_validation_bundle_root(
     partitions: Mapping[str, PartitionValue],
 ) -> Path:
     dataset = DatasetName.MODEL_VALIDATION_BUNDLE.value
-    ordered_partitions = storage._ordered_partitions(
+    return storage.dataset_dir(
         layer="gold",
         dataset=dataset,
         partitions=partitions,
-    )
-    return storage._dataset_dir(
-        layer="gold",
-        dataset=dataset,
-        ordered_partitions=ordered_partitions,
     )
 
 
@@ -606,12 +605,30 @@ def _skipped_heston_smoke_result(
     )
 
 
+def _skipped_heston_smoke_no_cleaned_quotes_result(
+    config: ModelValidationBundleConfig,
+) -> HestonSmokeResult:
+    return HestonSmokeResult(
+        status="skipped",
+        message=_NO_CLEANED_QUOTES_HESTON_SMOKE_MESSAGE,
+        objective_type=_required_text(
+            "config.heston_objective_type",
+            config.heston_objective_type,
+        ),
+        quote_count=0,
+    )
+
+
 def _heston_smoke_run(
     *,
     config: ModelValidationBundleConfig,
     market_data_snapshot: GoldMarketDataSnapshot,
     heston_result: GoldHestonQuotesResult,
 ) -> _HestonSmokeRun:
+    if heston_result.quote_count == 0:
+        return _HestonSmokeRun(
+            result=_skipped_heston_smoke_no_cleaned_quotes_result(config)
+        )
     if not config.run_heston_smoke:
         return _HestonSmokeRun(
             result=_skipped_heston_smoke_result(
@@ -666,6 +683,26 @@ def _run_heston_smoke(
         jacobian_mode=str(calibration_result.jacobian_mode),
         backend=str(calibration_result.backend),
     )
+
+
+def _build_heston_quotes_for_artifacts(
+    cleaned_quotes: pd.DataFrame,
+) -> GoldHestonQuotesResult:
+    if cleaned_quotes.empty:
+        return GoldHestonQuotesResult(
+            heston_quotes=_empty_heston_quotes_frame(),
+            quote_count=0,
+            warnings=(),
+        )
+
+    return build_heston_quotes(cleaned_quotes)
+
+
+def _empty_heston_quotes_frame() -> pd.DataFrame:
+    frame = pd.DataFrame(columns=HESTON_QUOTES_COLUMNS)
+    coerced = coerce_frame(frame, DatasetName.HESTON_QUOTES, allow_extra=False)
+    validate_dtypes(coerced, DatasetName.HESTON_QUOTES, allow_extra=False)
+    return coerced.loc[:, list(HESTON_QUOTES_COLUMNS)].reset_index(drop=True)
 
 
 def _failed_heston_smoke_result(

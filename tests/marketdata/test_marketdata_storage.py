@@ -305,6 +305,29 @@ def test_pipeline_frame_paths_are_deterministic(
     )
 
 
+def test_dataset_dir_resolves_ordered_partition_path(tmp_path) -> None:
+    storage = LocalStorage(tmp_path)
+
+    path = storage.dataset_dir(
+        layer="gold",
+        dataset="model_validation_bundle",
+        partitions={
+            "run_id": "test-run",
+            "date": "2026-05-22",
+            "underlying": "SPY",
+        },
+    )
+
+    assert path == (
+        tmp_path
+        / "gold"
+        / "model_validation_bundle"
+        / "underlying=SPY"
+        / "date=2026-05-22"
+        / "run_id=test-run"
+    )
+
+
 @pytest.mark.parametrize("filename", ["manifest.json", "warnings.json"])
 def test_model_validation_bundle_manifest_paths_are_deterministic(
     tmp_path,

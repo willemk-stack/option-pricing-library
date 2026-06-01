@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
+FIXTURE_ROOT = ROOT / "tests" / "marketdata" / "fixtures"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
@@ -98,6 +99,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     result = run_local_model_validation_pipeline(
         storage=args.output_dir,
         run_id=args.run_id,
+        fixture_root=FIXTURE_ROOT,
         bundle_config=ModelValidationBundleConfig(
             run_heston_smoke=args.run_heston_smoke,
         ),

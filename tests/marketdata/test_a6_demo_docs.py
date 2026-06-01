@@ -157,10 +157,12 @@ def test_heston_smoke_flags_map_to_bundle_config_without_changing_default(
 ) -> None:
     demo = _load_demo_module()
     requested_smoke_modes: list[bool] = []
+    requested_fixture_roots: list[Path] = []
 
     def _fake_pipeline(**kwargs: object) -> SimpleNamespace:
         bundle_config = kwargs["bundle_config"]
         requested_smoke_modes.append(bundle_config.run_heston_smoke)
+        requested_fixture_roots.append(cast(Path, kwargs["fixture_root"]))
         return _stub_pipeline_result(
             Path(cast(Path, kwargs["storage"])),
             cast(str, kwargs["run_id"]),
@@ -175,6 +177,11 @@ def test_heston_smoke_flags_map_to_bundle_config_without_changing_default(
     assert demo.main(["--output-dir", str(tmp_path / "run"), "--run-heston-smoke"]) == 0
 
     assert requested_smoke_modes == [False, False, True]
+    assert requested_fixture_roots == [
+        ROOT / "tests" / "marketdata" / "fixtures",
+        ROOT / "tests" / "marketdata" / "fixtures",
+        ROOT / "tests" / "marketdata" / "fixtures",
+    ]
 
 
 def test_demo_script_imports_are_local_only() -> None:

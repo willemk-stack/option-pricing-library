@@ -139,6 +139,33 @@ def _a3_outputs() -> _A3Outputs:
     )
 
 
+def _all_rejected_a3_outputs() -> _A3Outputs:
+    market_inputs = normalize_market_inputs(
+        pd.read_csv(FIXTURE_ROOT / "market_inputs.csv")
+    )
+    option_chain = normalize_option_chain(
+        pd.read_csv(FIXTURE_ROOT / "option_chain.csv")
+    )
+    option_chain["bid"] = -1.0
+    result = clean_option_quotes(option_chain, market_inputs)
+    asof = pd.Timestamp(market_inputs.iloc[0]["asof"])
+    local_snapshot = _LocalSnapshotStub(
+        fixture_name=FIXTURE_NAME,
+        snapshot_id=f"{FIXTURE_NAME}:SYNTH:{asof.isoformat()}",
+        run_id="test-run",
+        underlying="SYNTH",
+        asof=asof,
+    )
+    return _A3Outputs(
+        local_snapshot=local_snapshot,
+        market_inputs=market_inputs,
+        cleaned_quotes=result.cleaned_quotes,
+        rejected_quotes=result.rejected_quotes,
+        reason_counts=result.reason_counts,
+        warnings=result.warnings,
+    )
+
+
 def _storage(tmp_path: Path) -> LocalStorage:
     return LocalStorage(StorageConfig(root=tmp_path))
 
@@ -579,6 +606,80 @@ def test_heston_smoke_skipped_when_config_disables_it(
     assert int(cast(int, summary.loc[0, "quote_count"])) == len(outputs.cleaned_quotes)
     assert pd.isna(summary.loc[0, "success_count"])
     assert pd.isna(summary.loc[0, "max_seeds"])
+
+
+def test_all_quotes_rejected_writes_auditable_empty_heston_and_surface_artifacts(
+    tmp_path: Path,
+    fake_parquet: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    storage = _storage(tmp_path)
+    outputs = _all_rejected_a3_outputs()
+    calls: list[object] = []
+
+    def fake_calibrate_heston_multistart(
+        quotes: object,
+        **_kwargs: object,
+    ) -> HestonMultistartResult:
+        calls.append(quotes)
+        return _fake_multistart_result(quote_count=0)
+
+    monkeypatch.setattr(
+        bundles_module,
+        "calibrate_heston_multistart",
+        fake_calibrate_heston_multistart,
+    )
+
+    result = _write_bundle(
+        storage,
+        outputs,
+        config=ModelValidationBundleConfig(run_heston_smoke=True),
+    )
+    root = _bundle_root(tmp_path)
+
+    assert calls == []
+    assert outputs.cleaned_quotes.empty
+    assert not outputs.rejected_quotes.empty
+    assert outputs.reason_counts
+    assert outputs.warnings == ("all_quotes_rejected",)
+    assert all((root / filename).exists() for filename in EXPECTED_FILES)
+
+    cleaned = pd.read_parquet(root / "cleaned_quotes.parquet")
+    rejected = pd.read_parquet(root / "rejected_quotes.parquet")
+    heston_quotes = pd.read_parquet(root / "heston_quotes.parquet")
+    surface_inputs = pd.read_parquet(root / "surface_inputs.parquet")
+    assert cleaned.empty
+    assert not rejected.empty
+    assert heston_quotes.empty
+    assert surface_inputs.empty
+    assert tuple(heston_quotes.columns) == HESTON_QUOTES_COLUMNS
+    assert tuple(surface_inputs.columns) == SURFACE_INPUTS_COLUMNS
+    validate_dtypes(heston_quotes, DatasetName.HESTON_QUOTES, allow_extra=False)
+    validate_dtypes(surface_inputs, DatasetName.SURFACE_INPUTS, allow_extra=False)
+
+    manifest = json.loads(_bundle_path(tmp_path, "manifest.json").read_text())
+    assert manifest["rows"] == {
+        "market_inputs": 1,
+        "cleaned_quotes": 0,
+        "rejected_quotes": len(outputs.rejected_quotes),
+        "heston_quotes": 0,
+        "surface_inputs": 0,
+    }
+    assert manifest["reason_counts"] == outputs.reason_counts
+    assert manifest["warnings"] == ["all_quotes_rejected"]
+    assert manifest["heston_smoke"]["status"] == "skipped"
+    assert manifest["heston_smoke"]["message"] == (
+        "Heston smoke skipped because no cleaned quotes are available."
+    )
+    assert "rejection_detail" not in json.dumps(manifest, sort_keys=True)
+    assert result.stats.rows_out == 0
+
+    summary = pd.read_csv(_bundle_path(tmp_path, "heston_fit_summary.csv"))
+    assert summary.loc[0, "status"] == "skipped"
+    assert summary.loc[0, "message"] == (
+        "Heston smoke skipped because no cleaned quotes are available."
+    )
+    assert int(cast(int, summary.loc[0, "quote_count"])) == 0
 
 
 def test_heston_smoke_failure_can_fail_fast_without_writing_bundle(

@@ -14,13 +14,23 @@ from option_pricing.marketdata.bundles import (
     ModelValidationBundleConfig,
     write_model_validation_bundle_artifacts,
 )
+from option_pricing.marketdata.cleaning import QuoteCleaningPolicyV1
 from option_pricing.marketdata.config import StorageConfig
 from option_pricing.marketdata.pipeline import (
     LocalModelValidationPipelineResult,
     run_local_model_validation_pipeline,
 )
-from option_pricing.marketdata.schemas import DatasetName
+from option_pricing.marketdata.providers.local import (
+    LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1,
+    LOCAL_SNAPSHOT_SYNTH_WITH_REJECTIONS_V1,
+)
+from option_pricing.marketdata.schemas import (
+    HESTON_QUOTES_COLUMNS,
+    SURFACE_INPUTS_COLUMNS,
+    DatasetName,
+)
 from option_pricing.marketdata.storage import LocalStorage
+from option_pricing.marketdata.validation import validate_dtypes
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUNDLES_FILE = REPO_ROOT / "src/option_pricing/marketdata/bundles.py"
@@ -67,12 +77,16 @@ def _run_pipeline(
     tmp_path: Path,
     *,
     run_id: str = "test-run",
+    fixture_name: str = LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1,
+    cleaning_policy: QuoteCleaningPolicyV1 | None = None,
     overwrite: bool = False,
     library_commit: str | None = "abc123",
 ) -> LocalModelValidationPipelineResult:
     return run_local_model_validation_pipeline(
         storage=tmp_path,
         run_id=run_id,
+        fixture_name=fixture_name,
+        cleaning_policy=cleaning_policy,
         bundle_config=LOCAL_BUNDLE_CONFIG,
         overwrite=overwrite,
         library_commit=library_commit,
@@ -244,6 +258,90 @@ def test_local_model_validation_pipeline_writes_bronze_silver_gold_and_bundle(
     }
 
 
+def test_rejected_quote_fixture_flows_evidence_through_pipeline_and_bundle(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    result = _run_pipeline(
+        tmp_path,
+        fixture_name=LOCAL_SNAPSHOT_SYNTH_WITH_REJECTIONS_V1,
+    )
+
+    assert not result.quote_cleaning.cleaned_quotes.empty
+    assert not result.quote_cleaning.rejected_quotes.empty
+    assert result.quote_cleaning.reason_counts == {"crossed_market": 1}
+    assert result.silver_paths.rejected_quotes.exists()
+
+    bundle_root = _bundle_root(tmp_path)
+    bundle_rejected = bundle_root / "rejected_quotes.parquet"
+    assert bundle_rejected.exists()
+    assert pd.read_parquet(bundle_rejected).equals(
+        result.quote_cleaning.rejected_quotes.reset_index(drop=True)
+    )
+
+    manifest = _read_json(result.model_validation_bundle.manifest_path)
+    assert manifest["rows"]["cleaned_quotes"] == len(
+        result.quote_cleaning.cleaned_quotes
+    )
+    assert manifest["rows"]["rejected_quotes"] == len(
+        result.quote_cleaning.rejected_quotes
+    )
+    assert manifest["reason_counts"] == {"crossed_market": 1}
+    manifest_text = result.model_validation_bundle.manifest_path.read_text(
+        encoding="utf-8"
+    )
+    assert "rejection_detail" not in manifest_text
+    assert "ask must be >= bid" not in manifest_text
+    assert "rejected_quote_rows" not in manifest_text
+
+
+def test_all_quotes_rejected_pipeline_writes_auditable_empty_gold_and_bundle(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    result = _run_pipeline(
+        tmp_path,
+        fixture_name=LOCAL_SNAPSHOT_SYNTH_WITH_REJECTIONS_V1,
+        cleaning_policy=QuoteCleaningPolicyV1(max_relative_spread=0.001),
+    )
+    bundle_root = _bundle_root(tmp_path)
+
+    assert result.quote_cleaning.cleaned_quotes.empty
+    assert not result.quote_cleaning.rejected_quotes.empty
+    assert result.quote_cleaning.reason_counts == {
+        "crossed_market": 1,
+        "spread_too_wide": 1,
+    }
+    assert result.quote_cleaning.warnings == ("all_quotes_rejected",)
+    assert {path.name for path in bundle_root.iterdir()} == EXPECTED_BUNDLE_FILES
+
+    heston_quotes = pd.read_parquet(bundle_root / "heston_quotes.parquet")
+    surface_inputs = pd.read_parquet(bundle_root / "surface_inputs.parquet")
+    assert heston_quotes.empty
+    assert surface_inputs.empty
+    assert tuple(heston_quotes.columns) == HESTON_QUOTES_COLUMNS
+    assert tuple(surface_inputs.columns) == SURFACE_INPUTS_COLUMNS
+    validate_dtypes(heston_quotes, DatasetName.HESTON_QUOTES, allow_extra=False)
+    validate_dtypes(surface_inputs, DatasetName.SURFACE_INPUTS, allow_extra=False)
+
+    manifest = _read_json(result.model_validation_bundle.manifest_path)
+    assert manifest["rows"] == {
+        "market_inputs": 1,
+        "cleaned_quotes": 0,
+        "rejected_quotes": len(result.quote_cleaning.rejected_quotes),
+        "heston_quotes": 0,
+        "surface_inputs": 0,
+    }
+    assert manifest["reason_counts"] == result.quote_cleaning.reason_counts
+    assert manifest["heston_smoke"]["status"] == "skipped"
+    assert manifest["heston_smoke"]["message"] == (
+        "Heston smoke skipped because no cleaned quotes are available."
+    )
+    assert result.gold_paths.market_data.exists()
+    assert result.gold_paths.heston_quotes.exists()
+    assert result.model_validation_bundle.manifest_path.exists()
+
+
 @pytest.mark.parametrize("storage_kind", ["path", "storage_config", "local_storage"])
 def test_run_local_model_validation_pipeline_accepts_local_storage_inputs(
     tmp_path: Path,
@@ -375,6 +473,24 @@ def test_local_model_validation_pipeline_preflights_bundle_conflict(
 
     with pytest.raises(FileExistsError, match="overwrite=True"):
         _run_pipeline(tmp_path, library_commit="replacement")
+
+    _assert_only_existing_target_remains(tmp_path, existing_target)
+
+
+def test_all_quotes_rejected_pipeline_preflight_conflict_has_no_partial_writes(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    existing_target = _bundle_root(tmp_path) / "heston_quotes.parquet"
+    _precreate_text(existing_target)
+
+    with pytest.raises(FileExistsError, match="overwrite=True"):
+        _run_pipeline(
+            tmp_path,
+            fixture_name=LOCAL_SNAPSHOT_SYNTH_WITH_REJECTIONS_V1,
+            cleaning_policy=QuoteCleaningPolicyV1(max_relative_spread=0.001),
+            library_commit="replacement",
+        )
 
     _assert_only_existing_target_remains(tmp_path, existing_target)
 

@@ -1,9 +1,9 @@
 # Market Snapshot Validation
 
 The market snapshot validation workflow is a deterministic, local-first review
-path for the Phase A marketdata artifacts. It runs from the checked-in local
-fixture snapshot and writes Bronze, Silver, Gold, and model-validation bundle
-artifacts without credentials or live market access.
+path for the Phase A marketdata artifacts. It runs from checked-in local fixture
+snapshots and writes Bronze, Silver, Gold, and model-validation bundle artifacts
+without credentials or live market access.
 
 This page is for reviewers who want to understand what the workflow proves, how
 to run it, which artifacts it writes, and where the phase boundary stops.
@@ -16,10 +16,11 @@ market snapshot end to end. In A5/A6 scope, it demonstrates:
 - local fixture-to-artifact reproducibility for the same explicit `run_id`
 - library-consumption mechanics from normalized market inputs and cleaned quotes
 - quote-cleaning visibility, including accepted rows, rejected rows, reason
-  counts, and warnings
+  counts, and warnings through a dedicated rejected-quote fixture/test path
 - `MarketData` JSON serialization and reload into the library-facing type
 - `PricingContext` reconstruction through `MarketData.to_context()`
 - cleaned quote compatibility with the Heston quote schema
+- all-quotes-rejected snapshots remain auditable and skip Heston smoke clearly
 - packaging of a self-contained model-validation bundle under the local storage
   root
 
@@ -54,7 +55,7 @@ The only runtime inputs are:
 
 - a writable local storage root, such as `out/marketdata-demo`
 - an explicit `run_id`
-- the checked-in local fixture snapshot used by
+- the explicit checked-in local fixture root used by
   `run_local_model_validation_pipeline(...)`
 
 No provider credentials, environment variables, network access, or live market
@@ -70,8 +71,9 @@ python scripts/demo_local_market_validation.py --output-dir out/marketdata-demo 
 
 The command runs the deterministic local fixture through Bronze, Silver, Gold,
 and model-validation bundle writes. Heston smoke is skipped by default so the
-reviewer path stays fast and deterministic. The summary prints the key artifact
-paths:
+reviewer path stays fast and deterministic. The script passes the checked-in
+test fixture root explicitly instead of relying on package data. The summary
+prints the key artifact paths:
 
 ```text
 Local market validation demo completed.
@@ -104,6 +106,7 @@ from option_pricing.marketdata.pipeline import run_local_model_validation_pipeli
 result = run_local_model_validation_pipeline(
     storage=Path("out/marketdata-demo"),
     run_id="demo-run",
+    fixture_root=Path("tests/marketdata/fixtures"),
     bundle_config=ModelValidationBundleConfig(run_heston_smoke=False),
     overwrite=True,
 )
@@ -178,7 +181,13 @@ For the default local fixture and the run ID in the example above, the bundle is
 written to:
 
 ```text
-out/marketdata-demo/gold/model_validation_bundle/underlying=SYNTH/date=2026-05-22/run_id=demo-run/
+out/
+  marketdata-demo/
+    gold/
+      model_validation_bundle/
+        underlying=SYNTH/
+          date=2026-05-22/
+            run_id=demo-run/
 ```
 
 Use the manifest files as the high-level pointers into each artifact set.
@@ -270,7 +279,9 @@ quality score.
 
 `cleaned_quotes.parquet` contains accepted rows. `rejected_quotes.parquet`
 contains the row-level rejection evidence that the manifest intentionally avoids
-embedding.
+embedding. The default demo fixture is clean-only, so its rejected file may be
+empty; the dedicated `local_snapshot_synth_with_rejections_v1` fixture and
+pipeline tests prove that rejected rows and `reason_counts` flow end to end.
 
 ```python
 from pathlib import Path
@@ -292,6 +303,24 @@ print(rejected.head())
 Use the accepted and rejected counts to cross-check `manifest["rows"]`. Use the
 reason count output to confirm rejected rows remain explainable and inspectable
 outside the manifest.
+
+### Inspect all-quotes-rejected snapshots
+
+If every option quote is rejected, the pipeline still writes the local audit
+artifacts instead of failing after partial output. Reviewers should expect:
+
+- `market_data.json`, `manifest.json`, `warnings.json`, and
+  `heston_fit_summary.csv` to be present
+- empty schema-valid `cleaned_quotes.parquet`, `heston_quotes.parquet`, and
+  `surface_inputs.parquet`
+- non-empty `rejected_quotes.parquet` with inspectable row-level details
+- manifest row counts with zero cleaned/Heston/surface rows and non-zero
+  rejected rows
+- `manifest["heston_smoke"]["status"] == "skipped"`
+- a Heston smoke message saying no cleaned quotes are available
+
+This behavior keeps bad local snapshots auditable without treating them as
+successful calibration evidence.
 
 ### Inspect surface inputs
 
@@ -462,9 +491,9 @@ Phase ownership is intentionally narrow:
   orchestration.
 - A6 owns reviewer reproducibility and documentation/demo clarity.
 
-A6-S2 adds only a deterministic local demo script. It does not modify providers,
-add provider refresh logic, introduce a provider refresh or production CLI,
-change bundle code, or create research exports.
+The local demo remains deterministic and local-only. It does not modify
+providers, add provider refresh logic, introduce a provider refresh or
+production CLI, or create research exports.
 
 The original A3 Silver-only non-goals were:
 
@@ -560,6 +589,10 @@ The bundle manifest records summary metadata, row counts, reason counts,
 warnings, Heston smoke status, and artifact filenames. It does not embed
 rejected quote row details.
 
+When all cleaned quotes are absent, the bundle writes empty schema-valid Heston
+and surface artifacts and records Heston smoke as skipped. The smoke result is
+compatibility evidence only, not calibration-quality evidence.
+
 ## Assumptions and limitations
 
 The workflow assumes the local fixture snapshot is the evidence source under
@@ -581,9 +614,13 @@ Run the local quality and marketdata checks from the repository root:
 ruff check .
 black --check .
 mypy
+pytest -q tests/marketdata/test_local_snapshot_provider.py
+pytest -q tests/marketdata/test_quote_cleaning.py
+pytest -q tests/marketdata/test_gold_conversions.py
 pytest -q tests/marketdata/test_a5_local_pipeline.py
 pytest -q tests/marketdata/test_model_validation_bundle.py
 pytest -q tests/marketdata/test_a6_demo_docs.py
+pytest -q tests/test_packaging_metadata.py
 ```
 
 For rendered documentation review, serve the MkDocs site locally and inspect the

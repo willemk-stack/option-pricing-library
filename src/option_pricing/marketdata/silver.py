@@ -187,18 +187,11 @@ def _target_path(
     partitions: Mapping[str, str | date],
     filename: str,
 ) -> Path:
-    # Mirror the local Bronze writer's preflight path checks so Silver writes
-    # fail before any artifact is created when overwrite is disabled.
-    ordered_partitions = storage._ordered_partitions(
-        layer="silver",
-        dataset=dataset,
-        partitions=partitions,
-    )
     return (
-        storage._dataset_dir(
+        storage.dataset_dir(
             layer="silver",
             dataset=dataset,
-            ordered_partitions=ordered_partitions,
+            partitions=partitions,
         )
         / filename
     )

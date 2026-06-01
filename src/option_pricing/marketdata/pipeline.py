@@ -208,14 +208,12 @@ def _expected_pipeline_target_paths(
     local_snapshot: LocalSnapshotResult,
 ) -> _PipelineTargetPaths:
     partitions = _pipeline_partitions(local_snapshot)
-    bronze_root = _partitioned_dataset_dir(
-        storage,
+    bronze_root = storage.dataset_dir(
         layer="bronze",
         dataset="local_snapshot",
         partitions=partitions,
     )
-    bundle_root = _partitioned_dataset_dir(
-        storage,
+    bundle_root = storage.dataset_dir(
         layer="gold",
         dataset=DatasetName.MODEL_VALIDATION_BUNDLE.value,
         partitions=partitions,
@@ -325,25 +323,6 @@ def _utc_timestamp(value: pd.Timestamp) -> pd.Timestamp:
     return timestamp.tz_convert(UTC)
 
 
-def _partitioned_dataset_dir(
-    storage: LocalStorage,
-    *,
-    layer: str,
-    dataset: str,
-    partitions: dict[str, PartitionValue],
-) -> Path:
-    ordered_partitions = storage._ordered_partitions(
-        layer=layer,
-        dataset=dataset,
-        partitions=partitions,
-    )
-    return storage._dataset_dir(
-        layer=layer,
-        dataset=dataset,
-        ordered_partitions=ordered_partitions,
-    )
-
-
 def _target_path(
     storage: LocalStorage,
     *,
@@ -353,8 +332,7 @@ def _target_path(
     filename: str,
 ) -> Path:
     return (
-        _partitioned_dataset_dir(
-            storage,
+        storage.dataset_dir(
             layer=layer,
             dataset=dataset,
             partitions=partitions,

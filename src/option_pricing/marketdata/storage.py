@@ -429,6 +429,28 @@ class LocalStorage:
             raise ValueError(f"JSON file at {json_path} does not contain an object")
         return cast(dict[str, JsonValue], payload)
 
+    def dataset_dir(
+        self,
+        *,
+        layer: str,
+        dataset: str,
+        partitions: Mapping[str, PartitionValue] | None = None,
+    ) -> Path:
+        """Return the deterministic local directory for one dataset partition."""
+
+        layer_name = _normalise_layer(layer)
+        dataset_name = _normalise_dataset(dataset)
+        ordered_partitions = self._ordered_partitions(
+            layer=layer_name,
+            dataset=dataset_name,
+            partitions=partitions,
+        )
+        return self._dataset_dir(
+            layer=layer_name,
+            dataset=dataset_name,
+            ordered_partitions=ordered_partitions,
+        )
+
     def record_run(
         self,
         metadata: RunMetadata,

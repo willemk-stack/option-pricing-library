@@ -18,7 +18,7 @@ from option_pricing.marketdata.schemas import (
     DatasetName,
 )
 from option_pricing.marketdata.storage import LocalStorage, PartitionValue
-from option_pricing.marketdata.validation import validate_dtypes
+from option_pricing.marketdata.validation import coerce_frame, validate_dtypes
 from option_pricing.types import MarketData
 
 if TYPE_CHECKING:
@@ -398,7 +398,7 @@ def write_gold_artifacts(
         expected=underlying,
     )
 
-    cleaning_policy = _cleaning_policy_from_cleaned_quotes(cleaned_quotes)
+    cleaning_policy = cleaning_policy_from_cleaned_quotes(cleaned_quotes)
     partitions: dict[str, PartitionValue] = {
         "underlying": underlying,
         "date": valuation_timestamp.date(),
@@ -415,7 +415,7 @@ def write_gold_artifacts(
         library_commit=library_commit,
     )
     market_payload = market_data_snapshot_to_json(snapshot)
-    heston_result = build_heston_quotes(cleaned_quotes)
+    heston_result = _build_heston_quotes_for_artifacts(cleaned_quotes)
 
     market_manifest = _market_snapshot_manifest(
         local_snapshot,
@@ -586,16 +586,11 @@ def _gold_target_path(
     partitions: Mapping[str, PartitionValue],
     filename: str,
 ) -> Path:
-    ordered_partitions = storage._ordered_partitions(
-        layer="gold",
-        dataset=dataset,
-        partitions=partitions,
-    )
     return (
-        storage._dataset_dir(
+        storage.dataset_dir(
             layer="gold",
             dataset=dataset,
-            ordered_partitions=ordered_partitions,
+            partitions=partitions,
         )
         / filename
     )
@@ -620,7 +615,10 @@ def _ensure_gold_targets_available(
             )
 
 
-def _cleaning_policy_from_cleaned_quotes(cleaned_quotes: pd.DataFrame) -> str:
+def cleaning_policy_from_cleaned_quotes(cleaned_quotes: pd.DataFrame) -> str:
+    """Return the single cleaning-policy identifier carried by cleaned quotes."""
+
+    _require_cleaned_quotes_frame(cleaned_quotes)
     if cleaned_quotes.empty:
         return _DEFAULT_CLEANING_POLICY_ID
 
@@ -638,6 +636,26 @@ def _cleaning_policy_from_cleaned_quotes(cleaned_quotes: pd.DataFrame) -> str:
             "cleaned_quotes cleaning_policy must contain exactly one non-empty value"
         )
     return policies[0]
+
+
+def _build_heston_quotes_for_artifacts(
+    cleaned_quotes: pd.DataFrame,
+) -> GoldHestonQuotesResult:
+    if cleaned_quotes.empty:
+        return GoldHestonQuotesResult(
+            heston_quotes=_empty_heston_quotes_frame(),
+            quote_count=0,
+            warnings=(),
+        )
+
+    return build_heston_quotes(cleaned_quotes)
+
+
+def _empty_heston_quotes_frame() -> pd.DataFrame:
+    frame = pd.DataFrame(columns=HESTON_QUOTES_COLUMNS)
+    coerced = coerce_frame(frame, DatasetName.HESTON_QUOTES, allow_extra=False)
+    validate_dtypes(coerced, DatasetName.HESTON_QUOTES, allow_extra=False)
+    return coerced.loc[:, list(HESTON_QUOTES_COLUMNS)].reset_index(drop=True)
 
 
 def _market_snapshot_manifest(
@@ -727,7 +745,7 @@ def _heston_quotes_manifest(
         ),
         "valuation_timestamp_utc": _utc_isoformat(valuation_timestamp),
         "library_commit": library_commit,
-        "quote_cleaning_policy": _cleaning_policy_from_cleaned_quotes(cleaned_quotes),
+        "quote_cleaning_policy": cleaning_policy_from_cleaned_quotes(cleaned_quotes),
         "row_counts": {
             "cleaned_quotes": int(len(cleaned_quotes)),
             "rejected_quotes": int(len(rejected_quotes)),
@@ -1047,6 +1065,7 @@ __all__ = [
     "GoldMarketDataSnapshot",
     "build_heston_quotes",
     "build_market_data_snapshot",
+    "cleaning_policy_from_cleaned_quotes",
     "heston_quote_set_from_frame",
     "market_data_snapshot_from_json",
     "market_data_snapshot_to_json",

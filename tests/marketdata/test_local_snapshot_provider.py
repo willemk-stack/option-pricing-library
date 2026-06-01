@@ -11,6 +11,7 @@ import pytest
 
 from option_pricing.marketdata.providers.local import (
     LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1,
+    LOCAL_SNAPSHOT_SYNTH_WITH_REJECTIONS_V1,
     LocalSnapshotConfig,
     LocalSnapshotProvider,
     LocalSnapshotResult,
@@ -325,3 +326,16 @@ def test_repeated_local_snapshot_loads_are_deterministic() -> None:
         kind="mergesort",
     ).reset_index(drop=True)
     pd.testing.assert_frame_equal(first.option_chain_raw, sorted_option_chain)
+
+
+def test_rejection_fixture_loads_as_provider_neutral_local_snapshot() -> None:
+    provider = LocalSnapshotProvider(FIXTURE_ROOT)
+
+    result = provider.load_snapshot(LOCAL_SNAPSHOT_SYNTH_WITH_REJECTIONS_V1)
+
+    assert result.fixture_name == LOCAL_SNAPSHOT_SYNTH_WITH_REJECTIONS_V1
+    assert result.underlying == "SYNTH"
+    assert result.row_counts == {"market_inputs": 1, "option_chain": 2}
+    assert result.manifest["provider_neutral"] is True
+    assert result.manifest["synthetic"] is True
+    assert result.metadata["source"] == "local_fixture"
