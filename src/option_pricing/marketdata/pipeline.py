@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC
 from pathlib import Path
-from typing import Any, cast
 
 import pandas as pd
 
 from option_pricing.marketdata.bundles import (
     ModelValidationBundleConfig,
+    ModelValidationBundlePaths,
     write_model_validation_bundle_artifacts,
 )
 from option_pricing.marketdata.cleaning import (
@@ -32,11 +33,12 @@ from option_pricing.marketdata.providers.local import (
     LocalSnapshotResult,
     write_local_snapshot_bronze,
 )
+from option_pricing.marketdata.schemas import DatasetName
 from option_pricing.marketdata.silver import (
     SilverCleaningPaths,
     write_cleaned_quotes_silver,
 )
-from option_pricing.marketdata.storage import LocalStorage
+from option_pricing.marketdata.storage import LocalStorage, PartitionValue
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +53,14 @@ class LocalModelValidationPipelineResult:
     silver_paths: SilverCleaningPaths
     gold_paths: GoldConversionPaths
     model_validation_bundle: ModelValidationBundleResult
+
+
+@dataclass(frozen=True, slots=True)
+class _PipelineTargetPaths:
+    bronze_paths: LocalSnapshotBronzePaths
+    silver_paths: SilverCleaningPaths
+    gold_paths: GoldConversionPaths
+    model_validation_bundle_paths: ModelValidationBundlePaths
 
 
 def run_local_model_validation_pipeline(
@@ -68,6 +78,7 @@ def run_local_model_validation_pipeline(
     """Run the narrow A5 local fixture-to-model-validation bundle pipeline."""
 
     required_run_id = _required_run_id(run_id)
+    effective_cleaning_policy = _cleaning_policy(cleaning_policy)
     local_storage = _coerce_storage(storage)
     local_snapshot = LocalSnapshotProvider(
         LocalSnapshotConfig(
@@ -77,6 +88,11 @@ def run_local_model_validation_pipeline(
             run_id=required_run_id,
         )
     ).load_snapshot()
+    _preflight_pipeline_targets(
+        local_storage,
+        local_snapshot,
+        overwrite=overwrite,
+    )
 
     bronze_paths = write_local_snapshot_bronze(
         local_storage,
@@ -89,7 +105,7 @@ def run_local_model_validation_pipeline(
     quote_cleaning = clean_option_quotes(
         option_chain,
         market_inputs,
-        policy=_cleaning_policy(cleaning_policy),
+        policy=effective_cleaning_policy,
     )
     silver_paths = write_cleaned_quotes_silver(
         local_storage,
@@ -101,7 +117,7 @@ def run_local_model_validation_pipeline(
     )
     gold_paths = write_gold_artifacts(
         local_storage,
-        local_snapshot=cast(Any, local_snapshot),
+        local_snapshot=local_snapshot,
         market_inputs=market_inputs,
         cleaned_quotes=quote_cleaning.cleaned_quotes,
         rejected_quotes=quote_cleaning.rejected_quotes,
@@ -168,6 +184,207 @@ def _cleaning_policy(
             f"got {type(policy).__name__}"
         )
     return policy
+
+
+def _preflight_pipeline_targets(
+    storage: LocalStorage,
+    local_snapshot: LocalSnapshotResult,
+    *,
+    overwrite: bool,
+) -> None:
+    if overwrite:
+        return
+
+    paths = _expected_pipeline_target_paths(storage, local_snapshot)
+    for path in _iter_pipeline_target_paths(paths):
+        if path.exists():
+            raise FileExistsError(
+                f"{path} already exists; pass overwrite=True to replace it"
+            )
+
+
+def _expected_pipeline_target_paths(
+    storage: LocalStorage,
+    local_snapshot: LocalSnapshotResult,
+) -> _PipelineTargetPaths:
+    partitions = _pipeline_partitions(local_snapshot)
+    bronze_root = _partitioned_dataset_dir(
+        storage,
+        layer="bronze",
+        dataset="local_snapshot",
+        partitions=partitions,
+    )
+    bundle_root = _partitioned_dataset_dir(
+        storage,
+        layer="gold",
+        dataset=DatasetName.MODEL_VALIDATION_BUNDLE.value,
+        partitions=partitions,
+    )
+    return _PipelineTargetPaths(
+        bronze_paths=LocalSnapshotBronzePaths(
+            root=bronze_root,
+            manifest=bronze_root / "manifest.json",
+            market_inputs=bronze_root / "market_inputs.parquet",
+            option_chain=bronze_root / "option_chain.parquet",
+        ),
+        silver_paths=SilverCleaningPaths(
+            market_inputs=_target_path(
+                storage,
+                layer="silver",
+                dataset=DatasetName.MARKET_INPUTS.value,
+                partitions=partitions,
+                filename="market_inputs.parquet",
+            ),
+            cleaned_quotes=_target_path(
+                storage,
+                layer="silver",
+                dataset=DatasetName.CLEANED_QUOTES.value,
+                partitions=partitions,
+                filename="cleaned_quotes.parquet",
+            ),
+            rejected_quotes=_target_path(
+                storage,
+                layer="silver",
+                dataset=DatasetName.REJECTED_QUOTES.value,
+                partitions=partitions,
+                filename="rejected_quotes.parquet",
+            ),
+            manifest=_target_path(
+                storage,
+                layer="silver",
+                dataset=DatasetName.CLEANED_QUOTES.value,
+                partitions=partitions,
+                filename="manifest.json",
+            ),
+        ),
+        gold_paths=GoldConversionPaths(
+            market_data=_target_path(
+                storage,
+                layer="gold",
+                dataset=DatasetName.MARKET_SNAPSHOT.value,
+                partitions=partitions,
+                filename="market_data.json",
+            ),
+            market_manifest=_target_path(
+                storage,
+                layer="gold",
+                dataset=DatasetName.MARKET_SNAPSHOT.value,
+                partitions=partitions,
+                filename="manifest.json",
+            ),
+            heston_quotes=_target_path(
+                storage,
+                layer="gold",
+                dataset=DatasetName.HESTON_QUOTES.value,
+                partitions=partitions,
+                filename="heston_quotes.parquet",
+            ),
+            heston_manifest=_target_path(
+                storage,
+                layer="gold",
+                dataset=DatasetName.HESTON_QUOTES.value,
+                partitions=partitions,
+                filename="manifest.json",
+            ),
+        ),
+        model_validation_bundle_paths=ModelValidationBundlePaths(
+            root=bundle_root,
+            manifest=bundle_root / "manifest.json",
+            market_data=bundle_root / "market_data.json",
+            cleaned_quotes=bundle_root / "cleaned_quotes.parquet",
+            rejected_quotes=bundle_root / "rejected_quotes.parquet",
+            heston_quotes=bundle_root / "heston_quotes.parquet",
+            surface_inputs=bundle_root / "surface_inputs.parquet",
+            heston_fit_summary=bundle_root / "heston_fit_summary.csv",
+            warnings=bundle_root / "warnings.json",
+        ),
+    )
+
+
+def _pipeline_partitions(
+    local_snapshot: LocalSnapshotResult,
+) -> dict[str, PartitionValue]:
+    valuation_timestamp = _utc_timestamp(local_snapshot.asof)
+    return {
+        "underlying": local_snapshot.underlying,
+        "date": valuation_timestamp.date(),
+        "run_id": _required_snapshot_run_id(local_snapshot.run_id),
+    }
+
+
+def _required_snapshot_run_id(value: str | None) -> str:
+    if value is None:
+        raise ValueError("local_snapshot.run_id is required")
+    return _required_run_id(value)
+
+
+def _utc_timestamp(value: pd.Timestamp) -> pd.Timestamp:
+    timestamp = pd.Timestamp(value)
+    if timestamp.tzinfo is None:
+        return timestamp.tz_localize(UTC)
+    return timestamp.tz_convert(UTC)
+
+
+def _partitioned_dataset_dir(
+    storage: LocalStorage,
+    *,
+    layer: str,
+    dataset: str,
+    partitions: dict[str, PartitionValue],
+) -> Path:
+    ordered_partitions = storage._ordered_partitions(
+        layer=layer,
+        dataset=dataset,
+        partitions=partitions,
+    )
+    return storage._dataset_dir(
+        layer=layer,
+        dataset=dataset,
+        ordered_partitions=ordered_partitions,
+    )
+
+
+def _target_path(
+    storage: LocalStorage,
+    *,
+    layer: str,
+    dataset: str,
+    partitions: dict[str, PartitionValue],
+    filename: str,
+) -> Path:
+    return (
+        _partitioned_dataset_dir(
+            storage,
+            layer=layer,
+            dataset=dataset,
+            partitions=partitions,
+        )
+        / filename
+    )
+
+
+def _iter_pipeline_target_paths(paths: _PipelineTargetPaths) -> tuple[Path, ...]:
+    return (
+        paths.bronze_paths.market_inputs,
+        paths.bronze_paths.option_chain,
+        paths.bronze_paths.manifest,
+        paths.silver_paths.market_inputs,
+        paths.silver_paths.cleaned_quotes,
+        paths.silver_paths.rejected_quotes,
+        paths.silver_paths.manifest,
+        paths.gold_paths.market_data,
+        paths.gold_paths.market_manifest,
+        paths.gold_paths.heston_quotes,
+        paths.gold_paths.heston_manifest,
+        paths.model_validation_bundle_paths.manifest,
+        paths.model_validation_bundle_paths.market_data,
+        paths.model_validation_bundle_paths.cleaned_quotes,
+        paths.model_validation_bundle_paths.rejected_quotes,
+        paths.model_validation_bundle_paths.heston_quotes,
+        paths.model_validation_bundle_paths.surface_inputs,
+        paths.model_validation_bundle_paths.heston_fit_summary,
+        paths.model_validation_bundle_paths.warnings,
+    )
 
 
 __all__ = [

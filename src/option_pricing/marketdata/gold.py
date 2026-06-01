@@ -31,11 +31,20 @@ _OPTION_RIGHTS = frozenset({"call", "put"})
 
 
 class _GoldLocalSnapshot(Protocol):
-    fixture_name: str
-    snapshot_id: str
-    run_id: str | None
-    underlying: str
-    asof: pd.Timestamp
+    @property
+    def fixture_name(self) -> str: ...
+
+    @property
+    def snapshot_id(self) -> str: ...
+
+    @property
+    def run_id(self) -> str | None: ...
+
+    @property
+    def underlying(self) -> str: ...
+
+    @property
+    def asof(self) -> pd.Timestamp: ...
 
 
 @dataclass(frozen=True, slots=True)

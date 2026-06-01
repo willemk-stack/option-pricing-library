@@ -229,6 +229,11 @@ The local pipeline flow is fixed:
 8. Return a typed result with the local snapshot, normalized frames, cleaning
    result, Bronze/Silver/Gold paths, and bundle result.
 
+When `overwrite=False`, the pipeline preflights the deterministic Bronze,
+Silver, Gold, and A5 bundle output paths before writing any artifacts. A known
+conflict therefore fails before partial replacement or partial earlier-stage
+outputs are created.
+
 The A5 bundle is written under:
 
 ```text
@@ -338,7 +343,7 @@ pipeline_result = run_local_model_validation_pipeline(
   `Path`.
 - Bronze, Silver, A4 Gold, and A5 bundle artifacts are all written for the same
   local snapshot.
-- `overwrite=False` fails on existing deterministic outputs before replacement.
+- `overwrite=False` preflights deterministic outputs before writing artifacts.
 - `overwrite=True` replaces the deterministic local output set.
 - No live providers, credentials, CLI, provider refresh, research exports, new
   dependencies, public pricing API changes, or storage layout changes are added.

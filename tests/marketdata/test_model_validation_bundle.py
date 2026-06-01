@@ -350,6 +350,34 @@ def test_packaging_manifest_validates(
     assert manifest["layer"] == "gold"
 
 
+def test_public_wrapper_writes_bundle_contract(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    storage = _storage(tmp_path)
+    outputs = _a3_outputs()
+
+    result = bundles_module.write_model_validation_bundle_artifacts(
+        storage,
+        local_snapshot=outputs.local_snapshot,
+        market_inputs=outputs.market_inputs,
+        cleaned_quotes=outputs.cleaned_quotes,
+        rejected_quotes=outputs.rejected_quotes,
+        reason_counts=outputs.reason_counts,
+        warnings=outputs.warnings,
+        config=ModelValidationBundleConfig(run_heston_smoke=False),
+        library_commit="abc123",
+    )
+
+    root = _bundle_root(tmp_path)
+    assert result.manifest_path == root / "manifest.json"
+    assert all((root / filename).exists() for filename in EXPECTED_FILES)
+    assert {path.name for path in result.artifact_paths} == set(
+        EXPECTED_ARTIFACTS.values()
+    )
+    validate_model_validation_manifest(result.manifest)
+
+
 def test_manifest_artifact_references_are_relative_filenames(
     tmp_path: Path,
     fake_parquet: None,
@@ -748,6 +776,7 @@ def _is_disallowed_import(name: str) -> bool:
         "alpaca",
         "argparse",
         "click",
+        "duckdb",
         "fredapi",
         "requests",
         "yfinance",

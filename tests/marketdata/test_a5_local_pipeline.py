@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import json
+from dataclasses import fields
 from pathlib import Path
 from typing import cast
 
@@ -13,11 +14,13 @@ from option_pricing.marketdata.bundles import (
     ModelValidationBundleConfig,
     write_model_validation_bundle_artifacts,
 )
+from option_pricing.marketdata.config import StorageConfig
 from option_pricing.marketdata.pipeline import (
     LocalModelValidationPipelineResult,
     run_local_model_validation_pipeline,
 )
 from option_pricing.marketdata.schemas import DatasetName
+from option_pricing.marketdata.storage import LocalStorage
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BUNDLES_FILE = REPO_ROOT / "src/option_pricing/marketdata/bundles.py"
@@ -87,8 +90,114 @@ def _bundle_root(root: Path, *, run_id: str = "test-run") -> Path:
     )
 
 
+def _bronze_root(root: Path, *, run_id: str = "test-run") -> Path:
+    return (
+        root
+        / "bronze"
+        / "local_snapshot"
+        / "underlying=SYNTH"
+        / "date=2026-05-22"
+        / f"run_id={run_id}"
+    )
+
+
+def _silver_root(
+    root: Path,
+    dataset: DatasetName,
+    *,
+    run_id: str = "test-run",
+) -> Path:
+    return (
+        root
+        / "silver"
+        / dataset.value
+        / "underlying=SYNTH"
+        / "date=2026-05-22"
+        / f"run_id={run_id}"
+    )
+
+
+def _gold_root(
+    root: Path,
+    dataset: DatasetName,
+    *,
+    run_id: str = "test-run",
+) -> Path:
+    return (
+        root
+        / "gold"
+        / dataset.value
+        / "underlying=SYNTH"
+        / "date=2026-05-22"
+        / f"run_id={run_id}"
+    )
+
+
+def _silver_path(root: Path, dataset: DatasetName, filename: str) -> Path:
+    return _silver_root(root, dataset) / filename
+
+
+def _gold_path(root: Path, dataset: DatasetName, filename: str) -> Path:
+    return _gold_root(root, dataset) / filename
+
+
+def _known_pipeline_targets(root: Path) -> tuple[Path, ...]:
+    bronze_root = _bronze_root(root)
+    bundle_root = _bundle_root(root)
+    return (
+        bronze_root / "market_inputs.parquet",
+        bronze_root / "option_chain.parquet",
+        bronze_root / "manifest.json",
+        _silver_path(root, DatasetName.MARKET_INPUTS, "market_inputs.parquet"),
+        _silver_path(root, DatasetName.CLEANED_QUOTES, "cleaned_quotes.parquet"),
+        _silver_path(root, DatasetName.REJECTED_QUOTES, "rejected_quotes.parquet"),
+        _silver_path(root, DatasetName.CLEANED_QUOTES, "manifest.json"),
+        _gold_path(root, DatasetName.MARKET_SNAPSHOT, "market_data.json"),
+        _gold_path(root, DatasetName.MARKET_SNAPSHOT, "manifest.json"),
+        _gold_path(root, DatasetName.HESTON_QUOTES, "heston_quotes.parquet"),
+        _gold_path(root, DatasetName.HESTON_QUOTES, "manifest.json"),
+        bundle_root / "manifest.json",
+        bundle_root / "market_data.json",
+        bundle_root / "cleaned_quotes.parquet",
+        bundle_root / "rejected_quotes.parquet",
+        bundle_root / "heston_quotes.parquet",
+        bundle_root / "surface_inputs.parquet",
+        bundle_root / "heston_fit_summary.csv",
+        bundle_root / "warnings.json",
+    )
+
+
 def _read_json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _precreate_text(path: Path, text: str = "existing") -> None:
+    path.parent.mkdir(parents=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _assert_only_existing_target_remains(root: Path, existing_target: Path) -> None:
+    assert existing_target.read_text(encoding="utf-8") == "existing"
+    for target in _known_pipeline_targets(root):
+        if target == existing_target:
+            continue
+        assert not target.exists()
+    assert not (root / "_meta" / "artifacts.jsonl").exists()
+
+
+def test_local_model_validation_pipeline_result_fields_are_stable() -> None:
+    assert tuple(
+        field.name for field in fields(LocalModelValidationPipelineResult)
+    ) == (
+        "local_snapshot",
+        "market_inputs",
+        "option_chain",
+        "quote_cleaning",
+        "bronze_paths",
+        "silver_paths",
+        "gold_paths",
+        "model_validation_bundle",
+    )
 
 
 def test_local_model_validation_pipeline_writes_bronze_silver_gold_and_bundle(
@@ -135,6 +244,61 @@ def test_local_model_validation_pipeline_writes_bronze_silver_gold_and_bundle(
     }
 
 
+@pytest.mark.parametrize("storage_kind", ["path", "storage_config", "local_storage"])
+def test_run_local_model_validation_pipeline_accepts_local_storage_inputs(
+    tmp_path: Path,
+    fake_parquet: None,
+    storage_kind: str,
+) -> None:
+    storage_root = tmp_path / storage_kind
+    if storage_kind == "path":
+        storage: Path | StorageConfig | LocalStorage = storage_root
+    elif storage_kind == "storage_config":
+        storage = StorageConfig(root=storage_root)
+    else:
+        storage = LocalStorage(StorageConfig(root=storage_root))
+
+    result = run_local_model_validation_pipeline(
+        storage=storage,
+        run_id="test-run",
+        bundle_config=LOCAL_BUNDLE_CONFIG,
+    )
+
+    assert result.bronze_paths.manifest.exists()
+    assert result.model_validation_bundle.manifest_path.exists()
+
+
+def test_run_local_model_validation_pipeline_rejects_invalid_storage_type() -> None:
+    with pytest.raises(
+        TypeError,
+        match="storage must be a LocalStorage, StorageConfig, or pathlib.Path, got str",
+    ):
+        run_local_model_validation_pipeline(
+            storage="not-local-storage",  # type: ignore[arg-type]
+            run_id="test-run",
+            bundle_config=LOCAL_BUNDLE_CONFIG,
+        )
+
+
+def test_run_local_model_validation_pipeline_rejects_invalid_cleaning_policy(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(
+        TypeError,
+        match="cleaning_policy must be a QuoteCleaningPolicyV1, got object",
+    ):
+        run_local_model_validation_pipeline(
+            storage=tmp_path,
+            run_id="test-run",
+            cleaning_policy=object(),  # type: ignore[arg-type]
+            bundle_config=LOCAL_BUNDLE_CONFIG,
+        )
+
+    assert not (tmp_path / "bronze").exists()
+    assert not (tmp_path / "silver").exists()
+    assert not (tmp_path / "gold").exists()
+
+
 def test_run_local_model_validation_pipeline_requires_run_id(
     tmp_path: Path,
     fake_parquet: None,
@@ -166,6 +330,53 @@ def test_local_model_validation_pipeline_overwrite_false_preflights_existing_run
         _read_json(first.model_validation_bundle.manifest_path)["library_commit"]
         == "first"
     )
+
+
+def test_local_model_validation_pipeline_preflights_silver_conflict(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    existing_target = _silver_path(
+        tmp_path,
+        DatasetName.CLEANED_QUOTES,
+        "cleaned_quotes.parquet",
+    )
+    _precreate_text(existing_target)
+
+    with pytest.raises(FileExistsError, match="overwrite=True"):
+        _run_pipeline(tmp_path, library_commit="replacement")
+
+    _assert_only_existing_target_remains(tmp_path, existing_target)
+
+
+def test_local_model_validation_pipeline_preflights_gold_conflict(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    existing_target = _gold_path(
+        tmp_path,
+        DatasetName.HESTON_QUOTES,
+        "heston_quotes.parquet",
+    )
+    _precreate_text(existing_target)
+
+    with pytest.raises(FileExistsError, match="overwrite=True"):
+        _run_pipeline(tmp_path, library_commit="replacement")
+
+    _assert_only_existing_target_remains(tmp_path, existing_target)
+
+
+def test_local_model_validation_pipeline_preflights_bundle_conflict(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    existing_target = _bundle_root(tmp_path) / "warnings.json"
+    _precreate_text(existing_target)
+
+    with pytest.raises(FileExistsError, match="overwrite=True"):
+        _run_pipeline(tmp_path, library_commit="replacement")
+
+    _assert_only_existing_target_remains(tmp_path, existing_target)
 
 
 def test_local_model_validation_pipeline_overwrite_true_replaces_outputs(
@@ -232,6 +443,7 @@ def _is_disallowed_import(name: str) -> bool:
         "alpaca",
         "argparse",
         "click",
+        "duckdb",
         "fredapi",
         "requests",
         "yfinance",

@@ -499,6 +499,7 @@ def _is_disallowed_import(name: str) -> bool:
         "alpaca",
         "argparse",
         "click",
+        "duckdb",
         "fredapi",
         "requests",
         "yfinance",
