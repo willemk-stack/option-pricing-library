@@ -248,7 +248,7 @@ def write_model_validation_bundle_artifacts(
     overwrite: bool = False,
     library_commit: str | None = None,
 ) -> ModelValidationBundleResult:
-    """Write the public A5 local model-validation bundle artifact set."""
+    """Write the local model-validation bundle artifact set."""
 
     return _write_model_validation_bundle_artifacts(
         storage,
@@ -277,7 +277,7 @@ def _write_model_validation_bundle_artifacts(
     overwrite: bool = False,
     library_commit: str | None = None,
 ) -> ModelValidationBundleResult:
-    """Write the A5-S2 self-contained model-validation bundle artifacts."""
+    """Write the self-contained model-validation bundle artifacts."""
 
     _require_local_storage(storage)
     config = _model_validation_config(config)
@@ -844,7 +844,7 @@ def _artifact_payload(artifacts: Mapping[str, str]) -> dict[str, str]:
     if artifact_map != _MODEL_VALIDATION_ARTIFACTS:
         raise ValueError(
             "model-validation bundle artifacts must match the frozen "
-            f"A5-S1 filenames: {_MODEL_VALIDATION_ARTIFACTS!r}"
+            f"expected filenames: {_MODEL_VALIDATION_ARTIFACTS!r}"
         )
     return dict(_MODEL_VALIDATION_ARTIFACTS)
 

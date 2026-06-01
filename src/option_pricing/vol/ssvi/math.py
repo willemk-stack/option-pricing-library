@@ -334,6 +334,3 @@ def essvi_w_and_derivs(
         essvi_total_variance_dkk(y=y, params=params, T=T),
         essvi_total_variance_dT(y=y, params=params, T=T),
     )
-
-
-# TODO: Compute BS market implied vegas for residual weighting

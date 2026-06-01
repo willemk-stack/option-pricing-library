@@ -48,10 +48,9 @@ A3_DOCS_NON_GOALS = (
     "no live providers",
     "no credentials",
     "no CLI",
-    "no Gold",
-    "no Heston",
-    "no MarketData/PricingContext construction",
-    "no model-validation bundle",
+    "no provider refresh path",
+    "no production data-quality claim",
+    "no trading-performance claim",
     "no research exports",
 )
 DISALLOWED_IMPORT_ROOTS = {

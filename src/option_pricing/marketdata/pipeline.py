@@ -75,7 +75,7 @@ def run_local_model_validation_pipeline(
     overwrite: bool = False,
     library_commit: str | None = None,
 ) -> LocalModelValidationPipelineResult:
-    """Run the narrow A5 local fixture-to-model-validation bundle pipeline."""
+    """Run the local fixture-to-model-validation bundle pipeline."""
 
     required_run_id = _required_run_id(run_id)
     effective_cleaning_policy = _cleaning_policy(cleaning_policy)

@@ -1,17 +1,18 @@
 # Market Snapshot Validation
 
 The market snapshot validation workflow is a deterministic, local-first review
-path for the Phase A marketdata artifacts. It runs from checked-in local fixture
-snapshots and writes Bronze, Silver, Gold, and model-validation bundle artifacts
-without credentials or live market access.
+path for marketdata artifacts. It runs from checked-in local fixture snapshots
+and writes Bronze, Silver, Gold, and model-validation bundle artifacts without
+credentials or live market access.
 
 This page is for reviewers who want to understand what the workflow proves, how
-to run it, which artifacts it writes, and where the phase boundary stops.
+to run it, which artifacts it writes, and where the current scope stops.
 
 ## What this workflow proves
 
 The local fixture workflow proves that the library can consume one deterministic
-market snapshot end to end. In A5/A6 scope, it demonstrates:
+market snapshot end to end. In the current local-validation release, it
+demonstrates:
 
 - local fixture-to-artifact reproducibility for the same explicit `run_id`
 - library-consumption mechanics from normalized market inputs and cleaned quotes
@@ -33,13 +34,13 @@ This workflow does not prove production data quality, live-provider correctness,
 calibration quality, trading performance, or empirical research conclusions.
 
 It also does not provide a provider refresh path, credential setup, a CLI
-refresh workflow, a production CLI, or research exports. Those are outside the
-local A6 demo scope.
+refresh workflow, a production CLI, or research exports. Those are outside this
+demo workflow.
 
 ## Requirements
 
-Run the workflow from a normal development checkout. The A6 demo requires either
-the focused marketdata extra:
+Run the workflow from a normal development checkout. The local validation
+workflow requires either the focused marketdata extra:
 
 ```bash
 pip install -e ".[marketdata]"
@@ -194,8 +195,8 @@ Use the manifest files as the high-level pointers into each artifact set.
 
 ## Inspect the generated artifacts
 
-Start by binding the expected bundle directory and checking that every frozen
-A5 bundle filename exists.
+Start by binding the expected bundle directory and checking that every
+model-validation bundle filename exists.
 
 ```python
 from pathlib import Path
@@ -481,33 +482,35 @@ local-only and credential-free.
 - Artifacts mention credentials, live provider names, secret-looking keys, or
   live-source claims.
 
-## Phase boundary
+## Current scope and exclusions
 
-Phase ownership is intentionally narrow:
+Component responsibilities are intentionally narrow:
 
-- A3 owns Silver normalization and quote cleaning.
-- A4 owns Gold `MarketData` and Heston quote artifacts.
-- A5 owns the local model-validation bundle writer and fixture-to-bundle
-  orchestration.
-- A6 owns reviewer reproducibility and documentation/demo clarity.
+- Silver normalization and quote cleaning produce accepted quotes, rejected
+  quotes, reason counts, warnings, and a cleaning manifest.
+- Gold conversion writes `MarketData` reload evidence and Heston-compatible
+  quote artifacts.
+- The model-validation bundle packages the local artifacts into one
+  self-contained reviewer directory.
+- The reviewer path documents reproducibility, expected artifacts, and
+  limitation boundaries.
 
 The local demo remains deterministic and local-only. It does not modify
 providers, add provider refresh logic, introduce a provider refresh or
 production CLI, or create research exports.
 
-The original A3 Silver-only non-goals were:
+The current workflow intentionally excludes:
 
 - no live providers
 - no credentials
 - no CLI
-- no Gold
-- no Heston
-- no MarketData/PricingContext construction
-- no model-validation bundle
+- no provider refresh path
+- no production data-quality claim
+- no trading-performance claim
 - no research exports
 
-A4/A5 intentionally add Gold artifacts, Heston-compatible reconstruction, and
-bundle packaging while retaining the local-only and credential-free boundary.
+Gold artifacts, Heston-compatible reconstruction, and bundle packaging remain
+inside the local-only and credential-free boundary.
 
 ## Bronze, Silver, Gold, and bundle layers
 
@@ -517,17 +520,17 @@ snapshot. It records the fixture identity and writes the raw local
 
 Silver converts that fixture evidence into normalized `market_inputs`, cleaned
 quote rows, rejected quote rows, reason counts, warnings, and a cleaning
-manifest. A3 owns this normalization and cleaning contract.
+manifest.
 
-Gold converts Silver outputs into library-ready artifacts. A4 writes
+Gold converts Silver outputs into library-ready artifacts. It writes
 `market_data.json` for `MarketData` reload and `heston_quotes.parquet` using the
 existing Heston quote column contract. `PricingContext` is reconstructed through
 `MarketData.to_context()`; it is not serialized directly.
 
-The model-validation bundle is an A5 packaging layer over the same local
-contracts. It collects the reloaded market data payload, cleaned quotes,
-rejected quotes, Heston-compatible quotes, surface inputs, warnings, and a
-minimal Heston smoke summary into one self-contained local bundle.
+The model-validation bundle packages the same local contracts. It collects the
+reloaded market data payload, cleaned quotes, rejected quotes, Heston-compatible
+quotes, surface inputs, warnings, and a minimal Heston smoke summary into one
+self-contained local bundle.
 
 ## Quote-cleaning policy
 
@@ -572,9 +575,9 @@ Primary rejection reasons are:
 
 ## Model-validation bundle
 
-The A5 bundle is written under `gold/model_validation_bundle/...` for the same
-`underlying`, `date`, and `run_id` as the Bronze, Silver, and Gold artifacts.
-The frozen bundle artifact names are:
+The model-validation bundle is written under `gold/model_validation_bundle/...`
+for the same `underlying`, `date`, and `run_id` as the Bronze, Silver, and Gold
+artifacts. The frozen bundle artifact names are:
 
 - `manifest.json`
 - `market_data.json`
@@ -604,7 +607,7 @@ compatibility signal only. It is not a claim about production calibration
 quality, model fitness, strategy performance, or empirical validity.
 
 No live providers, no credentials, no provider refresh CLI or production CLI,
-and no research exports are part of the local A6 demo scope.
+and no research exports are part of this demo workflow.
 
 ## Developer checks
 
@@ -617,9 +620,7 @@ mypy
 pytest -q tests/marketdata/test_local_snapshot_provider.py
 pytest -q tests/marketdata/test_quote_cleaning.py
 pytest -q tests/marketdata/test_gold_conversions.py
-pytest -q tests/marketdata/test_a5_local_pipeline.py
 pytest -q tests/marketdata/test_model_validation_bundle.py
-pytest -q tests/marketdata/test_a6_demo_docs.py
 pytest -q tests/test_packaging_metadata.py
 ```
 

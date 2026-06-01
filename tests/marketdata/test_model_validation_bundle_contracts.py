@@ -421,7 +421,7 @@ def test_artifact_map_uses_frozen_bundle_local_filenames() -> None:
     invalid_artifacts["market_data"] = (
         REPO_ROOT / "out" / "market_data.json"
     ).as_posix()
-    with pytest.raises(ValueError, match="frozen A5-S1 filenames"):
+    with pytest.raises(ValueError, match="frozen expected filenames"):
         _manifest(artifacts=invalid_artifacts)
 
 

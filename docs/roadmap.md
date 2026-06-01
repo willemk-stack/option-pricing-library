@@ -3,73 +3,63 @@
 <div class="portfolio-hero">
   <p class="hero-kicker">Stable today vs exploratory next</p>
   <p class="hero-copy">Stable today: typed vanilla pricing engines, implied-vol and surface tooling, SVI/eSSVI workflows, local-vol/PDE diagnostics, the namespaced Heston pricing and calibration stack, README freshness checks, docs builds, and CI-executed notebooks.</p>
-  <p class="hero-copy">Exploratory next: hedging experiments, richer portfolio/reporting workflows, and capstone pages that tighten the evidence story around the existing model layers.</p>
+  <p class="hero-copy">Exploratory next: hedging experiments, richer portfolio/reporting workflows, and additional evidence pages that tighten the story around the existing model layers.</p>
 </div>
 
-## What is already solid
+## Current capabilities
 
 - **Public API and packaging**
   - typed package installable on Python 3.12+
   - recommended instrument workflow plus convenience and curves-first paths
+  - stable, minimal top-level exports
 - **Validation and CI**
   - README freshness enforced in CI
   - notebook execution with `pytest -q demos --nbmake`
   - headless notebook runs via `MPLBACKEND=Agg`
   - docs build and visual artifact generation in GitHub Actions
 - **Portfolio-ready numerics**
-  - SVI fitting and repair
-  - eSSVI projection and seam diagnostics
+  - Black-Scholes, Monte Carlo, and binomial CRR pricing routes
+  - implied-vol solving, SVI fitting, and SVI repair
+  - eSSVI projection and handoff diagnostics
   - local-vol extraction and PDE repricing checks
   - Heston Fourier vanilla pricing and Monte Carlo cross-checks
   - Heston calibration diagnostics and model-comparison workflows
+- **Local market snapshot validation**
+  - deterministic local fixture ingestion
+  - Bronze, Silver, Gold, and model-validation bundle artifacts
+  - credential-free reviewer workflow with explicit scope limits
 
-## Active polish
+## Near-term improvements
 
-- keep `option_pricing/__init__.py` exports stable and minimal
-- continue improving install ergonomics outside editable local workflows
-- keep the published proof pages aligned with the latest visual bundles and notebook outputs
+- keep install ergonomics smooth outside editable local workflows
+- keep proof pages aligned with regenerated visual bundles and notebook outputs
+- broaden local market snapshot examples while keeping live-provider and
+  credential-backed workflows out of scope
+- continue tightening Heston benchmark provenance and environment-scope
+  disclosure around regenerated artifacts
+- make documentation checks easier to reproduce locally across supported widths
+  and themes
 
-## Research roadmap
+## Longer-term research directions
 
-### Capstone 3 - Heston stochastic volatility and model comparison
-
-Status: active polish / release candidate.
-
-Implemented:
-- Heston Fourier vanilla pricing
-- Heston Monte Carlo with full-truncation Euler and Andersen QE schemes
-- calibration with bounded transforms and multistart
-- calibration fit diagnostics and synthetic benchmark diagnostics
-- Heston vs eSSVI/local-vol comparison layer
-- reviewer-facing Heston model-comparison page
-- generated Heston model-comparison visuals and CSV artifact bundle
-- README, homepage, decision guide, and validation-matrix proof-path exposure
-
-Remaining polish:
-- finish any remaining Heston citation and claim-support follow-ups after owner review
-- keep Heston benchmark provenance and environment-scope disclosure aligned with regenerated artifacts
-- preserve issue #93 matched direct-PDE subset caveat in docs, CSVs, and notebooks
-- prepare v0.5.0 release packaging and changelog story when the branch is ready
-- run final docs build, light/dark, and responsive visual validation before merge
-
-### Capstone 4 - Hedging realism
+### Hedging realism
 
 - delta/vega hedging simulator
-- misspecification experiments (hedge under one model, simulate under another)
+- misspecification experiments that hedge under one model and simulate under
+  another
 - P&L attribution and reporting notebook
 
-## Suggested GitHub labels
+### Market-data validation
 
-- Capstones: `capstone:1`, `capstone:2`, `capstone:3`, `capstone:4`
-- Type: `type:bug`, `type:enhancement`, `type:docs`, `type:chore`
-- Area: `area:pricing`, `area:vol`, `area:diagnostics`, `area:ci`, `area:docs`
-- Priority: `priority:p0`, `priority:p1`, `priority:p2`
+- separate validation track for provider-backed data quality
+- explicit credential and refresh design before any live-provider workflow is
+  presented as evidence
+- calibration diagnostics that distinguish data quality issues from model and
+  optimizer behavior
 
-## Release tags
+### Model-comparison depth
 
-- `v0.1.x`: BS/MC/tree baseline
-- `v0.2.x`: implied vol solver hardened
-- `v0.3.x`: vol surface + diagnostics
-- `v0.4.x`: local vol + PDE
-- `v0.5.x`: Heston + calibration
-- `v1.0.0`: stable API + polished docs + end-to-end demos
+- broader held-out and stress-test protocols around Heston calibration stability
+- direct IV-space objective only as a distinct, validated optimization path
+- expanded comparison grids that keep local-vol PDE error and model error
+  easier to separate

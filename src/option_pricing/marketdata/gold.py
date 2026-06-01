@@ -137,7 +137,7 @@ def build_market_data_snapshot(
 
 
 def build_heston_quotes(cleaned_quotes: pd.DataFrame) -> GoldHestonQuotesResult:
-    """Convert schema-cleaned A3 quotes into Gold Heston quote artifacts."""
+    """Convert schema-cleaned quotes into Gold Heston quote artifacts."""
 
     _require_cleaned_quotes_frame(cleaned_quotes)
     _require_non_empty_frame(cleaned_quotes, "cleaned_quotes")
@@ -347,7 +347,7 @@ def write_gold_artifacts(
     overwrite: bool = False,
     library_commit: str | None = None,
 ) -> GoldConversionPaths:
-    """Write the A4 Gold MarketData and Heston quote artifacts."""
+    """Write the Gold MarketData and Heston quote artifacts."""
 
     _require_local_storage(storage)
     run_id = _required_run_id(local_snapshot.run_id)

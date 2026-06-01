@@ -422,8 +422,8 @@ Read the trade-off honestly:
     residuals from PDE grid, boundary, and projection error.
 - Nothing in this guide should be read as a production-trading claim.
 
-For bounded interview/CV wording, see the
-[Heston Capstone interview framing](../notes/heston/heston_interview_framing.md)
+For Heston claim boundaries and limitation wording, see the
+[Heston implementation claims and limitations](../notes/heston/heston_implementation_claims.md)
 note.
 
 ## Minimal workflow checklist

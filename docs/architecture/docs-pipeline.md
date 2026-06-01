@@ -29,7 +29,7 @@ This is the authoritative blocking docs workflow on pull requests.
 - runs blocking Playwright smoke, DOM, and math audits against the prebuilt site artifact through `python scripts/run_docs_browser_audits.py verify --skip-build`
 - uses the narrow PR project set by default: `chromium-375` and `chromium-1280`
 - runs targeted accessibility checks only when the audit plan selects curated impacted paths, using `chromium-1280` by default
-- uploads agent-readable findings under `artifacts/docs-audit/findings.json` and `artifacts/docs-audit/summary.md`
+- uploads machine-readable CI findings under `artifacts/docs-audit/findings.json` and `artifacts/docs-audit/summary.md`
 - keeps the blocking gate focused on deterministic sync/build/smoke checks instead of full-page snapshot drift
 
 ### `docs-assets-refresh`
