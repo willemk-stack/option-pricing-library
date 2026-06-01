@@ -32,26 +32,27 @@ This workflow does not prove production data quality, live-provider correctness,
 calibration quality, trading performance, or empirical research conclusions.
 
 It also does not provide a provider refresh path, credential setup, a CLI
-workflow, or research exports. Those are outside A6-S3.
+refresh workflow, a production CLI, or research exports. Those are outside the
+local A6 demo scope.
 
 ## Requirements
 
 Run the workflow from a normal development checkout. The A6 demo requires either
 the focused marketdata extra:
 
-```powershell
+```bash
 pip install -e ".[marketdata]"
 ```
 
 or the full contributor setup:
 
-```powershell
+```bash
 pip install -e ".[dev]"
 ```
 
 The only runtime inputs are:
 
-- a writable local storage root, such as `out/marketdata`
+- a writable local storage root, such as `out/marketdata-demo`
 - an explicit `run_id`
 - the checked-in local fixture snapshot used by
   `run_local_model_validation_pipeline(...)`
@@ -59,11 +60,40 @@ The only runtime inputs are:
 No provider credentials, environment variables, network access, or live market
 data accounts are required.
 
-## Run the local fixture workflow
+## Run the local demo
 
-Use `run_local_model_validation_pipeline(...)` for the reviewer path. The default
-fixture is local and deterministic, and the example below keeps the run
-credential-free.
+Use the checked-in demo script for the canonical reviewer path:
+
+```bash
+python scripts/demo_local_market_validation.py --output-dir out/marketdata-demo --run-id demo-run
+```
+
+The command runs the deterministic local fixture through Bronze, Silver, Gold,
+and model-validation bundle writes. Heston smoke is skipped by default so the
+reviewer path stays fast and deterministic. The summary prints the key artifact
+paths:
+
+```text
+Local market validation demo completed.
+underlying: SYNTH
+run_id: demo-run
+valuation_date: 2026-05-22
+bronze_manifest: ...
+silver_manifest: ...
+market_data: ...
+heston_quotes: ...
+bundle_manifest: ...
+warnings: ...
+heston_fit_summary: ...
+No live providers or credentials were used.
+```
+
+Use `--overwrite` when rerunning the same deterministic `run_id`.
+
+## Developer API path
+
+The script is a thin wrapper around `run_local_model_validation_pipeline(...)`.
+For direct developer use, call the API with the same local-only defaults:
 
 ```python
 from pathlib import Path
@@ -72,8 +102,8 @@ from option_pricing.marketdata.bundles import ModelValidationBundleConfig
 from option_pricing.marketdata.pipeline import run_local_model_validation_pipeline
 
 result = run_local_model_validation_pipeline(
-    storage=Path("out/marketdata"),
-    run_id="reviewer-a6-s3",
+    storage=Path("out/marketdata-demo"),
+    run_id="demo-run",
     bundle_config=ModelValidationBundleConfig(run_heston_smoke=False),
     overwrite=True,
 )
@@ -91,7 +121,7 @@ The local pipeline writes one deterministic output set partitioned by
 `underlying`, `date`, and `run_id`.
 
 ```text
-out/marketdata/
+out/marketdata-demo/
   bronze/
     local_snapshot/
       underlying=<...>/
@@ -148,7 +178,7 @@ For the default local fixture and the run ID in the example above, the bundle is
 written to:
 
 ```text
-out/marketdata/gold/model_validation_bundle/underlying=SYNTH/date=2026-05-22/run_id=reviewer-a6-s3/
+out/marketdata-demo/gold/model_validation_bundle/underlying=SYNTH/date=2026-05-22/run_id=demo-run/
 ```
 
 Use the manifest files as the high-level pointers into each artifact set.
@@ -162,8 +192,8 @@ A5 bundle filename exists.
 from pathlib import Path
 
 bundle_dir = Path(
-    "out/marketdata/gold/model_validation_bundle/"
-    "underlying=SYNTH/date=2026-05-22/run_id=reviewer-a6-s3"
+    "out/marketdata-demo/gold/model_validation_bundle/"
+    "underlying=SYNTH/date=2026-05-22/run_id=demo-run"
 )
 expected = (
     "manifest.json",
@@ -193,8 +223,8 @@ from pathlib import Path
 
 manifest = json.loads(
     Path(
-        "out/marketdata/gold/model_validation_bundle/"
-        "underlying=SYNTH/date=2026-05-22/run_id=reviewer-a6-s3/manifest.json"
+        "out/marketdata-demo/gold/model_validation_bundle/"
+        "underlying=SYNTH/date=2026-05-22/run_id=demo-run/manifest.json"
     ).read_text()
 )
 
@@ -221,8 +251,8 @@ from pathlib import Path
 
 warnings_payload = json.loads(
     Path(
-        "out/marketdata/gold/model_validation_bundle/"
-        "underlying=SYNTH/date=2026-05-22/run_id=reviewer-a6-s3/warnings.json"
+        "out/marketdata-demo/gold/model_validation_bundle/"
+        "underlying=SYNTH/date=2026-05-22/run_id=demo-run/warnings.json"
     ).read_text()
 )
 
@@ -248,8 +278,8 @@ from pathlib import Path
 import pandas as pd
 
 bundle_dir = Path(
-    "out/marketdata/gold/model_validation_bundle/"
-    "underlying=SYNTH/date=2026-05-22/run_id=reviewer-a6-s3"
+    "out/marketdata-demo/gold/model_validation_bundle/"
+    "underlying=SYNTH/date=2026-05-22/run_id=demo-run"
 )
 cleaned = pd.read_parquet(bundle_dir / "cleaned_quotes.parquet")
 rejected = pd.read_parquet(bundle_dir / "rejected_quotes.parquet")
@@ -275,8 +305,8 @@ from pathlib import Path
 import pandas as pd
 
 bundle_dir = Path(
-    "out/marketdata/gold/model_validation_bundle/"
-    "underlying=SYNTH/date=2026-05-22/run_id=reviewer-a6-s3"
+    "out/marketdata-demo/gold/model_validation_bundle/"
+    "underlying=SYNTH/date=2026-05-22/run_id=demo-run"
 )
 cleaned = pd.read_parquet(bundle_dir / "cleaned_quotes.parquet")
 surface_inputs = pd.read_parquet(bundle_dir / "surface_inputs.parquet")
@@ -302,8 +332,8 @@ import pandas as pd
 
 heston_quotes = pd.read_parquet(
     Path(
-        "out/marketdata/gold/model_validation_bundle/"
-        "underlying=SYNTH/date=2026-05-22/run_id=reviewer-a6-s3/heston_quotes.parquet"
+        "out/marketdata-demo/gold/model_validation_bundle/"
+        "underlying=SYNTH/date=2026-05-22/run_id=demo-run/heston_quotes.parquet"
     )
 )
 
@@ -329,8 +359,8 @@ import pandas as pd
 
 summary = pd.read_csv(
     Path(
-        "out/marketdata/gold/model_validation_bundle/"
-        "underlying=SYNTH/date=2026-05-22/run_id=reviewer-a6-s3/heston_fit_summary.csv"
+        "out/marketdata-demo/gold/model_validation_bundle/"
+        "underlying=SYNTH/date=2026-05-22/run_id=demo-run/heston_fit_summary.csv"
     )
 )
 
@@ -346,8 +376,8 @@ from pathlib import Path
 
 manifest = json.loads(
     Path(
-        "out/marketdata/gold/model_validation_bundle/"
-        "underlying=SYNTH/date=2026-05-22/run_id=reviewer-a6-s3/manifest.json"
+        "out/marketdata-demo/gold/model_validation_bundle/"
+        "underlying=SYNTH/date=2026-05-22/run_id=demo-run/manifest.json"
     ).read_text()
 )
 
@@ -369,8 +399,8 @@ from option_pricing.marketdata.gold import market_data_snapshot_from_json
 
 payload = json.loads(
     Path(
-        "out/marketdata/gold/model_validation_bundle/"
-        "underlying=SYNTH/date=2026-05-22/run_id=reviewer-a6-s3/market_data.json"
+        "out/marketdata-demo/gold/model_validation_bundle/"
+        "underlying=SYNTH/date=2026-05-22/run_id=demo-run/market_data.json"
     ).read_text()
 )
 snapshot = market_data_snapshot_from_json(payload)
@@ -432,8 +462,9 @@ Phase ownership is intentionally narrow:
   orchestration.
 - A6 owns reviewer reproducibility and documentation/demo clarity.
 
-A6-S3 is documentation-only. It does not modify providers, add provider refresh
-logic, introduce a CLI script, change bundle code, or create research exports.
+A6-S2 adds only a deterministic local demo script. It does not modify providers,
+add provider refresh logic, introduce a provider refresh or production CLI,
+change bundle code, or create research exports.
 
 The original A3 Silver-only non-goals were:
 
@@ -539,8 +570,8 @@ The bundle may include a Heston smoke result, but that result is a packaging and
 compatibility signal only. It is not a claim about production calibration
 quality, model fitness, strategy performance, or empirical validity.
 
-No live providers, no credentials, no CLI refresh, and no research exports are
-part of A6-S3.
+No live providers, no credentials, no provider refresh CLI or production CLI,
+and no research exports are part of the local A6 demo scope.
 
 ## Developer checks
 
@@ -552,6 +583,7 @@ black --check .
 mypy
 pytest -q tests/marketdata/test_a5_local_pipeline.py
 pytest -q tests/marketdata/test_model_validation_bundle.py
+pytest -q tests/marketdata/test_a6_demo_docs.py
 ```
 
 For rendered documentation review, serve the MkDocs site locally and inspect the

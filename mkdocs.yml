@@ -143,6 +143,7 @@ nav:
       - eSSVI smooth handoff: user_guides/essvi_smooth_handoff.md
       - Local-vol and PDE validation: user_guides/localvol_pde_validation.md
       - Heston model comparison: user_guides/heston_model_comparison.md
+      - Market snapshot validation: user_guides/market_snapshot_validation.md
   - API:
       - Overview: api/index.md
       - Public: api/public.md

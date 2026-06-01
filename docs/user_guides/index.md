@@ -8,6 +8,7 @@ Use this section either to evaluate the repo quickly or to start from the public
 - [Surface repair workflow](surface_workflow.md) - quoted surface diagnostics, SVI fit quality, and repair evidence.
 - [eSSVI smooth handoff](essvi_smooth_handoff.md) - why slice-wise repair is not the final Dupire handoff, and what the smoothed surface fixes.
 - [Local-vol and PDE validation](localvol_pde_validation.md) - repricing accuracy, error structure, and convergence evidence.
+- [Market snapshot validation](market_snapshot_validation.md) - local fixture-to-artifact validation for reviewer reproducibility with no live providers or credentials.
 - [Performance evidence](../performance.md) - committed scaling plots, runtime/error tradeoffs, and reproducibility notes.
 - [Architecture](../architecture.md) - typed package structure, dependency direction, and system-design intent.
 
