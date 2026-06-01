@@ -74,8 +74,8 @@ def _require_pandas() -> Any:
         import pandas as pd
     except ImportError as exc:  # pragma: no cover - exercised only in minimal installs
         raise ImportError(
-            "LocalStorage requires pandas. Install `option_pricing[dev]` or add "
-            "`pandas` to your environment."
+            "LocalStorage requires pandas. Install `option_pricing[marketdata]` "
+            "or `option_pricing[dev]`."
         ) from exc
     return pd
 
@@ -83,8 +83,9 @@ def _require_pandas() -> Any:
 def _parquet_runtime_error(action: str, exc: Exception) -> RuntimeError:
     del exc
     return RuntimeError(
-        f"Unable to {action} Parquet data. Install `pyarrow` or `fastparquet` "
-        "to use LocalStorage frame IO."
+        f"Unable to {action} Parquet data. Install `option_pricing[marketdata]` "
+        "or `option_pricing[dev]` to use LocalStorage frame IO; these include "
+        "`pyarrow`. Alternatively, install `pyarrow` or `fastparquet`."
     )
 
 

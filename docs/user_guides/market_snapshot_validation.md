@@ -36,8 +36,20 @@ workflow, or research exports. Those are outside A6-S3.
 
 ## Requirements
 
-Run the workflow from a normal development checkout with the package and test
-dependencies installed. The only runtime inputs are:
+Run the workflow from a normal development checkout. The A6 demo requires either
+the focused marketdata extra:
+
+```powershell
+pip install -e ".[marketdata]"
+```
+
+or the full contributor setup:
+
+```powershell
+pip install -e ".[dev]"
+```
+
+The only runtime inputs are:
 
 - a writable local storage root, such as `out/marketdata`
 - an explicit `run_id`

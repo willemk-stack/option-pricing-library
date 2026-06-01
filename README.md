@@ -124,6 +124,7 @@ pip install -e .
 
 Supported extras from `pyproject.toml`:
 
+- `pip install -e ".[marketdata]"` for local market snapshot demos and Parquet-backed marketdata artifacts
 - `pip install -e ".[plot]"` for plotting helpers used by diagnostics and docs figures
 - `pip install -e ".[notebooks]"` for the demo notebook environment
 - `pip install -e ".[dev]"` for tests, benchmarks, linting, formatting, and typing
