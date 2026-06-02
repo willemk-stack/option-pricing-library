@@ -9,6 +9,7 @@ from typing import Any, cast
 import pandas as pd
 
 from option_pricing.marketdata.schemas import (
+    EQUITY_BARS_COLUMNS,
     EQUITY_QUOTES_COLUMNS,
     FRED_SERIES_COLUMNS,
     MARKET_INPUTS_COLUMNS,
@@ -35,6 +36,27 @@ _ALPACA_ASK_ALIASES = ("ask_price", "ap", "ask")
 _ALPACA_BID_SIZE_ALIASES = ("bid_size", "bs", "bidsize")
 _ALPACA_ASK_SIZE_ALIASES = ("ask_size", "as", "asksize")
 _ALPACA_SYMBOL_ALIASES = ("symbol", "S")
+_ALPACA_BAR_TS_ALIASES = ("timestamp", "t")
+_ALPACA_BAR_OPEN_ALIASES = ("open", "o")
+_ALPACA_BAR_HIGH_ALIASES = ("high", "h")
+_ALPACA_BAR_LOW_ALIASES = ("low", "l")
+_ALPACA_BAR_CLOSE_ALIASES = ("close", "c")
+_ALPACA_BAR_VOLUME_ALIASES = ("volume", "v")
+_ALPACA_BAR_TRADE_COUNT_ALIASES = ("trade_count", "n", "tradecount")
+_ALPACA_BAR_VWAP_ALIASES = ("vwap", "vw")
+_ALPACA_BAR_TIMEFRAME_ALIASES = ("timeframe", "tf")
+
+_ALPACA_BAR_FIELD_ALIASES = (
+    *_ALPACA_BAR_TS_ALIASES,
+    *_ALPACA_BAR_OPEN_ALIASES,
+    *_ALPACA_BAR_HIGH_ALIASES,
+    *_ALPACA_BAR_LOW_ALIASES,
+    *_ALPACA_BAR_CLOSE_ALIASES,
+    *_ALPACA_BAR_VOLUME_ALIASES,
+    *_ALPACA_BAR_TRADE_COUNT_ALIASES,
+    *_ALPACA_BAR_VWAP_ALIASES,
+    *_ALPACA_BAR_TIMEFRAME_ALIASES,
+)
 
 
 def normalize_alpaca_latest_quotes(
@@ -60,6 +82,43 @@ def normalize_alpaca_latest_quotes(
         .reset_index(drop=True)
     )
     validate_dtypes(out, DatasetName.EQUITY_QUOTES, allow_extra=False)
+    return out
+
+
+def normalize_alpaca_bars(
+    payload: Mapping[str, Any],
+    *,
+    asof: str | pd.Timestamp,
+) -> pd.DataFrame:
+    """Normalize Alpaca historical equity bars into the ``equity_bars`` schema."""
+
+    if not isinstance(payload, Mapping):
+        raise TypeError(
+            "alpaca equity bars payload must be a mapping, "
+            f"got {type(payload).__name__}"
+        )
+    if _is_missing_value(asof):
+        raise ValueError("alpaca equity bars asof must not be missing")
+
+    payload_timeframe = _optional_payload_text(payload, "timeframe")
+    rows = [
+        _alpaca_bar_row(
+            symbol,
+            bar,
+            asof=asof,
+            payload_timeframe=payload_timeframe,
+        )
+        for symbol, bar in _alpaca_bar_items(payload)
+    ]
+    frame = pd.DataFrame(rows, columns=list(EQUITY_BARS_COLUMNS))
+    coerced = coerce_frame(frame, DatasetName.EQUITY_BARS, allow_extra=False)
+    out = (
+        order_columns(coerced, DatasetName.EQUITY_BARS)
+        .loc[:, list(EQUITY_BARS_COLUMNS)]
+        .sort_values(["symbol", "bar_ts"], kind="mergesort")
+        .reset_index(drop=True)
+    )
+    validate_dtypes(out, DatasetName.EQUITY_BARS, allow_extra=False)
     return out
 
 
@@ -154,6 +213,189 @@ def _require_frame(frame: pd.DataFrame, dataset_name: str) -> None:
             f"{dataset_name} input must be a pandas DataFrame, "
             f"got {type(frame).__name__}"
         )
+
+
+def _alpaca_bar_items(payload: Mapping[str, Any]) -> list[tuple[str, Any]]:
+    if not isinstance(payload, Mapping):
+        raise TypeError(
+            "alpaca equity bars payload must be a mapping, "
+            f"got {type(payload).__name__}"
+        )
+
+    bars_payload = payload.get("bars", payload.get("bar", payload))
+    bars_payload = getattr(bars_payload, "data", bars_payload)
+
+    items: list[tuple[str, Any]] = []
+    if _is_bar_record(bars_payload):
+        symbol = _payload_or_bar_symbol(payload, bars_payload)
+        items.append((symbol, bars_payload))
+    elif isinstance(bars_payload, Mapping):
+        for symbol, records in bars_payload.items():
+            cleaned_symbol = _clean_alpaca_bar_symbol(symbol)
+            items.extend(
+                (cleaned_symbol, record)
+                for record in _bar_records(records, symbol=cleaned_symbol)
+            )
+    elif isinstance(bars_payload, list | tuple):
+        default_symbol = _single_payload_symbol(payload)
+        for record in bars_payload:
+            symbol = _clean_alpaca_bar_symbol(
+                _bar_value(record, _ALPACA_SYMBOL_ALIASES, default=default_symbol)
+            )
+            items.append((symbol, record))
+    else:
+        raise ValueError("alpaca equity bars payload must contain bars")
+
+    if not items:
+        raise ValueError("alpaca equity bars payload must contain at least one bar")
+    return items
+
+
+def _bar_records(records: Any, *, symbol: str) -> list[Any]:
+    records = getattr(records, "data", records)
+    if _is_bar_record(records):
+        return [records]
+    if isinstance(records, list | tuple):
+        return list(records)
+    raise ValueError(f"alpaca equity bars for {symbol!r} must be bar records")
+
+
+def _alpaca_bar_row(
+    symbol: str,
+    bar: Any,
+    *,
+    asof: str | pd.Timestamp,
+    payload_timeframe: str | None,
+) -> dict[str, object]:
+    bar_symbol = _clean_alpaca_bar_symbol(
+        _bar_value(bar, _ALPACA_SYMBOL_ALIASES, default=symbol)
+    )
+    timeframe = payload_timeframe
+    if timeframe is None:
+        timeframe = _required_bar_text_value(
+            bar,
+            "timeframe",
+            _ALPACA_BAR_TIMEFRAME_ALIASES,
+            symbol=bar_symbol,
+        )
+
+    return {
+        "symbol": bar_symbol,
+        "bar_ts": _required_bar_value(
+            bar,
+            "timestamp",
+            _ALPACA_BAR_TS_ALIASES,
+            symbol=bar_symbol,
+        ),
+        "timeframe": timeframe,
+        "open": _required_bar_value(
+            bar,
+            "open",
+            _ALPACA_BAR_OPEN_ALIASES,
+            symbol=bar_symbol,
+        ),
+        "high": _required_bar_value(
+            bar,
+            "high",
+            _ALPACA_BAR_HIGH_ALIASES,
+            symbol=bar_symbol,
+        ),
+        "low": _required_bar_value(
+            bar,
+            "low",
+            _ALPACA_BAR_LOW_ALIASES,
+            symbol=bar_symbol,
+        ),
+        "close": _required_bar_value(
+            bar,
+            "close",
+            _ALPACA_BAR_CLOSE_ALIASES,
+            symbol=bar_symbol,
+        ),
+        "volume": _required_bar_value(
+            bar,
+            "volume",
+            _ALPACA_BAR_VOLUME_ALIASES,
+            symbol=bar_symbol,
+        ),
+        "trade_count": _optional_bar_value(bar, _ALPACA_BAR_TRADE_COUNT_ALIASES),
+        "vwap": _optional_bar_value(bar, _ALPACA_BAR_VWAP_ALIASES),
+        "source": "alpaca",
+        "asof": asof,
+    }
+
+
+def _required_bar_text_value(
+    bar: Any,
+    field_label: str,
+    aliases: tuple[str, ...],
+    *,
+    symbol: str,
+) -> str:
+    value = _required_bar_value(bar, field_label, aliases, symbol=symbol)
+    return _required_text_value(value, "alpaca equity bar", field_label)
+
+
+def _required_bar_value(
+    bar: Any,
+    field_label: str,
+    aliases: tuple[str, ...],
+    *,
+    symbol: str,
+) -> Any:
+    value = _bar_value(bar, aliases)
+    if _is_missing_value(value):
+        raise ValueError(f"alpaca equity bar for {symbol!r} is missing {field_label}")
+    return value
+
+
+def _optional_bar_value(bar: Any, aliases: tuple[str, ...]) -> object:
+    value = _bar_value(bar, aliases)
+    if _is_missing_value(value):
+        return pd.NA
+    return value
+
+
+def _payload_or_bar_symbol(payload: Mapping[str, Any], bar: Any) -> str:
+    payload_symbol = payload.get("symbol", _MISSING)
+    value = _bar_value(bar, _ALPACA_SYMBOL_ALIASES, default=payload_symbol)
+    return _clean_alpaca_bar_symbol(value)
+
+
+def _single_payload_symbol(payload: Mapping[str, Any]) -> str:
+    value = payload.get("symbol", _MISSING)
+    if not _is_missing_value(value):
+        return _clean_alpaca_bar_symbol(value)
+
+    symbols = payload.get("symbols", _MISSING)
+    if isinstance(symbols, str):
+        return _clean_alpaca_bar_symbol(symbols)
+    if isinstance(symbols, list | tuple) and len(symbols) == 1:
+        return _clean_alpaca_bar_symbol(symbols[0])
+
+    raise ValueError(
+        "alpaca equity bars payload with a bar list must include one symbol"
+    )
+
+
+def _optional_payload_text(payload: Mapping[str, Any], field_name: str) -> str | None:
+    value = payload.get(field_name, _MISSING)
+    if _is_missing_value(value):
+        return None
+    return _required_text_value(value, "alpaca equity bars", field_name)
+
+
+def _is_bar_record(value: object) -> bool:
+    if isinstance(value, Mapping):
+        if _mapping_value(value, _ALPACA_BAR_FIELD_ALIASES) is not _MISSING:
+            return True
+        raw_data = value.get("raw_data")
+        return (
+            isinstance(raw_data, Mapping)
+            and _mapping_value(raw_data, _ALPACA_BAR_FIELD_ALIASES) is not _MISSING
+        )
+
+    return any(hasattr(value, alias) for alias in _ALPACA_BAR_FIELD_ALIASES)
 
 
 def _alpaca_latest_quote_items(
@@ -282,12 +524,30 @@ def _quote_value(
     *,
     default: object = _MISSING,
 ) -> Any:
-    if isinstance(quote, Mapping):
-        value = _mapping_value(quote, aliases)
+    return _provider_value(quote, aliases, default=default)
+
+
+def _bar_value(
+    bar: Any,
+    aliases: tuple[str, ...],
+    *,
+    default: object = _MISSING,
+) -> Any:
+    return _provider_value(bar, aliases, default=default)
+
+
+def _provider_value(
+    record: Any,
+    aliases: tuple[str, ...],
+    *,
+    default: object = _MISSING,
+) -> Any:
+    if isinstance(record, Mapping):
+        value = _mapping_value(record, aliases)
         if value is not _MISSING:
             return value
 
-        raw_data = quote.get("raw_data")
+        raw_data = record.get("raw_data")
         if isinstance(raw_data, Mapping):
             value = _mapping_value(raw_data, aliases)
             if value is not _MISSING:
@@ -295,11 +555,11 @@ def _quote_value(
     else:
         for alias in aliases:
             try:
-                return getattr(quote, alias)
+                return getattr(record, alias)
             except AttributeError:
                 continue
 
-        raw_data = getattr(quote, "raw_data", None)
+        raw_data = getattr(record, "raw_data", None)
         if isinstance(raw_data, Mapping):
             value = _mapping_value(raw_data, aliases)
             if value is not _MISSING:
@@ -317,6 +577,10 @@ def _mapping_value(mapping: Mapping[str, Any], aliases: tuple[str, ...]) -> Any:
 
 def _clean_alpaca_symbol(value: object) -> str:
     return _required_text_value(value, "alpaca latest quote", "symbol").upper()
+
+
+def _clean_alpaca_bar_symbol(value: object) -> str:
+    return _required_text_value(value, "alpaca equity bar", "symbol").upper()
 
 
 def _required_text_value(value: object, dataset_name: str, column: str) -> str:
@@ -495,6 +759,7 @@ def _validate_unique_contract_symbols(frame: pd.DataFrame) -> None:
 
 
 __all__ = [
+    "normalize_alpaca_bars",
     "normalize_alpaca_latest_quotes",
     "normalize_fred_observations",
     "normalize_market_inputs",
