@@ -9,6 +9,7 @@ from typing import Any, cast
 import pandas as pd
 
 from option_pricing.marketdata.schemas import (
+    EQUITY_QUOTES_COLUMNS,
     FRED_SERIES_COLUMNS,
     MARKET_INPUTS_COLUMNS,
     OPTION_CHAIN_COLUMNS,
@@ -26,6 +27,40 @@ _OPTION_RIGHT_ALIASES = {
     "p": "put",
     "put": "put",
 }
+_MISSING = object()
+
+_ALPACA_QUOTE_TS_ALIASES = ("timestamp", "t")
+_ALPACA_BID_ALIASES = ("bid_price", "bp", "bid")
+_ALPACA_ASK_ALIASES = ("ask_price", "ap", "ask")
+_ALPACA_BID_SIZE_ALIASES = ("bid_size", "bs", "bidsize")
+_ALPACA_ASK_SIZE_ALIASES = ("ask_size", "as", "asksize")
+_ALPACA_SYMBOL_ALIASES = ("symbol", "S")
+
+
+def normalize_alpaca_latest_quotes(
+    payload: Mapping[str, Any],
+    *,
+    asof: str | pd.Timestamp,
+) -> pd.DataFrame:
+    """Normalize Alpaca latest equity quotes into the ``equity_quotes`` schema."""
+
+    if _is_missing_value(asof):
+        raise ValueError("alpaca latest quotes asof must not be missing")
+
+    rows = [
+        _alpaca_latest_quote_row(symbol, quote, asof=asof)
+        for symbol, quote in _alpaca_latest_quote_items(payload)
+    ]
+    frame = pd.DataFrame(rows, columns=list(EQUITY_QUOTES_COLUMNS))
+    coerced = coerce_frame(frame, DatasetName.EQUITY_QUOTES, allow_extra=False)
+    out = (
+        order_columns(coerced, DatasetName.EQUITY_QUOTES)
+        .loc[:, list(EQUITY_QUOTES_COLUMNS)]
+        .sort_values(["symbol"], kind="mergesort")
+        .reset_index(drop=True)
+    )
+    validate_dtypes(out, DatasetName.EQUITY_QUOTES, allow_extra=False)
+    return out
 
 
 def normalize_fred_observations(
@@ -119,6 +154,187 @@ def _require_frame(frame: pd.DataFrame, dataset_name: str) -> None:
             f"{dataset_name} input must be a pandas DataFrame, "
             f"got {type(frame).__name__}"
         )
+
+
+def _alpaca_latest_quote_items(
+    payload: Mapping[str, Any],
+) -> list[tuple[str, Any]]:
+    if not isinstance(payload, Mapping):
+        raise TypeError(
+            "alpaca latest quotes payload must be a mapping, "
+            f"got {type(payload).__name__}"
+        )
+
+    quotes_payload: object
+    if "quotes" in payload:
+        quotes_payload = payload["quotes"]
+    elif "quote" in payload:
+        symbol = _required_text_value(
+            payload.get("symbol", _MISSING),
+            "alpaca latest quote",
+            "symbol",
+        )
+        quotes_payload = {symbol: payload["quote"]}
+    else:
+        quotes_payload = payload
+
+    quotes_payload = getattr(quotes_payload, "data", quotes_payload)
+    if not isinstance(quotes_payload, Mapping):
+        raise ValueError("alpaca latest quotes payload must contain a quotes mapping")
+    if not quotes_payload:
+        raise ValueError("alpaca latest quotes payload must contain at least one quote")
+
+    return [
+        (_clean_alpaca_symbol(symbol), quote)
+        for symbol, quote in quotes_payload.items()
+    ]
+
+
+def _alpaca_latest_quote_row(
+    symbol: str,
+    quote: Any,
+    *,
+    asof: str | pd.Timestamp,
+) -> dict[str, object]:
+    quote_symbol = _clean_alpaca_symbol(
+        _quote_value(quote, _ALPACA_SYMBOL_ALIASES, default=symbol)
+    )
+    quote_ts = _required_quote_value(
+        quote,
+        "quote timestamp",
+        _ALPACA_QUOTE_TS_ALIASES,
+        symbol=quote_symbol,
+    )
+    bid = _required_finite_quote_number(
+        quote,
+        "bid",
+        _ALPACA_BID_ALIASES,
+        symbol=quote_symbol,
+    )
+    ask = _required_finite_quote_number(
+        quote,
+        "ask",
+        _ALPACA_ASK_ALIASES,
+        symbol=quote_symbol,
+    )
+    bid_size = _optional_quote_value(quote, _ALPACA_BID_SIZE_ALIASES)
+    ask_size = _optional_quote_value(quote, _ALPACA_ASK_SIZE_ALIASES)
+
+    return {
+        "symbol": quote_symbol,
+        "quote_ts": quote_ts,
+        "bid": bid,
+        "ask": ask,
+        "bid_size": bid_size,
+        "ask_size": ask_size,
+        "mid": (bid + ask) / 2,
+        "source": "alpaca",
+        "asof": asof,
+    }
+
+
+def _required_quote_value(
+    quote: Any,
+    field_label: str,
+    aliases: tuple[str, ...],
+    *,
+    symbol: str,
+) -> Any:
+    value = _quote_value(quote, aliases)
+    if _is_missing_value(value):
+        raise ValueError(f"alpaca latest quote for {symbol!r} is missing {field_label}")
+    return value
+
+
+def _optional_quote_value(quote: Any, aliases: tuple[str, ...]) -> object:
+    value = _quote_value(quote, aliases)
+    if _is_missing_value(value):
+        return pd.NA
+    return value
+
+
+def _required_finite_quote_number(
+    quote: Any,
+    field_label: str,
+    aliases: tuple[str, ...],
+    *,
+    symbol: str,
+) -> float:
+    value = _quote_value(quote, aliases)
+    if value is _MISSING or value is None or value is pd.NA:
+        raise ValueError(f"alpaca latest quote for {symbol!r} is missing {field_label}")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(
+            f"alpaca latest quote for {symbol!r} {field_label} must be numeric"
+        ) from exc
+    if not math.isfinite(number):
+        raise ValueError(
+            f"alpaca latest quote for {symbol!r} {field_label} must be finite"
+        )
+    return number
+
+
+def _quote_value(
+    quote: Any,
+    aliases: tuple[str, ...],
+    *,
+    default: object = _MISSING,
+) -> Any:
+    if isinstance(quote, Mapping):
+        value = _mapping_value(quote, aliases)
+        if value is not _MISSING:
+            return value
+
+        raw_data = quote.get("raw_data")
+        if isinstance(raw_data, Mapping):
+            value = _mapping_value(raw_data, aliases)
+            if value is not _MISSING:
+                return value
+    else:
+        for alias in aliases:
+            try:
+                return getattr(quote, alias)
+            except AttributeError:
+                continue
+
+        raw_data = getattr(quote, "raw_data", None)
+        if isinstance(raw_data, Mapping):
+            value = _mapping_value(raw_data, aliases)
+            if value is not _MISSING:
+                return value
+
+    return default
+
+
+def _mapping_value(mapping: Mapping[str, Any], aliases: tuple[str, ...]) -> Any:
+    for alias in aliases:
+        if alias in mapping:
+            return mapping[alias]
+    return _MISSING
+
+
+def _clean_alpaca_symbol(value: object) -> str:
+    return _required_text_value(value, "alpaca latest quote", "symbol").upper()
+
+
+def _required_text_value(value: object, dataset_name: str, column: str) -> str:
+    if _is_missing_value(value):
+        raise ValueError(f"{dataset_name} {column} must not be missing")
+    text = str(value).strip()
+    if not text:
+        raise ValueError(f"{dataset_name} {column} must be a non-empty string")
+    return text
+
+
+def _is_missing_value(value: object) -> bool:
+    if value is _MISSING or value is None:
+        return True
+    try:
+        return bool(pd.isna(cast(Any, value)))
+    except (TypeError, ValueError):
+        return False
 
 
 def _fred_observations(payload: Mapping[str, Any]) -> list[Mapping[str, Any]]:
@@ -279,6 +495,7 @@ def _validate_unique_contract_symbols(frame: pd.DataFrame) -> None:
 
 
 __all__ = [
+    "normalize_alpaca_latest_quotes",
     "normalize_fred_observations",
     "normalize_market_inputs",
     "normalize_option_chain",

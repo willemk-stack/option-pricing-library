@@ -10,15 +10,21 @@ from importlib import import_module
 from typing import Any, Final, Literal, cast
 
 from option_pricing.marketdata.config import FredConfig
+from option_pricing.marketdata.errors import (
+    MarketDataProviderError,
+    MissingProviderCredentialError,
+    ProviderDataUnavailableError,
+    ProviderRequestError,
+)
 
 _OBSERVATIONS_PATH: Final = "series/observations"
 
 
-class FredProviderError(RuntimeError):
+class FredProviderError(MarketDataProviderError):
     """Base error for FRED provider failures."""
 
 
-class FredMissingApiKeyError(FredProviderError):
+class FredMissingApiKeyError(MissingProviderCredentialError, FredProviderError):
     """Raised when the configured FRED API key environment variable is missing."""
 
     def __init__(self, env_var_name: str | None = None) -> None:
@@ -30,10 +36,10 @@ class FredMissingApiKeyError(FredProviderError):
                 "Missing FRED API key: environment variable "
                 f"{env_var_name!r} is unset or blank."
             )
-        super().__init__(message)
+        RuntimeError.__init__(self, message)
 
 
-class FredRequestError(FredProviderError):
+class FredRequestError(ProviderRequestError, FredProviderError):
     """Raised when FRED returns an unusable response."""
 
     def __init__(
@@ -54,7 +60,7 @@ class FredRequestError(FredProviderError):
         super().__init__(f"{message}{suffix}")
 
 
-class FredRateUnavailableError(FredProviderError):
+class FredRateUnavailableError(ProviderDataUnavailableError, FredProviderError):
     """Raised when a FRED rate series has no usable observation for an asof."""
 
 
