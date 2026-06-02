@@ -263,6 +263,56 @@ def _read_json(path: Path) -> dict[str, object]:
     return cast(dict[str, object], json.loads(path.read_text(encoding="utf-8")))
 
 
+def _read_jsonl(path: Path) -> list[dict[str, object]]:
+    return [
+        cast(dict[str, object], json.loads(line))
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+
+
+def _fred_backfill_root(
+    tmp_path: Path,
+    *,
+    layer: str,
+    series_id: str,
+    start: str,
+    end: str,
+    run_id: str,
+) -> Path:
+    return (
+        tmp_path
+        / layer
+        / "fred_series"
+        / f"series_id={series_id}"
+        / f"start_date={start}"
+        / f"end_date={end}"
+        / f"run_id={run_id}"
+    )
+
+
+def _bars_backfill_root(
+    tmp_path: Path,
+    *,
+    layer: str,
+    symbol: str,
+    timeframe: str,
+    start: str,
+    end: str,
+    run_id: str,
+) -> Path:
+    return (
+        tmp_path
+        / layer
+        / "equity_bars"
+        / f"symbol={symbol}"
+        / f"timeframe={timeframe}"
+        / f"start_date={start}"
+        / f"end_date={end}"
+        / f"run_id={run_id}"
+    )
+
+
 def _snapshot(tmp_path: Path) -> ProviderSnapshotResult:
     return _pipeline(tmp_path).snapshot(
         "spy",
@@ -294,12 +344,12 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     assert result.rejected_quote_count == 0
     assert result.dropped_before_cleaning_count == 1
     assert result.warnings[:4] == (
-        "first_pass_assumption: dividend_yield=0.0, "
-        "dividend_yield_source=assumption, no_dividend_inference",
-        "first_pass_assumption: rate_series_id=DGS3MO, "
-        "default_rate_series_id=DGS3MO, no_curve_interpolation",
-        "first_pass_limitation: no_option_chain_backfill",
-        "first_pass_limitation: no_scheduling",
+        "documented_assumption: dividend_yield=0.0, "
+        "dividend_yield_source=assumption, dividend_inference=not_enabled",
+        "documented_assumption: rate_series_id=DGS3MO, "
+        "default_rate_series_id=DGS3MO, curve_interpolation=not_enabled",
+        "current_provider_scope: option_chain_backfill=not_enabled",
+        "current_provider_scope: scheduling=not_enabled",
     )
     assert result.warnings[-1] == (
         "alpaca_option_contracts_dropped_before_cleaning: "
@@ -322,6 +372,7 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     warnings_payload = _read_json(
         result.model_validation_bundle.manifest_path.parent / "warnings.json"
     )
+    run_entries = _read_jsonl(tmp_path / "_meta" / "runs.jsonl")
 
     assert bronze_manifest["providers"] == {
         "spot": "alpaca",
@@ -333,18 +384,30 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "provider": "fred",
         "series_id": "DGS3MO",
         "default_series_id": "DGS3MO",
-        "curve_interpolation": "not_implemented",
+        "curve_interpolation": "not_enabled",
     }
     assert bronze_manifest["dividend_assumptions"] == {
         "dividend_yield": 0.0,
         "source": "assumption",
-        "dividend_inference": "not_implemented",
+        "dividend_inference": "not_enabled",
     }
-    assert bronze_manifest["first_pass_limitations"] == {
-        "curve_interpolation": "not_implemented",
-        "dividend_inference": "not_implemented",
-        "option_chain_backfill": "not_implemented",
-        "scheduling": "not_implemented",
+    assert bronze_manifest["current_provider_scope"] == {
+        "curve_interpolation": "not_enabled",
+        "dividend_inference": "not_enabled",
+        "option_chain_backfill": "not_enabled",
+        "scheduling": "not_enabled",
+    }
+    assert bronze_manifest["request_metadata"] == {
+        "underlying": "SPY",
+        "asof": "2026-05-22T15:31:00Z",
+        "expiry_gte": "2026-06-01",
+        "expiry_lte": "2026-06-30",
+        "strike_gte": None,
+        "strike_lte": None,
+        "option_type": None,
+        "feed": "indicative",
+        "rate_series_id": "DGS3MO",
+        "fred_observation_end": "2026-05-22",
     }
     assert silver_manifest["source_type"] == "provider_snapshot"
     assert silver_manifest["rate_source"] == "fred:DGS3MO"
@@ -356,6 +419,35 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     assert bundle_manifest["rate_source"] == "fred:DGS3MO"
     assert bundle_manifest["dividend_yield_source"] == "assumption"
     assert warnings_payload["warnings"] == list(result.warnings)
+    assert len(run_entries) == 1
+    assert run_entries[0]["artifacts"] == [
+        path.relative_to(tmp_path).as_posix() for path in result.artifact_paths
+    ]
+    run_details = cast(dict[str, object], run_entries[0]["details"])
+    assert run_details == {
+        "operation": "snapshot",
+        "provider": "alpaca+fred",
+        "underlying": "SPY",
+        "asof": "2026-05-22T15:31:00Z",
+        "run_id": "b4-test-run",
+        "rate_series_id": "DGS3MO",
+        "rate_source": "fred:DGS3MO",
+        "rate_observation_date": "2026-05-20",
+        "spot_source": "alpaca",
+        "dividend_yield": 0.0,
+        "dividend_yield_source": "assumption",
+        "feed": "indicative",
+        "raw_option_contract_count": 3,
+        "normalized_option_contract_count": 2,
+        "dropped_before_cleaning_count": 1,
+        "accepted_quote_count": 2,
+        "rejected_quote_count": 0,
+        "warnings": list(result.warnings),
+        "artifact_paths": [
+            path.relative_to(tmp_path).as_posix() for path in result.artifact_paths
+        ],
+        "library_commit": "abc123",
+    }
 
 
 def test_provider_snapshot_result_payload_is_json_serializable(
@@ -369,7 +461,65 @@ def test_provider_snapshot_result_payload_is_json_serializable(
     encoded = json.dumps(payload, sort_keys=True)
     assert json.loads(encoded)["run_id"] == "b4-test-run"
     assert "DGS3MO" in encoded
-    assert "no_dividend_inference" in encoded
+    assert "dividend_inference=not_enabled" in encoded
+
+
+def test_provider_snapshot_outputs_do_not_leak_secrets(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    secret = "super-secret-value"
+    alpaca_client = _FakeAlpacaClient(
+        equity_payload={
+            **_equity_quote_payload(),
+            "authorization": secret,
+        },
+        option_payload={
+            **_option_chain_payload(),
+            "nested": {"secret_token": secret},
+        },
+    )
+    fred_client = _FakeFredClient(
+        {
+            **_fred_payload(),
+            "api_key": secret,
+            "nested": {"secret_token": secret},
+        }
+    )
+
+    result = _pipeline(
+        tmp_path,
+        alpaca_client=alpaca_client,
+        fred_client=fred_client,
+    ).snapshot(
+        "SPY",
+        asof="2026-05-22T15:31:00Z",
+        run_id="snapshot-secret-check",
+        feed="indicative",
+    )
+
+    manifest_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in result.artifact_paths
+        if path.name == "manifest.json"
+    )
+    bronze_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (
+            result.bronze_paths.latest_equity_quotes,
+            result.bronze_paths.option_chain,
+            result.bronze_paths.fred_observations,
+        )
+    )
+    runs_text = (tmp_path / "_meta" / "runs.jsonl").read_text(encoding="utf-8")
+    cli_text = json.dumps(cli._result_payload("snapshot", result), sort_keys=True)
+
+    assert secret not in bronze_text
+    assert secret not in manifest_text
+    assert secret not in runs_text
+    assert secret not in repr(result)
+    assert secret not in cli_text
+    assert "<redacted>" in bronze_text
 
 
 def test_provider_snapshot_missing_fred_rate_fails_clearly(
@@ -500,11 +650,21 @@ def test_backfill_fred_writes_bronze_and_silver_with_fake_client(
         run_id="fred-backfill",
     )
 
-    bronze_root = (
-        tmp_path / "bronze" / "fred_series" / "series_id=DGS3MO" / "date=2026-05-22"
+    bronze_root = _fred_backfill_root(
+        tmp_path,
+        layer="bronze",
+        series_id="DGS3MO",
+        start="2026-05-01",
+        end="2026-05-22",
+        run_id="fred-backfill",
     )
-    silver_root = (
-        tmp_path / "silver" / "fred_series" / "series_id=DGS3MO" / "date=2026-05-22"
+    silver_root = _fred_backfill_root(
+        tmp_path,
+        layer="silver",
+        series_id="DGS3MO",
+        start="2026-05-01",
+        end="2026-05-22",
+        run_id="fred-backfill",
     )
     assert (bronze_root / "observations.json").exists()
     assert (bronze_root / "manifest.json").exists()
@@ -532,6 +692,12 @@ def test_backfill_fred_writes_bronze_and_silver_with_fake_client(
     manifest = _read_json(silver_root / "manifest.json")
     assert manifest["operation"] == "backfill_fred"
     assert manifest["provider"] == "fred"
+    assert manifest["request_metadata"] == {
+        "series_id": "DGS3MO",
+        "observation_start": "2026-05-01",
+        "observation_end": "2026-05-22",
+        "sort_order": "asc",
+    }
     frame = pd.read_parquet(silver_root / "fred_series.parquet")
     assert frame["series_id"].astype(str).tolist() == ["DGS3MO", "DGS3MO"]
 
@@ -558,11 +724,14 @@ def test_backfill_fred_handles_multiple_series(
     assert result.stats.rows_out == 4
     assert len(result.artifact_paths) == 8
     assert (
-        tmp_path
-        / "silver"
-        / "fred_series"
-        / "series_id=FEDFUNDS"
-        / "date=2026-05-22"
+        _fred_backfill_root(
+            tmp_path,
+            layer="silver",
+            series_id="FEDFUNDS",
+            start="2026-05-01",
+            end="2026-05-22",
+            run_id="fred-multi",
+        )
         / "fred_series.parquet"
     ).exists()
 
@@ -584,7 +753,7 @@ def test_backfill_fred_defaults_end_date_safely(
     called_end = cast(date, fred_client.calls[0]["observation_end"])
     assert before <= called_end <= after
     assert any(
-        f"date={called_end.isoformat()}" in path.as_posix()
+        f"end_date={called_end.isoformat()}" in path.as_posix()
         for path in result.artifact_paths
     )
 
@@ -602,21 +771,23 @@ def test_backfill_bars_writes_bronze_and_silver_with_fake_client(
         run_id="bars-backfill",
     )
 
-    bronze_root = (
-        tmp_path
-        / "bronze"
-        / "equity_bars"
-        / "symbol=SPY"
-        / "timeframe=1Day"
-        / "date=2026-05-23"
+    bronze_root = _bars_backfill_root(
+        tmp_path,
+        layer="bronze",
+        symbol="SPY",
+        timeframe="1Day",
+        start="2026-05-20",
+        end="2026-05-23",
+        run_id="bars-backfill",
     )
-    silver_root = (
-        tmp_path
-        / "silver"
-        / "equity_bars"
-        / "symbol=SPY"
-        / "timeframe=1Day"
-        / "date=2026-05-23"
+    silver_root = _bars_backfill_root(
+        tmp_path,
+        layer="silver",
+        symbol="SPY",
+        timeframe="1Day",
+        start="2026-05-20",
+        end="2026-05-23",
+        run_id="bars-backfill",
     )
     assert (bronze_root / "bars.json").exists()
     assert (bronze_root / "manifest.json").exists()
@@ -630,6 +801,15 @@ def test_backfill_bars_writes_bronze_and_silver_with_fake_client(
     frame = pd.read_parquet(silver_root / "equity_bars.parquet")
     assert frame["symbol"].astype(str).tolist() == ["SPY"]
     assert float(frame.loc[0, "close"]) == pytest.approx(500.5)
+    request_metadata = cast(
+        dict[str, object], _read_json(silver_root / "manifest.json")["request_metadata"]
+    )
+    assert request_metadata["symbols"] == ["SPY"]
+    assert request_metadata["start"] == "2026-05-20T00:00:00Z"
+    assert request_metadata["end"] == "2026-05-23T00:00:00Z"
+    assert request_metadata["timeframe"] == "1Day"
+    assert request_metadata["feed"] == "indicative"
+    assert isinstance(request_metadata["asof"], str)
 
 
 def test_backfill_bars_handles_multiple_symbols(
@@ -650,26 +830,116 @@ def test_backfill_bars_handles_multiple_symbols(
     assert result.stats.rows_out == 2
     assert len(result.artifact_paths) == 8
     qqq_frame = pd.read_parquet(
-        tmp_path
-        / "silver"
-        / "equity_bars"
-        / "symbol=QQQ"
-        / "timeframe=1Day"
-        / "date=2026-05-23"
+        _bars_backfill_root(
+            tmp_path,
+            layer="silver",
+            symbol="QQQ",
+            timeframe="1Day",
+            start="2026-05-20",
+            end="2026-05-23",
+            run_id="bars-multi",
+        )
         / "equity_bars.parquet"
     )
     assert qqq_frame["symbol"].astype(str).tolist() == ["QQQ"]
 
     spy_bronze = _read_json(
-        tmp_path
-        / "bronze"
-        / "equity_bars"
-        / "symbol=SPY"
-        / "timeframe=1Day"
-        / "date=2026-05-23"
+        _bars_backfill_root(
+            tmp_path,
+            layer="bronze",
+            symbol="SPY",
+            timeframe="1Day",
+            start="2026-05-20",
+            end="2026-05-23",
+            run_id="bars-multi",
+        )
         / "bars.json"
     )
     assert cast(dict[str, object], spy_bronze["payload"])["symbols"] == ["SPY"]
+
+
+def test_backfill_fred_same_end_date_different_start_and_run_id_do_not_collide(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    pipeline = _pipeline(tmp_path, fred_client=_FakeFredClient())
+
+    pipeline.backfill_fred(
+        "DGS3MO",
+        start="2026-05-01",
+        end="2026-05-22",
+        run_id="fred-window-a",
+    )
+    pipeline.backfill_fred(
+        "DGS3MO",
+        start="2026-05-10",
+        end="2026-05-22",
+        run_id="fred-window-b",
+    )
+
+    first_root = _fred_backfill_root(
+        tmp_path,
+        layer="silver",
+        series_id="DGS3MO",
+        start="2026-05-01",
+        end="2026-05-22",
+        run_id="fred-window-a",
+    )
+    second_root = _fred_backfill_root(
+        tmp_path,
+        layer="silver",
+        series_id="DGS3MO",
+        start="2026-05-10",
+        end="2026-05-22",
+        run_id="fred-window-b",
+    )
+
+    assert first_root != second_root
+    assert (first_root / "fred_series.parquet").exists()
+    assert (second_root / "fred_series.parquet").exists()
+
+
+def test_backfill_bars_same_window_end_but_different_start_and_run_id_do_not_collide(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    pipeline = _pipeline(tmp_path, alpaca_client=_FakeAlpacaClient())
+
+    pipeline.backfill_bars(
+        "SPY",
+        start="2026-05-20",
+        end="2026-05-23",
+        run_id="bars-window-a",
+    )
+    pipeline.backfill_bars(
+        "SPY",
+        start="2026-05-21",
+        end="2026-05-23",
+        run_id="bars-window-b",
+    )
+
+    first_root = _bars_backfill_root(
+        tmp_path,
+        layer="silver",
+        symbol="SPY",
+        timeframe="1Day",
+        start="2026-05-20",
+        end="2026-05-23",
+        run_id="bars-window-a",
+    )
+    second_root = _bars_backfill_root(
+        tmp_path,
+        layer="silver",
+        symbol="SPY",
+        timeframe="1Day",
+        start="2026-05-21",
+        end="2026-05-23",
+        run_id="bars-window-b",
+    )
+
+    assert first_root != second_root
+    assert (first_root / "equity_bars.parquet").exists()
+    assert (second_root / "equity_bars.parquet").exists()
 
 
 def test_backfill_overwrite_false_protects_existing_artifacts(
@@ -690,7 +960,7 @@ def test_backfill_overwrite_false_protects_existing_artifacts(
             "DGS3MO",
             start="2026-05-01",
             end="2026-05-22",
-            run_id="fred-second",
+            run_id="fred-first",
         )
 
     assert len(fred_client.calls) == 1
@@ -773,11 +1043,14 @@ def test_backfill_overwrite_true_replaces_artifacts(
     )
 
     manifest = _read_json(
-        tmp_path
-        / "silver"
-        / "fred_series"
-        / "series_id=DGS3MO"
-        / "date=2026-05-22"
+        _fred_backfill_root(
+            tmp_path,
+            layer="silver",
+            series_id="DGS3MO",
+            start="2026-05-01",
+            end="2026-05-22",
+            run_id="fred-replace",
+        )
         / "manifest.json"
     )
     assert manifest["library_commit"] == "replacement"
@@ -811,16 +1084,21 @@ def test_backfill_outputs_do_not_leak_secrets(
     )
     runs_text = (tmp_path / "_meta" / "runs.jsonl").read_text(encoding="utf-8")
     bronze_text = (
-        tmp_path
-        / "bronze"
-        / "fred_series"
-        / "series_id=DGS3MO"
-        / "date=2026-05-22"
+        _fred_backfill_root(
+            tmp_path,
+            layer="bronze",
+            series_id="DGS3MO",
+            start="2026-05-01",
+            end="2026-05-22",
+            run_id="secret-check",
+        )
         / "observations.json"
     ).read_text(encoding="utf-8")
+    cli_text = json.dumps(cli._result_payload("backfill-fred", result), sort_keys=True)
 
     assert secret not in manifest_text
     assert secret not in runs_text
     assert secret not in repr(result)
     assert secret not in bronze_text
+    assert secret not in cli_text
     assert "<redacted>" in bronze_text

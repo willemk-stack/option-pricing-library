@@ -68,18 +68,20 @@ _DEFAULT_RATE_SERIES_ID = "DGS3MO"
 _DEFAULT_BARS_TIMEFRAME = "1Day"
 _DEFAULT_DAY_COUNT = "ACT/365"
 _DIVIDEND_ASSUMPTION_WARNING = (
-    "first_pass_assumption: dividend_yield=0.0, "
-    "dividend_yield_source=assumption, no_dividend_inference"
+    "documented_assumption: dividend_yield=0.0, "
+    "dividend_yield_source=assumption, dividend_inference=not_enabled"
 )
-_NO_OPTION_CHAIN_BACKFILL_WARNING = "first_pass_limitation: no_option_chain_backfill"
-_NO_SCHEDULING_WARNING = "first_pass_limitation: no_scheduling"
+_NO_OPTION_CHAIN_BACKFILL_WARNING = (
+    "current_provider_scope: option_chain_backfill=not_enabled"
+)
+_NO_SCHEDULING_WARNING = "current_provider_scope: scheduling=not_enabled"
 _FRED_BACKFILL_WARNING = (
-    "first_pass_limitation: fred_backfill_stores_single_series_observations, "
-    "no_curve_interpolation"
+    "current_provider_scope: fred_backfill_storage=single_series_observations, "
+    "curve_interpolation=not_enabled"
 )
 _BARS_BACKFILL_WARNING = (
-    "first_pass_limitation: equity_bars_backfill_only, "
-    "no_option_chain_backfill, no_scheduling"
+    "current_provider_scope: bars_backfill=equity_only, "
+    "option_chain_backfill=not_enabled, scheduling=not_enabled"
 )
 _SECRET_KEY_PARTS = frozenset(
     {"api_key", "apikey", "secret", "token", "authorization", "password"}
@@ -378,6 +380,7 @@ class MarketDataPipeline:
     ) -> ProviderSnapshotResult:
         """Fetch, normalize, clean, and persist one provider-backed snapshot."""
 
+        started_at = datetime.now(UTC)
         cleaned_underlying = _clean_underlying(underlying)
         asof_timestamp = _coerce_asof(asof)
         effective_run_id = _optional_run_id(run_id) or _new_run_id(asof_timestamp)
@@ -388,6 +391,24 @@ class MarketDataPipeline:
         )
         cleaned_dividend_yield = _finite_float(dividend_yield, "dividend_yield")
         cleaned_library_commit = _optional_text(library_commit, "library_commit")
+        resolved_feed = feed or self.config.alpaca.feed
+        provider_sources = {
+            "spot": "alpaca",
+            "option_chain": "alpaca",
+            "rate": "fred",
+        }
+        snapshot_request_metadata = _provider_snapshot_request_metadata(
+            underlying=cleaned_underlying,
+            asof=asof_timestamp,
+            expiry_gte=expiry_gte,
+            expiry_lte=expiry_lte,
+            strike_gte=strike_gte,
+            strike_lte=strike_lte,
+            option_type=option_type,
+            feed=resolved_feed,
+            rate_series_id=cleaned_rate_series_id,
+            fred_observation_end=asof_timestamp.date(),
+        )
 
         _preflight_provider_snapshot_targets(
             self.storage,
@@ -512,14 +533,10 @@ class MarketDataPipeline:
             option_chain_raw=option_chain,
             metadata={
                 "source_type": PROVIDER_SNAPSHOT_SOURCE_TYPE,
-                "providers": {
-                    "spot": "alpaca",
-                    "option_chain": "alpaca",
-                    "rate": "fred",
-                },
+                "providers": provider_sources,
                 "rate_series_id": cleaned_rate_series_id,
-                "feed": feed or self.config.alpaca.feed,
-                "first_pass_limitations": _first_pass_limitations(),
+                "feed": resolved_feed,
+                "current_provider_scope": _first_pass_limitations(),
             },
             row_counts={
                 "equity_quotes": int(len(equity_quotes)),
@@ -545,7 +562,8 @@ class MarketDataPipeline:
             option_chain_payload=option_chain_payload,
             fred_payload=fred_payload,
             rate_series_id=cleaned_rate_series_id,
-            feed=feed or self.config.alpaca.feed,
+            feed=resolved_feed,
+            request_metadata=snapshot_request_metadata,
             overwrite=overwrite,
             library_commit=cleaned_library_commit,
         )
@@ -588,6 +606,44 @@ class MarketDataPipeline:
             silver_paths=silver_paths,
             gold_paths=gold_paths,
             model_validation_bundle=model_validation_bundle,
+        )
+        spot_source = _required_text(
+            str(equity_quote_payload.get("source", provider_sources["spot"])),
+            "spot_source",
+        )
+        self.storage.record_run(
+            RunMetadata(
+                run_id=effective_run_id,
+                asof=cast(datetime, _utc_timestamp(asof_timestamp).to_pydatetime()),
+                started_at=started_at,
+                git_sha=cleaned_library_commit,
+            ),
+            artifacts=artifact_paths,
+            details=_provider_snapshot_run_details(
+                storage=self.storage,
+                underlying=cleaned_underlying,
+                asof=asof_timestamp,
+                run_id=effective_run_id,
+                rate_series_id=cleaned_rate_series_id,
+                rate_source=rate_source,
+                rate_observation_date=rate_selection.observation_date,
+                spot_source=spot_source,
+                dividend_yield=cleaned_dividend_yield,
+                dividend_yield_source=cleaned_dividend_yield_source,
+                feed=resolved_feed,
+                raw_option_contract_count=raw_option_contract_count,
+                normalized_option_contract_count=len(option_chain),
+                dropped_before_cleaning_count=dropped_before_cleaning_count,
+                accepted_quote_count=int(
+                    len(quote_cleaning_for_artifacts.cleaned_quotes)
+                ),
+                rejected_quote_count=int(
+                    len(quote_cleaning_for_artifacts.rejected_quotes)
+                ),
+                warnings=warnings,
+                artifact_paths=artifact_paths,
+                library_commit=cleaned_library_commit,
+            ),
         )
 
         return ProviderSnapshotResult(
@@ -642,7 +698,9 @@ class MarketDataPipeline:
         _preflight_fred_backfill_targets(
             self.storage,
             series_ids=cleaned_series_ids,
+            start_date=start_date,
             end_date=end_date,
+            run_id=metadata.run_id,
             overwrite=overwrite,
         )
 
@@ -679,7 +737,9 @@ class MarketDataPipeline:
 
             partitions = _fred_backfill_partitions(
                 series_id=series_id,
+                start_date=start_date,
                 end_date=end_date,
+                run_id=metadata.run_id,
             )
             bronze_json_path = self.storage.write_json(
                 _provider_backfill_payload_document(payload, request=request),
@@ -695,6 +755,7 @@ class MarketDataPipeline:
                     series_id=series_id,
                     start_date=start_date,
                     end_date=end_date,
+                    request_metadata=request,
                     raw_rows=raw_rows,
                     normalized_rows=normalized_rows,
                     layer="bronze",
@@ -722,6 +783,7 @@ class MarketDataPipeline:
                     series_id=series_id,
                     start_date=start_date,
                     end_date=end_date,
+                    request_metadata=request,
                     raw_rows=raw_rows,
                     normalized_rows=normalized_rows,
                     layer="silver",
@@ -811,7 +873,9 @@ class MarketDataPipeline:
             self.storage,
             symbols=cleaned_symbols,
             timeframe=cleaned_timeframe,
+            start_date=start_timestamp.date(),
             end_date=end_timestamp.date(),
+            run_id=metadata.run_id,
             overwrite=overwrite,
         )
 
@@ -855,7 +919,9 @@ class MarketDataPipeline:
             partitions = _bars_backfill_partitions(
                 symbol=symbol,
                 timeframe=cleaned_timeframe,
+                start_date=start_timestamp.date(),
                 end_date=end_timestamp.date(),
+                run_id=metadata.run_id,
             )
             bronze_json_path = self.storage.write_json(
                 _provider_backfill_payload_document(
@@ -876,6 +942,7 @@ class MarketDataPipeline:
                     end=end_timestamp,
                     timeframe=cleaned_timeframe,
                     feed=cleaned_feed or self.config.alpaca.feed,
+                    request_metadata={**request, "symbols": [symbol]},
                     raw_rows=raw_rows,
                     normalized_rows=normalized_rows,
                     layer="bronze",
@@ -905,6 +972,7 @@ class MarketDataPipeline:
                     end=end_timestamp,
                     timeframe=cleaned_timeframe,
                     feed=cleaned_feed or self.config.alpaca.feed,
+                    request_metadata={**request, "symbols": [symbol]},
                     raw_rows=raw_rows,
                     normalized_rows=normalized_rows,
                     layer="silver",
@@ -1236,7 +1304,9 @@ def _preflight_fred_backfill_targets(
     storage: LocalStorage,
     *,
     series_ids: Sequence[str],
+    start_date: date,
     end_date: date,
+    run_id: str,
     overwrite: bool,
 ) -> None:
     if overwrite:
@@ -1245,7 +1315,9 @@ def _preflight_fred_backfill_targets(
         for path in _expected_fred_backfill_target_paths(
             storage,
             series_id=series_id,
+            start_date=start_date,
             end_date=end_date,
+            run_id=run_id,
         ):
             if path.exists():
                 raise FileExistsError(
@@ -1258,7 +1330,9 @@ def _preflight_bars_backfill_targets(
     *,
     symbols: Sequence[str],
     timeframe: str,
+    start_date: date,
     end_date: date,
+    run_id: str,
     overwrite: bool,
 ) -> None:
     if overwrite:
@@ -1268,7 +1342,9 @@ def _preflight_bars_backfill_targets(
             storage,
             symbol=symbol,
             timeframe=timeframe,
+            start_date=start_date,
             end_date=end_date,
+            run_id=run_id,
         ):
             if path.exists():
                 raise FileExistsError(
@@ -1280,9 +1356,16 @@ def _expected_fred_backfill_target_paths(
     storage: LocalStorage,
     *,
     series_id: str,
+    start_date: date,
     end_date: date,
+    run_id: str,
 ) -> tuple[Path, ...]:
-    partitions = _fred_backfill_partitions(series_id=series_id, end_date=end_date)
+    partitions = _fred_backfill_partitions(
+        series_id=series_id,
+        start_date=start_date,
+        end_date=end_date,
+        run_id=run_id,
+    )
     return (
         _target_path(
             storage,
@@ -1320,12 +1403,16 @@ def _expected_bars_backfill_target_paths(
     *,
     symbol: str,
     timeframe: str,
+    start_date: date,
     end_date: date,
+    run_id: str,
 ) -> tuple[Path, ...]:
     partitions = _bars_backfill_partitions(
         symbol=symbol,
         timeframe=timeframe,
+        start_date=start_date,
         end_date=end_date,
+        run_id=run_id,
     )
     return (
         _target_path(
@@ -1362,18 +1449,33 @@ def _expected_bars_backfill_target_paths(
 def _fred_backfill_partitions(
     *,
     series_id: str,
+    start_date: date,
     end_date: date,
+    run_id: str,
 ) -> dict[str, PartitionValue]:
-    return {"series_id": series_id, "date": end_date}
+    return {
+        "series_id": series_id,
+        "start_date": start_date,
+        "end_date": end_date,
+        "run_id": run_id,
+    }
 
 
 def _bars_backfill_partitions(
     *,
     symbol: str,
     timeframe: str,
+    start_date: date,
     end_date: date,
+    run_id: str,
 ) -> dict[str, PartitionValue]:
-    return {"symbol": symbol, "timeframe": timeframe, "date": end_date}
+    return {
+        "symbol": symbol,
+        "timeframe": timeframe,
+        "start_date": start_date,
+        "end_date": end_date,
+        "run_id": run_id,
+    }
 
 
 def _provider_backfill_payload_document(
@@ -1382,7 +1484,7 @@ def _provider_backfill_payload_document(
     request: Mapping[str, Any],
 ) -> dict[str, object]:
     return {
-        "request": _jsonable_provider_value(request),
+        "request": _sanitized_request_metadata(request),
         "payload": _jsonable_provider_value(payload),
     }
 
@@ -1393,6 +1495,7 @@ def _fred_backfill_manifest(
     series_id: str,
     start_date: date,
     end_date: date,
+    request_metadata: Mapping[str, Any],
     raw_rows: int,
     normalized_rows: int,
     layer: str,
@@ -1413,6 +1516,7 @@ def _fred_backfill_manifest(
         "series_id": series_id,
         "start_date": start_date,
         "end_date": end_date,
+        "request_metadata": _sanitized_request_metadata(request_metadata),
         "rows": {"raw": raw_rows, "normalized": normalized_rows},
         "warnings": list(warnings),
         "artifacts": dict(artifacts),
@@ -1428,6 +1532,7 @@ def _bars_backfill_manifest(
     end: pd.Timestamp,
     timeframe: str,
     feed: str,
+    request_metadata: Mapping[str, Any],
     raw_rows: int,
     normalized_rows: int,
     layer: str,
@@ -1450,6 +1555,7 @@ def _bars_backfill_manifest(
         "end": end,
         "timeframe": timeframe,
         "feed": feed,
+        "request_metadata": _sanitized_request_metadata(request_metadata),
         "rows": {"raw": raw_rows, "normalized": normalized_rows},
         "warnings": list(warnings),
         "artifacts": dict(artifacts),
@@ -1477,10 +1583,17 @@ def _backfill_run_details(
         "start": start,
         "end": end,
         "rows": {"raw": rows_in, "normalized": rows_out},
-        "requests": [dict(request) for request in requests],
+        "requests": [_sanitized_request_metadata(request) for request in requests],
         "warnings": list(warnings),
         "library_commit": library_commit,
     }
+
+
+def _sanitized_request_metadata(request: Mapping[str, Any]) -> dict[str, object]:
+    sanitized = _jsonable_provider_value(dict(request))
+    if not isinstance(sanitized, dict):
+        raise TypeError("request metadata must serialize to a JSON object")
+    return sanitized
 
 
 def _count_fred_observations(payload: Mapping[str, Any]) -> int:
@@ -1817,20 +1930,20 @@ def _first_pass_snapshot_assumption_warnings(
     if dividend_yield == 0.0 and dividend_yield_source.strip().lower() == "assumption":
         warnings.append(_DIVIDEND_ASSUMPTION_WARNING)
     warnings.append(
-        "first_pass_assumption: "
+        "documented_assumption: "
         f"rate_series_id={rate_series_id}, "
         f"default_rate_series_id={_DEFAULT_RATE_SERIES_ID}, "
-        "no_curve_interpolation"
+        "curve_interpolation=not_enabled"
     )
     return tuple(warnings)
 
 
 def _first_pass_limitations() -> dict[str, str]:
     return {
-        "curve_interpolation": "not_implemented",
-        "dividend_inference": "not_implemented",
-        "option_chain_backfill": "not_implemented",
-        "scheduling": "not_implemented",
+        "curve_interpolation": "not_enabled",
+        "dividend_inference": "not_enabled",
+        "option_chain_backfill": "not_enabled",
+        "scheduling": "not_enabled",
     }
 
 
@@ -1912,6 +2025,7 @@ def _write_provider_snapshot_bronze(
     fred_payload: Mapping[str, Any],
     rate_series_id: str,
     feed: str,
+    request_metadata: Mapping[str, Any],
     overwrite: bool,
     library_commit: str | None,
 ) -> ProviderSnapshotBronzePaths:
@@ -1947,6 +2061,7 @@ def _write_provider_snapshot_bronze(
             provider_snapshot,
             rate_series_id=rate_series_id,
             feed=feed,
+            request_metadata=request_metadata,
             library_commit=library_commit,
         ),
         layer="bronze",
@@ -2062,6 +2177,7 @@ def _provider_bronze_manifest(
     *,
     rate_series_id: str,
     feed: str,
+    request_metadata: Mapping[str, Any],
     library_commit: str | None,
 ) -> dict[str, object]:
     return {
@@ -2079,12 +2195,13 @@ def _provider_bronze_manifest(
             "provider": "fred",
             "series_id": rate_series_id,
             "default_series_id": _DEFAULT_RATE_SERIES_ID,
-            "curve_interpolation": "not_implemented",
+            "curve_interpolation": "not_enabled",
         },
         "dividend_assumptions": _provider_snapshot_dividend_assumptions(
             provider_snapshot
         ),
-        "first_pass_limitations": _first_pass_limitations(),
+        "current_provider_scope": _first_pass_limitations(),
+        "request_metadata": _sanitized_request_metadata(request_metadata),
         "rows": dict(provider_snapshot.row_counts),
         "warnings": list(provider_snapshot.warnings),
         "artifacts": {
@@ -2106,8 +2223,40 @@ def _provider_snapshot_dividend_assumptions(
             str(market_row["dividend_yield_source"]),
             "dividend_yield_source",
         ),
-        "dividend_inference": "not_implemented",
+        "dividend_inference": "not_enabled",
     }
+
+
+def _provider_snapshot_request_metadata(
+    *,
+    underlying: str,
+    asof: pd.Timestamp,
+    expiry_gte: date | str | None,
+    expiry_lte: date | str | None,
+    strike_gte: float | None,
+    strike_lte: float | None,
+    option_type: str | None,
+    feed: str,
+    rate_series_id: str,
+    fred_observation_end: date | None = None,
+    fred_observation_start: date | None = None,
+) -> dict[str, object]:
+    request_metadata: dict[str, Any] = {
+        "underlying": underlying,
+        "asof": asof,
+        "expiry_gte": expiry_gte,
+        "expiry_lte": expiry_lte,
+        "strike_gte": strike_gte,
+        "strike_lte": strike_lte,
+        "option_type": option_type,
+        "feed": feed,
+        "rate_series_id": rate_series_id,
+    }
+    if fred_observation_start is not None:
+        request_metadata["fred_observation_start"] = fred_observation_start
+    if fred_observation_end is not None:
+        request_metadata["fred_observation_end"] = fred_observation_end
+    return _sanitized_request_metadata(request_metadata)
 
 
 def _expected_provider_snapshot_target_paths(
@@ -2304,6 +2453,65 @@ def _provider_snapshot_artifact_paths(
         *model_validation_bundle.artifact_paths,
         model_validation_bundle.manifest_path,
     )
+
+
+def _provider_snapshot_run_details(
+    *,
+    storage: LocalStorage,
+    underlying: str,
+    asof: pd.Timestamp,
+    run_id: str,
+    rate_series_id: str,
+    rate_source: str,
+    rate_observation_date: pd.Timestamp,
+    spot_source: str,
+    dividend_yield: float,
+    dividend_yield_source: str,
+    feed: str,
+    raw_option_contract_count: int,
+    normalized_option_contract_count: int,
+    dropped_before_cleaning_count: int,
+    accepted_quote_count: int,
+    rejected_quote_count: int,
+    warnings: Sequence[str],
+    artifact_paths: Sequence[Path],
+    library_commit: str | None,
+) -> dict[str, object]:
+    return {
+        "operation": "snapshot",
+        "provider": "alpaca+fred",
+        "underlying": underlying,
+        "asof": _utc_isoformat(asof),
+        "run_id": run_id,
+        "rate_series_id": rate_series_id,
+        "rate_source": rate_source,
+        "rate_observation_date": rate_observation_date.date().isoformat(),
+        "spot_source": spot_source,
+        "dividend_yield": dividend_yield,
+        "dividend_yield_source": dividend_yield_source,
+        "feed": feed,
+        "raw_option_contract_count": raw_option_contract_count,
+        "normalized_option_contract_count": normalized_option_contract_count,
+        "dropped_before_cleaning_count": dropped_before_cleaning_count,
+        "accepted_quote_count": accepted_quote_count,
+        "rejected_quote_count": rejected_quote_count,
+        "warnings": list(warnings),
+        "artifact_paths": _relative_artifact_references(storage, artifact_paths),
+        "library_commit": library_commit,
+    }
+
+
+def _relative_artifact_references(
+    storage: LocalStorage,
+    artifact_paths: Sequence[Path],
+) -> list[str]:
+    references: list[str] = []
+    for path in artifact_paths:
+        try:
+            references.append(path.relative_to(storage.root).as_posix())
+        except ValueError:
+            references.append(path.as_posix())
+    return references
 
 
 def _preflight_pipeline_targets(

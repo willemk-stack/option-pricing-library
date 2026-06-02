@@ -117,7 +117,7 @@ The same pattern also applies to:
 - `mc_price_from_ctx`
 - `binom_price_from_ctx`
 
-## Provider-backed marketdata first pass
+## Provider-backed marketdata current scope
 
 The Phase B4 provider-backed path can fetch one live-capable snapshot and two
 simple backfill artifact sets through `MarketDataPipeline`. It is intentionally
@@ -155,15 +155,16 @@ Backfill Alpaca equity bars:
 python scripts/fetch_market_snapshot.py backfill-bars --symbols SPY QQQ --start 2026-05-20 --end 2026-05-23 --timeframe 1Day --data-root out/marketdata-live
 ```
 
-Current first-pass assumptions and limitations are written as warnings or
-manifest notes:
+Current documented assumptions and provider-scope limits are written as
+warnings or manifest notes:
 
 - `dividend_yield` defaults to `0.0` with source `assumption`
 - the default rate series is FRED `DGS3MO`
-- rate selection uses one FRED series observation; no curve interpolation yet
-- no dividend inference yet
+- rate selection uses one FRED series observation; curve interpolation is not
+  enabled yet
+- dividend inference is not enabled yet
 - no option-chain historical backfill yet
-- no scheduling, cron, or background refresh job yet
+- scheduling, cron, and background refresh are not enabled yet
 - Alpaca option contracts without usable bid/ask may be dropped before quote
   cleaning; snapshot warnings include the raw, normalized, and dropped counts
 
