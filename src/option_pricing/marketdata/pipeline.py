@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, is_dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Protocol, cast
@@ -38,9 +38,10 @@ from option_pricing.marketdata.contracts import (
 from option_pricing.marketdata.errors import ProviderDataUnavailableError
 from option_pricing.marketdata.gold import GoldConversionPaths, write_gold_artifacts
 from option_pricing.marketdata.normalize import (
+    AlpacaOptionChainNormalizationAudit,
     normalize_alpaca_bars,
     normalize_alpaca_latest_quotes,
-    normalize_alpaca_option_chain,
+    normalize_alpaca_option_chain_with_audit,
     normalize_fred_observations,
     normalize_market_inputs,
     normalize_option_chain,
@@ -65,8 +66,36 @@ PROVIDER_SNAPSHOT_BRONZE_SCHEMA_VERSION = "provider_snapshot_bronze.v1"
 PROVIDER_SNAPSHOT_FIXTURE_NAME = "provider_snapshot_v1"
 PROVIDER_SNAPSHOT_SOURCE_TYPE = "provider_snapshot"
 _DEFAULT_RATE_SERIES_ID = "DGS3MO"
+_DEFAULT_SNAPSHOT_RATE_LOOKBACK_DAYS = 90
+_DEFAULT_RATE_CURVE_SERIES_IDS = (
+    "DGS1MO",
+    "DGS3MO",
+    "DGS6MO",
+    "DGS1",
+    "DGS2",
+)
+_PROVIDER_RATE_CURVE_COLUMNS = (
+    "series_id",
+    "tenor",
+    "observation_date",
+    "value_percent",
+    "continuous_decimal",
+    "source",
+    "asof",
+    "day_count",
+)
+_RATE_CURVE_TENORS = {
+    "DGS1MO": "1M",
+    "DGS3MO": "3M",
+    "DGS6MO": "6M",
+    "DGS1": "1Y",
+    "DGS2": "2Y",
+}
 _DEFAULT_BARS_TIMEFRAME = "1Day"
 _DEFAULT_DAY_COUNT = "ACT/365"
+_PROVIDER_REJECTED_CONTRACTS_DATASET = "provider_rejected_contracts"
+_PROVIDER_RATE_CURVE_DATASET = "curves"
+_PROVIDER_RATE_CURVE_SCHEMA_VERSION = "provider_rate_curve_gold.v1"
 _DIVIDEND_ASSUMPTION_WARNING = (
     "documented_assumption: dividend_yield=0.0, "
     "dividend_yield_source=assumption, dividend_inference=not_enabled"
@@ -187,6 +216,15 @@ class ProviderSnapshotSilverPaths:
     cleaned_quotes: Path
     rejected_quotes: Path
     manifest: Path
+    provider_rejected_contracts: Path | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderSnapshotRateCurvePaths:
+    """Filesystem paths for one provider-backed Gold rate-curve artifact."""
+
+    rate_curve: Path
+    manifest: Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,8 +238,12 @@ class ProviderSnapshotResult:
     rate: float
     rate_source: str
     rate_observation_date: pd.Timestamp
+    rate_series_id: str
     dividend_yield: float
     dividend_yield_source: str
+    feed: str
+    raw_option_contract_count: int
+    normalized_option_contract_count: int
     accepted_quote_count: int
     rejected_quote_count: int
     dropped_before_cleaning_count: int
@@ -211,6 +253,33 @@ class ProviderSnapshotResult:
     silver_paths: ProviderSnapshotSilverPaths
     gold_paths: GoldConversionPaths
     model_validation_bundle: ModelValidationBundleResult
+    provider_rejected_contract_count: int = 0
+    rate_curve_paths: ProviderSnapshotRateCurvePaths | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderRefreshDailyCounts:
+    """Aggregate counts for one provider-backed refresh_daily run."""
+
+    raw_option_contract_count: int
+    normalized_option_contract_count: int
+    dropped_before_cleaning_count: int
+    provider_rejected_contract_count: int
+    accepted_quote_count: int
+    rejected_quote_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderRefreshDailyResult:
+    """Typed aggregate result for one provider-backed refresh_daily run."""
+
+    aggregate_run_id: str
+    child_run_ids: tuple[str, ...]
+    underlyings: tuple[str, ...]
+    artifact_paths: tuple[Path, ...]
+    counts: ProviderRefreshDailyCounts
+    warnings: tuple[str, ...]
+    results: tuple[ProviderSnapshotResult, ...]
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -245,6 +314,7 @@ class _ProviderSnapshotTargetPaths:
     bronze_paths: ProviderSnapshotBronzePaths
     silver_paths: ProviderSnapshotSilverPaths
     gold_paths: GoldConversionPaths
+    rate_curve_paths: ProviderSnapshotRateCurvePaths | None
     model_validation_bundle_paths: ModelValidationBundlePaths
 
 
@@ -375,6 +445,8 @@ class MarketDataPipeline:
         feed: str | None = None,
         dividend_yield: float = 0.0,
         dividend_yield_source: str = "assumption",
+        rate_lookback_days: int = _DEFAULT_SNAPSHOT_RATE_LOOKBACK_DAYS,
+        curve_series_ids: Sequence[str] | None = None,
         overwrite: bool = False,
         library_commit: str | None = None,
     ) -> ProviderSnapshotResult:
@@ -390,8 +462,19 @@ class MarketDataPipeline:
             "dividend_yield_source",
         )
         cleaned_dividend_yield = _finite_float(dividend_yield, "dividend_yield")
+        cleaned_rate_lookback_days = _nonnegative_int(
+            rate_lookback_days,
+            "rate_lookback_days",
+        )
+        cleaned_curve_series_ids = _snapshot_curve_series_ids(
+            curve_series_ids,
+            primary_series_id=cleaned_rate_series_id,
+        )
         cleaned_library_commit = _optional_text(library_commit, "library_commit")
         resolved_feed = feed or self.config.alpaca.feed
+        fred_observation_start = asof_timestamp.date() - timedelta(
+            days=cleaned_rate_lookback_days
+        )
         provider_sources = {
             "spot": "alpaca",
             "option_chain": "alpaca",
@@ -407,7 +490,10 @@ class MarketDataPipeline:
             option_type=option_type,
             feed=resolved_feed,
             rate_series_id=cleaned_rate_series_id,
+            rate_lookback_days=cleaned_rate_lookback_days,
+            curve_series_ids=cleaned_curve_series_ids,
             fred_observation_end=asof_timestamp.date(),
+            fred_observation_start=fred_observation_start,
         )
 
         _preflight_provider_snapshot_targets(
@@ -418,6 +504,7 @@ class MarketDataPipeline:
                 run_id=effective_run_id,
             ),
             rate_series_id=cleaned_rate_series_id,
+            include_rate_curve=bool(cleaned_curve_series_ids),
             overwrite=overwrite,
         )
 
@@ -439,6 +526,7 @@ class MarketDataPipeline:
         fred_payload = self._fetch_fred_observations(
             cleaned_rate_series_id,
             asof=asof_timestamp,
+            lookback_days=cleaned_rate_lookback_days,
         )
 
         equity_quotes = _normalize_latest_equity_quotes_for_snapshot(
@@ -456,18 +544,18 @@ class MarketDataPipeline:
                 option_chain_payload,
                 underlying=cleaned_underlying,
                 asof=asof_timestamp,
+                feed=resolved_feed,
             )
         except ProviderSnapshotDataUnavailableError as exc:
             raise ProviderSnapshotDataUnavailableError(
                 f"{exc}; raw_option_contracts={raw_option_contract_count}, "
                 "normalized_option_contracts=0, "
-                "reason=missing_or_unusable_bid_ask"
+                "reason=provider_normalization"
             ) from None
-        option_chain = normalize_option_chain(provider_option_chain)
-        dropped_before_cleaning_count = max(
-            raw_option_contract_count - len(option_chain),
-            0,
-        )
+        option_chain = normalize_option_chain(provider_option_chain.option_chain)
+        provider_rejected_contracts = provider_option_chain.rejected_contracts
+        provider_rejected_contract_count = int(len(provider_rejected_contracts))
+        dropped_before_cleaning_count = provider_rejected_contract_count
 
         fred_series = _normalize_fred_observations_for_snapshot(
             fred_payload,
@@ -478,6 +566,20 @@ class MarketDataPipeline:
             fred_series,
             series_id=cleaned_rate_series_id,
             asof=asof_timestamp,
+            lookback_days=cleaned_rate_lookback_days,
+        )
+        rate_curve = _build_provider_snapshot_rate_curve(
+            asof=asof_timestamp,
+            day_count=_DEFAULT_DAY_COUNT,
+            primary_series_id=cleaned_rate_series_id,
+            primary_fred_series=fred_series,
+            requested_series_ids=cleaned_curve_series_ids,
+            lookback_days=cleaned_rate_lookback_days,
+            load_series_frame=lambda series_id: self._load_snapshot_rate_curve_series(
+                series_id,
+                asof=asof_timestamp,
+                lookback_days=cleaned_rate_lookback_days,
+            ),
         )
         rate_source = f"{rate_selection.source}:{rate_selection.series_id}"
         market_inputs = normalize_market_inputs(
@@ -510,6 +612,7 @@ class MarketDataPipeline:
             dropped_before_cleaning_count=dropped_before_cleaning_count,
             raw_option_contract_count=raw_option_contract_count,
             normalized_option_contract_count=len(option_chain),
+            provider_rejected_contract_count=provider_rejected_contract_count,
             rate_series_id=cleaned_rate_series_id,
             dividend_yield=cleaned_dividend_yield,
             dividend_yield_source=cleaned_dividend_yield_source,
@@ -542,7 +645,9 @@ class MarketDataPipeline:
                 "equity_quotes": int(len(equity_quotes)),
                 "option_contracts_raw": int(raw_option_contract_count),
                 "option_contracts_normalized": int(len(option_chain)),
+                "provider_rejected_contracts": int(provider_rejected_contract_count),
                 "fred_observations": int(len(fred_series)),
+                "rate_curve_points": int(len(rate_curve)),
                 "cleaned_quotes": int(len(quote_cleaning.cleaned_quotes)),
                 "rejected_quotes": int(len(quote_cleaning.rejected_quotes)),
             },
@@ -553,6 +658,7 @@ class MarketDataPipeline:
             self.storage,
             provider_snapshot,
             rate_series_id=cleaned_rate_series_id,
+            include_rate_curve=bool(cleaned_curve_series_ids),
             overwrite=overwrite,
         )
         bronze_paths = _write_provider_snapshot_bronze(
@@ -574,7 +680,17 @@ class MarketDataPipeline:
             fred_series=fred_series,
             market_inputs=market_inputs,
             quote_cleaning=quote_cleaning_for_artifacts,
+            provider_rejected_contracts=provider_rejected_contracts,
             rate_series_id=cleaned_rate_series_id,
+            overwrite=overwrite,
+            library_commit=cleaned_library_commit,
+        )
+        rate_curve_paths = _write_provider_snapshot_rate_curve_gold(
+            self.storage,
+            provider_snapshot,
+            rate_curve=rate_curve,
+            requested_series_ids=cleaned_curve_series_ids,
+            lookback_days=cleaned_rate_lookback_days,
             overwrite=overwrite,
             library_commit=cleaned_library_commit,
         )
@@ -605,6 +721,7 @@ class MarketDataPipeline:
             bronze_paths=bronze_paths,
             silver_paths=silver_paths,
             gold_paths=gold_paths,
+            rate_curve_paths=rate_curve_paths,
             model_validation_bundle=model_validation_bundle,
         )
         spot_source = _required_text(
@@ -631,9 +748,11 @@ class MarketDataPipeline:
                 dividend_yield=cleaned_dividend_yield,
                 dividend_yield_source=cleaned_dividend_yield_source,
                 feed=resolved_feed,
+                rate_lookback_days=cleaned_rate_lookback_days,
                 raw_option_contract_count=raw_option_contract_count,
                 normalized_option_contract_count=len(option_chain),
                 dropped_before_cleaning_count=dropped_before_cleaning_count,
+                provider_rejected_contract_count=provider_rejected_contract_count,
                 accepted_quote_count=int(
                     len(quote_cleaning_for_artifacts.cleaned_quotes)
                 ),
@@ -654,8 +773,12 @@ class MarketDataPipeline:
             rate=rate_selection.rate,
             rate_source=rate_source,
             rate_observation_date=rate_selection.observation_date,
+            rate_series_id=cleaned_rate_series_id,
             dividend_yield=cleaned_dividend_yield,
             dividend_yield_source=cleaned_dividend_yield_source,
+            feed=resolved_feed,
+            raw_option_contract_count=int(raw_option_contract_count),
+            normalized_option_contract_count=int(len(option_chain)),
             accepted_quote_count=int(len(quote_cleaning_for_artifacts.cleaned_quotes)),
             rejected_quote_count=int(len(quote_cleaning_for_artifacts.rejected_quotes)),
             dropped_before_cleaning_count=int(dropped_before_cleaning_count),
@@ -665,6 +788,135 @@ class MarketDataPipeline:
             silver_paths=silver_paths,
             gold_paths=gold_paths,
             model_validation_bundle=model_validation_bundle,
+            provider_rejected_contract_count=provider_rejected_contract_count,
+            rate_curve_paths=rate_curve_paths,
+        )
+
+    def refresh_daily(
+        self,
+        underlyings: str | Sequence[str],
+        *,
+        asof: str | pd.Timestamp | None = None,
+        run_id_prefix: str | None = None,
+        rate_series_id: str = _DEFAULT_RATE_SERIES_ID,
+        expiry_gte: date | str | None = None,
+        expiry_lte: date | str | None = None,
+        strike_gte: float | None = None,
+        strike_lte: float | None = None,
+        option_type: str | None = None,
+        feed: str | None = None,
+        dividend_yield: float = 0.0,
+        dividend_yield_source: str = "assumption",
+        rate_lookback_days: int = _DEFAULT_SNAPSHOT_RATE_LOOKBACK_DAYS,
+        curve_series_ids: Sequence[str] | None = None,
+        overwrite: bool = False,
+        library_commit: str | None = None,
+    ) -> ProviderRefreshDailyResult:
+        """Run one provider-backed snapshot per underlying and record an aggregate run."""
+
+        started_at = datetime.now(UTC)
+        asof_timestamp = _coerce_asof(asof)
+        cleaned_underlyings = _clean_alpaca_symbols(underlyings)
+        cleaned_library_commit = _optional_text(library_commit, "library_commit")
+        aggregate_run_id = _new_refresh_daily_run_id(
+            asof_timestamp,
+            run_id_prefix=run_id_prefix,
+        )
+
+        results: list[ProviderSnapshotResult] = []
+        for index, underlying in enumerate(cleaned_underlyings, start=1):
+            results.append(
+                self.snapshot(
+                    underlying,
+                    asof=asof_timestamp,
+                    run_id=_refresh_daily_child_run_id(
+                        aggregate_run_id,
+                        underlying,
+                        ordinal=index,
+                    ),
+                    rate_series_id=rate_series_id,
+                    expiry_gte=expiry_gte,
+                    expiry_lte=expiry_lte,
+                    strike_gte=strike_gte,
+                    strike_lte=strike_lte,
+                    option_type=option_type,
+                    feed=feed,
+                    dividend_yield=dividend_yield,
+                    dividend_yield_source=dividend_yield_source,
+                    rate_lookback_days=rate_lookback_days,
+                    curve_series_ids=curve_series_ids,
+                    overwrite=overwrite,
+                    library_commit=cleaned_library_commit,
+                )
+            )
+
+        artifact_paths = tuple(
+            path for result in results for path in result.artifact_paths
+        )
+        child_run_ids = tuple(result.run_id for result in results)
+        warnings = _merge_unique_warnings(
+            warning for result in results for warning in result.warnings
+        )
+        counts = ProviderRefreshDailyCounts(
+            raw_option_contract_count=sum(
+                int(result.raw_option_contract_count) for result in results
+            ),
+            normalized_option_contract_count=sum(
+                int(result.normalized_option_contract_count) for result in results
+            ),
+            dropped_before_cleaning_count=sum(
+                int(result.dropped_before_cleaning_count) for result in results
+            ),
+            provider_rejected_contract_count=sum(
+                int(result.provider_rejected_contract_count) for result in results
+            ),
+            accepted_quote_count=sum(
+                int(result.accepted_quote_count) for result in results
+            ),
+            rejected_quote_count=sum(
+                int(result.rejected_quote_count) for result in results
+            ),
+        )
+        self.storage.record_run(
+            RunMetadata(
+                run_id=aggregate_run_id,
+                asof=cast(datetime, _utc_timestamp(asof_timestamp).to_pydatetime()),
+                started_at=started_at,
+                git_sha=cleaned_library_commit,
+            ),
+            artifacts=artifact_paths,
+            details=_provider_refresh_daily_run_details(
+                storage=self.storage,
+                aggregate_run_id=aggregate_run_id,
+                child_run_ids=child_run_ids,
+                underlyings=cleaned_underlyings,
+                asof=asof_timestamp,
+                rate_series_id=_clean_rate_series_id(rate_series_id),
+                feed=feed or self.config.alpaca.feed,
+                expiry_gte=expiry_gte,
+                expiry_lte=expiry_lte,
+                strike_gte=strike_gte,
+                strike_lte=strike_lte,
+                option_type=option_type,
+                dividend_yield=_finite_float(dividend_yield, "dividend_yield"),
+                dividend_yield_source=_required_text(
+                    dividend_yield_source,
+                    "dividend_yield_source",
+                ),
+                counts=counts,
+                warnings=warnings,
+                artifact_paths=artifact_paths,
+                library_commit=cleaned_library_commit,
+            ),
+        )
+        return ProviderRefreshDailyResult(
+            aggregate_run_id=aggregate_run_id,
+            child_run_ids=child_run_ids,
+            underlyings=cleaned_underlyings,
+            artifact_paths=artifact_paths,
+            counts=counts,
+            warnings=warnings,
+            results=tuple(results),
         )
 
     def backfill_fred(
@@ -1072,10 +1324,13 @@ class MarketDataPipeline:
         series_id: str,
         *,
         asof: pd.Timestamp,
+        lookback_days: int,
     ) -> Mapping[str, Any]:
+        observation_start = asof.date() - timedelta(days=lookback_days)
         try:
             return self._resolve_fred_client().fetch_observations(
                 series_id,
+                observation_start=observation_start,
                 observation_end=asof.date(),
                 sort_order="asc",
             )
@@ -1083,6 +1338,27 @@ class MarketDataPipeline:
             raise ProviderSnapshotDataUnavailableError(
                 f"FRED observations are unavailable for series_id={series_id!r}"
             ) from None
+
+    def _load_snapshot_rate_curve_series(
+        self,
+        series_id: str,
+        *,
+        asof: pd.Timestamp,
+        lookback_days: int,
+    ) -> pd.DataFrame | None:
+        try:
+            payload = self._fetch_fred_observations(
+                series_id,
+                asof=asof,
+                lookback_days=lookback_days,
+            )
+            return _normalize_fred_observations_for_snapshot(
+                payload,
+                series_id=series_id,
+                asof=asof,
+            )
+        except ProviderSnapshotDataUnavailableError:
+            return None
 
     def _resolve_alpaca_client(self) -> _AlpacaClientLike:
         if self._alpaca_client is None:
@@ -1182,6 +1458,18 @@ def _clean_rate_series_id(value: str) -> str:
     return _required_text(value, "rate_series_id").upper()
 
 
+def _nonnegative_int(value: object, field_name: str) -> int:
+    if isinstance(value, bool):
+        raise TypeError(f"{field_name} must be an integer")
+    try:
+        integer = int(cast(Any, value))
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{field_name} must be an integer") from exc
+    if integer < 0:
+        raise ValueError(f"{field_name} must be >= 0")
+    return integer
+
+
 def _required_text(value: str, field_name: str) -> str:
     if not isinstance(value, str):
         raise TypeError(f"{field_name} must be a string")
@@ -1216,6 +1504,25 @@ def _optional_run_id(value: str | None) -> str | None:
 def _new_run_id(asof: pd.Timestamp) -> str:
     timestamp = asof.strftime("%Y%m%dT%H%M%SZ")
     return f"b4a-{timestamp}-{uuid4().hex[:8]}"
+
+
+def _new_refresh_daily_run_id(
+    asof: pd.Timestamp,
+    *,
+    run_id_prefix: str | None,
+) -> str:
+    cleaned_prefix = _optional_text(run_id_prefix, "run_id_prefix")
+    timestamp = asof.strftime("%Y%m%dT%H%M%SZ")
+    return f"{cleaned_prefix or 'b4-refresh-daily'}-{timestamp}-{uuid4().hex[:8]}"
+
+
+def _refresh_daily_child_run_id(
+    aggregate_run_id: str,
+    underlying: str,
+    *,
+    ordinal: int,
+) -> str:
+    return f"{aggregate_run_id}-{ordinal:02d}-{underlying.lower()}"
 
 
 def _backfill_metadata(
@@ -1791,12 +2098,14 @@ def _normalize_option_chain_for_snapshot(
     *,
     underlying: str,
     asof: pd.Timestamp,
-) -> pd.DataFrame:
+    feed: str | None,
+) -> AlpacaOptionChainNormalizationAudit:
     try:
-        return normalize_alpaca_option_chain(
+        return normalize_alpaca_option_chain_with_audit(
             payload,
             underlying=underlying,
             asof=asof,
+            feed=feed,
         )
     except Exception:
         raise ProviderSnapshotDataUnavailableError(
@@ -1824,6 +2133,7 @@ def _select_rate_for_snapshot(
     *,
     series_id: str,
     asof: pd.Timestamp,
+    lookback_days: int,
 ) -> Any:
     try:
         return select_latest_fred_rate_at_or_before_asof(
@@ -1832,10 +2142,102 @@ def _select_rate_for_snapshot(
             asof=asof,
         )
     except ProviderDataUnavailableError:
+        observation_start = asof.date() - timedelta(days=lookback_days)
         raise ProviderSnapshotDataUnavailableError(
             "No usable FRED rate observation exists for "
-            f"series_id={series_id!r} at or before {asof.date()}"
+            f"series_id={series_id!r} at or before {asof.date()} "
+            f"within the last {lookback_days} days "
+            f"(observation_start={observation_start.isoformat()})"
         ) from None
+
+
+def _snapshot_curve_series_ids(
+    curve_series_ids: Sequence[str] | None,
+    *,
+    primary_series_id: str,
+) -> tuple[str, ...]:
+    if curve_series_ids is None:
+        cleaned = list(_DEFAULT_RATE_CURVE_SERIES_IDS)
+    else:
+        if isinstance(curve_series_ids, str):
+            raw_series_ids: tuple[str, ...] = (curve_series_ids,)
+        else:
+            raw_series_ids = tuple(curve_series_ids)
+        if not raw_series_ids:
+            return ()
+        cleaned = [_clean_rate_series_id(series_id) for series_id in raw_series_ids]
+
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for series_id in cleaned:
+        if series_id in seen:
+            continue
+        seen.add(series_id)
+        deduped.append(series_id)
+    if deduped and primary_series_id not in seen:
+        deduped.insert(0, primary_series_id)
+    return tuple(deduped)
+
+
+def _build_provider_snapshot_rate_curve(
+    *,
+    asof: pd.Timestamp,
+    day_count: str,
+    primary_series_id: str,
+    primary_fred_series: pd.DataFrame,
+    requested_series_ids: Sequence[str],
+    lookback_days: int,
+    load_series_frame: Callable[[str], pd.DataFrame | None],
+) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for series_id in requested_series_ids:
+        frame = (
+            primary_fred_series
+            if series_id == primary_series_id
+            else load_series_frame(series_id)
+        )
+        if frame is None:
+            continue
+        try:
+            selection = select_latest_fred_rate_at_or_before_asof(
+                frame,
+                series_id=series_id,
+                asof=asof,
+            )
+        except ProviderDataUnavailableError:
+            continue
+        rows.append(
+            {
+                "series_id": selection.series_id,
+                "tenor": _RATE_CURVE_TENORS.get(
+                    selection.series_id, selection.series_id
+                ),
+                "observation_date": selection.observation_date,
+                "value_percent": selection.value_percent,
+                "continuous_decimal": selection.continuous_decimal,
+                "source": selection.source,
+                "asof": selection.asof,
+                "day_count": day_count,
+            }
+        )
+
+    frame = pd.DataFrame(rows, columns=list(_PROVIDER_RATE_CURVE_COLUMNS))
+    for column in ("series_id", "tenor", "source", "day_count"):
+        frame[column] = frame[column].astype("string")
+    frame["observation_date"] = pd.to_datetime(
+        frame["observation_date"],
+        errors="coerce",
+    )
+    frame["value_percent"] = pd.to_numeric(
+        frame["value_percent"],
+        errors="coerce",
+    ).astype("Float64")
+    frame["continuous_decimal"] = pd.to_numeric(
+        frame["continuous_decimal"],
+        errors="coerce",
+    ).astype("Float64")
+    frame["asof"] = pd.to_datetime(frame["asof"], errors="coerce", utc=True)
+    return frame.reset_index(drop=True)
 
 
 def _market_inputs_frame(
@@ -1895,6 +2297,7 @@ def _provider_snapshot_warnings(
     dropped_before_cleaning_count: int,
     raw_option_contract_count: int,
     normalized_option_contract_count: int,
+    provider_rejected_contract_count: int,
     rate_series_id: str,
     dividend_yield: float,
     dividend_yield_source: str,
@@ -1915,7 +2318,8 @@ def _provider_snapshot_warnings(
             f"dropped={dropped_before_cleaning_count}, "
             f"raw={raw_option_contract_count}, "
             f"normalized={normalized_option_contract_count}, "
-            "reason=missing_or_unusable_bid_ask"
+            f"provider_rejected_contracts={provider_rejected_contract_count}, "
+            "stage=provider_normalization"
         )
     return tuple(warnings)
 
@@ -1999,6 +2403,7 @@ def _preflight_provider_snapshot_targets(
     provider_snapshot: _ProviderSnapshot,
     *,
     rate_series_id: str,
+    include_rate_curve: bool,
     overwrite: bool,
 ) -> None:
     if overwrite:
@@ -2008,6 +2413,7 @@ def _preflight_provider_snapshot_targets(
         storage,
         provider_snapshot,
         rate_series_id=rate_series_id,
+        include_rate_curve=include_rate_curve,
     )
     for path in _iter_provider_snapshot_target_paths(paths):
         if path.exists():
@@ -2087,6 +2493,7 @@ def _write_provider_snapshot_silver(
     fred_series: pd.DataFrame,
     market_inputs: pd.DataFrame,
     quote_cleaning: QuoteCleaningResult,
+    provider_rejected_contracts: pd.DataFrame,
     rate_series_id: str,
     overwrite: bool,
     library_commit: str | None,
@@ -2124,6 +2531,14 @@ def _write_provider_snapshot_silver(
         filename="fred_series.parquet",
         overwrite=overwrite,
     )
+    provider_rejected_contracts_path = storage.write_frame(
+        provider_rejected_contracts,
+        layer="silver",
+        dataset=_PROVIDER_REJECTED_CONTRACTS_DATASET,
+        partitions=_provider_snapshot_partitions(provider_snapshot),
+        filename="provider_rejected_contracts.parquet",
+        overwrite=overwrite,
+    )
     return ProviderSnapshotSilverPaths(
         market_inputs=cleaning_paths.market_inputs,
         option_chain=option_chain_path,
@@ -2131,7 +2546,83 @@ def _write_provider_snapshot_silver(
         cleaned_quotes=cleaning_paths.cleaned_quotes,
         rejected_quotes=cleaning_paths.rejected_quotes,
         manifest=cleaning_paths.manifest,
+        provider_rejected_contracts=provider_rejected_contracts_path,
     )
+
+
+def _write_provider_snapshot_rate_curve_gold(
+    storage: LocalStorage,
+    provider_snapshot: _ProviderSnapshot,
+    *,
+    rate_curve: pd.DataFrame,
+    requested_series_ids: Sequence[str],
+    lookback_days: int,
+    overwrite: bool,
+    library_commit: str | None,
+) -> ProviderSnapshotRateCurvePaths | None:
+    if not requested_series_ids:
+        return None
+
+    partitions = _provider_snapshot_partitions(provider_snapshot)
+    rate_curve_path = storage.write_frame(
+        rate_curve,
+        layer="gold",
+        dataset=_PROVIDER_RATE_CURVE_DATASET,
+        partitions=partitions,
+        filename="rate_curve.parquet",
+        overwrite=overwrite,
+    )
+    manifest_path = storage.write_manifest(
+        _provider_snapshot_rate_curve_manifest(
+            provider_snapshot,
+            rate_curve=rate_curve,
+            requested_series_ids=requested_series_ids,
+            lookback_days=lookback_days,
+            library_commit=library_commit,
+        ),
+        layer="gold",
+        dataset=_PROVIDER_RATE_CURVE_DATASET,
+        partitions=partitions,
+        filename="manifest.json",
+        overwrite=overwrite,
+    )
+    return ProviderSnapshotRateCurvePaths(
+        rate_curve=rate_curve_path,
+        manifest=manifest_path,
+    )
+
+
+def _provider_snapshot_rate_curve_manifest(
+    provider_snapshot: _ProviderSnapshot,
+    *,
+    rate_curve: pd.DataFrame,
+    requested_series_ids: Sequence[str],
+    lookback_days: int,
+    library_commit: str | None,
+) -> dict[str, object]:
+    included_series_ids = [
+        str(series_id) for series_id in rate_curve["series_id"].tolist()
+    ]
+    return {
+        "provider_snapshot_rate_curve_schema_version": _PROVIDER_RATE_CURVE_SCHEMA_VERSION,
+        "artifact": "rate_curve",
+        "run_id": provider_snapshot.run_id,
+        "snapshot_id": provider_snapshot.snapshot_id,
+        "underlying": provider_snapshot.underlying,
+        "valuation_timestamp_utc": _utc_isoformat(provider_snapshot.asof),
+        "rate_compounding": "continuous",
+        "day_count": _DEFAULT_DAY_COUNT,
+        "lookback_days": int(lookback_days),
+        "requested_series_ids": [str(series_id) for series_id in requested_series_ids],
+        "included_series_ids": included_series_ids,
+        "rows": {"rate_curve": int(len(rate_curve))},
+        "artifacts": {"rate_curve": "rate_curve.parquet"},
+        "source": {
+            "source_type": PROVIDER_SNAPSHOT_SOURCE_TYPE,
+            "fixture_name": provider_snapshot.fixture_name,
+        },
+        "library_commit": library_commit,
+    }
 
 
 def _provider_payload_document(payload: Mapping[str, Any]) -> dict[str, object]:
@@ -2238,6 +2729,8 @@ def _provider_snapshot_request_metadata(
     option_type: str | None,
     feed: str,
     rate_series_id: str,
+    rate_lookback_days: int,
+    curve_series_ids: Sequence[str],
     fred_observation_end: date | None = None,
     fred_observation_start: date | None = None,
 ) -> dict[str, object]:
@@ -2251,6 +2744,8 @@ def _provider_snapshot_request_metadata(
         "option_type": option_type,
         "feed": feed,
         "rate_series_id": rate_series_id,
+        "rate_lookback_days": int(rate_lookback_days),
+        "curve_series_ids": tuple(str(series_id) for series_id in curve_series_ids),
     }
     if fred_observation_start is not None:
         request_metadata["fred_observation_start"] = fred_observation_start
@@ -2264,6 +2759,7 @@ def _expected_provider_snapshot_target_paths(
     provider_snapshot: _ProviderSnapshot,
     *,
     rate_series_id: str,
+    include_rate_curve: bool,
 ) -> _ProviderSnapshotTargetPaths:
     partitions = _provider_snapshot_partitions(provider_snapshot)
     valuation_timestamp = _utc_timestamp(provider_snapshot.asof)
@@ -2325,6 +2821,13 @@ def _expected_provider_snapshot_target_paths(
                 partitions=partitions,
                 filename="manifest.json",
             ),
+            provider_rejected_contracts=_target_path(
+                storage,
+                layer="silver",
+                dataset=_PROVIDER_REJECTED_CONTRACTS_DATASET,
+                partitions=partitions,
+                filename="provider_rejected_contracts.parquet",
+            ),
         ),
         gold_paths=GoldConversionPaths(
             market_data=_target_path(
@@ -2355,6 +2858,26 @@ def _expected_provider_snapshot_target_paths(
                 partitions=partitions,
                 filename="manifest.json",
             ),
+        ),
+        rate_curve_paths=(
+            ProviderSnapshotRateCurvePaths(
+                rate_curve=_target_path(
+                    storage,
+                    layer="gold",
+                    dataset=_PROVIDER_RATE_CURVE_DATASET,
+                    partitions=partitions,
+                    filename="rate_curve.parquet",
+                ),
+                manifest=_target_path(
+                    storage,
+                    layer="gold",
+                    dataset=_PROVIDER_RATE_CURVE_DATASET,
+                    partitions=partitions,
+                    filename="manifest.json",
+                ),
+            )
+            if include_rate_curve
+            else None
         ),
         model_validation_bundle_paths=ModelValidationBundlePaths(
             root=bundle_root,
@@ -2402,6 +2925,13 @@ def _provider_snapshot_partitions(
 def _iter_provider_snapshot_target_paths(
     paths: _ProviderSnapshotTargetPaths,
 ) -> tuple[Path, ...]:
+    curve_paths: tuple[Path, ...] = ()
+    if paths.rate_curve_paths is not None:
+        curve_paths = (
+            paths.rate_curve_paths.rate_curve,
+            paths.rate_curve_paths.manifest,
+        )
+
     return (
         paths.bronze_paths.latest_equity_quotes,
         paths.bronze_paths.option_chain,
@@ -2413,10 +2943,16 @@ def _iter_provider_snapshot_target_paths(
         paths.silver_paths.cleaned_quotes,
         paths.silver_paths.rejected_quotes,
         paths.silver_paths.manifest,
+        *(
+            ()
+            if paths.silver_paths.provider_rejected_contracts is None
+            else (paths.silver_paths.provider_rejected_contracts,)
+        ),
         paths.gold_paths.market_data,
         paths.gold_paths.market_manifest,
         paths.gold_paths.heston_quotes,
         paths.gold_paths.heston_manifest,
+        *curve_paths,
         paths.model_validation_bundle_paths.manifest,
         paths.model_validation_bundle_paths.market_data,
         paths.model_validation_bundle_paths.cleaned_quotes,
@@ -2433,8 +2969,22 @@ def _provider_snapshot_artifact_paths(
     bronze_paths: ProviderSnapshotBronzePaths,
     silver_paths: ProviderSnapshotSilverPaths,
     gold_paths: GoldConversionPaths,
+    rate_curve_paths: ProviderSnapshotRateCurvePaths | None,
     model_validation_bundle: ModelValidationBundleResult,
 ) -> tuple[Path, ...]:
+    curve_artifacts: tuple[Path, ...] = ()
+    if rate_curve_paths is not None:
+        curve_artifacts = (
+            rate_curve_paths.rate_curve,
+            rate_curve_paths.manifest,
+        )
+
+    provider_rejected_contracts_artifact: tuple[Path, ...] = ()
+    if silver_paths.provider_rejected_contracts is not None:
+        provider_rejected_contracts_artifact = (
+            silver_paths.provider_rejected_contracts,
+        )
+
     return (
         bronze_paths.latest_equity_quotes,
         bronze_paths.option_chain,
@@ -2446,10 +2996,12 @@ def _provider_snapshot_artifact_paths(
         silver_paths.cleaned_quotes,
         silver_paths.rejected_quotes,
         silver_paths.manifest,
+        *provider_rejected_contracts_artifact,
         gold_paths.market_data,
         gold_paths.market_manifest,
         gold_paths.heston_quotes,
         gold_paths.heston_manifest,
+        *curve_artifacts,
         *model_validation_bundle.artifact_paths,
         model_validation_bundle.manifest_path,
     )
@@ -2468,9 +3020,11 @@ def _provider_snapshot_run_details(
     dividend_yield: float,
     dividend_yield_source: str,
     feed: str,
+    rate_lookback_days: int,
     raw_option_contract_count: int,
     normalized_option_contract_count: int,
     dropped_before_cleaning_count: int,
+    provider_rejected_contract_count: int,
     accepted_quote_count: int,
     rejected_quote_count: int,
     warnings: Sequence[str],
@@ -2490,9 +3044,11 @@ def _provider_snapshot_run_details(
         "dividend_yield": dividend_yield,
         "dividend_yield_source": dividend_yield_source,
         "feed": feed,
+        "rate_lookback_days": rate_lookback_days,
         "raw_option_contract_count": raw_option_contract_count,
         "normalized_option_contract_count": normalized_option_contract_count,
         "dropped_before_cleaning_count": dropped_before_cleaning_count,
+        "provider_rejected_contract_count": provider_rejected_contract_count,
         "accepted_quote_count": accepted_quote_count,
         "rejected_quote_count": rejected_quote_count,
         "warnings": list(warnings),
@@ -2512,6 +3068,64 @@ def _relative_artifact_references(
         except ValueError:
             references.append(path.as_posix())
     return references
+
+
+def _merge_unique_warnings(warnings: Sequence[str] | Any) -> tuple[str, ...]:
+    seen: set[str] = set()
+    merged: list[str] = []
+    for warning in warnings:
+        cleaned_warning = str(warning)
+        if cleaned_warning in seen:
+            continue
+        seen.add(cleaned_warning)
+        merged.append(cleaned_warning)
+    return tuple(merged)
+
+
+def _provider_refresh_daily_run_details(
+    *,
+    storage: LocalStorage,
+    aggregate_run_id: str,
+    child_run_ids: Sequence[str],
+    underlyings: Sequence[str],
+    asof: pd.Timestamp,
+    rate_series_id: str,
+    feed: str,
+    expiry_gte: date | str | None,
+    expiry_lte: date | str | None,
+    strike_gte: float | None,
+    strike_lte: float | None,
+    option_type: str | None,
+    dividend_yield: float,
+    dividend_yield_source: str,
+    counts: ProviderRefreshDailyCounts,
+    warnings: Sequence[str],
+    artifact_paths: Sequence[Path],
+    library_commit: str | None,
+) -> dict[str, object]:
+    return {
+        "operation": "refresh_daily",
+        "provider": "alpaca+fred",
+        "aggregate_run_id": aggregate_run_id,
+        "child_run_ids": list(child_run_ids),
+        "underlyings": list(underlyings),
+        "asof": _utc_isoformat(asof),
+        "rate_series_id": rate_series_id,
+        "feed": feed,
+        "filters": {
+            "expiry_gte": expiry_gte,
+            "expiry_lte": expiry_lte,
+            "strike_gte": strike_gte,
+            "strike_lte": strike_lte,
+            "option_type": option_type,
+        },
+        "dividend_yield": dividend_yield,
+        "dividend_yield_source": dividend_yield_source,
+        "counts": asdict(counts),
+        "warnings": list(warnings),
+        "artifact_paths": _relative_artifact_references(storage, artifact_paths),
+        "library_commit": library_commit,
+    }
 
 
 def _preflight_pipeline_targets(
@@ -2696,6 +3310,8 @@ def _iter_pipeline_target_paths(paths: _PipelineTargetPaths) -> tuple[Path, ...]
 __all__ = [
     "LocalModelValidationPipelineResult",
     "MarketDataPipeline",
+    "ProviderRefreshDailyCounts",
+    "ProviderRefreshDailyResult",
     "ProviderSnapshotBronzePaths",
     "ProviderSnapshotDataUnavailableError",
     "ProviderSnapshotResult",

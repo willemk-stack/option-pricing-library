@@ -40,3 +40,11 @@ def test_marketdata_dependencies_stay_optional_and_sdk_bound() -> None:
     )
     for dependency in core_dependencies:
         assert not any(name in dependency.lower() for name in optional_only)
+
+
+def test_marketdata_console_script_metadata() -> None:
+    project = project_metadata()
+
+    assert project["scripts"]["option-pricing-marketdata"] == (
+        "option_pricing.marketdata.cli:main"
+    )

@@ -9,6 +9,16 @@ from pathlib import Path
 SOURCE_ROOT = Path(__file__).resolve().parents[2] / "src" / "option_pricing"
 MARKETDATA_PROVIDER_ROOT = SOURCE_ROOT / "marketdata" / "providers"
 EXPECTED_MARKETDATA_IMPORTS = {
+    "option_pricing.marketdata": (
+        "MarketDataPipeline",
+        "ProviderSnapshotResult",
+        "ProviderSnapshotDataUnavailableError",
+        "LocalStorage",
+        "AlpacaConfig",
+        "FredConfig",
+        "StorageConfig",
+        "PipelineConfig",
+    ),
     "option_pricing.marketdata.config": (
         "AlpacaConfig",
         "FredConfig",

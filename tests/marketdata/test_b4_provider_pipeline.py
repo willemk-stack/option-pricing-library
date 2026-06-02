@@ -5,12 +5,13 @@ import math
 from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pandas as pd
 import pytest
 
-import scripts.fetch_market_snapshot as cli
+import option_pricing.marketdata.cli as cli
 from option_pricing.marketdata.config import (
     AlpacaConfig,
     FredConfig,
@@ -313,16 +314,17 @@ def _bars_backfill_root(
     )
 
 
-def _snapshot(tmp_path: Path) -> ProviderSnapshotResult:
-    return _pipeline(tmp_path).snapshot(
-        "spy",
-        asof="2026-05-22T15:31:00Z",
-        run_id="b4-test-run",
-        expiry_gte="2026-06-01",
-        expiry_lte="2026-06-30",
-        feed="indicative",
-        library_commit="abc123",
-    )
+def _snapshot(tmp_path: Path, **overrides: object) -> ProviderSnapshotResult:
+    snapshot_kwargs: dict[str, object] = {
+        "asof": "2026-05-22T15:31:00Z",
+        "run_id": "b4-test-run",
+        "expiry_gte": "2026-06-01",
+        "expiry_lte": "2026-06-30",
+        "feed": "indicative",
+        "library_commit": "abc123",
+    }
+    snapshot_kwargs.update(overrides)
+    return _pipeline(tmp_path).snapshot("spy", **snapshot_kwargs)
 
 
 def test_provider_snapshot_works_end_to_end_with_fake_clients(
@@ -338,10 +340,15 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     assert result.rate == pytest.approx(math.log1p(4.25 / 100.0))
     assert result.rate_source == "fred:DGS3MO"
     assert result.rate_observation_date == pd.Timestamp("2026-05-20")
+    assert result.rate_series_id == "DGS3MO"
+    assert result.feed == "indicative"
     assert result.dividend_yield == pytest.approx(0.0)
     assert result.dividend_yield_source == "assumption"
+    assert result.raw_option_contract_count == 3
+    assert result.normalized_option_contract_count == 2
     assert result.accepted_quote_count == 2
     assert result.rejected_quote_count == 0
+    assert result.provider_rejected_contract_count == 1
     assert result.dropped_before_cleaning_count == 1
     assert result.warnings[:4] == (
         "documented_assumption: dividend_yield=0.0, "
@@ -353,7 +360,8 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     )
     assert result.warnings[-1] == (
         "alpaca_option_contracts_dropped_before_cleaning: "
-        "dropped=1, raw=3, normalized=2, reason=missing_or_unusable_bid_ask"
+        "dropped=1, raw=3, normalized=2, "
+        "provider_rejected_contracts=1, stage=provider_normalization"
     )
 
     for path in result.artifact_paths:
@@ -362,17 +370,27 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     assert result.bronze_paths.manifest.exists()
     assert result.silver_paths.option_chain.exists()
     assert result.silver_paths.fred_series.exists()
+    assert result.silver_paths.provider_rejected_contracts is not None
+    assert result.silver_paths.provider_rejected_contracts.exists()
     assert result.gold_paths.market_data.exists()
+    assert result.rate_curve_paths is not None
+    assert result.rate_curve_paths.rate_curve.exists()
+    assert result.rate_curve_paths.manifest.exists()
     assert result.model_validation_bundle.manifest_path.exists()
 
     bronze_manifest = _read_json(result.bronze_paths.manifest)
     silver_manifest = _read_json(result.silver_paths.manifest)
     gold_manifest = _read_json(result.gold_paths.market_manifest)
+    rate_curve_manifest = _read_json(result.rate_curve_paths.manifest)
     bundle_manifest = _read_json(result.model_validation_bundle.manifest_path)
     warnings_payload = _read_json(
         result.model_validation_bundle.manifest_path.parent / "warnings.json"
     )
     run_entries = _read_jsonl(tmp_path / "_meta" / "runs.jsonl")
+    provider_rejected_contracts = pd.read_parquet(
+        result.silver_paths.provider_rejected_contracts
+    )
+    rate_curve = pd.read_parquet(result.rate_curve_paths.rate_curve)
 
     assert bronze_manifest["providers"] == {
         "spot": "alpaca",
@@ -407,8 +425,13 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "option_type": None,
         "feed": "indicative",
         "rate_series_id": "DGS3MO",
+        "rate_lookback_days": 90,
+        "curve_series_ids": ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2"],
+        "fred_observation_start": "2026-02-21",
         "fred_observation_end": "2026-05-22",
     }
+    assert bronze_manifest["rows"]["provider_rejected_contracts"] == 1
+    assert bronze_manifest["rows"]["rate_curve_points"] == 5
     assert silver_manifest["source_type"] == "provider_snapshot"
     assert silver_manifest["rate_source"] == "fred:DGS3MO"
     assert silver_manifest["dividend_yield_source"] == "assumption"
@@ -416,9 +439,63 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     assert gold_manifest["source"]["source_type"] == "provider_snapshot"
     assert gold_manifest["sources"]["rate_source"] == "fred:DGS3MO"
     assert gold_manifest["sources"]["dividend_yield_source"] == "assumption"
+    assert rate_curve_manifest == {
+        "provider_snapshot_rate_curve_schema_version": "provider_rate_curve_gold.v1",
+        "artifact": "rate_curve",
+        "run_id": "b4-test-run",
+        "snapshot_id": bronze_manifest["snapshot_id"],
+        "underlying": "SPY",
+        "valuation_timestamp_utc": "2026-05-22T15:31:00Z",
+        "rate_compounding": "continuous",
+        "day_count": "ACT/365",
+        "lookback_days": 90,
+        "requested_series_ids": ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2"],
+        "included_series_ids": ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2"],
+        "rows": {"rate_curve": 5},
+        "artifacts": {"rate_curve": "rate_curve.parquet"},
+        "source": {
+            "source_type": "provider_snapshot",
+            "fixture_name": "provider_snapshot_v1",
+        },
+        "library_commit": "abc123",
+        "dataset": "curves",
+        "layer": "gold",
+        "partitions": {
+            "underlying": "SPY",
+            "date": "2026-05-22",
+            "run_id": "b4-test-run",
+        },
+        "written_at": rate_curve_manifest["written_at"],
+    }
     assert bundle_manifest["rate_source"] == "fred:DGS3MO"
     assert bundle_manifest["dividend_yield_source"] == "assumption"
     assert warnings_payload["warnings"] == list(result.warnings)
+    rejected_row = provider_rejected_contracts.iloc[0]
+    assert len(provider_rejected_contracts) == 1
+    assert rejected_row["underlying"] == "SPY"
+    assert rejected_row["contract_symbol"] == "SPY260619C00510000"
+    assert rejected_row["payload_contract_key"] == "SPY260619C00510000"
+    assert rejected_row["asof"] == pd.Timestamp("2026-05-22T15:31:00Z")
+    assert rejected_row["source"] == "alpaca"
+    assert rejected_row["feed"] == "indicative"
+    assert rejected_row["rejection_stage"] == "provider_normalization"
+    assert rejected_row["reason"] == "missing_required_price"
+    assert rejected_row["rejection_detail"] == "latest_quote is missing bid"
+    assert rejected_row["raw_quote_timestamp"] == "2026-05-22T15:30:00Z"
+    assert pd.isna(rejected_row["raw_bid"])
+    assert rejected_row["raw_ask"] == "2.0"
+    assert pd.isna(rejected_row["raw_expiry"])
+    assert pd.isna(rejected_row["raw_strike"])
+    assert pd.isna(rejected_row["raw_right"])
+    assert rate_curve["series_id"].astype(str).tolist() == [
+        "DGS1MO",
+        "DGS3MO",
+        "DGS6MO",
+        "DGS1",
+        "DGS2",
+    ]
+    assert rate_curve["tenor"].astype(str).tolist() == ["1M", "3M", "6M", "1Y", "2Y"]
+    assert rate_curve["day_count"].astype(str).tolist() == ["ACT/365"] * 5
     assert len(run_entries) == 1
     assert run_entries[0]["artifacts"] == [
         path.relative_to(tmp_path).as_posix() for path in result.artifact_paths
@@ -437,9 +514,11 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "dividend_yield": 0.0,
         "dividend_yield_source": "assumption",
         "feed": "indicative",
+        "rate_lookback_days": 90,
         "raw_option_contract_count": 3,
         "normalized_option_contract_count": 2,
         "dropped_before_cleaning_count": 1,
+        "provider_rejected_contract_count": 1,
         "accepted_quote_count": 2,
         "rejected_quote_count": 0,
         "warnings": list(result.warnings),
@@ -462,6 +541,145 @@ def test_provider_snapshot_result_payload_is_json_serializable(
     assert json.loads(encoded)["run_id"] == "b4-test-run"
     assert "DGS3MO" in encoded
     assert "dividend_inference=not_enabled" in encoded
+
+
+def test_refresh_daily_dispatches_snapshots_and_records_aggregate_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pipeline = MarketDataPipeline(storage=tmp_path)
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    def fake_snapshot(underlying: str, **kwargs: object) -> object:
+        calls.append((underlying, kwargs))
+        return SimpleNamespace(
+            underlying=underlying,
+            run_id=cast(str, kwargs["run_id"]),
+            artifact_paths=(tmp_path / f"{underlying.lower()}-market_data.json",),
+            raw_option_contract_count=3,
+            normalized_option_contract_count=2,
+            dropped_before_cleaning_count=1,
+            provider_rejected_contract_count=1,
+            accepted_quote_count=2,
+            rejected_quote_count=0,
+            warnings=("sample warning",),
+        )
+
+    monkeypatch.setattr(pipeline, "snapshot", fake_snapshot)
+
+    result = pipeline.refresh_daily(
+        ["spy", "qqq"],
+        asof="2026-05-22T15:31:00Z",
+        run_id_prefix="daily-close",
+        rate_series_id="DGS3MO",
+        feed="sip",
+        dividend_yield=0.0125,
+        dividend_yield_source="manual_override",
+        overwrite=True,
+    )
+
+    assert result.aggregate_run_id.startswith("daily-close-20260522T153100Z-")
+    assert result.underlyings == ("SPY", "QQQ")
+    assert [call[0] for call in calls] == ["SPY", "QQQ"]
+    assert result.child_run_ids == tuple(
+        cast(str, call_kwargs["run_id"]) for _, call_kwargs in calls
+    )
+    assert all(
+        call_kwargs["asof"] == pd.Timestamp("2026-05-22T15:31:00Z")
+        for _, call_kwargs in calls
+    )
+    assert all(call_kwargs["feed"] == "sip" for _, call_kwargs in calls)
+    assert result.counts.raw_option_contract_count == 6
+    assert result.counts.normalized_option_contract_count == 4
+    assert result.counts.dropped_before_cleaning_count == 2
+    assert result.counts.provider_rejected_contract_count == 2
+    assert result.counts.accepted_quote_count == 4
+    assert result.counts.rejected_quote_count == 0
+    assert result.warnings == ("sample warning",)
+    assert result.artifact_paths == (
+        tmp_path / "spy-market_data.json",
+        tmp_path / "qqq-market_data.json",
+    )
+
+    run_entries = _read_jsonl(tmp_path / "_meta" / "runs.jsonl")
+    assert len(run_entries) == 1
+    assert run_entries[0]["run_id"] == result.aggregate_run_id
+    assert run_entries[0]["artifacts"] == [
+        "spy-market_data.json",
+        "qqq-market_data.json",
+    ]
+    run_details = cast(dict[str, object], run_entries[0]["details"])
+    assert run_details == {
+        "operation": "refresh_daily",
+        "provider": "alpaca+fred",
+        "aggregate_run_id": result.aggregate_run_id,
+        "child_run_ids": list(result.child_run_ids),
+        "underlyings": ["SPY", "QQQ"],
+        "asof": "2026-05-22T15:31:00Z",
+        "rate_series_id": "DGS3MO",
+        "feed": "sip",
+        "filters": {
+            "expiry_gte": None,
+            "expiry_lte": None,
+            "strike_gte": None,
+            "strike_lte": None,
+            "option_type": None,
+        },
+        "dividend_yield": 0.0125,
+        "dividend_yield_source": "manual_override",
+        "counts": {
+            "raw_option_contract_count": 6,
+            "normalized_option_contract_count": 4,
+            "dropped_before_cleaning_count": 2,
+            "provider_rejected_contract_count": 2,
+            "accepted_quote_count": 4,
+            "rejected_quote_count": 0,
+        },
+        "warnings": ["sample warning"],
+        "artifact_paths": ["spy-market_data.json", "qqq-market_data.json"],
+        "library_commit": None,
+    }
+
+
+def test_provider_snapshot_dividend_override_flows_through_metadata(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    result = _snapshot(
+        tmp_path,
+        run_id="dividend-override",
+        dividend_yield=0.015,
+        dividend_yield_source="manual_override",
+        library_commit="dividend-override",
+    )
+
+    bronze_manifest = _read_json(result.bronze_paths.manifest)
+    silver_manifest = _read_json(result.silver_paths.manifest)
+    market_data = _read_json(result.gold_paths.market_data)
+    gold_manifest = _read_json(result.gold_paths.market_manifest)
+    bundle_manifest = _read_json(result.model_validation_bundle.manifest_path)
+
+    assert result.dividend_yield == pytest.approx(0.015)
+    assert result.dividend_yield_source == "manual_override"
+    assert bronze_manifest["dividend_assumptions"] == {
+        "dividend_yield": 0.015,
+        "source": "manual_override",
+        "dividend_inference": "not_enabled",
+    }
+    assert silver_manifest["dividend_yield"] == pytest.approx(0.015)
+    assert silver_manifest["dividend_yield_source"] == "manual_override"
+    assert cast(dict[str, object], market_data["market_data"])[
+        "dividend_yield"
+    ] == pytest.approx(0.015)
+    assert (
+        cast(dict[str, object], market_data["sources"])["dividend_yield_source"]
+        == "manual_override"
+    )
+    assert (
+        cast(dict[str, object], gold_manifest["sources"])["dividend_yield_source"]
+        == "manual_override"
+    )
+    assert bundle_manifest["dividend_yield_source"] == "manual_override"
 
 
 def test_provider_snapshot_outputs_do_not_leak_secrets(
@@ -541,13 +759,41 @@ def test_provider_snapshot_missing_fred_rate_fails_clearly(
 
     with pytest.raises(
         ProviderSnapshotDataUnavailableError,
-        match="No usable FRED rate observation",
+        match="within the last 90 days",
     ):
         _pipeline(tmp_path, fred_client=fred_client).snapshot(
             "SPY",
             asof="2026-05-22T15:31:00Z",
             run_id="missing-fred",
         )
+
+
+def test_provider_snapshot_bounds_fred_requests_to_lookback_window(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    fred_client = _FakeFredClient()
+
+    _pipeline(tmp_path, fred_client=fred_client).snapshot(
+        "SPY",
+        asof="2026-05-22T15:31:00Z",
+        run_id="fred-window",
+        rate_lookback_days=30,
+    )
+
+    assert [call["series_id"] for call in fred_client.calls] == [
+        "DGS3MO",
+        "DGS1MO",
+        "DGS6MO",
+        "DGS1",
+        "DGS2",
+    ]
+    assert all(
+        call["observation_start"] == date(2026, 4, 22)
+        and call["observation_end"] == date(2026, 5, 22)
+        and call["sort_order"] == "asc"
+        for call in fred_client.calls
+    )
 
 
 def test_provider_snapshot_missing_alpaca_quote_fails_clearly(

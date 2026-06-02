@@ -80,6 +80,23 @@ _ALPACA_OPTION_OPEN_INTEREST_ALIASES = (
     "oi",
 )
 _OCC_CONTRACT_SYMBOL_RE = re.compile(r"^([A-Z0-9.]+?)(\d{6})([CP])(\d{8})$")
+_PROVIDER_REJECTED_CONTRACT_COLUMNS = (
+    "underlying",
+    "contract_symbol",
+    "payload_contract_key",
+    "asof",
+    "source",
+    "feed",
+    "rejection_stage",
+    "reason",
+    "rejection_detail",
+    "raw_quote_timestamp",
+    "raw_bid",
+    "raw_ask",
+    "raw_expiry",
+    "raw_strike",
+    "raw_right",
+)
 
 _ALPACA_BAR_FIELD_ALIASES = (
     *_ALPACA_BAR_TS_ALIASES,
@@ -100,6 +117,12 @@ class _AlpacaOptionContractMetadata:
     expiry: date
     strike: float
     right: str
+
+
+@dataclass(frozen=True, slots=True)
+class AlpacaOptionChainNormalizationAudit:
+    option_chain: pd.DataFrame
+    rejected_contracts: pd.DataFrame
 
 
 def normalize_alpaca_latest_quotes(
@@ -173,6 +196,22 @@ def normalize_alpaca_option_chain(
 ) -> pd.DataFrame:
     """Normalize Alpaca option chain snapshots into the ``option_chain`` schema."""
 
+    return normalize_alpaca_option_chain_with_audit(
+        payload,
+        underlying=underlying,
+        asof=asof,
+    ).option_chain
+
+
+def normalize_alpaca_option_chain_with_audit(
+    payload: Mapping[str, Any],
+    *,
+    underlying: str | None = None,
+    asof: str | pd.Timestamp | None = None,
+    feed: str | None = None,
+) -> AlpacaOptionChainNormalizationAudit:
+    """Normalize Alpaca option chains and retain pre-cleaning contract rejections."""
+
     if not isinstance(payload, Mapping):
         raise TypeError(
             "alpaca option chain payload must be a mapping, "
@@ -189,20 +228,28 @@ def normalize_alpaca_option_chain(
     if _is_missing_value(resolved_underlying):
         resolved_underlying = payload.get("underlying", _MISSING)
     cleaned_underlying = _clean_alpaca_option_underlying(resolved_underlying)
+    source = _optional_diagnostic_text(payload.get("source", "alpaca"))
+    resolved_feed = feed
+    if _is_missing_value(resolved_feed):
+        resolved_feed = payload.get("feed", _MISSING)
+    cleaned_feed = _optional_diagnostic_text(resolved_feed)
 
-    rows = [
-        row
-        for default_symbol, contract in _alpaca_option_contract_items(payload)
-        if (
-            row := _alpaca_option_chain_row(
-                cleaned_underlying,
-                default_symbol,
-                contract,
-                asof=resolved_asof,
-            )
+    rows: list[dict[str, object]] = []
+    rejected_rows: list[dict[str, object]] = []
+    for default_symbol, contract in _alpaca_option_contract_items(payload):
+        row, rejected = _alpaca_option_chain_row_with_audit(
+            cleaned_underlying,
+            default_symbol,
+            contract,
+            asof=resolved_asof,
+            source=source,
+            feed=cleaned_feed,
         )
-        is not None
-    ]
+        if row is not None:
+            rows.append(row)
+        elif rejected is not None:
+            rejected_rows.append(rejected)
+
     if not rows:
         raise ValueError(
             "alpaca option chain has no contracts with usable latest quote bid/ask"
@@ -222,7 +269,10 @@ def normalize_alpaca_option_chain(
         .reset_index(drop=True)
     )
     validate_dtypes(out, DatasetName.OPTION_CHAIN, allow_extra=False)
-    return out
+    return AlpacaOptionChainNormalizationAudit(
+        option_chain=out,
+        rejected_contracts=_provider_rejected_contracts_frame(rejected_rows),
+    )
 
 
 def normalize_fred_observations(
@@ -350,11 +400,125 @@ def _alpaca_option_chain_row(
     *,
     asof: object,
 ) -> dict[str, object] | None:
-    metadata = _alpaca_option_contract_metadata(default_symbol, contract)
-    quote = _option_snapshot_value(contract, _ALPACA_OPTION_LATEST_QUOTE_ALIASES)
-    if _is_missing_value(quote):
-        return None
+    row, _ = _alpaca_option_chain_row_with_audit(
+        underlying,
+        default_symbol,
+        contract,
+        asof=asof,
+        source="alpaca",
+        feed=pd.NA,
+    )
+    return row
 
+
+def _alpaca_option_chain_row_with_audit(
+    underlying: str,
+    default_symbol: Any,
+    contract: Any,
+    *,
+    asof: object,
+    source: object,
+    feed: object,
+) -> tuple[dict[str, object] | None, dict[str, object] | None]:
+    raw_contract_symbol = _option_metadata_value(
+        contract,
+        _ALPACA_OPTION_CONTRACT_SYMBOL_ALIASES,
+        default=default_symbol,
+    )
+    raw_expiry = _option_metadata_value(contract, _ALPACA_OPTION_EXPIRY_ALIASES)
+    raw_strike = _option_metadata_value(contract, _ALPACA_OPTION_STRIKE_ALIASES)
+    raw_right = _option_metadata_value(contract, _ALPACA_OPTION_RIGHT_ALIASES)
+    quote = _option_snapshot_value(contract, _ALPACA_OPTION_LATEST_QUOTE_ALIASES)
+    raw_quote_ts = _MISSING
+    raw_bid = _MISSING
+    raw_ask = _MISSING
+    if not _is_missing_value(quote):
+        raw_quote_ts = _quote_value(quote, _ALPACA_QUOTE_TS_ALIASES)
+        raw_bid = _quote_value(quote, _ALPACA_BID_ALIASES)
+        raw_ask = _quote_value(quote, _ALPACA_ASK_ALIASES)
+
+    try:
+        metadata = _alpaca_option_contract_metadata(default_symbol, contract)
+    except Exception as exc:
+        return None, _provider_rejected_contract_row(
+            underlying=underlying,
+            contract_symbol=raw_contract_symbol,
+            payload_contract_key=default_symbol,
+            asof=asof,
+            source=source,
+            feed=feed,
+            reason="invalid_contract_metadata",
+            rejection_detail=str(exc),
+            raw_quote_timestamp=raw_quote_ts,
+            raw_bid=raw_bid,
+            raw_ask=raw_ask,
+            raw_expiry=raw_expiry,
+            raw_strike=raw_strike,
+            raw_right=raw_right,
+        )
+
+    if _is_missing_value(quote):
+        return None, _provider_rejected_contract_row(
+            underlying=underlying,
+            contract_symbol=metadata.contract_symbol,
+            payload_contract_key=default_symbol,
+            asof=asof,
+            source=source,
+            feed=feed,
+            reason="missing_required_price",
+            rejection_detail="latest_quote is missing",
+            raw_quote_timestamp=raw_quote_ts,
+            raw_bid=raw_bid,
+            raw_ask=raw_ask,
+            raw_expiry=raw_expiry,
+            raw_strike=raw_strike,
+            raw_right=raw_right,
+        )
+
+    if _is_missing_value(raw_quote_ts):
+        return None, _provider_rejected_contract_row(
+            underlying=underlying,
+            contract_symbol=metadata.contract_symbol,
+            payload_contract_key=default_symbol,
+            asof=asof,
+            source=source,
+            feed=feed,
+            reason="missing_quote_timestamp",
+            rejection_detail="latest_quote timestamp is missing",
+            raw_quote_timestamp=raw_quote_ts,
+            raw_bid=raw_bid,
+            raw_ask=raw_ask,
+            raw_expiry=raw_expiry,
+            raw_strike=raw_strike,
+            raw_right=raw_right,
+        )
+
+    missing_price_fields = [
+        field_name
+        for field_name, value in (("bid", raw_bid), ("ask", raw_ask))
+        if _is_missing_value(value)
+    ]
+    if missing_price_fields:
+        return None, _provider_rejected_contract_row(
+            underlying=underlying,
+            contract_symbol=metadata.contract_symbol,
+            payload_contract_key=default_symbol,
+            asof=asof,
+            source=source,
+            feed=feed,
+            reason="missing_required_price",
+            rejection_detail=(
+                "latest_quote is missing " + ", ".join(missing_price_fields)
+            ),
+            raw_quote_timestamp=raw_quote_ts,
+            raw_bid=raw_bid,
+            raw_ask=raw_ask,
+            raw_expiry=raw_expiry,
+            raw_strike=raw_strike,
+            raw_right=raw_right,
+        )
+
+    metadata = _alpaca_option_contract_metadata(default_symbol, contract)
     bid = _optional_finite_option_quote_number(
         quote,
         _ALPACA_BID_ALIASES,
@@ -363,9 +527,24 @@ def _alpaca_option_chain_row(
         quote,
         _ALPACA_ASK_ALIASES,
     )
-    quote_ts = _quote_value(quote, _ALPACA_QUOTE_TS_ALIASES)
-    if bid is None or ask is None or _is_missing_value(quote_ts):
-        return None
+    quote_ts = raw_quote_ts
+    if bid is None or ask is None:
+        return None, _provider_rejected_contract_row(
+            underlying=underlying,
+            contract_symbol=metadata.contract_symbol,
+            payload_contract_key=default_symbol,
+            asof=asof,
+            source=source,
+            feed=feed,
+            reason="unusable_bid_ask",
+            rejection_detail="latest_quote bid/ask must be finite numeric values",
+            raw_quote_timestamp=raw_quote_ts,
+            raw_bid=raw_bid,
+            raw_ask=raw_ask,
+            raw_expiry=raw_expiry,
+            raw_strike=raw_strike,
+            raw_right=raw_right,
+        )
 
     return {
         "underlying": underlying,
@@ -390,7 +569,67 @@ def _alpaca_option_chain_row(
         ),
         "source": "alpaca",
         "asof": asof,
+    }, None
+
+
+def _provider_rejected_contract_row(
+    *,
+    underlying: str,
+    contract_symbol: object,
+    payload_contract_key: object,
+    asof: object,
+    source: object,
+    feed: object,
+    reason: str,
+    rejection_detail: str,
+    raw_quote_timestamp: object,
+    raw_bid: object,
+    raw_ask: object,
+    raw_expiry: object,
+    raw_strike: object,
+    raw_right: object,
+) -> dict[str, object]:
+    return {
+        "underlying": underlying,
+        "contract_symbol": _optional_diagnostic_text(contract_symbol),
+        "payload_contract_key": _optional_diagnostic_text(payload_contract_key),
+        "asof": asof,
+        "source": _optional_diagnostic_text(source),
+        "feed": _optional_diagnostic_text(feed),
+        "rejection_stage": "provider_normalization",
+        "reason": reason,
+        "rejection_detail": rejection_detail,
+        "raw_quote_timestamp": _optional_diagnostic_text(raw_quote_timestamp),
+        "raw_bid": _optional_diagnostic_text(raw_bid),
+        "raw_ask": _optional_diagnostic_text(raw_ask),
+        "raw_expiry": _optional_diagnostic_text(raw_expiry),
+        "raw_strike": _optional_diagnostic_text(raw_strike),
+        "raw_right": _optional_diagnostic_text(raw_right),
     }
+
+
+def _provider_rejected_contracts_frame(
+    rows: list[dict[str, object]],
+) -> pd.DataFrame:
+    frame = pd.DataFrame(rows, columns=list(_PROVIDER_REJECTED_CONTRACT_COLUMNS))
+    for column in _PROVIDER_REJECTED_CONTRACT_COLUMNS:
+        if column == "asof":
+            frame[column] = pd.to_datetime(frame[column], errors="coerce", utc=True)
+        else:
+            frame[column] = frame[column].astype("string")
+    return frame.reset_index(drop=True)
+
+
+def _optional_diagnostic_text(value: object) -> object:
+    if _is_missing_value(value):
+        return pd.NA
+    raw_value = getattr(value, "value", value)
+    if isinstance(raw_value, pd.Timestamp):
+        return raw_value.isoformat()
+    if isinstance(raw_value, date):
+        return raw_value.isoformat()
+    text = str(raw_value).strip()
+    return text if text else pd.NA
 
 
 def _alpaca_option_contract_metadata(
@@ -1163,9 +1402,11 @@ def _validate_unique_contract_symbols(frame: pd.DataFrame) -> None:
 
 
 __all__ = [
+    "AlpacaOptionChainNormalizationAudit",
     "normalize_alpaca_bars",
     "normalize_alpaca_latest_quotes",
     "normalize_alpaca_option_chain",
+    "normalize_alpaca_option_chain_with_audit",
     "normalize_fred_observations",
     "normalize_market_inputs",
     "normalize_option_chain",

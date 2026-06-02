@@ -119,9 +119,10 @@ The same pattern also applies to:
 
 ## Provider-backed marketdata current scope
 
-The Phase B4 provider-backed path can fetch one live-capable snapshot and two
-simple backfill artifact sets through `MarketDataPipeline`. It is intentionally
-small: the CLI parses arguments and dispatches to the pipeline, while the
+The current provider-backed marketdata interface supports one-shot snapshots,
+multi-underlying daily refreshes, and two simple backfill artifact sets through
+`MarketDataPipeline`. The installable CLI and the compatibility wrapper both
+stay thin: they parse arguments and dispatch to the pipeline, while the
 pipeline handles provider calls, normalization, quote cleaning, Bronze/Silver
 storage, Gold conversion, and the model-validation bundle.
 
@@ -137,26 +138,56 @@ Provider-backed runs read credentials from environment variables:
 - `ALPACA_SECRET_KEY`
 - `FRED_API_KEY`
 
+The installed console entry point is:
+
+```bash
+option-pricing-marketdata --help
+```
+
+The existing wrapper remains available for repo-local usage:
+
+```bash
+python scripts/fetch_market_snapshot.py --help
+```
+
 Fetch one market snapshot:
 
 ```bash
-python scripts/fetch_market_snapshot.py snapshot --underlying SPY --asof 2026-05-22T15:31:00Z --data-root out/marketdata-live --json
+option-pricing-marketdata snapshot --underlying SPY --asof 2026-05-22T15:31:00Z --data-root out/marketdata-live
+```
+
+Refresh multiple underlyings with one aggregate run:
+
+```bash
+option-pricing-marketdata refresh-daily --underlyings SPY QQQ --asof 2026-05-22T15:31:00Z --run-id-prefix daily-close --data-root out/marketdata-live
 ```
 
 Backfill FRED observations:
 
 ```bash
-python scripts/fetch_market_snapshot.py backfill-fred --series DGS3MO --start 2026-05-01 --end 2026-05-22 --data-root out/marketdata-live
+option-pricing-marketdata backfill-fred --series DGS3MO --start 2026-05-01 --end 2026-05-22 --data-root out/marketdata-live
 ```
 
 Backfill Alpaca equity bars:
 
 ```bash
-python scripts/fetch_market_snapshot.py backfill-bars --symbols SPY QQQ --start 2026-05-20 --end 2026-05-23 --timeframe 1Day --data-root out/marketdata-live
+option-pricing-marketdata backfill-bars --symbols SPY QQQ --start 2026-05-20 --end 2026-05-23 --timeframe 1Day --data-root out/marketdata-live
 ```
 
-Current documented assumptions and provider-scope limits are written as
-warnings or manifest notes:
+Override the documented dividend assumption:
+
+```bash
+option-pricing-marketdata snapshot --underlying SPY --dividend-yield 0.0125 --dividend-yield-source manual_override --data-root out/marketdata-live
+```
+
+Emit stable JSON output for automation:
+
+```bash
+option-pricing-marketdata refresh-daily --underlyings SPY QQQ --json --data-root out/marketdata-live
+```
+
+Documented assumptions and current provider scope are written as warnings or
+manifest notes:
 
 - `dividend_yield` defaults to `0.0` with source `assumption`
 - the default rate series is FRED `DGS3MO`
@@ -164,9 +195,16 @@ warnings or manifest notes:
   enabled yet
 - dividend inference is not enabled yet
 - no option-chain historical backfill yet
-- scheduling, cron, and background refresh are not enabled yet
+- scheduling, cron, and background refresh services are not enabled
 - Alpaca option contracts without usable bid/ask may be dropped before quote
   cleaning; snapshot warnings include the raw, normalized, and dropped counts
+
+Snapshot output includes the documented rate/dividend source metadata, feed,
+rate series, raw and normalized option contract counts when available,
+dropped/provider-rejected counts, accepted/rejected counts, warnings, and the
+main artifact paths. The `refresh-daily` aggregate result summarizes those same
+counts across all requested underlyings and records one aggregate run alongside
+the child snapshot runs.
 
 Normal tests use mocked providers and do not require credentials. Live provider
 smoke tests are optional and are skipped unless the relevant credentials and

@@ -13,6 +13,9 @@ authors = [{ name = "Willem Knibbe", email = "willemknibbe0@gmail.com" }]
 
 dependencies = ["numpy", "scipy"]
 
+[project.scripts]
+option-pricing-marketdata = "option_pricing.marketdata.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pandas==2.2.3",
@@ -31,13 +34,7 @@ dev = [
     "scipy-stubs",
     "pandas-stubs==2.2.3.241126",
 ]
-marketdata = [
-    "pandas==2.2.3",
-    "pyarrow",
-    "requests",
-    "tenacity",
-    "alpaca-py",
-]
+marketdata = ["pandas==2.2.3", "pyarrow", "requests", "tenacity", "alpaca-py"]
 notebooks = ["jupyter", "matplotlib==3.10.8", "pandas", "ipywidgets"]
 plot = ["matplotlib==3.10.8", "pandas==2.2.3"]
 docs = [
