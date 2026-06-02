@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Mapping
+from dataclasses import dataclass
+from datetime import date
 from typing import Any, cast
 
 import pandas as pd
@@ -45,6 +48,38 @@ _ALPACA_BAR_VOLUME_ALIASES = ("volume", "v")
 _ALPACA_BAR_TRADE_COUNT_ALIASES = ("trade_count", "n", "tradecount")
 _ALPACA_BAR_VWAP_ALIASES = ("vwap", "vw")
 _ALPACA_BAR_TIMEFRAME_ALIASES = ("timeframe", "tf")
+_ALPACA_OPTION_CONTRACT_SYMBOL_ALIASES = (
+    "contract_symbol",
+    "contractSymbol",
+    "symbol",
+    "option_symbol",
+    "optionSymbol",
+)
+_ALPACA_OPTION_EXPIRY_ALIASES = (
+    "expiry",
+    "expiration",
+    "expiration_date",
+    "expirationDate",
+)
+_ALPACA_OPTION_STRIKE_ALIASES = ("strike", "strike_price", "strikePrice")
+_ALPACA_OPTION_RIGHT_ALIASES = ("right", "type", "option_type", "optionType")
+_ALPACA_OPTION_CONTRACT_ALIASES = ("contract", "option_contract", "optionContract")
+_ALPACA_OPTION_LATEST_QUOTE_ALIASES = ("latest_quote", "latestQuote", "quote")
+_ALPACA_OPTION_LATEST_TRADE_ALIASES = ("latest_trade", "latestTrade", "trade")
+_ALPACA_OPTION_TRADE_PRICE_ALIASES = ("price", "p", "trade_price", "tradePrice")
+_ALPACA_OPTION_IV_ALIASES = ("implied_volatility", "impliedVolatility", "iv")
+_ALPACA_OPTION_GREEKS_ALIASES = ("greeks", "greek")
+_ALPACA_OPTION_DELTA_ALIASES = ("delta",)
+_ALPACA_OPTION_GAMMA_ALIASES = ("gamma",)
+_ALPACA_OPTION_THETA_ALIASES = ("theta",)
+_ALPACA_OPTION_VEGA_ALIASES = ("vega",)
+_ALPACA_OPTION_RHO_ALIASES = ("rho",)
+_ALPACA_OPTION_OPEN_INTEREST_ALIASES = (
+    "open_interest",
+    "openInterest",
+    "oi",
+)
+_OCC_CONTRACT_SYMBOL_RE = re.compile(r"^([A-Z0-9.]+?)(\d{6})([CP])(\d{8})$")
 
 _ALPACA_BAR_FIELD_ALIASES = (
     *_ALPACA_BAR_TS_ALIASES,
@@ -57,6 +92,14 @@ _ALPACA_BAR_FIELD_ALIASES = (
     *_ALPACA_BAR_VWAP_ALIASES,
     *_ALPACA_BAR_TIMEFRAME_ALIASES,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _AlpacaOptionContractMetadata:
+    contract_symbol: str
+    expiry: date
+    strike: float
+    right: str
 
 
 def normalize_alpaca_latest_quotes(
@@ -119,6 +162,66 @@ def normalize_alpaca_bars(
         .reset_index(drop=True)
     )
     validate_dtypes(out, DatasetName.EQUITY_BARS, allow_extra=False)
+    return out
+
+
+def normalize_alpaca_option_chain(
+    payload: Mapping[str, Any],
+    *,
+    underlying: str | None = None,
+    asof: str | pd.Timestamp | None = None,
+) -> pd.DataFrame:
+    """Normalize Alpaca option chain snapshots into the ``option_chain`` schema."""
+
+    if not isinstance(payload, Mapping):
+        raise TypeError(
+            "alpaca option chain payload must be a mapping, "
+            f"got {type(payload).__name__}"
+        )
+
+    resolved_asof: object = asof
+    if _is_missing_value(resolved_asof):
+        resolved_asof = payload.get("asof", _MISSING)
+    if _is_missing_value(resolved_asof):
+        raise ValueError("alpaca option chain asof must not be missing")
+
+    resolved_underlying: object = underlying
+    if _is_missing_value(resolved_underlying):
+        resolved_underlying = payload.get("underlying", _MISSING)
+    cleaned_underlying = _clean_alpaca_option_underlying(resolved_underlying)
+
+    rows = [
+        row
+        for default_symbol, contract in _alpaca_option_contract_items(payload)
+        if (
+            row := _alpaca_option_chain_row(
+                cleaned_underlying,
+                default_symbol,
+                contract,
+                asof=resolved_asof,
+            )
+        )
+        is not None
+    ]
+    if not rows:
+        raise ValueError(
+            "alpaca option chain has no contracts with usable latest quote bid/ask"
+        )
+
+    frame = pd.DataFrame(rows, columns=list(OPTION_CHAIN_COLUMNS))
+    coerced = coerce_frame(frame, DatasetName.OPTION_CHAIN, allow_extra=False)
+    coerced["right"] = _normalize_option_rights(coerced["right"])
+    _validate_unique_contract_symbols(coerced)
+    out = (
+        order_columns(coerced, DatasetName.OPTION_CHAIN)
+        .loc[:, list(OPTION_CHAIN_COLUMNS)]
+        .sort_values(
+            ["expiry", "strike", "right", "contract_symbol"],
+            kind="mergesort",
+        )
+        .reset_index(drop=True)
+    )
+    validate_dtypes(out, DatasetName.OPTION_CHAIN, allow_extra=False)
     return out
 
 
@@ -213,6 +316,307 @@ def _require_frame(frame: pd.DataFrame, dataset_name: str) -> None:
             f"{dataset_name} input must be a pandas DataFrame, "
             f"got {type(frame).__name__}"
         )
+
+
+def _alpaca_option_contract_items(payload: Mapping[str, Any]) -> list[tuple[Any, Any]]:
+    if "contracts" in payload:
+        contracts_payload = payload["contracts"]
+    elif "snapshots" in payload:
+        contracts_payload = payload["snapshots"]
+    else:
+        raise ValueError(
+            "alpaca option chain payload must contain a contracts mapping or list"
+        )
+
+    contracts_payload = getattr(contracts_payload, "data", contracts_payload)
+    if isinstance(contracts_payload, Mapping):
+        if not contracts_payload:
+            raise ValueError("alpaca option chain payload must contain contracts")
+        return list(contracts_payload.items())
+    if isinstance(contracts_payload, list | tuple):
+        if not contracts_payload:
+            raise ValueError("alpaca option chain payload must contain contracts")
+        return [(_MISSING, contract) for contract in contracts_payload]
+
+    raise ValueError(
+        "alpaca option chain contracts must be provided as a mapping or list"
+    )
+
+
+def _alpaca_option_chain_row(
+    underlying: str,
+    default_symbol: Any,
+    contract: Any,
+    *,
+    asof: object,
+) -> dict[str, object] | None:
+    metadata = _alpaca_option_contract_metadata(default_symbol, contract)
+    quote = _option_snapshot_value(contract, _ALPACA_OPTION_LATEST_QUOTE_ALIASES)
+    if _is_missing_value(quote):
+        return None
+
+    bid = _optional_finite_option_quote_number(
+        quote,
+        _ALPACA_BID_ALIASES,
+    )
+    ask = _optional_finite_option_quote_number(
+        quote,
+        _ALPACA_ASK_ALIASES,
+    )
+    quote_ts = _quote_value(quote, _ALPACA_QUOTE_TS_ALIASES)
+    if bid is None or ask is None or _is_missing_value(quote_ts):
+        return None
+
+    return {
+        "underlying": underlying,
+        "contract_symbol": metadata.contract_symbol,
+        "quote_ts": quote_ts,
+        "expiry": metadata.expiry,
+        "strike": metadata.strike,
+        "right": metadata.right,
+        "bid": bid,
+        "ask": ask,
+        "mid": (bid + ask) / 2,
+        "last": _alpaca_option_last_price(contract),
+        "iv": _optional_option_snapshot_value(contract, _ALPACA_OPTION_IV_ALIASES),
+        "delta": _alpaca_option_greek_value(contract, _ALPACA_OPTION_DELTA_ALIASES),
+        "gamma": _alpaca_option_greek_value(contract, _ALPACA_OPTION_GAMMA_ALIASES),
+        "theta": _alpaca_option_greek_value(contract, _ALPACA_OPTION_THETA_ALIASES),
+        "vega": _alpaca_option_greek_value(contract, _ALPACA_OPTION_VEGA_ALIASES),
+        "rho": _alpaca_option_greek_value(contract, _ALPACA_OPTION_RHO_ALIASES),
+        "open_interest": _optional_option_snapshot_value(
+            contract,
+            _ALPACA_OPTION_OPEN_INTEREST_ALIASES,
+        ),
+        "source": "alpaca",
+        "asof": asof,
+    }
+
+
+def _alpaca_option_contract_metadata(
+    default_symbol: Any,
+    contract: Any,
+) -> _AlpacaOptionContractMetadata:
+    contract_symbol = _clean_alpaca_option_contract_symbol(
+        _option_metadata_value(
+            contract,
+            _ALPACA_OPTION_CONTRACT_SYMBOL_ALIASES,
+            default=default_symbol,
+        )
+    )
+    expiry_value = _option_metadata_value(contract, _ALPACA_OPTION_EXPIRY_ALIASES)
+    strike_value = _option_metadata_value(contract, _ALPACA_OPTION_STRIKE_ALIASES)
+    right_value = _option_metadata_value(contract, _ALPACA_OPTION_RIGHT_ALIASES)
+
+    parsed: _AlpacaOptionContractMetadata | None = None
+    if (
+        _is_missing_value(expiry_value)
+        or _is_missing_value(strike_value)
+        or _is_missing_value(right_value)
+    ):
+        parsed = _parse_occ_contract_symbol(contract_symbol)
+
+    expiry = (
+        parsed.expiry
+        if _is_missing_value(expiry_value) and parsed is not None
+        else _normalize_option_expiry(expiry_value, contract_symbol)
+    )
+    strike = (
+        parsed.strike
+        if _is_missing_value(strike_value) and parsed is not None
+        else _required_positive_option_strike(strike_value, contract_symbol)
+    )
+    right = (
+        parsed.right
+        if _is_missing_value(right_value) and parsed is not None
+        else _normalize_alpaca_option_right_value(right_value, contract_symbol)
+    )
+
+    return _AlpacaOptionContractMetadata(
+        contract_symbol=contract_symbol,
+        expiry=expiry,
+        strike=strike,
+        right=right,
+    )
+
+
+def _option_metadata_value(
+    contract: Any,
+    aliases: tuple[str, ...],
+    *,
+    default: object = _MISSING,
+) -> Any:
+    value = _option_snapshot_value(contract, aliases)
+    if value is not _MISSING:
+        return value
+
+    nested_contract = _option_snapshot_value(contract, _ALPACA_OPTION_CONTRACT_ALIASES)
+    if nested_contract is not _MISSING:
+        value = _provider_value(nested_contract, aliases)
+        if value is not _MISSING:
+            return value
+
+    return default
+
+
+def _parse_occ_contract_symbol(symbol: str) -> _AlpacaOptionContractMetadata:
+    normalized_symbol = symbol.replace(" ", "").upper()
+    match = _OCC_CONTRACT_SYMBOL_RE.fullmatch(normalized_symbol)
+    if match is None:
+        raise ValueError(
+            f"alpaca option chain could not parse OCC contract symbol {symbol!r}"
+        )
+
+    _, expiry_raw, right_raw, strike_raw = match.groups()
+    year = 2000 + int(expiry_raw[:2])
+    month = int(expiry_raw[2:4])
+    day = int(expiry_raw[4:6])
+    try:
+        expiry = date(year, month, day)
+    except ValueError as exc:
+        raise ValueError(
+            f"alpaca option chain contract symbol {symbol!r} has invalid expiry"
+        ) from exc
+
+    strike = int(strike_raw) / 1000
+    if strike <= 0:
+        raise ValueError(
+            f"alpaca option chain contract symbol {symbol!r} has nonpositive strike"
+        )
+
+    return _AlpacaOptionContractMetadata(
+        contract_symbol=normalized_symbol,
+        expiry=expiry,
+        strike=strike,
+        right=_OPTION_RIGHT_ALIASES[right_raw.lower()],
+    )
+
+
+def _normalize_option_expiry(value: Any, contract_symbol: str) -> date:
+    if _is_missing_value(value):
+        raise ValueError(
+            f"alpaca option chain contract {contract_symbol!r} is missing expiry"
+        )
+    try:
+        timestamp = pd.Timestamp(value)
+    except Exception as exc:
+        raise ValueError(
+            f"alpaca option chain contract {contract_symbol!r} expiry is invalid"
+        ) from exc
+    if pd.isna(timestamp):
+        raise ValueError(
+            f"alpaca option chain contract {contract_symbol!r} expiry is invalid"
+        )
+    return timestamp.date()
+
+
+def _required_positive_option_strike(value: Any, contract_symbol: str) -> float:
+    if _is_missing_value(value):
+        raise ValueError(
+            f"alpaca option chain contract {contract_symbol!r} is missing strike"
+        )
+    try:
+        strike = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(
+            f"alpaca option chain contract {contract_symbol!r} strike must be numeric"
+        ) from exc
+    if not math.isfinite(strike) or strike <= 0:
+        raise ValueError(
+            f"alpaca option chain contract {contract_symbol!r} strike must be > 0"
+        )
+    return strike
+
+
+def _normalize_alpaca_option_right_value(value: Any, contract_symbol: str) -> str:
+    if _is_missing_value(value):
+        raise ValueError(
+            f"alpaca option chain contract {contract_symbol!r} is missing right"
+        )
+    raw_value = getattr(value, "value", value)
+    text = str(raw_value).strip().lower()
+    if text.endswith(".call"):
+        text = "call"
+    elif text.endswith(".put"):
+        text = "put"
+
+    normalized = _OPTION_RIGHT_ALIASES.get(text)
+    if normalized is None:
+        raise ValueError(
+            f"alpaca option chain contract {contract_symbol!r} has invalid right "
+            f"{value!r}; expected call/put or C/P aliases"
+        )
+    return normalized
+
+
+def _optional_finite_option_quote_number(
+    quote: Any,
+    aliases: tuple[str, ...],
+) -> float | None:
+    value = _quote_value(quote, aliases)
+    if _is_missing_value(value):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def _optional_option_snapshot_value(contract: Any, aliases: tuple[str, ...]) -> object:
+    value = _option_snapshot_value(contract, aliases)
+    if _is_missing_value(value):
+        return pd.NA
+    return value
+
+
+def _alpaca_option_greek_value(contract: Any, aliases: tuple[str, ...]) -> object:
+    value = _option_snapshot_value(contract, aliases)
+    if not _is_missing_value(value):
+        return value
+
+    greeks = _option_snapshot_value(contract, _ALPACA_OPTION_GREEKS_ALIASES)
+    if _is_missing_value(greeks):
+        return pd.NA
+
+    value = _provider_value(greeks, aliases)
+    if _is_missing_value(value):
+        return pd.NA
+    return value
+
+
+def _alpaca_option_last_price(contract: Any) -> object:
+    trade = _option_snapshot_value(contract, _ALPACA_OPTION_LATEST_TRADE_ALIASES)
+    if _is_missing_value(trade):
+        return pd.NA
+
+    value = _provider_value(trade, _ALPACA_OPTION_TRADE_PRICE_ALIASES)
+    if _is_missing_value(value):
+        return pd.NA
+    return value
+
+
+def _option_snapshot_value(
+    contract: Any,
+    aliases: tuple[str, ...],
+    *,
+    default: object = _MISSING,
+) -> Any:
+    return _provider_value(contract, aliases, default=default)
+
+
+def _clean_alpaca_option_underlying(value: object) -> str:
+    return _required_text_value(value, "alpaca option chain", "underlying").upper()
+
+
+def _clean_alpaca_option_contract_symbol(value: object) -> str:
+    return (
+        _required_text_value(value, "alpaca option chain", "contract_symbol")
+        .replace(" ", "")
+        .upper()
+    )
 
 
 def _alpaca_bar_items(payload: Mapping[str, Any]) -> list[tuple[str, Any]]:
@@ -761,6 +1165,7 @@ def _validate_unique_contract_symbols(frame: pd.DataFrame) -> None:
 __all__ = [
     "normalize_alpaca_bars",
     "normalize_alpaca_latest_quotes",
+    "normalize_alpaca_option_chain",
     "normalize_fred_observations",
     "normalize_market_inputs",
     "normalize_option_chain",

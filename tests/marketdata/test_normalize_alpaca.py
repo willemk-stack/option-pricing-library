@@ -8,12 +8,15 @@ import pytest
 from option_pricing.marketdata.normalize import (
     normalize_alpaca_bars,
     normalize_alpaca_latest_quotes,
+    normalize_alpaca_option_chain,
 )
 from option_pricing.marketdata.schemas import (
     EQUITY_BARS_COLUMNS,
     EQUITY_BARS_DTYPES,
     EQUITY_QUOTES_COLUMNS,
     EQUITY_QUOTES_DTYPES,
+    OPTION_CHAIN_COLUMNS,
+    OPTION_CHAIN_DTYPES,
 )
 from option_pricing.marketdata.validation import validate_dtypes
 
@@ -40,6 +43,35 @@ class _ObjectBar:
     volume: int = 1000
     trade_count: int = 75
     vwap: float = 500.1
+
+
+@dataclass(frozen=True, slots=True)
+class _ObjectTrade:
+    price: float = 4.25
+
+
+@dataclass(frozen=True, slots=True)
+class _ObjectGreeks:
+    delta: float = 0.45
+    gamma: float = 0.02
+    theta: float = -0.03
+    vega: float = 0.18
+    rho: float = 0.04
+
+
+@dataclass(frozen=True, slots=True)
+class _ObjectOptionSnapshot:
+    symbol: str = "SPY260619C00500000"
+    latest_quote: _ObjectQuote = _ObjectQuote(
+        symbol="SPY260619C00500000",
+        timestamp="2026-05-22T11:30:00-04:00",
+        bid_price=4.0,
+        ask_price=4.4,
+    )
+    latest_trade: _ObjectTrade | None = _ObjectTrade()
+    implied_volatility: float | None = 0.2
+    greeks: _ObjectGreeks | None = _ObjectGreeks()
+    open_interest: int | None = 123
 
 
 def _payload() -> dict[str, object]:
@@ -220,6 +252,275 @@ def test_normalize_alpaca_latest_quotes_accepts_raw_abbreviated_quote_mapping() 
 
     assert normalized.loc[0, "symbol"] == "SPY"
     assert float(normalized.loc[0, "mid"]) == pytest.approx(499.1)
+
+
+def _option_chain_payload() -> dict[str, object]:
+    return {
+        "underlying": "spy",
+        "contracts": {
+            "SPY260619C00500000": {
+                "expiration_date": "2026-06-19",
+                "strike_price": "500",
+                "type": "C",
+                "latest_quote": {
+                    "timestamp": "2026-05-22T11:30:00-04:00",
+                    "bid_price": "4.0",
+                    "ask_price": "4.4",
+                },
+                "latest_trade": {"price": "4.25"},
+                "implied_volatility": "0.2",
+                "greeks": {
+                    "delta": "0.45",
+                    "gamma": "0.02",
+                    "theta": "-0.03",
+                    "vega": "0.18",
+                    "rho": "0.04",
+                },
+                "open_interest": "123",
+                "provider_extra": "ignored",
+            }
+        },
+        "source": "alpaca",
+        "feed": "indicative",
+        "asof": "2026-05-22T15:31:00Z",
+        "debug": "ignored",
+    }
+
+
+def test_normalize_alpaca_option_chain_outputs_canonical_schema_order() -> None:
+    normalized = normalize_alpaca_option_chain(_option_chain_payload())
+
+    assert tuple(normalized.columns) == OPTION_CHAIN_COLUMNS
+    assert {column: str(normalized[column].dtype) for column in normalized} == (
+        OPTION_CHAIN_DTYPES
+    )
+    validate_dtypes(normalized, "option_chain", allow_extra=False)
+    assert "debug" not in normalized.columns
+    assert "provider_extra" not in normalized.columns
+
+
+def test_normalize_alpaca_option_chain_accepts_object_style_snapshots() -> None:
+    normalized = normalize_alpaca_option_chain(
+        {
+            "underlying": "SPY",
+            "contracts": [_ObjectOptionSnapshot()],
+            "asof": "2026-05-22T15:31:00Z",
+        }
+    )
+
+    assert normalized.loc[0, "contract_symbol"] == "SPY260619C00500000"
+    assert normalized.loc[0, "expiry"] == pd.Timestamp("2026-06-19")
+    assert float(normalized.loc[0, "strike"]) == pytest.approx(500.0)
+    assert normalized.loc[0, "right"] == "call"
+
+
+def test_normalize_alpaca_option_chain_occ_fallback_parses_put_symbol() -> None:
+    normalized = normalize_alpaca_option_chain(
+        {
+            "underlying": "SPY",
+            "contracts": {
+                "SPY260619P00450000": {
+                    "latest_quote": {
+                        "timestamp": "2026-05-22T15:30:00Z",
+                        "bid_price": 3.0,
+                        "ask_price": 3.4,
+                    }
+                }
+            },
+            "asof": "2026-05-22T15:31:00Z",
+        }
+    )
+
+    assert normalized.loc[0, "expiry"] == pd.Timestamp("2026-06-19")
+    assert normalized.loc[0, "right"] == "put"
+    assert float(normalized.loc[0, "strike"]) == pytest.approx(450.0)
+
+
+def test_normalize_alpaca_option_chain_computes_mid_and_preserves_last() -> None:
+    normalized = normalize_alpaca_option_chain(_option_chain_payload())
+
+    assert float(normalized.loc[0, "mid"]) == pytest.approx(4.2)
+    assert float(normalized.loc[0, "last"]) == pytest.approx(4.25)
+
+
+def test_normalize_alpaca_option_chain_missing_last_and_optional_fields_are_nullable() -> (
+    None
+):
+    normalized = normalize_alpaca_option_chain(
+        {
+            "underlying": "SPY",
+            "contracts": {
+                "SPY260619C00500000": {
+                    "latest_quote": {
+                        "timestamp": "2026-05-22T15:30:00Z",
+                        "bid_price": 4.0,
+                        "ask_price": 4.4,
+                    }
+                }
+            },
+            "asof": "2026-05-22T15:31:00Z",
+        }
+    )
+
+    for column in [
+        "last",
+        "iv",
+        "delta",
+        "gamma",
+        "theta",
+        "vega",
+        "rho",
+        "open_interest",
+    ]:
+        assert pd.isna(normalized.loc[0, column])
+
+    assert str(normalized["last"].dtype) == "Float64"
+    assert str(normalized["open_interest"].dtype) == "Int64"
+
+
+def test_normalize_alpaca_option_chain_skips_missing_or_unusable_quotes() -> None:
+    normalized = normalize_alpaca_option_chain(
+        {
+            "underlying": "SPY",
+            "contracts": {
+                "SPY260619C00500000": {"latest_quote": None},
+                "SPY260619C00510000": {
+                    "latest_quote": {
+                        "timestamp": "2026-05-22T15:30:00Z",
+                        "ask_price": 2.0,
+                    }
+                },
+                "SPY260619C00520000": {
+                    "latest_quote": {
+                        "timestamp": "2026-05-22T15:30:00Z",
+                        "bid_price": "not-a-number",
+                        "ask_price": 2.0,
+                    }
+                },
+                "SPY260619C00530000": {
+                    "latest_quote": {
+                        "timestamp": "2026-05-22T15:30:00Z",
+                        "bid_price": 1.0,
+                        "ask_price": 1.4,
+                    }
+                },
+            },
+            "asof": "2026-05-22T15:31:00Z",
+        }
+    )
+
+    assert normalized["contract_symbol"].astype(str).tolist() == ["SPY260619C00530000"]
+
+
+def test_normalize_alpaca_option_chain_all_unusable_quotes_fail_clearly() -> None:
+    with pytest.raises(ValueError, match="usable latest quote bid/ask"):
+        normalize_alpaca_option_chain(
+            {
+                "underlying": "SPY",
+                "contracts": {
+                    "SPY260619C00500000": {
+                        "latest_quote": {
+                            "timestamp": "2026-05-22T15:30:00Z",
+                            "ask_price": 4.4,
+                        }
+                    }
+                },
+                "asof": "2026-05-22T15:31:00Z",
+            }
+        )
+
+
+def test_normalize_alpaca_option_chain_missing_contracts_fail_clearly() -> None:
+    with pytest.raises(ValueError, match="contracts mapping or list"):
+        normalize_alpaca_option_chain(
+            {"underlying": "SPY", "asof": "2026-05-22T15:31:00Z"}
+        )
+
+
+def test_normalize_alpaca_option_chain_invalid_occ_fallback_fails_clearly() -> None:
+    with pytest.raises(ValueError, match="could not parse OCC"):
+        normalize_alpaca_option_chain(
+            {
+                "underlying": "SPY",
+                "contracts": {
+                    "NOT_OCC": {
+                        "latest_quote": {
+                            "timestamp": "2026-05-22T15:30:00Z",
+                            "bid_price": 4.0,
+                            "ask_price": 4.4,
+                        }
+                    }
+                },
+                "asof": "2026-05-22T15:31:00Z",
+            }
+        )
+
+
+def test_normalize_alpaca_option_chain_nonpositive_metadata_strike_fails() -> None:
+    with pytest.raises(ValueError, match="strike must be > 0"):
+        normalize_alpaca_option_chain(
+            {
+                "underlying": "SPY",
+                "contracts": {
+                    "SPY260619C00500000": {
+                        "expiration_date": "2026-06-19",
+                        "strike_price": 0,
+                        "type": "call",
+                        "latest_quote": {
+                            "timestamp": "2026-05-22T15:30:00Z",
+                            "bid_price": 4.0,
+                            "ask_price": 4.4,
+                        },
+                    }
+                },
+                "asof": "2026-05-22T15:31:00Z",
+            }
+        )
+
+
+def test_normalize_alpaca_option_chain_sorts_deterministically() -> None:
+    normalized = normalize_alpaca_option_chain(
+        {
+            "underlying": "SPY",
+            "contracts": {
+                "SPY260619P00500000": {
+                    "latest_quote": {
+                        "timestamp": "2026-05-22T15:30:00Z",
+                        "bid_price": 4.0,
+                        "ask_price": 4.4,
+                    }
+                },
+                "SPY260619C00450000": {
+                    "latest_quote": {
+                        "timestamp": "2026-05-22T15:30:00Z",
+                        "bid_price": 3.0,
+                        "ask_price": 3.4,
+                    }
+                },
+                "SPY260619C00500000": {
+                    "latest_quote": {
+                        "timestamp": "2026-05-22T15:30:00Z",
+                        "bid_price": 2.0,
+                        "ask_price": 2.4,
+                    }
+                },
+            },
+            "asof": "2026-05-22T15:31:00Z",
+        }
+    )
+
+    assert normalized["contract_symbol"].astype(str).tolist() == [
+        "SPY260619C00450000",
+        "SPY260619C00500000",
+        "SPY260619P00500000",
+    ]
+
+
+def test_normalize_alpaca_option_chain_normalizes_timestamps_to_utc() -> None:
+    normalized = normalize_alpaca_option_chain(_option_chain_payload())
+
+    assert normalized.loc[0, "quote_ts"] == pd.Timestamp("2026-05-22T15:30:00Z")
+    assert normalized.loc[0, "asof"] == pd.Timestamp("2026-05-22T15:31:00Z")
 
 
 def _bars_payload() -> dict[str, object]:

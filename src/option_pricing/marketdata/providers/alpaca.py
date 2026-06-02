@@ -1,11 +1,11 @@
-"""Alpaca market data provider shell for latest equity quotes and equity bars."""
+"""Alpaca market data provider shell for equities and option chain snapshots."""
 
 from __future__ import annotations
 
 import os
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from importlib import import_module
 from typing import Protocol, cast
 
@@ -78,6 +78,43 @@ class _EquityBarsRequest:
     asof: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class _OptionChainRequest:
+    underlying: str
+    feed: str
+    expiry_gte: date
+    expiry_lte: date
+    strike_gte: float | None
+    strike_lte: float | None
+    option_type: str | None
+    root_symbol: str | None
+    updated_since: datetime | None
+
+    @property
+    def underlying_symbol(self) -> str:
+        return self.underlying
+
+    @property
+    def expiration_date_gte(self) -> date:
+        return self.expiry_gte
+
+    @property
+    def expiration_date_lte(self) -> date:
+        return self.expiry_lte
+
+    @property
+    def strike_price_gte(self) -> float | None:
+        return self.strike_gte
+
+    @property
+    def strike_price_lte(self) -> float | None:
+        return self.strike_lte
+
+    @property
+    def type(self) -> str | None:
+        return self.option_type
+
+
 class _StockDataClient(Protocol):
     def get_stock_latest_quote(self, request_params: object) -> object:
         """Return latest quote data for the request."""
@@ -86,8 +123,13 @@ class _StockDataClient(Protocol):
         """Return historical stock bars for the request."""
 
 
+class _OptionDataClient(Protocol):
+    def get_option_chain(self, request_params: object) -> object:
+        """Return option chain snapshot data for the request."""
+
+
 class AlpacaClient:
-    """Small injectable client for Alpaca equity market data."""
+    """Small injectable client for Alpaca market data."""
 
     def __init__(
         self,
@@ -95,6 +137,7 @@ class AlpacaClient:
         secret_key: str,
         config: AlpacaConfig | None = None,
         stock_data_client: _StockDataClient | None = None,
+        option_data_client: _OptionDataClient | None = None,
     ) -> None:
         self.config = config or AlpacaConfig()
         self._api_key = _clean_credential(
@@ -106,12 +149,14 @@ class AlpacaClient:
             credential_name="secret key",
         )
         self._stock_data_client = stock_data_client
+        self._option_data_client = option_data_client
 
     @classmethod
     def from_env(
         cls,
         config: AlpacaConfig | None = None,
         stock_data_client: _StockDataClient | None = None,
+        option_data_client: _OptionDataClient | None = None,
     ) -> AlpacaClient:
         """Create a client from the environment variables named by ``AlpacaConfig``."""
 
@@ -135,6 +180,7 @@ class AlpacaClient:
             secret_key,
             config=resolved_config,
             stock_data_client=stock_data_client,
+            option_data_client=option_data_client,
         )
 
     def get_latest_equity_quotes(
@@ -240,6 +286,92 @@ class AlpacaClient:
             "asof": cleaned_asof,
         }
 
+    def get_option_chain(
+        self,
+        underlying: str,
+        *,
+        expiry_gte: date | str | None = None,
+        expiry_lte: date | str | None = None,
+        strike_gte: float | None = None,
+        strike_lte: float | None = None,
+        option_type: str | None = None,
+        root_symbol: str | None = None,
+        updated_since: datetime | str | None = None,
+        feed: str | None = None,
+        asof: object | None = None,
+    ) -> dict[str, object]:
+        """Fetch option chain snapshots for one underlying symbol."""
+
+        cleaned_underlying = _clean_underlying_symbol(underlying)
+        effective_feed = _clean_optional_text(feed, "feed") or self.config.feed
+        normalized_expiry_gte, normalized_expiry_lte = _option_chain_expiry_bounds(
+            expiry_gte,
+            expiry_lte,
+        )
+        normalized_strike_gte = _clean_optional_float(strike_gte, "strike_gte")
+        normalized_strike_lte = _clean_optional_float(strike_lte, "strike_lte")
+        if (
+            normalized_strike_gte is not None
+            and normalized_strike_lte is not None
+            and normalized_strike_gte > normalized_strike_lte
+        ):
+            raise ValueError("strike_gte must be less than or equal to strike_lte")
+
+        cleaned_option_type = _clean_option_type(option_type)
+        cleaned_root_symbol = _clean_optional_symbol(root_symbol, "root_symbol")
+        normalized_updated_since = _normalize_optional_datetime(
+            updated_since,
+            "updated_since",
+        )
+
+        option_client = self._resolve_option_data_client()
+        request = self._option_chain_request(
+            cleaned_underlying,
+            feed=effective_feed,
+            expiry_gte=normalized_expiry_gte,
+            expiry_lte=normalized_expiry_lte,
+            strike_gte=normalized_strike_gte,
+            strike_lte=normalized_strike_lte,
+            option_type=cleaned_option_type,
+            root_symbol=cleaned_root_symbol,
+            updated_since=normalized_updated_since,
+        )
+
+        getter = getattr(option_client, "get_option_chain", None)
+        if not callable(getter):
+            raise TypeError(
+                "Alpaca option_data_client must provide a callable "
+                "get_option_chain method"
+            )
+
+        try:
+            response = getter(request)
+        except Exception:
+            raise AlpacaRequestError(
+                "Alpaca option chain request failed",
+                symbols=(cleaned_underlying,),
+            ) from None
+
+        request_metadata = _option_chain_request_metadata(
+            cleaned_underlying,
+            feed=effective_feed,
+            expiry_gte=normalized_expiry_gte,
+            expiry_lte=normalized_expiry_lte,
+            strike_gte=normalized_strike_gte,
+            strike_lte=normalized_strike_lte,
+            option_type=cleaned_option_type,
+            root_symbol=cleaned_root_symbol,
+            updated_since=normalized_updated_since,
+        )
+        return {
+            "underlying": cleaned_underlying,
+            "contracts": getattr(response, "data", response),
+            "source": "alpaca",
+            "feed": effective_feed,
+            "request": request_metadata,
+            "asof": asof,
+        }
+
     def _resolve_stock_data_client(self) -> object:
         if self._stock_data_client is not None:
             return self._stock_data_client
@@ -256,6 +388,24 @@ class AlpacaClient:
         except Exception:
             raise AlpacaRequestError(
                 "Could not construct Alpaca stock data client"
+            ) from None
+
+    def _resolve_option_data_client(self) -> object:
+        if self._option_data_client is not None:
+            return self._option_data_client
+
+        try:
+            client_cls, _, _, _ = _alpaca_option_sdk_objects()
+            return client_cls(
+                api_key=self._api_key,
+                secret_key=self._secret_key,
+                sandbox=self.config.sandbox,
+            )
+        except AlpacaProviderError:
+            raise
+        except Exception:
+            raise AlpacaRequestError(
+                "Could not construct Alpaca option data client"
             ) from None
 
     def _latest_quote_request(self, symbols: tuple[str, ...]) -> object:
@@ -338,14 +488,77 @@ class AlpacaClient:
                 symbols=symbols,
             ) from None
 
+    def _option_chain_request(
+        self,
+        underlying: str,
+        *,
+        feed: str,
+        expiry_gte: date,
+        expiry_lte: date,
+        strike_gte: float | None,
+        strike_lte: float | None,
+        option_type: str | None,
+        root_symbol: str | None,
+        updated_since: datetime | None,
+    ) -> object:
+        if self._option_data_client is not None:
+            return _OptionChainRequest(
+                underlying=underlying,
+                feed=feed,
+                expiry_gte=expiry_gte,
+                expiry_lte=expiry_lte,
+                strike_gte=strike_gte,
+                strike_lte=strike_lte,
+                option_type=option_type,
+                root_symbol=root_symbol,
+                updated_since=updated_since,
+            )
+
+        try:
+            (
+                _,
+                request_cls,
+                options_feed_factory,
+                contract_type_factory,
+            ) = _alpaca_option_sdk_objects()
+            request_kwargs: dict[str, object] = {
+                "underlying_symbol": underlying,
+                "feed": _optional_sdk_enum(feed, options_feed_factory),
+                "expiration_date_gte": expiry_gte,
+                "expiration_date_lte": expiry_lte,
+            }
+            if strike_gte is not None:
+                request_kwargs["strike_price_gte"] = strike_gte
+            if strike_lte is not None:
+                request_kwargs["strike_price_lte"] = strike_lte
+            if option_type is not None:
+                request_kwargs["type"] = _optional_sdk_enum(
+                    option_type,
+                    contract_type_factory,
+                )
+            if root_symbol is not None:
+                request_kwargs["root_symbol"] = root_symbol
+            if updated_since is not None:
+                request_kwargs["updated_since"] = updated_since
+            return request_cls(**request_kwargs)
+        except AlpacaProviderError:
+            raise
+        except Exception:
+            raise AlpacaRequestError(
+                "Could not construct Alpaca option chain request",
+                symbols=(underlying,),
+            ) from None
+
     def __repr__(self) -> str:
-        injected = self._stock_data_client is not None
+        stock_injected = self._stock_data_client is not None
+        option_injected = self._option_data_client is not None
         return (
             "AlpacaClient("
             f"config={self.config!r}, "
             "api_key=<redacted>, "
             "secret_key=<redacted>, "
-            f"stock_data_client_injected={injected!r}"
+            f"stock_data_client_injected={stock_injected!r}, "
+            f"option_data_client_injected={option_injected!r}"
             ")"
         )
 
@@ -415,6 +628,62 @@ def _alpaca_bars_sdk_objects() -> tuple[
         cast(Callable[[str], object], data_feed_factory),
         cast(Callable[[str], object] | None, adjustment_factory),
         cast(Callable[[str], object] | None, sort_factory),
+    )
+
+
+def _alpaca_option_sdk_objects() -> tuple[
+    Callable[..., object],
+    Callable[..., object],
+    Callable[[str], object] | None,
+    Callable[[str], object] | None,
+]:
+    try:
+        historical_module = import_module("alpaca.data.historical.option")
+        requests_module = import_module("alpaca.data.requests")
+        enums_module = import_module("alpaca.data.enums")
+    except ModuleNotFoundError:
+        raise AlpacaRequestError(
+            "alpaca-py is required to fetch Alpaca option chains"
+        ) from None
+
+    client_cls = getattr(historical_module, "OptionHistoricalDataClient", None)
+    request_cls = getattr(requests_module, "OptionChainRequest", None)
+    options_feed_factory = getattr(enums_module, "OptionsFeed", None) or getattr(
+        requests_module,
+        "OptionsFeed",
+        None,
+    )
+    contract_type_factory = getattr(enums_module, "ContractType", None) or getattr(
+        requests_module,
+        "ContractType",
+        None,
+    )
+    if contract_type_factory is None:
+        try:
+            trading_enums_module = import_module("alpaca.trading.enums")
+        except ModuleNotFoundError:
+            trading_enums_module = None
+        if trading_enums_module is not None:
+            contract_type_factory = getattr(
+                trading_enums_module,
+                "ContractType",
+                None,
+            )
+    if not callable(options_feed_factory):
+        options_feed_factory = None
+    if not callable(contract_type_factory):
+        contract_type_factory = None
+
+    if not callable(client_cls):
+        raise AlpacaRequestError("alpaca-py OptionHistoricalDataClient is unavailable")
+    if not callable(request_cls):
+        raise AlpacaRequestError("alpaca-py OptionChainRequest is unavailable")
+
+    return (
+        cast(Callable[..., object], client_cls),
+        cast(Callable[..., object], request_cls),
+        cast(Callable[[str], object] | None, options_feed_factory),
+        cast(Callable[[str], object] | None, contract_type_factory),
     )
 
 
@@ -492,6 +761,42 @@ def _clean_symbols(symbols: str | Sequence[str]) -> tuple[str, ...]:
     return cleaned
 
 
+def _option_chain_expiry_bounds(
+    expiry_gte: date | str | None,
+    expiry_lte: date | str | None,
+) -> tuple[date, date]:
+    current_date = datetime.now(UTC).date()
+    lower = (
+        current_date
+        if expiry_gte is None
+        else _normalize_date(expiry_gte, "expiry_gte")
+    )
+    upper = (
+        current_date + timedelta(days=45)
+        if expiry_lte is None
+        else _normalize_date(expiry_lte, "expiry_lte")
+    )
+    if lower > upper:
+        raise ValueError("expiry_gte must be less than or equal to expiry_lte")
+    return lower, upper
+
+
+def _normalize_date(value: date | str, field_name: str) -> date:
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.date()
+        return value.astimezone(UTC).date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        cleaned = _clean_required_text(value, field_name)
+        try:
+            return date.fromisoformat(cleaned)
+        except ValueError as exc:
+            raise ValueError(f"{field_name} must be an ISO date string") from exc
+    raise TypeError(f"{field_name} must be a date or ISO date string")
+
+
 def _normalize_datetime(value: datetime | str, field_name: str) -> datetime:
     if isinstance(value, datetime):
         parsed = value
@@ -509,6 +814,15 @@ def _normalize_datetime(value: datetime | str, field_name: str) -> datetime:
     return parsed.astimezone(UTC)
 
 
+def _normalize_optional_datetime(
+    value: datetime | str | None,
+    field_name: str,
+) -> datetime | None:
+    if value is None:
+        return None
+    return _normalize_datetime(value, field_name)
+
+
 def _clean_required_text(value: str, field_name: str) -> str:
     if not isinstance(value, str):
         raise TypeError(f"{field_name} must be a string")
@@ -522,6 +836,64 @@ def _clean_optional_text(value: str | None, field_name: str) -> str | None:
     if value is None:
         return None
     return _clean_required_text(value, field_name)
+
+
+def _clean_optional_symbol(value: str | None, field_name: str) -> str | None:
+    if value is None:
+        return None
+    return _clean_required_text(value, field_name).upper()
+
+
+def _clean_underlying_symbol(value: str) -> str:
+    return _clean_required_text(value, "underlying").upper()
+
+
+def _clean_optional_float(value: float | None, field_name: str) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise TypeError(f"{field_name} must be numeric")
+    try:
+        cleaned = float(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{field_name} must be numeric") from exc
+    if not cleaned == cleaned or cleaned in (float("inf"), float("-inf")):
+        raise ValueError(f"{field_name} must be finite")
+    return cleaned
+
+
+def _clean_option_type(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = _clean_required_text(value, "option_type").lower()
+    if cleaned not in {"call", "put"}:
+        raise ValueError("option_type must be either 'call' or 'put'")
+    return cleaned
+
+
+def _option_chain_request_metadata(
+    underlying: str,
+    *,
+    feed: str,
+    expiry_gte: date,
+    expiry_lte: date,
+    strike_gte: float | None,
+    strike_lte: float | None,
+    option_type: str | None,
+    root_symbol: str | None,
+    updated_since: datetime | None,
+) -> dict[str, object]:
+    return {
+        "underlying": underlying,
+        "feed": feed,
+        "expiry_gte": expiry_gte,
+        "expiry_lte": expiry_lte,
+        "strike_gte": strike_gte,
+        "strike_lte": strike_lte,
+        "option_type": option_type,
+        "root_symbol": root_symbol,
+        "updated_since": updated_since,
+    }
 
 
 def _clean_limit(value: int | None) -> int | None:

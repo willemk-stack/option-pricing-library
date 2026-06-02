@@ -5,13 +5,14 @@ import importlib.util
 import os
 import sys
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from importlib import import_module
 from typing import Any
 
 import pytest
 
 from option_pricing.marketdata.config import AlpacaConfig
+from option_pricing.marketdata.normalize import normalize_alpaca_option_chain
 from option_pricing.marketdata.providers.alpaca import (
     AlpacaClient,
     AlpacaMissingCredentialsError,
@@ -70,6 +71,27 @@ class _FakeStockClient:
         if self.bars_error is not None:
             raise self.bars_error
         return self.bars_response
+
+
+class _FakeOptionClient:
+    def __init__(
+        self,
+        response: object | None = None,
+        error: Exception | None = None,
+    ) -> None:
+        self.response = (
+            {"SPY260619C00500000": {"latest_quote": {}}}
+            if response is None
+            else response
+        )
+        self.error = error
+        self.calls: list[object] = []
+
+    def get_option_chain(self, request_params: object) -> object:
+        self.calls.append(request_params)
+        if self.error is not None:
+            raise self.error
+        return self.response
 
 
 def test_alpaca_client_from_env_missing_api_key_raises_typed_error(
@@ -283,6 +305,191 @@ def test_alpaca_client_get_equity_bars_provider_exception_is_wrapped() -> None:
     assert "alpaca-key-value" not in details
 
 
+def test_alpaca_client_get_option_chain_uses_injected_fake_option_client() -> None:
+    fake_client = _FakeOptionClient(response={"SPY260619C00500000": object()})
+    client = AlpacaClient(
+        "alpaca-key",
+        "alpaca-secret",
+        config=AlpacaConfig(feed="indicative"),
+        option_data_client=fake_client,
+    )
+
+    result = client.get_option_chain(
+        " spy ",
+        expiry_gte=date(2026, 6, 1),
+        expiry_lte="2026-06-30",
+        strike_gte=400,
+        strike_lte=550.0,
+        option_type="Call",
+        root_symbol="spy",
+        updated_since="2026-05-22T11:30:00-04:00",
+        feed="opra",
+        asof="2026-05-22T15:31:00Z",
+    )
+
+    assert result["underlying"] == "SPY"
+    assert result["source"] == "alpaca"
+    assert result["feed"] == "opra"
+    assert result["contracts"] == fake_client.response
+    assert result["asof"] == "2026-05-22T15:31:00Z"
+    assert len(fake_client.calls) == 1
+    request = fake_client.calls[0]
+    assert request.underlying == "SPY"
+    assert request.underlying_symbol == "SPY"
+    assert request.feed == "opra"
+    assert request.expiry_gte == date(2026, 6, 1)
+    assert request.expiry_lte == date(2026, 6, 30)
+    assert request.expiration_date_gte == date(2026, 6, 1)
+    assert request.expiration_date_lte == date(2026, 6, 30)
+    assert request.strike_gte == 400.0
+    assert request.strike_lte == 550.0
+    assert request.strike_price_gte == 400.0
+    assert request.strike_price_lte == 550.0
+    assert request.option_type == "call"
+    assert request.type == "call"
+    assert request.root_symbol == "SPY"
+    assert request.updated_since == datetime(2026, 5, 22, 15, 30, tzinfo=UTC)
+
+    metadata = result["request"]
+    assert metadata["underlying"] == "SPY"
+    assert metadata["feed"] == "opra"
+    assert metadata["expiry_gte"] == date(2026, 6, 1)
+    assert metadata["expiry_lte"] == date(2026, 6, 30)
+    assert "alpaca-key" not in repr(metadata)
+    assert "alpaca-secret" not in repr(metadata)
+
+
+def test_alpaca_client_get_option_chain_defaults_to_config_feed() -> None:
+    fake_client = _FakeOptionClient()
+    client = AlpacaClient(
+        "alpaca-key",
+        "alpaca-secret",
+        config=AlpacaConfig(feed="indicative"),
+        option_data_client=fake_client,
+    )
+
+    result = client.get_option_chain(
+        "SPY",
+        expiry_gte="2026-06-01",
+        expiry_lte="2026-06-30",
+    )
+
+    assert result["feed"] == "indicative"
+    assert fake_client.calls[0].feed == "indicative"
+
+
+def test_alpaca_client_get_option_chain_applies_default_expiry_bounds() -> None:
+    fake_client = _FakeOptionClient()
+    client = AlpacaClient(
+        "alpaca-key",
+        "alpaca-secret",
+        option_data_client=fake_client,
+    )
+
+    before = datetime.now(UTC).date()
+    result = client.get_option_chain("SPY")
+    after = datetime.now(UTC).date()
+
+    request = fake_client.calls[0]
+    assert before <= request.expiry_gte <= after
+    assert request.expiry_lte == request.expiry_gte + timedelta(days=45)
+    metadata = result["request"]
+    assert metadata["expiry_gte"] == request.expiry_gte
+    assert metadata["expiry_lte"] == request.expiry_lte
+
+
+def test_alpaca_client_get_option_chain_default_lte_uses_current_date_window() -> None:
+    fake_client = _FakeOptionClient()
+    client = AlpacaClient(
+        "alpaca-key",
+        "alpaca-secret",
+        option_data_client=fake_client,
+    )
+
+    current_date = datetime.now(UTC).date()
+    client.get_option_chain("SPY", expiry_gte=current_date + timedelta(days=10))
+
+    request = fake_client.calls[0]
+    assert request.expiry_gte == current_date + timedelta(days=10)
+    assert request.expiry_lte == current_date + timedelta(days=45)
+
+
+def test_alpaca_client_get_option_chain_explicit_expiry_bounds_override_defaults() -> (
+    None
+):
+    fake_client = _FakeOptionClient()
+    client = AlpacaClient(
+        "alpaca-key",
+        "alpaca-secret",
+        option_data_client=fake_client,
+    )
+
+    client.get_option_chain(
+        "SPY",
+        expiry_gte="2026-06-19",
+        expiry_lte="2026-07-17",
+    )
+
+    request = fake_client.calls[0]
+    assert request.expiry_gte == date(2026, 6, 19)
+    assert request.expiry_lte == date(2026, 7, 17)
+
+
+def test_alpaca_client_get_option_chain_expiry_bounds_must_be_ordered() -> None:
+    client = AlpacaClient(
+        "alpaca-key",
+        "alpaca-secret",
+        option_data_client=_FakeOptionClient(),
+    )
+
+    with pytest.raises(ValueError, match="expiry_gte"):
+        client.get_option_chain(
+            "SPY",
+            expiry_gte="2026-07-17",
+            expiry_lte="2026-06-19",
+        )
+
+
+def test_alpaca_client_get_option_chain_strike_bounds_must_be_ordered() -> None:
+    client = AlpacaClient(
+        "alpaca-key",
+        "alpaca-secret",
+        option_data_client=_FakeOptionClient(),
+    )
+
+    with pytest.raises(ValueError, match="strike_gte"):
+        client.get_option_chain("SPY", strike_gte=550.0, strike_lte=500.0)
+
+
+def test_alpaca_client_get_option_chain_option_type_must_be_call_or_put() -> None:
+    client = AlpacaClient(
+        "alpaca-key",
+        "alpaca-secret",
+        option_data_client=_FakeOptionClient(),
+    )
+
+    with pytest.raises(ValueError, match="option_type"):
+        client.get_option_chain("SPY", option_type="straddle")
+
+
+def test_alpaca_client_get_option_chain_provider_exception_is_wrapped() -> None:
+    secret = "alpaca-secret-value"
+    fake_client = _FakeOptionClient(error=RuntimeError(f"boom near {secret}"))
+    client = AlpacaClient(
+        "alpaca-key-value",
+        secret,
+        option_data_client=fake_client,
+    )
+
+    with pytest.raises(AlpacaRequestError) as excinfo:
+        client.get_option_chain("SPY")
+
+    details = f"{excinfo.value!s} {excinfo.value!r} {client!r}"
+    assert "option chain request failed" in str(excinfo.value)
+    assert secret not in details
+    assert "alpaca-key-value" not in details
+
+
 def test_alpaca_request_failures_raise_without_leaking_secrets() -> None:
     secret = "alpaca-secret-value"
     fake_client = _FakeStockClient(error=ValueError(f"boom near {secret}"))
@@ -353,3 +560,30 @@ def test_alpaca_live_fetch_spy_equity_bar_smoke() -> None:
     )
 
     assert "SPY" in payload["bars"]
+
+
+@pytest.mark.skipif(
+    not (
+        os.environ.get("ALPACA_API_KEY")
+        and os.environ.get("ALPACA_SECRET_KEY")
+        and importlib.util.find_spec("alpaca") is not None
+    ),
+    reason="ALPACA_API_KEY/ALPACA_SECRET_KEY or alpaca-py are not available",
+)
+def test_alpaca_live_fetch_spy_option_chain_smoke() -> None:
+    payload = AlpacaClient.from_env().get_option_chain(
+        "SPY",
+        asof=datetime.now(UTC).isoformat(),
+    )
+
+    if not payload["contracts"]:
+        pytest.skip("Alpaca returned no SPY option contracts")
+
+    try:
+        normalized = normalize_alpaca_option_chain(payload)
+    except ValueError as exc:
+        if "usable latest quote bid/ask" in str(exc):
+            pytest.skip("Alpaca returned no SPY option contracts with bid/ask")
+        raise
+
+    assert normalized["underlying"].astype(str).eq("SPY").all()
