@@ -16,6 +16,7 @@ dependencies = ["numpy", "scipy"]
 [project.optional-dependencies]
 dev = [
     "pandas==2.2.3",
+    "pyarrow",
     "matplotlib==3.10.8",
     "jupyter",
     "nbmake",
@@ -29,6 +30,10 @@ dev = [
     "pre-commit==4.5.1",
     "scipy-stubs",
     "pandas-stubs==2.2.3.241126",
+]
+marketdata = [
+    "pandas==2.2.3",
+    "pyarrow",
 ]
 notebooks = ["jupyter", "matplotlib==3.10.8", "pandas", "ipywidgets"]
 plot = ["matplotlib==3.10.8", "pandas==2.2.3"]

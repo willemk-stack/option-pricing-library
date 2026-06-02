@@ -47,6 +47,7 @@ _PARTITION_ORDERS: dict[tuple[str, str], tuple[str, ...]] = {
     ("bronze", "equity_quotes"): ("date",),
     ("bronze", "equity_bars"): ("symbol", "timeframe", "date"),
     ("bronze", "option_chain"): ("underlying", "asof_date"),
+    ("bronze", "local_snapshot"): ("underlying", "date", "run_id"),
     ("bronze", "fred_series"): ("series_id", "date"),
     ("silver", "equity_quotes"): ("date",),
     ("silver", "equity_bars"): ("symbol", "timeframe", "date"),
@@ -55,7 +56,7 @@ _PARTITION_ORDERS: dict[tuple[str, str], tuple[str, ...]] = {
     ("silver", "market_inputs"): ("underlying", "date", "run_id"),
     ("silver", "cleaned_quotes"): ("underlying", "date", "run_id"),
     ("silver", "rejected_quotes"): ("underlying", "date", "run_id"),
-    ("gold", "market_snapshot"): ("underlying", "date"),
+    ("gold", "market_snapshot"): ("underlying", "date", "run_id"),
     ("gold", "curves"): ("date",),
     ("gold", "vol_inputs"): ("underlying", "date"),
     ("gold", "heston_quotes"): ("underlying", "date", "run_id"),
@@ -73,8 +74,8 @@ def _require_pandas() -> Any:
         import pandas as pd
     except ImportError as exc:  # pragma: no cover - exercised only in minimal installs
         raise ImportError(
-            "LocalStorage requires pandas. Install `option_pricing[dev]` or add "
-            "`pandas` to your environment."
+            "LocalStorage requires pandas. Install `option_pricing[marketdata]` "
+            "or `option_pricing[dev]`."
         ) from exc
     return pd
 
@@ -82,8 +83,9 @@ def _require_pandas() -> Any:
 def _parquet_runtime_error(action: str, exc: Exception) -> RuntimeError:
     del exc
     return RuntimeError(
-        f"Unable to {action} Parquet data. Install `pyarrow` or `fastparquet` "
-        "to use LocalStorage frame IO."
+        f"Unable to {action} Parquet data. Install `option_pricing[marketdata]` "
+        "or `option_pricing[dev]` to use LocalStorage frame IO; these include "
+        "`pyarrow`. Alternatively, install `pyarrow` or `fastparquet`."
     )
 
 
@@ -350,6 +352,104 @@ class LocalStorage:
             },
         )
         return manifest_path
+
+    def write_json(
+        self,
+        payload: Mapping[str, Any],
+        *,
+        dataset: str,
+        layer: str = "bronze",
+        partitions: Mapping[str, PartitionValue] | None = None,
+        filename: str,
+        overwrite: bool = False,
+    ) -> Path:
+        """Write a generic JSON object to a partitioned dataset path."""
+
+        layer_name = _normalise_layer(layer)
+        dataset_name = _normalise_dataset(dataset)
+        ordered_partitions = self._ordered_partitions(
+            layer=layer_name,
+            dataset=dataset_name,
+            partitions=partitions,
+        )
+        target_dir = self._dataset_dir(
+            layer=layer_name,
+            dataset=dataset_name,
+            ordered_partitions=ordered_partitions,
+        )
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        json_path = target_dir / self._json_filename(filename)
+        _raise_if_target_exists(json_path, overwrite=overwrite)
+
+        json_payload = _jsonify_object(payload)
+        written_at = _utcnow().isoformat()
+        self._write_json_atomic(json_path, json_payload)
+        self._append_jsonl(
+            self.artifacts_path,
+            {
+                "artifact_type": "json",
+                "dataset": dataset_name,
+                "layer": layer_name,
+                "partitions": self._serialise_partitions(ordered_partitions),
+                "path": _relative_posix(self.root, json_path),
+                "written_at": written_at,
+            },
+        )
+        return json_path
+
+    def read_json(
+        self,
+        *,
+        dataset: str,
+        layer: str = "bronze",
+        partitions: Mapping[str, PartitionValue] | None = None,
+        filename: str,
+    ) -> dict[str, JsonValue]:
+        """Read a generic JSON object from a partitioned dataset path."""
+
+        layer_name = _normalise_layer(layer)
+        dataset_name = _normalise_dataset(dataset)
+        ordered_partitions = self._ordered_partitions(
+            layer=layer_name,
+            dataset=dataset_name,
+            partitions=partitions,
+        )
+        target_dir = self._dataset_dir(
+            layer=layer_name,
+            dataset=dataset_name,
+            ordered_partitions=ordered_partitions,
+        )
+        json_path = target_dir / self._json_filename(filename)
+
+        with json_path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+
+        if not isinstance(payload, dict):
+            raise ValueError(f"JSON file at {json_path} does not contain an object")
+        return cast(dict[str, JsonValue], payload)
+
+    def dataset_dir(
+        self,
+        *,
+        layer: str,
+        dataset: str,
+        partitions: Mapping[str, PartitionValue] | None = None,
+    ) -> Path:
+        """Return the deterministic local directory for one dataset partition."""
+
+        layer_name = _normalise_layer(layer)
+        dataset_name = _normalise_dataset(dataset)
+        ordered_partitions = self._ordered_partitions(
+            layer=layer_name,
+            dataset=dataset_name,
+            partitions=partitions,
+        )
+        return self._dataset_dir(
+            layer=layer_name,
+            dataset=dataset_name,
+            ordered_partitions=ordered_partitions,
+        )
 
     def record_run(
         self,

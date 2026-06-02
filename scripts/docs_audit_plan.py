@@ -78,8 +78,8 @@ def impact_to_audit_plan(impact: DocsImpact) -> DocsAuditPlan:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Emit the docs browser audit plan used by CI, local repro, and agent "
-            "loops so suites, projects, and path targeting come from one source."
+            "Emit the docs browser audit plan used by CI and local reproduction "
+            "so suites, projects, and path targeting come from one source."
         )
     )
     parser.add_argument(

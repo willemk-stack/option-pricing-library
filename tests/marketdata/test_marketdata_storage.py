@@ -41,6 +41,7 @@ def _valid_model_validation_manifest() -> dict[str, object]:
     return {
         "artifact_schema_version": MODEL_VALIDATION_BUNDLE_VERSION,
         "run_id": "test-run",
+        "snapshot_id": "snapshot-001",
         "created_at_utc": "2026-05-22T14:35:00Z",
         "library_commit": "abc123",
         "underlying": "SPY",
@@ -52,8 +53,15 @@ def _valid_model_validation_manifest() -> dict[str, object]:
         "day_count": "ACT/365",
         "quote_cleaning_policy": "phase_a_default",
         "rows": {"cleaned_quotes": 1},
+        "reason_counts": {},
         "warnings": [],
         "artifacts": {"cleaned_quotes": "silver/cleaned_quotes"},
+        "heston_smoke": {
+            "status": "skipped",
+            "message": "not run in A5-S1",
+            "objective_type": "price_rmse",
+            "quote_count": 1,
+        },
     }
 
 
@@ -113,6 +121,57 @@ def test_write_and_read_frame_round_trips_partitioned_data(
     artifact = json.loads(artifact_lines[0])
     assert artifact["artifact_type"] == "frame"
     assert artifact["rows"] == 1
+
+
+def test_write_and_read_json_round_trips_partitioned_object(tmp_path) -> None:
+    storage = LocalStorage(StorageConfig(root=tmp_path))
+
+    path = storage.write_json(
+        {"row_count": 1, "asof_date": date(2026, 5, 22)},
+        dataset="market_snapshot",
+        layer="gold",
+        partitions={
+            "run_id": "test-run",
+            "date": date(2026, 5, 22),
+            "underlying": "SYNTH",
+        },
+        filename="market_data",
+    )
+
+    expected_path = (
+        tmp_path
+        / "gold"
+        / "market_snapshot"
+        / "underlying=SYNTH"
+        / "date=2026-05-22"
+        / "run_id=test-run"
+        / "market_data.json"
+    )
+    assert path == expected_path
+    assert path.exists()
+    assert storage.read_json(
+        dataset="market_snapshot",
+        layer="gold",
+        partitions={
+            "underlying": "SYNTH",
+            "date": date(2026, 5, 22),
+            "run_id": "test-run",
+        },
+        filename="market_data.json",
+    ) == {"row_count": 1, "asof_date": "2026-05-22"}
+
+    artifact_lines = (
+        (tmp_path / "_meta" / "artifacts.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    )
+    assert len(artifact_lines) == 1
+    artifact = json.loads(artifact_lines[0])
+    assert artifact["artifact_type"] == "json"
+    assert artifact["path"] == (
+        "gold/market_snapshot/underlying=SYNTH/"
+        "date=2026-05-22/run_id=test-run/market_data.json"
+    )
 
 
 def test_manifest_run_registry_and_checkpoints_are_persisted(tmp_path) -> None:
@@ -243,6 +302,29 @@ def test_pipeline_frame_paths_are_deterministic(
         / "date=2026-05-22"
         / "run_id=test-run"
         / filename
+    )
+
+
+def test_dataset_dir_resolves_ordered_partition_path(tmp_path) -> None:
+    storage = LocalStorage(tmp_path)
+
+    path = storage.dataset_dir(
+        layer="gold",
+        dataset="model_validation_bundle",
+        partitions={
+            "run_id": "test-run",
+            "date": "2026-05-22",
+            "underlying": "SPY",
+        },
+    )
+
+    assert path == (
+        tmp_path
+        / "gold"
+        / "model_validation_bundle"
+        / "underlying=SPY"
+        / "date=2026-05-22"
+        / "run_id=test-run"
     )
 
 

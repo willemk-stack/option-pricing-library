@@ -42,7 +42,7 @@ class VolSurface:
 
     def __post_init__(
         self,
-    ) -> None:  # TODO: Check if is TimediffbleSurface => yes then skip
+    ) -> None:
         expiries = np.asarray(self.expiries, dtype=np.float64)
         theta_raw = np.asarray(
             [float(np.asarray(s.w_at(0.0))) for s in self.smiles], dtype=np.float64

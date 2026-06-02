@@ -143,6 +143,7 @@ nav:
       - eSSVI smooth handoff: user_guides/essvi_smooth_handoff.md
       - Local-vol and PDE validation: user_guides/localvol_pde_validation.md
       - Heston model comparison: user_guides/heston_model_comparison.md
+      - Market snapshot validation: user_guides/market_snapshot_validation.md
   - API:
       - Overview: api/index.md
       - Public: api/public.md
@@ -184,7 +185,7 @@ nav:
           - Calibration seeds: notes/heston/heston_calibration_seeds.md
           - Calibration benchmark diagnostics: notes/heston/heston_calibration_benchmark_diagnostics.md
           - Heston vs local vol: notes/heston/heston_vs_local_vol.md
-          - Interview framing: notes/heston/heston_interview_framing.md
+          - Implementation claims: notes/heston/heston_implementation_claims.md
           - Monte Carlo diagnostics: notes/heston/heston_monte_carlo.md
           - Andersen QE scheme: notes/heston/heston_qe_notes.md
       - Diagnostics and numerical methods:

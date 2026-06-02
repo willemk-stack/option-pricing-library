@@ -78,7 +78,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--findings-json",
         type=Path,
-        help="Write aggregated agent-readable findings to this JSON file.",
+        help="Write aggregated automation-readable findings to this JSON file.",
     )
     parser.add_argument(
         "--summary-md",

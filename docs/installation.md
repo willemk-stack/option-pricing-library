@@ -1,6 +1,6 @@
 # Installation
 
-This repo targets Python 3.12+ and supports a small core install plus extras for plotting, notebooks, docs, and development.
+This repo targets Python 3.12+ and supports a small core install plus extras for marketdata, plotting, notebooks, docs, and development.
 
 ## Fastest install from GitHub
 
@@ -38,6 +38,7 @@ These extras come directly from `pyproject.toml`:
 | Extra | Install command | Use it for |
 | --- | --- | --- |
 | Core only | `pip install -e .` | Pricing library development without optional tooling |
+| Marketdata | `pip install -e ".[marketdata]"` | Local market snapshot demos and Parquet-backed marketdata artifacts |
 | Plotting | `pip install -e ".[plot]"` | Matplotlib and pandas-backed diagnostics or figure generation |
 | Notebooks | `pip install -e ".[notebooks]"` | Jupyter-based demo and exploration workflows |
 | Development | `pip install -e ".[dev]"` | Tests, benchmarks, linting, formatting, and type checks |

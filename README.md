@@ -94,6 +94,7 @@ The proof card above is generated from the published eSSVI and local-vol validat
 
 - [Decision guide](https://willemk-stack.github.io/option-pricing-library/user_guides/decision_guide/) for the strongest end-to-end review path
 - [Heston model comparison](https://willemk-stack.github.io/option-pricing-library/user_guides/heston_model_comparison/) for the reviewer-facing model-choice proof path
+- [Market snapshot validation](https://willemk-stack.github.io/option-pricing-library/user_guides/market_snapshot_validation/) for the local fixture-to-artifact reviewer workflow with no live providers or credentials
 - [Validation matrix](https://willemk-stack.github.io/option-pricing-library/validation_matrix/) for the claim-to-evidence map across the library
 - [Heston guide](https://willemk-stack.github.io/option-pricing-library/user_guides/heston/) for the stochastic-volatility implementation and API workflow
 - [Instruments guide](https://willemk-stack.github.io/option-pricing-library/user_guides/instruments/) for the recommended public API
@@ -124,6 +125,7 @@ pip install -e .
 
 Supported extras from `pyproject.toml`:
 
+- `pip install -e ".[marketdata]"` for local market snapshot demos and Parquet-backed marketdata artifacts
 - `pip install -e ".[plot]"` for plotting helpers used by diagnostics and docs figures
 - `pip install -e ".[notebooks]"` for the demo notebook environment
 - `pip install -e ".[dev]"` for tests, benchmarks, linting, formatting, and typing
