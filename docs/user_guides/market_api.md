@@ -117,6 +117,60 @@ The same pattern also applies to:
 - `mc_price_from_ctx`
 - `binom_price_from_ctx`
 
+## Provider-backed marketdata first pass
+
+The Phase B4 provider-backed path can fetch one live-capable snapshot and two
+simple backfill artifact sets through `MarketDataPipeline`. It is intentionally
+small: the CLI parses arguments and dispatches to the pipeline, while the
+pipeline handles provider calls, normalization, quote cleaning, Bronze/Silver
+storage, Gold conversion, and the model-validation bundle.
+
+Install the marketdata extra before using provider-backed commands:
+
+```bash
+pip install -e ".[marketdata]"
+```
+
+Provider-backed runs read credentials from environment variables:
+
+- `ALPACA_API_KEY`
+- `ALPACA_SECRET_KEY`
+- `FRED_API_KEY`
+
+Fetch one market snapshot:
+
+```bash
+python scripts/fetch_market_snapshot.py snapshot --underlying SPY --asof 2026-05-22T15:31:00Z --data-root out/marketdata-live --json
+```
+
+Backfill FRED observations:
+
+```bash
+python scripts/fetch_market_snapshot.py backfill-fred --series DGS3MO --start 2026-05-01 --end 2026-05-22 --data-root out/marketdata-live
+```
+
+Backfill Alpaca equity bars:
+
+```bash
+python scripts/fetch_market_snapshot.py backfill-bars --symbols SPY QQQ --start 2026-05-20 --end 2026-05-23 --timeframe 1Day --data-root out/marketdata-live
+```
+
+Current first-pass assumptions and limitations are written as warnings or
+manifest notes:
+
+- `dividend_yield` defaults to `0.0` with source `assumption`
+- the default rate series is FRED `DGS3MO`
+- rate selection uses one FRED series observation; no curve interpolation yet
+- no dividend inference yet
+- no option-chain historical backfill yet
+- no scheduling, cron, or background refresh job yet
+- Alpaca option contracts without usable bid/ask may be dropped before quote
+  cleaning; snapshot warnings include the raw, normalized, and dropped counts
+
+Normal tests use mocked providers and do not require credentials. Live provider
+smoke tests are optional and are skipped unless the relevant credentials and
+provider SDK/runtime dependency are present.
+
 ## Related guides
 
 - [Quickstart](quickstart.md)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import UTC, date, datetime
@@ -66,6 +67,20 @@ PROVIDER_SNAPSHOT_SOURCE_TYPE = "provider_snapshot"
 _DEFAULT_RATE_SERIES_ID = "DGS3MO"
 _DEFAULT_BARS_TIMEFRAME = "1Day"
 _DEFAULT_DAY_COUNT = "ACT/365"
+_DIVIDEND_ASSUMPTION_WARNING = (
+    "first_pass_assumption: dividend_yield=0.0, "
+    "dividend_yield_source=assumption, no_dividend_inference"
+)
+_NO_OPTION_CHAIN_BACKFILL_WARNING = "first_pass_limitation: no_option_chain_backfill"
+_NO_SCHEDULING_WARNING = "first_pass_limitation: no_scheduling"
+_FRED_BACKFILL_WARNING = (
+    "first_pass_limitation: fred_backfill_stores_single_series_observations, "
+    "no_curve_interpolation"
+)
+_BARS_BACKFILL_WARNING = (
+    "first_pass_limitation: equity_bars_backfill_only, "
+    "no_option_chain_backfill, no_scheduling"
+)
 _SECRET_KEY_PARTS = frozenset(
     {"api_key", "apikey", "secret", "token", "authorization", "password"}
 )
@@ -371,7 +386,19 @@ class MarketDataPipeline:
             dividend_yield_source,
             "dividend_yield_source",
         )
+        cleaned_dividend_yield = _finite_float(dividend_yield, "dividend_yield")
         cleaned_library_commit = _optional_text(library_commit, "library_commit")
+
+        _preflight_provider_snapshot_targets(
+            self.storage,
+            _provider_snapshot_target_stub(
+                underlying=cleaned_underlying,
+                asof=asof_timestamp,
+                run_id=effective_run_id,
+            ),
+            rate_series_id=cleaned_rate_series_id,
+            overwrite=overwrite,
+        )
 
         asof_label = _utc_isoformat(asof_timestamp)
         equity_quote_payload = self._fetch_latest_equity_quote(
@@ -403,11 +430,18 @@ class MarketDataPipeline:
             underlying=cleaned_underlying,
         )
         raw_option_contract_count = _count_alpaca_option_contracts(option_chain_payload)
-        provider_option_chain = _normalize_option_chain_for_snapshot(
-            option_chain_payload,
-            underlying=cleaned_underlying,
-            asof=asof_timestamp,
-        )
+        try:
+            provider_option_chain = _normalize_option_chain_for_snapshot(
+                option_chain_payload,
+                underlying=cleaned_underlying,
+                asof=asof_timestamp,
+            )
+        except ProviderSnapshotDataUnavailableError as exc:
+            raise ProviderSnapshotDataUnavailableError(
+                f"{exc}; raw_option_contracts={raw_option_contract_count}, "
+                "normalized_option_contracts=0, "
+                "reason=missing_or_unusable_bid_ask"
+            ) from None
         option_chain = normalize_option_chain(provider_option_chain)
         dropped_before_cleaning_count = max(
             raw_option_contract_count - len(option_chain),
@@ -434,7 +468,7 @@ class MarketDataPipeline:
                 rate_source=rate_source,
                 rate_observation_date=rate_selection.observation_date,
                 rate_compounding=rate_selection.rate_compounding,
-                dividend_yield=dividend_yield,
+                dividend_yield=cleaned_dividend_yield,
                 dividend_yield_source=cleaned_dividend_yield_source,
             )
         )
@@ -446,7 +480,8 @@ class MarketDataPipeline:
         if quote_cleaning.cleaned_quotes.empty:
             raise ProviderSnapshotDataUnavailableError(
                 "No usable option contracts remain after quote cleaning for "
-                f"{cleaned_underlying!r}"
+                f"{cleaned_underlying!r}; accepted=0, "
+                f"rejected={len(quote_cleaning.rejected_quotes)}"
             )
 
         warnings = _provider_snapshot_warnings(
@@ -454,6 +489,13 @@ class MarketDataPipeline:
             dropped_before_cleaning_count=dropped_before_cleaning_count,
             raw_option_contract_count=raw_option_contract_count,
             normalized_option_contract_count=len(option_chain),
+            rate_series_id=cleaned_rate_series_id,
+            dividend_yield=cleaned_dividend_yield,
+            dividend_yield_source=cleaned_dividend_yield_source,
+        )
+        quote_cleaning_for_artifacts = _quote_cleaning_result_with_warnings(
+            quote_cleaning,
+            warnings,
         )
         provider_snapshot = _ProviderSnapshot(
             fixture_name=PROVIDER_SNAPSHOT_FIXTURE_NAME,
@@ -477,6 +519,7 @@ class MarketDataPipeline:
                 },
                 "rate_series_id": cleaned_rate_series_id,
                 "feed": feed or self.config.alpaca.feed,
+                "first_pass_limitations": _first_pass_limitations(),
             },
             row_counts={
                 "equity_quotes": int(len(equity_quotes)),
@@ -512,7 +555,7 @@ class MarketDataPipeline:
             option_chain=option_chain,
             fred_series=fred_series,
             market_inputs=market_inputs,
-            quote_cleaning=quote_cleaning,
+            quote_cleaning=quote_cleaning_for_artifacts,
             rate_series_id=cleaned_rate_series_id,
             overwrite=overwrite,
             library_commit=cleaned_library_commit,
@@ -521,9 +564,9 @@ class MarketDataPipeline:
             self.storage,
             local_snapshot=provider_snapshot,
             market_inputs=market_inputs,
-            cleaned_quotes=quote_cleaning.cleaned_quotes,
-            rejected_quotes=quote_cleaning.rejected_quotes,
-            reason_counts=quote_cleaning.reason_counts,
+            cleaned_quotes=quote_cleaning_for_artifacts.cleaned_quotes,
+            rejected_quotes=quote_cleaning_for_artifacts.rejected_quotes,
+            reason_counts=quote_cleaning_for_artifacts.reason_counts,
             warnings=warnings,
             overwrite=overwrite,
             library_commit=cleaned_library_commit,
@@ -532,9 +575,9 @@ class MarketDataPipeline:
             self.storage,
             local_snapshot=provider_snapshot,
             market_inputs=market_inputs,
-            cleaned_quotes=quote_cleaning.cleaned_quotes,
-            rejected_quotes=quote_cleaning.rejected_quotes,
-            reason_counts=quote_cleaning.reason_counts,
+            cleaned_quotes=quote_cleaning_for_artifacts.cleaned_quotes,
+            rejected_quotes=quote_cleaning_for_artifacts.rejected_quotes,
+            reason_counts=quote_cleaning_for_artifacts.reason_counts,
             warnings=warnings,
             config=self.bundle_config,
             overwrite=overwrite,
@@ -555,10 +598,10 @@ class MarketDataPipeline:
             rate=rate_selection.rate,
             rate_source=rate_source,
             rate_observation_date=rate_selection.observation_date,
-            dividend_yield=float(dividend_yield),
+            dividend_yield=cleaned_dividend_yield,
             dividend_yield_source=cleaned_dividend_yield_source,
-            accepted_quote_count=int(len(quote_cleaning.cleaned_quotes)),
-            rejected_quote_count=int(len(quote_cleaning.rejected_quotes)),
+            accepted_quote_count=int(len(quote_cleaning_for_artifacts.cleaned_quotes)),
+            rejected_quote_count=int(len(quote_cleaning_for_artifacts.rejected_quotes)),
             dropped_before_cleaning_count=int(dropped_before_cleaning_count),
             warnings=warnings,
             artifact_paths=artifact_paths,
@@ -605,6 +648,7 @@ class MarketDataPipeline:
 
         artifact_paths: list[Path] = []
         requests: list[dict[str, object]] = []
+        warnings = (_FRED_BACKFILL_WARNING,)
         rows_in = 0
         rows_out = 0
         asof = pd.Timestamp(metadata.asof)
@@ -655,6 +699,7 @@ class MarketDataPipeline:
                     normalized_rows=normalized_rows,
                     layer="bronze",
                     artifacts={"observations": "observations.json"},
+                    warnings=warnings,
                     library_commit=cleaned_library_commit,
                 ),
                 layer="bronze",
@@ -681,6 +726,7 @@ class MarketDataPipeline:
                     normalized_rows=normalized_rows,
                     layer="silver",
                     artifacts={"fred_series": "fred_series.parquet"},
+                    warnings=warnings,
                     library_commit=cleaned_library_commit,
                 ),
                 layer="silver",
@@ -710,6 +756,7 @@ class MarketDataPipeline:
                 rows_in=rows_in,
                 rows_out=rows_out,
                 requests=requests,
+                warnings=warnings,
                 library_commit=cleaned_library_commit,
             ),
         )
@@ -721,6 +768,7 @@ class MarketDataPipeline:
                 rows_in=rows_in,
                 rows_out=rows_out,
                 files_written=(*artifact_paths, runs_path),
+                warnings=warnings,
             ),
         )
 
@@ -794,6 +842,7 @@ class MarketDataPipeline:
         bars = normalize_alpaca_bars(payload, asof=asof)
 
         artifact_paths: list[Path] = []
+        warnings = (_BARS_BACKFILL_WARNING,)
         rows_in = 0
         rows_out = 0
         for symbol in cleaned_symbols:
@@ -831,6 +880,7 @@ class MarketDataPipeline:
                     normalized_rows=normalized_rows,
                     layer="bronze",
                     artifacts={"bars": "bars.json"},
+                    warnings=warnings,
                     library_commit=cleaned_library_commit,
                 ),
                 layer="bronze",
@@ -859,6 +909,7 @@ class MarketDataPipeline:
                     normalized_rows=normalized_rows,
                     layer="silver",
                     artifacts={"equity_bars": "equity_bars.parquet"},
+                    warnings=warnings,
                     library_commit=cleaned_library_commit,
                 ),
                 layer="silver",
@@ -888,6 +939,7 @@ class MarketDataPipeline:
                 rows_in=rows_in,
                 rows_out=rows_out,
                 requests=[request],
+                warnings=warnings,
                 library_commit=cleaned_library_commit,
             ),
         )
@@ -899,6 +951,7 @@ class MarketDataPipeline:
                 rows_in=rows_in,
                 rows_out=rows_out,
                 files_written=(*artifact_paths, runs_path),
+                warnings=warnings,
             ),
         )
 
@@ -1068,6 +1121,16 @@ def _required_text(value: str, field_name: str) -> str:
     if not cleaned:
         raise ValueError(f"{field_name} must be a non-empty string")
     return cleaned
+
+
+def _finite_float(value: object, field_name: str) -> float:
+    try:
+        number = float(cast(Any, value))
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{field_name} must be numeric") from exc
+    if not math.isfinite(number):
+        raise ValueError(f"{field_name} must be finite")
+    return number
 
 
 def _optional_text(value: str | None, field_name: str) -> str | None:
@@ -1334,6 +1397,7 @@ def _fred_backfill_manifest(
     normalized_rows: int,
     layer: str,
     artifacts: Mapping[str, str],
+    warnings: Sequence[str],
     library_commit: str | None,
 ) -> dict[str, object]:
     return {
@@ -1350,6 +1414,7 @@ def _fred_backfill_manifest(
         "start_date": start_date,
         "end_date": end_date,
         "rows": {"raw": raw_rows, "normalized": normalized_rows},
+        "warnings": list(warnings),
         "artifacts": dict(artifacts),
         "library_commit": library_commit,
     }
@@ -1367,6 +1432,7 @@ def _bars_backfill_manifest(
     normalized_rows: int,
     layer: str,
     artifacts: Mapping[str, str],
+    warnings: Sequence[str],
     library_commit: str | None,
 ) -> dict[str, object]:
     return {
@@ -1385,6 +1451,7 @@ def _bars_backfill_manifest(
         "timeframe": timeframe,
         "feed": feed,
         "rows": {"raw": raw_rows, "normalized": normalized_rows},
+        "warnings": list(warnings),
         "artifacts": dict(artifacts),
         "library_commit": library_commit,
     }
@@ -1400,6 +1467,7 @@ def _backfill_run_details(
     rows_in: int,
     rows_out: int,
     requests: Sequence[Mapping[str, object]],
+    warnings: Sequence[str],
     library_commit: str | None,
 ) -> dict[str, object]:
     return {
@@ -1410,6 +1478,7 @@ def _backfill_run_details(
         "end": end,
         "rows": {"raw": rows_in, "normalized": rows_out},
         "requests": [dict(request) for request in requests],
+        "warnings": list(warnings),
         "library_commit": library_commit,
     }
 
@@ -1713,8 +1782,20 @@ def _provider_snapshot_warnings(
     dropped_before_cleaning_count: int,
     raw_option_contract_count: int,
     normalized_option_contract_count: int,
+    rate_series_id: str,
+    dividend_yield: float,
+    dividend_yield_source: str,
 ) -> tuple[str, ...]:
-    warnings = [str(warning) for warning in cleaning_warnings]
+    warnings = [
+        *_first_pass_snapshot_assumption_warnings(
+            rate_series_id=rate_series_id,
+            dividend_yield=dividend_yield,
+            dividend_yield_source=dividend_yield_source,
+        ),
+        str(_NO_OPTION_CHAIN_BACKFILL_WARNING),
+        str(_NO_SCHEDULING_WARNING),
+        *(str(warning) for warning in cleaning_warnings),
+    ]
     if dropped_before_cleaning_count > 0:
         warnings.append(
             "alpaca_option_contracts_dropped_before_cleaning: "
@@ -1724,6 +1805,69 @@ def _provider_snapshot_warnings(
             "reason=missing_or_unusable_bid_ask"
         )
     return tuple(warnings)
+
+
+def _first_pass_snapshot_assumption_warnings(
+    *,
+    rate_series_id: str,
+    dividend_yield: float,
+    dividend_yield_source: str,
+) -> tuple[str, ...]:
+    warnings: list[str] = []
+    if dividend_yield == 0.0 and dividend_yield_source.strip().lower() == "assumption":
+        warnings.append(_DIVIDEND_ASSUMPTION_WARNING)
+    warnings.append(
+        "first_pass_assumption: "
+        f"rate_series_id={rate_series_id}, "
+        f"default_rate_series_id={_DEFAULT_RATE_SERIES_ID}, "
+        "no_curve_interpolation"
+    )
+    return tuple(warnings)
+
+
+def _first_pass_limitations() -> dict[str, str]:
+    return {
+        "curve_interpolation": "not_implemented",
+        "dividend_inference": "not_implemented",
+        "option_chain_backfill": "not_implemented",
+        "scheduling": "not_implemented",
+    }
+
+
+def _provider_snapshot_target_stub(
+    *,
+    underlying: str,
+    asof: pd.Timestamp,
+    run_id: str,
+) -> _ProviderSnapshot:
+    return _ProviderSnapshot(
+        fixture_name=PROVIDER_SNAPSHOT_FIXTURE_NAME,
+        snapshot_id=_provider_snapshot_id(
+            underlying=underlying,
+            asof=asof,
+            run_id=run_id,
+        ),
+        run_id=run_id,
+        underlying=underlying,
+        asof=asof,
+        manifest={},
+        market_inputs_raw=pd.DataFrame(),
+        option_chain_raw=pd.DataFrame(),
+        metadata={},
+        row_counts={},
+    )
+
+
+def _quote_cleaning_result_with_warnings(
+    result: QuoteCleaningResult,
+    warnings: Sequence[str],
+) -> QuoteCleaningResult:
+    return QuoteCleaningResult(
+        cleaned_quotes=result.cleaned_quotes,
+        rejected_quotes=result.rejected_quotes,
+        reason_counts=result.reason_counts,
+        warnings=tuple(warnings),
+    )
 
 
 def _provider_snapshot_id(
@@ -1931,6 +2075,16 @@ def _provider_bronze_manifest(
         "providers": provider_snapshot.metadata["providers"],
         "feed": feed,
         "rate_series_id": rate_series_id,
+        "rate_assumptions": {
+            "provider": "fred",
+            "series_id": rate_series_id,
+            "default_series_id": _DEFAULT_RATE_SERIES_ID,
+            "curve_interpolation": "not_implemented",
+        },
+        "dividend_assumptions": _provider_snapshot_dividend_assumptions(
+            provider_snapshot
+        ),
+        "first_pass_limitations": _first_pass_limitations(),
         "rows": dict(provider_snapshot.row_counts),
         "warnings": list(provider_snapshot.warnings),
         "artifacts": {
@@ -1939,6 +2093,20 @@ def _provider_bronze_manifest(
             "fred_observations": "fred_observations.json",
         },
         "library_commit": library_commit,
+    }
+
+
+def _provider_snapshot_dividend_assumptions(
+    provider_snapshot: _ProviderSnapshot,
+) -> dict[str, object]:
+    market_row = provider_snapshot.market_inputs_raw.iloc[0]
+    return {
+        "dividend_yield": _finite_float(market_row["dividend_yield"], "dividend_yield"),
+        "source": _required_text(
+            str(market_row["dividend_yield_source"]),
+            "dividend_yield_source",
+        ),
+        "dividend_inference": "not_implemented",
     }
 
 

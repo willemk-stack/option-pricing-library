@@ -239,8 +239,16 @@ def _silver_cleaning_manifest(
         "underlying": local_snapshot.underlying,
         "valuation_timestamp_utc": _utc_isoformat(valuation_timestamp),
         "spot": _float_field(market_row, "spot"),
+        "spot_source": _text_field(market_row, "spot_source"),
         "rate": _float_field(market_row, "rate"),
+        "rate_source": _text_field(market_row, "rate_source"),
+        "rate_observation_date": _timestamp_field(
+            market_row,
+            "rate_observation_date",
+        ),
+        "rate_compounding": _text_field(market_row, "rate_compounding"),
         "dividend_yield": _float_field(market_row, "dividend_yield"),
+        "dividend_yield_source": _text_field(market_row, "dividend_yield_source"),
         "day_count": _text_field(market_row, "day_count"),
         "rows": {
             "market_inputs": int(len(market_inputs)),
@@ -274,6 +282,13 @@ def _text_field(row: pd.Series, column: str) -> str | None:
     if pd.isna(value):
         return None
     return str(value)
+
+
+def _timestamp_field(row: pd.Series, column: str) -> str | None:
+    value = row[column]
+    if pd.isna(value):
+        return None
+    return pd.Timestamp(value).isoformat()
 
 
 def _optional_text(value: str | None) -> str | None:

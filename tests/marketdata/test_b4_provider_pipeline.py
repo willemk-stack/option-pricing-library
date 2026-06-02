@@ -10,6 +10,7 @@ from typing import Any, cast
 import pandas as pd
 import pytest
 
+import scripts.fetch_market_snapshot as cli
 from option_pricing.marketdata.config import (
     AlpacaConfig,
     FredConfig,
@@ -292,9 +293,17 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     assert result.accepted_quote_count == 2
     assert result.rejected_quote_count == 0
     assert result.dropped_before_cleaning_count == 1
-    assert result.warnings == (
+    assert result.warnings[:4] == (
+        "first_pass_assumption: dividend_yield=0.0, "
+        "dividend_yield_source=assumption, no_dividend_inference",
+        "first_pass_assumption: rate_series_id=DGS3MO, "
+        "default_rate_series_id=DGS3MO, no_curve_interpolation",
+        "first_pass_limitation: no_option_chain_backfill",
+        "first_pass_limitation: no_scheduling",
+    )
+    assert result.warnings[-1] == (
         "alpaca_option_contracts_dropped_before_cleaning: "
-        "dropped=1, raw=3, normalized=2, reason=missing_or_unusable_bid_ask",
+        "dropped=1, raw=3, normalized=2, reason=missing_or_unusable_bid_ask"
     )
 
     for path in result.artifact_paths:
@@ -306,14 +315,61 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     assert result.gold_paths.market_data.exists()
     assert result.model_validation_bundle.manifest_path.exists()
 
-    silver_manifest = json.loads(
-        result.silver_paths.manifest.read_text(encoding="utf-8")
+    bronze_manifest = _read_json(result.bronze_paths.manifest)
+    silver_manifest = _read_json(result.silver_paths.manifest)
+    gold_manifest = _read_json(result.gold_paths.market_manifest)
+    bundle_manifest = _read_json(result.model_validation_bundle.manifest_path)
+    warnings_payload = _read_json(
+        result.model_validation_bundle.manifest_path.parent / "warnings.json"
     )
-    gold_manifest = json.loads(
-        result.gold_paths.market_manifest.read_text(encoding="utf-8")
-    )
+
+    assert bronze_manifest["providers"] == {
+        "spot": "alpaca",
+        "option_chain": "alpaca",
+        "rate": "fred",
+    }
+    assert bronze_manifest["feed"] == "indicative"
+    assert bronze_manifest["rate_assumptions"] == {
+        "provider": "fred",
+        "series_id": "DGS3MO",
+        "default_series_id": "DGS3MO",
+        "curve_interpolation": "not_implemented",
+    }
+    assert bronze_manifest["dividend_assumptions"] == {
+        "dividend_yield": 0.0,
+        "source": "assumption",
+        "dividend_inference": "not_implemented",
+    }
+    assert bronze_manifest["first_pass_limitations"] == {
+        "curve_interpolation": "not_implemented",
+        "dividend_inference": "not_implemented",
+        "option_chain_backfill": "not_implemented",
+        "scheduling": "not_implemented",
+    }
     assert silver_manifest["source_type"] == "provider_snapshot"
+    assert silver_manifest["rate_source"] == "fred:DGS3MO"
+    assert silver_manifest["dividend_yield_source"] == "assumption"
+    assert silver_manifest["warnings"] == list(result.warnings)
     assert gold_manifest["source"]["source_type"] == "provider_snapshot"
+    assert gold_manifest["sources"]["rate_source"] == "fred:DGS3MO"
+    assert gold_manifest["sources"]["dividend_yield_source"] == "assumption"
+    assert bundle_manifest["rate_source"] == "fred:DGS3MO"
+    assert bundle_manifest["dividend_yield_source"] == "assumption"
+    assert warnings_payload["warnings"] == list(result.warnings)
+
+
+def test_provider_snapshot_result_payload_is_json_serializable(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    result = _snapshot(tmp_path)
+
+    payload = cli._result_payload("snapshot", result)
+
+    encoded = json.dumps(payload, sort_keys=True)
+    assert json.loads(encoded)["run_id"] == "b4-test-run"
+    assert "DGS3MO" in encoded
+    assert "no_dividend_inference" in encoded
 
 
 def test_provider_snapshot_missing_fred_rate_fails_clearly(
@@ -638,6 +694,94 @@ def test_backfill_overwrite_false_protects_existing_artifacts(
         )
 
     assert len(fred_client.calls) == 1
+
+
+def test_provider_snapshot_overwrite_false_protects_before_provider_calls(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    _snapshot(tmp_path)
+    alpaca_client = _FakeAlpacaClient()
+    fred_client = _FakeFredClient()
+
+    with pytest.raises(FileExistsError, match="overwrite=True"):
+        _pipeline(
+            tmp_path,
+            alpaca_client=alpaca_client,
+            fred_client=fred_client,
+        ).snapshot(
+            "SPY",
+            asof="2026-05-22T15:31:00Z",
+            run_id="b4-test-run",
+        )
+
+    assert alpaca_client.equity_calls == []
+    assert alpaca_client.option_calls == []
+    assert fred_client.calls == []
+
+
+def test_provider_snapshot_overwrite_true_replaces_artifacts(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    _snapshot(tmp_path)
+    replacement_equity = _equity_quote_payload()
+    quote = cast(
+        dict[str, object],
+        cast(dict[str, object], replacement_equity["quotes"])["SPY"],
+    )
+    quote["bid_price"] = 509.0
+    quote["ask_price"] = 511.0
+
+    result = _pipeline(
+        tmp_path,
+        alpaca_client=_FakeAlpacaClient(equity_payload=replacement_equity),
+    ).snapshot(
+        "SPY",
+        asof="2026-05-22T15:31:00Z",
+        run_id="b4-test-run",
+        overwrite=True,
+        library_commit="replacement",
+    )
+
+    market_data = _read_json(result.gold_paths.market_data)
+    manifest = _read_json(result.gold_paths.market_manifest)
+    assert cast(dict[str, object], market_data["market_data"])["spot"] == 510.0
+    assert manifest["library_commit"] == "replacement"
+
+
+def test_backfill_overwrite_true_replaces_artifacts(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    pipeline = _pipeline(tmp_path, fred_client=_FakeFredClient())
+    pipeline.backfill_fred(
+        "DGS3MO",
+        start="2026-05-01",
+        end="2026-05-22",
+        run_id="fred-replace",
+        library_commit="first",
+    )
+
+    result = pipeline.backfill_fred(
+        "DGS3MO",
+        start="2026-05-01",
+        end="2026-05-22",
+        run_id="fred-replace",
+        overwrite=True,
+        library_commit="replacement",
+    )
+
+    manifest = _read_json(
+        tmp_path
+        / "silver"
+        / "fred_series"
+        / "series_id=DGS3MO"
+        / "date=2026-05-22"
+        / "manifest.json"
+    )
+    assert manifest["library_commit"] == "replacement"
+    assert manifest["warnings"] == list(result.stats.warnings)
 
 
 def test_backfill_outputs_do_not_leak_secrets(
