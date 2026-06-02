@@ -235,7 +235,7 @@ def _silver_cleaning_manifest(
         "fixture_name": local_snapshot.fixture_name,
         "snapshot_id": local_snapshot.snapshot_id,
         "run_id": run_id,
-        "source_type": "local_fixture",
+        "source_type": _snapshot_source_type(local_snapshot),
         "underlying": local_snapshot.underlying,
         "valuation_timestamp_utc": _utc_isoformat(valuation_timestamp),
         "spot": _float_field(market_row, "spot"),
@@ -283,6 +283,20 @@ def _optional_text(value: str | None) -> str | None:
     if not cleaned:
         raise ValueError("library_commit must be a non-empty string when provided")
     return cleaned
+
+
+def _snapshot_source_type(local_snapshot: LocalSnapshotResult) -> str:
+    metadata = getattr(local_snapshot, "metadata", None)
+    if isinstance(metadata, Mapping):
+        source_type = metadata.get("source_type")
+        if isinstance(source_type, str) and source_type.strip():
+            return source_type.strip()
+
+    source_type = getattr(local_snapshot, "source_type", None)
+    if isinstance(source_type, str) and source_type.strip():
+        return source_type.strip()
+
+    return "local_fixture"
 
 
 __all__ = [

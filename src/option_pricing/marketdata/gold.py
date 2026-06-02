@@ -712,10 +712,10 @@ def _market_snapshot_manifest(
         "artifacts": {
             "market_data": "market_data.json",
         },
-        "source": {
-            "source_type": "local_fixture",
-            "fixture_name": fixture_name,
-        },
+        "source": _snapshot_source_payload(
+            local_snapshot,
+            fixture_name=fixture_name,
+        ),
     }
 
 
@@ -765,10 +765,10 @@ def _heston_quotes_manifest(
         "artifacts": {
             "heston_quotes": "heston_quotes.parquet",
         },
-        "source": {
-            "source_type": "local_fixture",
-            "fixture_name": fixture_name,
-        },
+        "source": _snapshot_source_payload(
+            local_snapshot,
+            fixture_name=fixture_name,
+        ),
     }
 
 
@@ -803,6 +803,31 @@ def _warnings_payload(warnings: Sequence[str]) -> list[str]:
     if isinstance(warnings, (str, bytes, bytearray)):
         raise TypeError("warnings must be a sequence of strings")
     return [str(warning) for warning in warnings]
+
+
+def _snapshot_source_payload(
+    local_snapshot: _GoldLocalSnapshot,
+    *,
+    fixture_name: str,
+) -> dict[str, str]:
+    return {
+        "source_type": _snapshot_source_type(local_snapshot),
+        "fixture_name": fixture_name,
+    }
+
+
+def _snapshot_source_type(local_snapshot: _GoldLocalSnapshot) -> str:
+    metadata = getattr(local_snapshot, "metadata", None)
+    if isinstance(metadata, Mapping):
+        source_type = metadata.get("source_type")
+        if isinstance(source_type, str) and source_type.strip():
+            return source_type.strip()
+
+    source_type = getattr(local_snapshot, "source_type", None)
+    if isinstance(source_type, str) and source_type.strip():
+        return source_type.strip()
+
+    return "local_fixture"
 
 
 def _required_finite_float(row: pd.Series, column: str) -> float:
