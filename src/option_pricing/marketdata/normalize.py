@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
+from typing import Any, cast
 
 import pandas as pd
 
 from option_pricing.marketdata.schemas import (
+    FRED_SERIES_COLUMNS,
     MARKET_INPUTS_COLUMNS,
     OPTION_CHAIN_COLUMNS,
     DatasetName,
@@ -23,6 +26,49 @@ _OPTION_RIGHT_ALIASES = {
     "p": "put",
     "put": "put",
 }
+
+
+def normalize_fred_observations(
+    payload: Mapping[str, Any],
+    *,
+    series_id: str,
+    asof: str | pd.Timestamp,
+) -> pd.DataFrame:
+    """Normalize raw FRED observations into the existing ``fred_series`` schema."""
+
+    if not isinstance(payload, Mapping):
+        raise TypeError(
+            "fred_series payload must be a mapping, " f"got {type(payload).__name__}"
+        )
+
+    rows = [
+        {
+            "series_id": series_id,
+            "observation_date": _fred_required_observation_text(
+                observation,
+                "date",
+            ),
+            "value": _normalize_fred_value(observation.get("value")),
+            "realtime_start": _fred_required_observation_text(
+                observation,
+                "realtime_start",
+            ),
+            "realtime_end": _fred_required_observation_text(
+                observation,
+                "realtime_end",
+            ),
+            "source": "fred",
+            "asof": asof,
+        }
+        for observation in _fred_observations(payload)
+    ]
+    frame = pd.DataFrame(rows, columns=list(FRED_SERIES_COLUMNS))
+    coerced = coerce_frame(frame, DatasetName.FRED_SERIES, allow_extra=False)
+    out = order_columns(coerced, DatasetName.FRED_SERIES).loc[
+        :, list(FRED_SERIES_COLUMNS)
+    ]
+    validate_dtypes(out, DatasetName.FRED_SERIES, allow_extra=False)
+    return out.reset_index(drop=True)
 
 
 def normalize_market_inputs(frame: pd.DataFrame) -> pd.DataFrame:
@@ -73,6 +119,38 @@ def _require_frame(frame: pd.DataFrame, dataset_name: str) -> None:
             f"{dataset_name} input must be a pandas DataFrame, "
             f"got {type(frame).__name__}"
         )
+
+
+def _fred_observations(payload: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    observations = payload.get("observations")
+    if not isinstance(observations, list):
+        raise ValueError("fred_series payload must contain an observations list")
+
+    out: list[Mapping[str, Any]] = []
+    for index, observation in enumerate(observations):
+        if not isinstance(observation, Mapping):
+            raise ValueError(
+                "fred_series observations must be objects; "
+                f"observation {index} has type {type(observation).__name__}"
+            )
+        out.append(cast(Mapping[str, Any], observation))
+    return out
+
+
+def _fred_required_observation_text(
+    observation: Mapping[str, Any],
+    field_name: str,
+) -> Any:
+    value = observation.get(field_name)
+    if value is None:
+        raise ValueError(f"fred_series observation is missing {field_name!r}")
+    return value
+
+
+def _normalize_fred_value(value: Any) -> Any:
+    if isinstance(value, str) and value.strip() == ".":
+        return pd.NA
+    return value
 
 
 def _validate_market_inputs_values(frame: pd.DataFrame) -> None:
@@ -201,6 +279,7 @@ def _validate_unique_contract_symbols(frame: pd.DataFrame) -> None:
 
 
 __all__ = [
+    "normalize_fred_observations",
     "normalize_market_inputs",
     "normalize_option_chain",
 ]
