@@ -60,6 +60,17 @@ EXPECTED_MARKETDATA_IMPORTS = {
     ),
     "option_pricing.marketdata.storage": ("LocalStorage",),
 }
+EXPECTED_PIPELINE_IMPORTS = (
+    "LocalModelValidationPipelineResult",
+    "MarketDataPipeline",
+    "ProviderRefreshDailyCounts",
+    "ProviderRefreshDailyResult",
+    "ProviderSnapshotBronzePaths",
+    "ProviderSnapshotDataUnavailableError",
+    "ProviderSnapshotResult",
+    "ProviderSnapshotSilverPaths",
+    "run_local_model_validation_pipeline",
+)
 ORDINARY_MARKETDATA_IMPORTS = (
     "option_pricing",
     "option_pricing.marketdata",
@@ -106,6 +117,13 @@ def test_phase_a1_marketdata_public_import_boundaries() -> None:
 
         for symbol in public_symbols:
             assert getattr(module, symbol) is not None
+
+
+def test_phase_a1_marketdata_pipeline_facade_exports() -> None:
+    module = import_module("option_pricing.marketdata.pipeline")
+
+    for symbol in EXPECTED_PIPELINE_IMPORTS:
+        assert getattr(module, symbol) is not None
 
 
 def test_b1_s1_ordinary_imports_do_not_require_marketdata_optional_deps(
