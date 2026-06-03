@@ -61,7 +61,7 @@ def _provider_snapshot_warnings(
     dividend_yield_source: str,
 ) -> tuple[str, ...]:
     warnings = [
-        *_first_pass_snapshot_assumption_warnings(
+        *_snapshot_assumption_warnings(
             rate_series_id=rate_series_id,
             dividend_yield=dividend_yield,
             dividend_yield_source=dividend_yield_source,
@@ -82,7 +82,7 @@ def _provider_snapshot_warnings(
     return tuple(warnings)
 
 
-def _first_pass_snapshot_assumption_warnings(
+def _snapshot_assumption_warnings(
     *,
     rate_series_id: str,
     dividend_yield: float,
@@ -100,7 +100,7 @@ def _first_pass_snapshot_assumption_warnings(
     return tuple(warnings)
 
 
-def _first_pass_limitations() -> dict[str, str]:
+def _current_provider_scope() -> dict[str, str]:
     return {
         "curve_interpolation": "not_enabled",
         "dividend_inference": "not_enabled",

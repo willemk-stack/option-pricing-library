@@ -33,9 +33,9 @@ provider APIs, network clients, or any credential-backed data source.
 This workflow does not prove production data quality, live-provider correctness,
 calibration quality, trading performance, or empirical research conclusions.
 
-It also does not provide a provider refresh path, credential setup, a CLI
-refresh workflow, a production CLI, or research exports. Those are outside this
-demo workflow.
+It also does not exercise provider-backed refresh commands, credential setup,
+live-provider CLI paths, or research exports. Those are outside this local demo
+workflow and are documented separately where they apply.
 
 ## Requirements
 
@@ -495,16 +495,16 @@ Component responsibilities are intentionally narrow:
 - The reviewer path documents reproducibility, expected artifacts, and
   limitation boundaries.
 
-The local demo remains deterministic and local-only. It does not modify
-providers, add provider refresh logic, introduce a provider refresh or
-production CLI, or create research exports.
+The local demo remains deterministic and local-only. It does not call providers,
+run provider refresh logic, execute the provider-backed CLI, or create research
+exports.
 
 The current workflow intentionally excludes:
 
-- no live providers
-- no credentials
-- no CLI
-- no provider refresh path
+- no live-provider execution in this local workflow
+- no credential use in this local workflow
+- no provider-backed CLI execution in this local workflow
+- no provider refresh path in this local workflow
 - no production data-quality claim
 - no trading-performance claim
 - no research exports
@@ -606,8 +606,8 @@ The bundle may include a Heston smoke result, but that result is a packaging and
 compatibility signal only. It is not a claim about production calibration
 quality, model fitness, strategy performance, or empirical validity.
 
-No live providers, no credentials, no provider refresh CLI or production CLI,
-and no research exports are part of this demo workflow.
+No live providers, credentials, provider-backed CLI execution, or research
+exports are part of this local demo workflow.
 
 ## Developer checks
 

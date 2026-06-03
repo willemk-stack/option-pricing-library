@@ -206,9 +206,17 @@ main artifact paths. The `refresh-daily` aggregate result summarizes those same
 counts across all requested underlyings and records one aggregate run alongside
 the child snapshot runs.
 
-Normal tests use mocked providers and do not require credentials. Live provider
-smoke tests are optional and are skipped unless the relevant credentials and
-provider SDK/runtime dependency are present.
+Normal tests use mocked providers and do not require credentials. Optional live
+smoke tests are skipped unless all three credentials, `alpaca-py`, and `pyarrow`
+are available in the local environment:
+
+```bash
+pytest -q tests/marketdata/test_provider_confidence_checks.py::test_live_provider_snapshot_smoke_optional
+```
+
+The live smoke path runs a narrow SPY snapshot into a temporary local storage
+root and checks the same documented assumptions, current provider scope, key
+artifacts, accepted quote count, and text-artifact secret hygiene.
 
 ## Related guides
 

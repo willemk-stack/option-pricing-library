@@ -76,7 +76,7 @@ from option_pricing.marketdata.provider_policy import (
     DEFAULT_RATE_CURVE_SERIES_IDS,
     DEFAULT_RATE_SERIES_ID,
     DEFAULT_SNAPSHOT_RATE_LOOKBACK_DAYS,
-    _first_pass_limitations,
+    _current_provider_scope,
     _merge_unique_warnings,
     _provider_snapshot_warnings,
 )
@@ -386,7 +386,7 @@ class MarketDataPipeline:
                 "providers": provider_sources,
                 "rate_series_id": cleaned_rate_series_id,
                 "feed": resolved_feed,
-                "current_provider_scope": _first_pass_limitations(),
+                "current_provider_scope": _current_provider_scope(),
             },
             row_counts={
                 "equity_quotes": int(len(equity_quotes)),

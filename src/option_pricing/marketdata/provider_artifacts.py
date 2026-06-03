@@ -18,7 +18,7 @@ from option_pricing.marketdata.provider_policy import (
     DEFAULT_RATE_SERIES_ID,
     PROVIDER_RATE_CURVE_COLUMNS,
     RATE_CURVE_TENORS,
-    _first_pass_limitations,
+    _current_provider_scope,
 )
 from option_pricing.marketdata.provider_results import (
     ProviderSnapshotBronzePaths,
@@ -472,7 +472,7 @@ def _provider_bronze_manifest(
         "dividend_assumptions": _provider_snapshot_dividend_assumptions(
             provider_snapshot
         ),
-        "current_provider_scope": _first_pass_limitations(),
+        "current_provider_scope": _current_provider_scope(),
         "request_metadata": _sanitized_request_metadata(request_metadata),
         "rows": dict(provider_snapshot.row_counts),
         "warnings": list(provider_snapshot.warnings),
