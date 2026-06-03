@@ -9,6 +9,7 @@ from datetime import date, datetime
 from os import PathLike, fspath
 from pathlib import Path
 
+from option_pricing.marketdata.bundles import ModelValidationBundleConfig
 from option_pricing.marketdata.config import (
     AlpacaConfig,
     FredConfig,
@@ -17,6 +18,9 @@ from option_pricing.marketdata.config import (
 )
 from option_pricing.marketdata.errors import MarketDataProviderError
 from option_pricing.marketdata.pipeline import MarketDataPipeline
+from option_pricing.marketdata.provider_confidence import (
+    validate_provider_snapshot_bundle,
+)
 
 DEFAULT_DATA_ROOT = Path("data")
 DEFAULT_RATE_SERIES = "DGS3MO"
@@ -96,6 +100,34 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--timeframe",
         default=DEFAULT_TIMEFRAME,
         help="Alpaca bar timeframe.",
+    )
+
+    validate_bundle = subparsers.add_parser(
+        "validate-bundle",
+        help="Validate provider-backed model-facing artifacts without providers.",
+    )
+    validate_bundle.add_argument(
+        "--market-data",
+        type=Path,
+        required=True,
+        help="Path to provider-backed market_data.json.",
+    )
+    validate_bundle.add_argument(
+        "--cleaned-quotes",
+        type=Path,
+        required=True,
+        help="Path to provider-backed cleaned_quotes.parquet.",
+    )
+    validate_bundle.add_argument(
+        "--heston-quotes",
+        type=Path,
+        required=True,
+        help="Path to provider-backed heston_quotes.parquet.",
+    )
+    validate_bundle.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit one stable JSON object instead of human-readable text.",
     )
 
     return parser.parse_args(argv)
@@ -208,9 +240,38 @@ def _add_snapshot_query_options(parser: argparse.ArgumentParser) -> None:
         help="Move stale accepted option quotes to rejected_quotes.",
     )
     parser.add_argument(
+        "--reject-option-quotes-after-asof",
+        action="store_true",
+        help="Move accepted option quotes after the snapshot asof to rejected_quotes.",
+    )
+    parser.add_argument(
         "--reject-stale-equity-quote",
         action="store_true",
         help="Fail the snapshot when the equity quote violates freshness policy.",
+    )
+    parser.add_argument(
+        "--min-accepted-contracts",
+        type=int,
+        default=None,
+        help="Minimum accepted option contracts required by the quality policy.",
+    )
+    parser.add_argument(
+        "--min-accepted-calls",
+        type=int,
+        default=None,
+        help="Minimum accepted calls required by the quality policy.",
+    )
+    parser.add_argument(
+        "--min-accepted-puts",
+        type=int,
+        default=None,
+        help="Minimum accepted puts required by the quality policy.",
+    )
+    parser.add_argument(
+        "--min-expiries",
+        type=int,
+        default=None,
+        help="Minimum accepted expiries required by the quality policy.",
     )
 
 
@@ -225,16 +286,25 @@ def _build_config(args: argparse.Namespace) -> PipelineConfig:
 
 
 def _build_pipeline(args: argparse.Namespace) -> MarketDataPipeline:
-    pipeline = MarketDataPipeline(_build_config(args))
-    if getattr(args, "run_heston_smoke", False):
-        bundle_config = getattr(pipeline, "bundle_config", None)
-        config_cls = getattr(bundle_config, "__class__", None)
-        if bundle_config is not None and config_cls is not None:
-            pipeline.bundle_config = config_cls(run_heston_smoke=True)
-    return pipeline
+    return MarketDataPipeline(
+        _build_config(args),
+        bundle_config=ModelValidationBundleConfig(
+            run_heston_smoke=bool(getattr(args, "run_heston_smoke", False))
+        ),
+    )
 
 
 def _run_command(args: argparse.Namespace) -> tuple[str, object]:
+    if args.command == "validate-bundle":
+        return (
+            "validate-bundle",
+            validate_provider_snapshot_bundle(
+                market_data_path=args.market_data,
+                cleaned_quotes_path=args.cleaned_quotes,
+                heston_quotes_path=args.heston_quotes,
+            ),
+        )
+
     pipeline = _build_pipeline(args)
     if args.command == "snapshot":
         return (
@@ -325,6 +395,8 @@ def _emit_result(command: str, result: object, *, as_json: bool) -> None:
         lines = _backfill_summary_lines(result, dataset="fred_series")
     elif command == "backfill-bars":
         lines = _backfill_summary_lines(result, dataset="equity_bars")
+    elif command == "validate-bundle":
+        lines = _validate_bundle_summary_lines(result)
     else:
         raise ValueError(f"Unsupported command: {command}")
     print("\n".join(lines))
@@ -339,6 +411,11 @@ def _result_payload(command: str, result: object) -> dict[str, object]:
         return _backfill_payload(result, command=command, dataset="fred_series")
     if command == "backfill-bars":
         return _backfill_payload(result, command=command, dataset="equity_bars")
+    if command == "validate-bundle":
+        payload = _jsonable(result)
+        if not isinstance(payload, Mapping):
+            raise TypeError("validate-bundle result must be mapping-like")
+        return {"command": "validate-bundle", **payload}
     raise ValueError(f"Unsupported command: {command}")
 
 
@@ -537,6 +614,18 @@ def _backfill_summary_lines(result: object, *, dataset: str) -> list[str]:
     return lines
 
 
+def _validate_bundle_summary_lines(result: object) -> list[str]:
+    return [
+        "Provider snapshot bundle validation passed.",
+        f"underlying: {getattr(result, 'underlying', None)}",
+        "cleaned_quote_count: " f"{getattr(result, 'cleaned_quote_count', None)}",
+        f"heston_quote_count: {getattr(result, 'heston_quote_count', None)}",
+        f"spot: {getattr(result, 'spot', None)}",
+        f"rate: {getattr(result, 'rate', None)}",
+        f"dividend_yield: {getattr(result, 'dividend_yield', None)}",
+    ]
+
+
 def _warning_lines(warnings: Sequence[str]) -> list[str]:
     if not warnings:
         return ["warnings: none"]
@@ -588,8 +677,19 @@ def _quality_policy_payload(args: argparse.Namespace) -> dict[str, object] | Non
         payload["max_option_quote_age_seconds"] = max_option_age
     if getattr(args, "reject_stale_option_quotes", False):
         payload["reject_stale_option_quotes"] = True
+    if getattr(args, "reject_option_quotes_after_asof", False):
+        payload["reject_option_quotes_after_asof"] = True
     if getattr(args, "reject_stale_equity_quote", False):
         payload["reject_stale_equity_quote"] = True
+    for arg_name in (
+        "min_accepted_contracts",
+        "min_accepted_calls",
+        "min_accepted_puts",
+        "min_expiries",
+    ):
+        value = getattr(args, arg_name, None)
+        if value is not None:
+            payload[arg_name] = value
     return payload or None
 
 

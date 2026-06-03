@@ -33,6 +33,14 @@ writes artifacts, `validate_provider_snapshot_bundle(...)` can read back
 `market_data.json`, `cleaned_quotes.parquet`, and `heston_quotes.parquet`,
 reconstruct `MarketData`, and verify Heston quote-set compatibility. This is a
 controlled real-data validation check, not a production data-quality claim.
+The same helper is available through:
+
+```bash
+option-pricing-marketdata validate-bundle \
+  --market-data path/to/market_data.json \
+  --cleaned-quotes path/to/cleaned_quotes.parquet \
+  --heston-quotes path/to/heston_quotes.parquet
+```
 
 ## What this workflow does not prove
 
@@ -40,9 +48,12 @@ This workflow does not prove production data quality, live-provider correctness,
 calibration quality, trading performance, or empirical research conclusions.
 
 It also does not exercise provider-backed refresh commands, credential setup,
-live-provider CLI paths, provider refresh CLI or production CLI, or research
-exports. Those are outside this local demo workflow and are documented
-separately where they apply.
+live-provider snapshot or refresh CLI paths, production CLI workflows, or
+research exports. The credential-free provider bundle validation command only
+checks already-written model-facing artifacts.
+
+For the local demo workflow itself, the non-goals remain: no CLI, no provider
+refresh path, and no provider refresh CLI or production CLI.
 
 ## Requirements
 
@@ -510,8 +521,9 @@ The current workflow intentionally excludes:
 
 - no live providers in this local workflow
 - no credential use in this local workflow
-- no CLI execution in this local workflow
-- no provider refresh path in this local workflow
+- no CLI
+- no provider refresh path
+- no provider refresh CLI or production CLI
 - no production data-quality claim
 - no trading-performance claim
 - no research exports

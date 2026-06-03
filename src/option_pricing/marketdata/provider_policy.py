@@ -72,6 +72,7 @@ class ProviderSnapshotQualityPolicy:
     max_option_quote_age_seconds: float | None = None
     warn_on_stale_quotes: bool = True
     reject_stale_option_quotes: bool = False
+    reject_option_quotes_after_asof: bool = False
     reject_stale_equity_quote: bool = False
     require_option_quotes_on_or_before_asof: bool = True
     require_equity_quote_on_or_before_asof: bool = True
@@ -91,6 +92,10 @@ class ProviderSnapshotQualityPolicy:
         )
         _validate_bool(self.warn_on_stale_quotes, "warn_on_stale_quotes")
         _validate_bool(self.reject_stale_option_quotes, "reject_stale_option_quotes")
+        _validate_bool(
+            self.reject_option_quotes_after_asof,
+            "reject_option_quotes_after_asof",
+        )
         _validate_bool(self.reject_stale_equity_quote, "reject_stale_equity_quote")
         _validate_bool(
             self.require_option_quotes_on_or_before_asof,
@@ -120,6 +125,7 @@ class ProviderSnapshotQualityPolicy:
             "max_option_quote_age_seconds": self.max_option_quote_age_seconds,
             "warn_on_stale_quotes": self.warn_on_stale_quotes,
             "reject_stale_option_quotes": self.reject_stale_option_quotes,
+            "reject_option_quotes_after_asof": (self.reject_option_quotes_after_asof),
             "reject_stale_equity_quote": self.reject_stale_equity_quote,
             "require_option_quotes_on_or_before_asof": (
                 self.require_option_quotes_on_or_before_asof
@@ -380,33 +386,38 @@ def _apply_provider_snapshot_quality_policy(
     asof: pd.Timestamp,
     policy: ProviderSnapshotQualityPolicy,
 ) -> QuoteCleaningResult:
-    if (
-        not policy.reject_stale_option_quotes
-        or policy.max_option_quote_age_seconds is None
-        or result.cleaned_quotes.empty
-    ):
+    if result.cleaned_quotes.empty:
         return result
 
     ages = _quote_age_seconds(result.cleaned_quotes, _utc_timestamp(asof))
-    stale_mask = ages > float(policy.max_option_quote_age_seconds)
-    if not bool(stale_mask.any()):
+    reject_mask = pd.Series(False, index=result.cleaned_quotes.index)
+    if policy.reject_option_quotes_after_asof:
+        reject_mask = reject_mask | (ages < 0.0)
+    if (
+        policy.reject_stale_option_quotes
+        and policy.max_option_quote_age_seconds is not None
+    ):
+        reject_mask = reject_mask | (ages > float(policy.max_option_quote_age_seconds))
+    if not bool(reject_mask.any()):
         return result
 
-    cleaned = result.cleaned_quotes.loc[~stale_mask].reset_index(drop=True)
-    stale = result.cleaned_quotes.loc[stale_mask].reset_index(drop=True)
-    stale_rejections = _stale_rejected_quotes(
-        stale,
-        max_age_seconds=float(policy.max_option_quote_age_seconds),
+    cleaned = result.cleaned_quotes.loc[~reject_mask].reset_index(drop=True)
+    rejected_quotes = result.cleaned_quotes.loc[reject_mask].reset_index(drop=True)
+    quality_rejections = _quality_rejected_quotes(
+        rejected_quotes,
+        asof=asof,
+        policy=policy,
     )
     rejected = (
-        stale_rejections
+        quality_rejections
         if result.rejected_quotes.empty
-        else pd.concat([result.rejected_quotes, stale_rejections], ignore_index=True)
+        else pd.concat([result.rejected_quotes, quality_rejections], ignore_index=True)
     )
     reason_counts = dict(result.reason_counts)
-    reason_counts["stale_quote"] = reason_counts.get("stale_quote", 0) + int(
-        len(stale_rejections)
-    )
+    for reason, count in (
+        quality_rejections["rejection_reason"].astype(str).value_counts().items()
+    ):
+        reason_counts[str(reason)] = reason_counts.get(str(reason), 0) + int(count)
 
     return QuoteCleaningResult(
         cleaned_quotes=_coerce_output(cleaned, DatasetName.CLEANED_QUOTES),
@@ -416,16 +427,33 @@ def _apply_provider_snapshot_quality_policy(
     )
 
 
-def _stale_rejected_quotes(
-    stale_quotes: pd.DataFrame,
+def _quality_rejected_quotes(
+    quotes: pd.DataFrame,
     *,
-    max_age_seconds: float,
+    asof: pd.Timestamp,
+    policy: ProviderSnapshotQualityPolicy,
 ) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
-    for _, row in stale_quotes.iterrows():
+    max_age_seconds = policy.max_option_quote_age_seconds
+    for _, row in quotes.iterrows():
         age_seconds = (
-            _utc_timestamp(row["asof"]) - _utc_timestamp(row["quote_ts"])
+            _utc_timestamp(asof) - _utc_timestamp(row["quote_ts"])
         ).total_seconds()
+        if policy.reject_option_quotes_after_asof and age_seconds < 0.0:
+            rejection_reason = "quote_after_asof"
+            rejection_detail = "quote_ts is after snapshot asof"
+        elif (
+            policy.reject_stale_option_quotes
+            and max_age_seconds is not None
+            and age_seconds > float(max_age_seconds)
+        ):
+            rejection_reason = "stale_quote"
+            rejection_detail = (
+                f"quote_age_seconds={age_seconds:.6g} exceeds "
+                f"max_option_quote_age_seconds={float(max_age_seconds):.6g}"
+            )
+        else:
+            continue
         rows.append(
             {
                 "underlying": row["underlying"],
@@ -442,11 +470,8 @@ def _stale_rejected_quotes(
                 "iv": row["iv"],
                 "vega": row["vega"],
                 "source": row["source"],
-                "rejection_reason": "stale_quote",
-                "rejection_detail": (
-                    f"quote_age_seconds={age_seconds:.6g} exceeds "
-                    f"max_option_quote_age_seconds={max_age_seconds:.6g}"
-                ),
+                "rejection_reason": rejection_reason,
+                "rejection_detail": rejection_detail,
                 "cleaning_policy": row["cleaning_policy"],
             }
         )

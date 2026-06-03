@@ -712,6 +712,7 @@ def test_refresh_daily_dispatches_snapshots_and_records_aggregate_run(
             "max_option_quote_age_seconds": None,
             "warn_on_stale_quotes": True,
             "reject_stale_option_quotes": False,
+            "reject_option_quotes_after_asof": False,
             "reject_stale_equity_quote": False,
             "require_option_quotes_on_or_before_asof": True,
             "require_equity_quote_on_or_before_asof": True,
@@ -1018,6 +1019,70 @@ def test_stale_option_quote_can_be_rejected_by_policy(
     assert result.accepted_quote_count == 1
     assert result.rejected_quote_count == 1
     assert rejected["rejection_reason"].astype(str).tolist() == ["stale_quote"]
+
+
+def test_option_quote_after_asof_warns_by_default_policy(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    option_payload = _option_chain_payload()
+    contracts = cast(dict[str, Any], option_payload["contracts"])
+    cast(dict[str, Any], contracts["SPY260619C00500000"])["latest_quote"] = {
+        "timestamp": "2026-05-22T15:32:00Z",
+        "bid_price": 4.0,
+        "ask_price": 4.4,
+    }
+    alpaca_client = _FakeAlpacaClient(option_payload=option_payload)
+
+    result = _pipeline(tmp_path, alpaca_client=alpaca_client).snapshot(
+        "SPY",
+        asof="2026-05-22T15:31:00Z",
+        run_id="after-asof-warning",
+        curve_series_ids=(),
+    )
+
+    assert result.accepted_quote_count == 2
+    assert result.rejected_quote_count == 0
+    assert result.quote_freshness["option_quotes_after_asof_count"] == 1
+    assert result.quote_freshness["accepted_quotes_after_asof_count"] == 1
+    assert any(
+        "provider_quality: option_quotes_after_asof" in w for w in result.warnings
+    )
+
+
+def test_option_quote_after_asof_can_be_rejected_by_policy(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    option_payload = _option_chain_payload()
+    contracts = cast(dict[str, Any], option_payload["contracts"])
+    cast(dict[str, Any], contracts["SPY260619C00500000"])["latest_quote"] = {
+        "timestamp": "2026-05-22T15:32:00Z",
+        "bid_price": 4.0,
+        "ask_price": 4.4,
+    }
+    alpaca_client = _FakeAlpacaClient(option_payload=option_payload)
+
+    result = _pipeline(tmp_path, alpaca_client=alpaca_client).snapshot(
+        "SPY",
+        asof="2026-05-22T15:31:00Z",
+        run_id="after-asof-rejection",
+        curve_series_ids=(),
+        quality_policy={"reject_option_quotes_after_asof": True},
+    )
+
+    rejected = pd.read_parquet(result.silver_paths.rejected_quotes)
+    assert result.accepted_quote_count == 1
+    assert result.rejected_quote_count == 1
+    assert result.quote_freshness["option_quotes_after_asof_count"] == 1
+    assert result.quote_freshness["accepted_quotes_after_asof_count"] == 0
+    assert rejected["rejection_reason"].astype(str).tolist() == ["quote_after_asof"]
+    assert rejected["rejection_detail"].astype(str).tolist() == [
+        "quote_ts is after snapshot asof"
+    ]
+    assert any(
+        "provider_quality: option_quotes_after_asof" in w for w in result.warnings
+    )
 
 
 def test_equity_quote_after_asof_can_fail_quality_policy(

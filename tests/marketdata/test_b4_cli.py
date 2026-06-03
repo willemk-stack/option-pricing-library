@@ -9,6 +9,9 @@ from types import SimpleNamespace
 import pytest
 
 import option_pricing.marketdata.cli as cli
+from option_pricing.marketdata.provider_confidence import (
+    ProviderSnapshotBundleValidationResult,
+)
 
 FAKE_SECRET = "fake-cli-secret-value"
 
@@ -16,8 +19,9 @@ FAKE_SECRET = "fake-cli-secret-value"
 class _FakePipeline:
     instances: list[_FakePipeline] = []
 
-    def __init__(self, config: object) -> None:
+    def __init__(self, config: object, **kwargs: object) -> None:
         self.config = config
+        self.init_kwargs = kwargs
         self.calls: list[tuple[str, tuple[object, ...], dict[str, object]]] = []
         self.instances.append(self)
 
@@ -220,6 +224,16 @@ def test_snapshot_cli_parses_arguments_and_calls_pipeline_correctly(
             "--max-option-quote-age-seconds",
             "300",
             "--reject-stale-option-quotes",
+            "--reject-option-quotes-after-asof",
+            "--min-accepted-contracts",
+            "10",
+            "--min-accepted-calls",
+            "4",
+            "--min-accepted-puts",
+            "4",
+            "--min-expiries",
+            "2",
+            "--run-heston-smoke",
             "--overwrite",
         ]
     )
@@ -228,6 +242,7 @@ def test_snapshot_cli_parses_arguments_and_calls_pipeline_correctly(
     instance = _FakePipeline.instances[-1]
     assert instance.config.storage.root == tmp_path
     assert instance.config.alpaca.feed == "sip"
+    assert instance.init_kwargs["bundle_config"].run_heston_smoke is True
     name, args, kwargs = _last_call()
     assert name == "snapshot"
     assert args == ("spy",)
@@ -249,6 +264,11 @@ def test_snapshot_cli_parses_arguments_and_calls_pipeline_correctly(
             "max_equity_quote_age_seconds": 120.0,
             "max_option_quote_age_seconds": 300.0,
             "reject_stale_option_quotes": True,
+            "reject_option_quotes_after_asof": True,
+            "min_accepted_contracts": 10,
+            "min_accepted_calls": 4,
+            "min_accepted_puts": 4,
+            "min_expiries": 2,
         },
         "overwrite": True,
         "library_commit": "abc123",
@@ -309,6 +329,7 @@ def test_refresh_daily_cli_parses_arguments_and_calls_pipeline_correctly(
     instance = _FakePipeline.instances[-1]
     assert instance.config.storage.root == tmp_path
     assert instance.config.alpaca.feed == "sip"
+    assert instance.init_kwargs["bundle_config"].run_heston_smoke is False
     name, args, kwargs = _last_call()
     assert name == "refresh_daily"
     assert args == (["spy", "qqq"],)
@@ -335,6 +356,41 @@ def test_refresh_daily_cli_parses_arguments_and_calls_pipeline_correctly(
     assert "aggregate_run_id: daily-close-20260522T153100Z-abcdef12" in stdout
     assert "raw_option_contract_count: 92" in stdout
     assert "accepted_quote_count: 84" in stdout
+
+
+def test_refresh_daily_cli_passes_quality_minimums(
+    tmp_path: Path,
+) -> None:
+    exit_code = cli.main(
+        [
+            "refresh-daily",
+            "--underlyings",
+            "spy",
+            "--data-root",
+            str(tmp_path),
+            "--min-accepted-contracts",
+            "8",
+            "--min-accepted-calls",
+            "3",
+            "--min-accepted-puts",
+            "3",
+            "--min-expiries",
+            "2",
+            "--reject-option-quotes-after-asof",
+        ]
+    )
+
+    assert exit_code == 0
+    name, args, kwargs = _last_call()
+    assert name == "refresh_daily"
+    assert args == (["spy"],)
+    assert kwargs["quality_policy"] == {
+        "reject_option_quotes_after_asof": True,
+        "min_accepted_contracts": 8,
+        "min_accepted_calls": 3,
+        "min_accepted_puts": 3,
+        "min_expiries": 2,
+    }
 
 
 def test_snapshot_json_emits_valid_stable_json(
@@ -484,6 +540,108 @@ def test_backfill_bars_parses_symbols_dates_timeframe_and_calls_pipeline_correct
     assert "small warning" in stdout
 
 
+def test_validate_bundle_cli_calls_existing_helper(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[dict[str, Path]] = []
+
+    def fake_validate_provider_snapshot_bundle(
+        *,
+        market_data_path: Path,
+        cleaned_quotes_path: Path,
+        heston_quotes_path: Path,
+    ) -> ProviderSnapshotBundleValidationResult:
+        calls.append(
+            {
+                "market_data_path": market_data_path,
+                "cleaned_quotes_path": cleaned_quotes_path,
+                "heston_quotes_path": heston_quotes_path,
+            }
+        )
+        return ProviderSnapshotBundleValidationResult(
+            underlying="SPY",
+            cleaned_quote_count=42,
+            heston_quote_count=42,
+            spot=500.0,
+            rate=0.0416,
+            dividend_yield=0.0,
+        )
+
+    monkeypatch.setattr(
+        cli,
+        "validate_provider_snapshot_bundle",
+        fake_validate_provider_snapshot_bundle,
+    )
+
+    exit_code = cli.main(
+        [
+            "validate-bundle",
+            "--market-data",
+            "market_data.json",
+            "--cleaned-quotes",
+            "cleaned_quotes.parquet",
+            "--heston-quotes",
+            "heston_quotes.parquet",
+        ]
+    )
+
+    assert exit_code == 0
+    assert calls == [
+        {
+            "market_data_path": Path("market_data.json"),
+            "cleaned_quotes_path": Path("cleaned_quotes.parquet"),
+            "heston_quotes_path": Path("heston_quotes.parquet"),
+        }
+    ]
+    assert _FakePipeline.instances == []
+    stdout = capsys.readouterr().out
+    assert "Provider snapshot bundle validation passed." in stdout
+    assert "cleaned_quote_count: 42" in stdout
+
+
+def test_validate_bundle_cli_emits_json(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        cli,
+        "validate_provider_snapshot_bundle",
+        lambda **_: ProviderSnapshotBundleValidationResult(
+            underlying="SPY",
+            cleaned_quote_count=42,
+            heston_quote_count=42,
+            spot=500.0,
+            rate=0.0416,
+            dividend_yield=0.0,
+        ),
+    )
+
+    exit_code = cli.main(
+        [
+            "validate-bundle",
+            "--market-data",
+            "market_data.json",
+            "--cleaned-quotes",
+            "cleaned_quotes.parquet",
+            "--heston-quotes",
+            "heston_quotes.parquet",
+            "--json",
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "cleaned_quote_count": 42,
+        "command": "validate-bundle",
+        "dividend_yield": 0.0,
+        "heston_quote_count": 42,
+        "rate": 0.0416,
+        "spot": 500.0,
+        "underlying": "SPY",
+    }
+
+
 def test_missing_required_args_fail_through_argparse(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -521,9 +679,11 @@ def test_cli_stays_inside_parse_and_dispatch_boundary() -> None:
                 imported_marketdata_modules.add(node.module)
 
     assert imported_marketdata_modules == {
+        "option_pricing.marketdata.bundles",
         "option_pricing.marketdata.config",
         "option_pricing.marketdata.errors",
         "option_pricing.marketdata.pipeline",
+        "option_pricing.marketdata.provider_confidence",
     }
     assert "normalize_" not in source
     assert "clean_option_quotes" not in source

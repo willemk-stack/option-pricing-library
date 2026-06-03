@@ -167,6 +167,11 @@ option-pricing-marketdata snapshot \
   --max-equity-quote-age-seconds 900 \
   --max-option-quote-age-seconds 1800 \
   --reject-stale-option-quotes \
+  --reject-option-quotes-after-asof \
+  --min-accepted-contracts 50 \
+  --min-accepted-calls 20 \
+  --min-accepted-puts 20 \
+  --min-expiries 2 \
   --library-commit "$(git rev-parse HEAD)" \
   --data-root out/marketdata-live
 ```
@@ -174,6 +179,22 @@ option-pricing-marketdata snapshot \
 Pass `--no-rate-curve` to skip the curve artifact when only the selected flat
 rate is needed. Pass `--run-heston-smoke` to enable the lightweight Heston
 smoke check inside the model-validation bundle.
+
+For a first real provider-backed model run, start warning-only:
+
+```bash
+option-pricing-marketdata snapshot \
+  --underlying SPY \
+  --max-equity-quote-age-seconds 900 \
+  --max-option-quote-age-seconds 1800 \
+  --library-commit "$(git rev-parse HEAD)" \
+  --data-root out/marketdata-live
+```
+
+Inspect `quote_freshness`, provider diagnostics, accepted/rejected counts, and
+warnings in the JSON output or manifests. Then rerun with stricter rejection
+controls such as `--reject-stale-option-quotes`,
+`--reject-option-quotes-after-asof`, and the minimum accepted quote flags.
 
 Refresh multiple underlyings with one aggregate run:
 
@@ -239,8 +260,27 @@ The provider snapshot freshness policy records:
 By default the policy warns but stays compatible with existing Phase B behavior.
 Use `--reject-stale-option-quotes` with `--max-option-quote-age-seconds` to move
 stale accepted options into `rejected_quotes` with reason `stale_quote`. Use
-`--reject-stale-equity-quote` to fail when the equity quote violates the
-freshness or on-or-before-`asof` policy.
+`--reject-option-quotes-after-asof` to move accepted option quotes with
+`quote_ts > asof` into `rejected_quotes` with reason `quote_after_asof`.
+Minimum-shape flags `--min-accepted-contracts`, `--min-accepted-calls`,
+`--min-accepted-puts`, and `--min-expiries` fail the snapshot when the accepted
+set is too small for the intended model run. Use `--reject-stale-equity-quote`
+to fail when the equity quote violates the freshness or on-or-before-`asof`
+policy.
+
+Validate model-facing artifacts after a provider-backed snapshot with the
+credential-free helper:
+
+```bash
+option-pricing-marketdata validate-bundle \
+  --market-data out/marketdata-live/gold/market_snapshot/underlying=SPY/date=2026-05-22/run_id=<run-id>/market_data.json \
+  --cleaned-quotes out/marketdata-live/silver/cleaned_quotes/underlying=SPY/date=2026-05-22/run_id=<run-id>/cleaned_quotes.parquet \
+  --heston-quotes out/marketdata-live/gold/heston_quotes/underlying=SPY/date=2026-05-22/run_id=<run-id>/heston_quotes.parquet
+```
+
+The command calls `validate_provider_snapshot_bundle(...)` and verifies that
+`market_data.json`, `cleaned_quotes.parquet`, and `heston_quotes.parquet` can be
+read by the library-facing contracts. Add `--json` for stable automation output.
 
 Snapshot output includes the documented rate/dividend source metadata, feed,
 rate series, raw and normalized option contract counts when available,
