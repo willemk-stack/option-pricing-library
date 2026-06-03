@@ -67,6 +67,27 @@ def _snapshot_result(
         accepted_quote_count=42,
         rejected_quote_count=3,
         provider_rejected_contract_count=1,
+        quality_policy={
+            "min_accepted_contracts": 1,
+            "warn_on_stale_quotes": True,
+        },
+        quote_freshness={
+            "equity_quote_age_seconds": 60.0,
+            "stale_option_quote_count": 0,
+        },
+        diagnostics=(
+            {
+                "provider": "alpaca",
+                "operation": "latest_equity_quote",
+                "status": "ok",
+                "request_metadata": {"symbols": ["SPY"]},
+                "started_at": "2026-05-22T15:31:00Z",
+                "ended_at": "2026-05-22T15:31:00Z",
+                "elapsed_ms": 1.0,
+                "retry_count": 0,
+                "rows_or_contracts_in": 1,
+            },
+        ),
         warnings=("sample warning",),
         artifact_paths=(
             Path(
@@ -187,6 +208,18 @@ def test_snapshot_cli_parses_arguments_and_calls_pipeline_correctly(
             "0.0125",
             "--dividend-yield-source",
             "manual_override",
+            "--rate-lookback-days",
+            "45",
+            "--curve-series",
+            "DGS1MO",
+            "DGS1",
+            "--library-commit",
+            "abc123",
+            "--max-equity-quote-age-seconds",
+            "120",
+            "--max-option-quote-age-seconds",
+            "300",
+            "--reject-stale-option-quotes",
             "--overwrite",
         ]
     )
@@ -210,7 +243,15 @@ def test_snapshot_cli_parses_arguments_and_calls_pipeline_correctly(
         "feed": "sip",
         "dividend_yield": 0.0125,
         "dividend_yield_source": "manual_override",
+        "rate_lookback_days": 45,
+        "curve_series_ids": ["DGS1MO", "DGS1"],
+        "quality_policy": {
+            "max_equity_quote_age_seconds": 120.0,
+            "max_option_quote_age_seconds": 300.0,
+            "reject_stale_option_quotes": True,
+        },
         "overwrite": True,
+        "library_commit": "abc123",
     }
     stdout = capsys.readouterr().out
     assert "Market snapshot completed." in stdout
@@ -283,7 +324,11 @@ def test_refresh_daily_cli_parses_arguments_and_calls_pipeline_correctly(
         "feed": "sip",
         "dividend_yield": 0.0125,
         "dividend_yield_source": "manual_override",
+        "rate_lookback_days": 90,
+        "curve_series_ids": None,
+        "quality_policy": None,
         "overwrite": True,
+        "library_commit": None,
     }
     stdout = capsys.readouterr().out
     assert "Daily refresh completed." in stdout
@@ -330,6 +375,27 @@ def test_snapshot_json_emits_valid_stable_json(
         },
         "normalized_option_contract_count": 45,
         "provider_rejected_contract_count": 1,
+        "provider_operation_diagnostics": [
+            {
+                "elapsed_ms": 1.0,
+                "ended_at": "2026-05-22T15:31:00Z",
+                "operation": "latest_equity_quote",
+                "provider": "alpaca",
+                "request_metadata": {"symbols": ["SPY"]},
+                "retry_count": 0,
+                "rows_or_contracts_in": 1,
+                "started_at": "2026-05-22T15:31:00Z",
+                "status": "ok",
+            }
+        ],
+        "quality_policy": {
+            "min_accepted_contracts": 1,
+            "warn_on_stale_quotes": True,
+        },
+        "quote_freshness": {
+            "equity_quote_age_seconds": 60.0,
+            "stale_option_quote_count": 0,
+        },
         "rate_series_id": "DGS3MO",
         "rate": 0.0416,
         "rate_observation_date": "2026-05-20",
@@ -370,6 +436,7 @@ def test_backfill_fred_parses_series_start_end_and_calls_pipeline_correctly(
         "end": "2026-05-22",
         "run_id": "fred-cli-run",
         "overwrite": False,
+        "library_commit": None,
     }
     stdout = capsys.readouterr().out
     assert "dataset: fred_series" in stdout
@@ -410,6 +477,7 @@ def test_backfill_bars_parses_symbols_dates_timeframe_and_calls_pipeline_correct
         "feed": "sip",
         "run_id": "bars-cli-run",
         "overwrite": True,
+        "library_commit": None,
     }
     stdout = capsys.readouterr().out
     assert "dataset: equity_bars" in stdout

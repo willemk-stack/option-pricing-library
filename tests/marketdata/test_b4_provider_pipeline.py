@@ -16,7 +16,12 @@ from option_pricing.marketdata.config import (
     AlpacaConfig,
     FredConfig,
     PipelineConfig,
+    ProviderRetryConfig,
     StorageConfig,
+)
+from option_pricing.marketdata.errors import (
+    MissingProviderCredentialError,
+    ProviderRequestError,
 )
 from option_pricing.marketdata.pipeline import (
     MarketDataPipeline,
@@ -409,6 +414,46 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "source": "assumption",
         "dividend_inference": "not_enabled",
     }
+    assert bronze_manifest["dividend_policy"] == bronze_manifest["dividend_assumptions"]
+    assert bronze_manifest["rate_policy"] == {
+        "provider": "fred",
+        "series_id": "DGS3MO",
+        "default_series_id": "DGS3MO",
+        "lookback_days": 90,
+        "curve_series_ids": ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2"],
+        "curve_interpolation": "not_enabled",
+    }
+    assert bronze_manifest["quality_policy"]["min_accepted_contracts"] == 1
+    assert bronze_manifest["quote_freshness"] == {
+        "equity_quote_age_seconds": 60.0,
+        "equity_quote_after_asof": False,
+        "stale_equity_quote": False,
+        "option_quote_age_seconds_min": 60.0,
+        "option_quote_age_seconds_median": 60.0,
+        "option_quote_age_seconds_max": 60.0,
+        "option_quote_count": 2,
+        "option_quotes_after_asof_count": 0,
+        "stale_option_quote_count": 0,
+        "accepted_quote_count": 2,
+        "accepted_call_count": 1,
+        "accepted_put_count": 1,
+        "accepted_expiry_count": 1,
+        "stale_accepted_quote_count": 0,
+        "accepted_quotes_after_asof_count": 0,
+    }
+    diagnostics = cast(
+        list[dict[str, object]],
+        bronze_manifest["provider_operation_diagnostics"],
+    )
+    assert [item["operation"] for item in diagnostics[:3]] == [
+        "latest_equity_quote",
+        "option_chain",
+        "fred_observations",
+    ]
+    assert all(item["status"] == "ok" for item in diagnostics)
+    assert diagnostics[0]["rows_or_contracts_in"] == 1
+    assert diagnostics[1]["rows_or_contracts_in"] == 3
+    assert diagnostics[2]["rows_or_contracts_in"] == 2
     assert bronze_manifest["current_provider_scope"] == {
         "curve_interpolation": "not_enabled",
         "dividend_inference": "not_enabled",
@@ -457,6 +502,19 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
             "source_type": "provider_snapshot",
             "fixture_name": "provider_snapshot_v1",
         },
+        "rate_policy": {
+            "provider": "fred",
+            "primary_series_id": "DGS3MO",
+            "requested_series_ids": ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2"],
+            "lookback_days": 90,
+            "curve_interpolation": "not_enabled",
+        },
+        "current_provider_scope": {
+            "curve_interpolation": "not_enabled",
+            "dividend_inference": "not_enabled",
+            "option_chain_backfill": "not_enabled",
+            "scheduling": "not_enabled",
+        },
         "library_commit": "abc123",
         "dataset": "curves",
         "layer": "gold",
@@ -501,6 +559,7 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         path.relative_to(tmp_path).as_posix() for path in result.artifact_paths
     ]
     run_details = cast(dict[str, object], run_entries[0]["details"])
+    assert run_details["provider_operation_diagnostics"] == diagnostics
     assert run_details == {
         "operation": "snapshot",
         "provider": "alpaca+fred",
@@ -513,14 +572,37 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "spot_source": "alpaca",
         "dividend_yield": 0.0,
         "dividend_yield_source": "assumption",
+        "dividend_policy": {
+            "dividend_yield": 0.0,
+            "source": "assumption",
+            "dividend_inference": "not_enabled",
+        },
         "feed": "indicative",
         "rate_lookback_days": 90,
+        "rate_policy": {
+            "provider": "fred",
+            "series_id": "DGS3MO",
+            "rate_source": "fred:DGS3MO",
+            "rate_observation_date": "2026-05-20",
+            "lookback_days": 90,
+            "curve_series_ids": ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2"],
+            "curve_interpolation": "not_enabled",
+        },
         "raw_option_contract_count": 3,
         "normalized_option_contract_count": 2,
         "dropped_before_cleaning_count": 1,
         "provider_rejected_contract_count": 1,
         "accepted_quote_count": 2,
         "rejected_quote_count": 0,
+        "quality_policy": bronze_manifest["quality_policy"],
+        "quote_freshness": bronze_manifest["quote_freshness"],
+        "provider_operation_diagnostics": diagnostics,
+        "current_provider_scope": {
+            "curve_interpolation": "not_enabled",
+            "dividend_inference": "not_enabled",
+            "option_chain_backfill": "not_enabled",
+            "scheduling": "not_enabled",
+        },
         "warnings": list(result.warnings),
         "artifact_paths": [
             path.relative_to(tmp_path).as_posix() for path in result.artifact_paths
@@ -618,6 +700,32 @@ def test_refresh_daily_dispatches_snapshots_and_records_aggregate_run(
         "asof": "2026-05-22T15:31:00Z",
         "rate_series_id": "DGS3MO",
         "feed": "sip",
+        "rate_policy": {
+            "provider": "fred",
+            "series_id": "DGS3MO",
+            "lookback_days": 90,
+            "curve_series_ids": ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2"],
+            "curve_interpolation": "not_enabled",
+        },
+        "quality_policy": {
+            "max_equity_quote_age_seconds": None,
+            "max_option_quote_age_seconds": None,
+            "warn_on_stale_quotes": True,
+            "reject_stale_option_quotes": False,
+            "reject_stale_equity_quote": False,
+            "require_option_quotes_on_or_before_asof": True,
+            "require_equity_quote_on_or_before_asof": True,
+            "min_accepted_contracts": 1,
+            "min_accepted_calls": None,
+            "min_accepted_puts": None,
+            "min_expiries": None,
+        },
+        "current_provider_scope": {
+            "curve_interpolation": "not_enabled",
+            "dividend_inference": "not_enabled",
+            "option_chain_backfill": "not_enabled",
+            "scheduling": "not_enabled",
+        },
         "filters": {
             "expiry_gte": None,
             "expiry_lte": None,
@@ -738,6 +846,204 @@ def test_provider_snapshot_outputs_do_not_leak_secrets(
     assert secret not in repr(result)
     assert secret not in cli_text
     assert "<redacted>" in bronze_text
+
+
+def test_provider_failure_preserves_sanitized_diagnostic_context(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    secret = "provider-secret-value"
+
+    class _FailingAlpacaClient(_FakeAlpacaClient):
+        def get_latest_equity_quotes(
+            self,
+            symbols: str,
+            *,
+            asof: object | None = None,
+        ) -> Mapping[str, Any]:
+            self.equity_calls.append({"symbols": symbols, "asof": asof})
+            raise RuntimeError(f"boom near {secret}")
+
+    with pytest.raises(ProviderSnapshotDataUnavailableError) as excinfo:
+        _pipeline(
+            tmp_path,
+            alpaca_client=_FailingAlpacaClient(),
+        ).snapshot(
+            "SPY",
+            asof="2026-05-22T15:31:00Z",
+            run_id="failing-diagnostic",
+        )
+
+    exc = excinfo.value
+    assert exc.failure_kind == "provider_request_failed"
+    assert exc.diagnostic is not None
+    diagnostic = exc.diagnostic.as_dict()
+    assert diagnostic["provider"] == "alpaca"
+    assert diagnostic["operation"] == "latest_equity_quote"
+    assert diagnostic["status"] == "failed"
+    assert diagnostic["exception_type"] == "RuntimeError"
+    assert secret not in json.dumps(diagnostic, sort_keys=True)
+    assert "RuntimeError raised by provider call" in str(diagnostic["message"])
+
+
+def test_provider_retry_retries_transient_request_and_records_retry_count(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    class _FlakyAlpacaClient(_FakeAlpacaClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.remaining_failures = 1
+
+        def get_latest_equity_quotes(
+            self,
+            symbols: str,
+            *,
+            asof: object | None = None,
+        ) -> Mapping[str, Any]:
+            self.equity_calls.append({"symbols": symbols, "asof": asof})
+            if self.remaining_failures:
+                self.remaining_failures -= 1
+                raise ProviderRequestError("transient latest quote failure")
+            return self.equity_payload
+
+    alpaca_client = _FlakyAlpacaClient()
+    pipeline = MarketDataPipeline(
+        PipelineConfig(
+            alpaca=AlpacaConfig(),
+            fred=FredConfig(),
+            storage=StorageConfig(root=tmp_path),
+            retry=ProviderRetryConfig(
+                max_attempts=2,
+                wait_initial_seconds=0.0,
+                wait_max_seconds=0.0,
+            ),
+        ),
+        alpaca_client=alpaca_client,
+        fred_client=_FakeFredClient(),
+    )
+
+    result = pipeline.snapshot(
+        "SPY",
+        asof="2026-05-22T15:31:00Z",
+        run_id="retry-success",
+        curve_series_ids=(),
+    )
+
+    assert len(alpaca_client.equity_calls) == 2
+    assert result.diagnostics[0].operation == "latest_equity_quote"
+    assert result.diagnostics[0].retry_count == 1
+    assert result.diagnostics[0].status == "ok"
+
+
+def test_provider_retry_does_not_retry_missing_credentials(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    class _MissingCredentialsAlpacaClient(_FakeAlpacaClient):
+        def get_latest_equity_quotes(
+            self,
+            symbols: str,
+            *,
+            asof: object | None = None,
+        ) -> Mapping[str, Any]:
+            self.equity_calls.append({"symbols": symbols, "asof": asof})
+            raise MissingProviderCredentialError("ALPACA_API_KEY")
+
+    alpaca_client = _MissingCredentialsAlpacaClient()
+    with pytest.raises(ProviderSnapshotDataUnavailableError) as excinfo:
+        _pipeline(
+            tmp_path,
+            alpaca_client=alpaca_client,
+        ).snapshot(
+            "SPY",
+            asof="2026-05-22T15:31:00Z",
+            run_id="missing-credentials",
+        )
+
+    assert len(alpaca_client.equity_calls) == 1
+    assert excinfo.value.failure_kind == "missing_credentials"
+    assert excinfo.value.diagnostic is not None
+    assert excinfo.value.diagnostic.retry_count == 0
+
+
+def test_stale_option_quote_warns_by_default_policy(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    result = _snapshot(
+        tmp_path,
+        run_id="stale-warning",
+        quality_policy={"max_option_quote_age_seconds": 30},
+    )
+
+    assert result.accepted_quote_count == 2
+    assert result.quote_freshness["stale_option_quote_count"] == 2
+    assert any("provider_quality: stale_option_quotes" in w for w in result.warnings)
+    assert any(
+        "provider_quality: stale_accepted_option_quotes" in w for w in result.warnings
+    )
+
+
+def test_stale_option_quote_can_be_rejected_by_policy(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    option_payload = _option_chain_payload()
+    contracts = cast(dict[str, Any], option_payload["contracts"])
+    cast(dict[str, Any], contracts["SPY260619C00500000"])["latest_quote"] = {
+        "timestamp": "2026-05-22T15:31:00Z",
+        "bid_price": 4.0,
+        "ask_price": 4.4,
+    }
+    cast(dict[str, Any], contracts["SPY260619P00500000"])["latest_quote"] = {
+        "timestamp": "2026-05-22T15:00:00Z",
+        "bid_price": 3.8,
+        "ask_price": 4.2,
+    }
+    alpaca_client = _FakeAlpacaClient(option_payload=option_payload)
+
+    result = _pipeline(tmp_path, alpaca_client=alpaca_client).snapshot(
+        "SPY",
+        asof="2026-05-22T15:31:00Z",
+        run_id="stale-rejection",
+        curve_series_ids=(),
+        quality_policy={
+            "max_option_quote_age_seconds": 30,
+            "reject_stale_option_quotes": True,
+        },
+    )
+
+    rejected = pd.read_parquet(result.silver_paths.rejected_quotes)
+    assert result.accepted_quote_count == 1
+    assert result.rejected_quote_count == 1
+    assert rejected["rejection_reason"].astype(str).tolist() == ["stale_quote"]
+
+
+def test_equity_quote_after_asof_can_fail_quality_policy(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    equity_payload = _equity_quote_payload()
+    quote = cast(dict[str, Any], cast(dict[str, Any], equity_payload["quotes"])["SPY"])
+    quote["timestamp"] = "2026-05-22T15:32:00Z"
+
+    with pytest.raises(
+        ProviderSnapshotDataUnavailableError,
+        match="Equity quote timestamp is after",
+    ) as excinfo:
+        _pipeline(
+            tmp_path,
+            alpaca_client=_FakeAlpacaClient(equity_payload=equity_payload),
+        ).snapshot(
+            "SPY",
+            asof="2026-05-22T15:31:00Z",
+            run_id="equity-after-asof",
+            curve_series_ids=(),
+            quality_policy={"reject_stale_equity_quote": True},
+        )
+
+    assert excinfo.value.failure_kind == "quality_policy_failed"
 
 
 def test_provider_snapshot_missing_fred_rate_fails_clearly(

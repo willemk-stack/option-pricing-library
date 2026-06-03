@@ -156,6 +156,25 @@ Fetch one market snapshot:
 option-pricing-marketdata snapshot --underlying SPY --asof 2026-05-22T15:31:00Z --data-root out/marketdata-live
 ```
 
+Use explicit rate, curve, provenance, and freshness controls when preparing a
+controlled real-data validation run:
+
+```bash
+option-pricing-marketdata snapshot \
+  --underlying SPY \
+  --rate-lookback-days 45 \
+  --curve-series DGS1MO DGS3MO DGS6MO DGS1 \
+  --max-equity-quote-age-seconds 900 \
+  --max-option-quote-age-seconds 1800 \
+  --reject-stale-option-quotes \
+  --library-commit "$(git rev-parse HEAD)" \
+  --data-root out/marketdata-live
+```
+
+Pass `--no-rate-curve` to skip the curve artifact when only the selected flat
+rate is needed. Pass `--run-heston-smoke` to enable the lightweight Heston
+smoke check inside the model-validation bundle.
+
 Refresh multiple underlyings with one aggregate run:
 
 ```bash
@@ -186,6 +205,10 @@ Emit stable JSON output for automation:
 option-pricing-marketdata refresh-daily --underlyings SPY QQQ --json --data-root out/marketdata-live
 ```
 
+JSON output includes the snapshot warnings, quality policy, quote freshness
+statistics, and sanitized provider operation diagnostics. Human-readable output
+stays concise by default.
+
 Documented assumptions and current provider scope are written as warnings or
 manifest notes:
 
@@ -198,6 +221,26 @@ manifest notes:
 - scheduling, cron, and background refresh services are not enabled
 - Alpaca option contracts without usable bid/ask may be dropped before quote
   cleaning; snapshot warnings include the raw, normalized, and dropped counts
+
+Provider diagnostics are written to snapshot manifests and run metadata. They
+record provider, operation, status, sanitized request metadata, elapsed time,
+retry count, and sanitized exception class/message when a call fails. API keys,
+secret keys, bearer tokens, authorization headers, passwords, and raw secret
+values are not written to text artifacts.
+
+The provider snapshot freshness policy records:
+
+- equity quote age in seconds
+- option quote age min/median/max in seconds
+- option quotes after the requested `asof`
+- stale option quote and stale accepted quote counts
+- accepted call/put/expiry counts
+
+By default the policy warns but stays compatible with existing Phase B behavior.
+Use `--reject-stale-option-quotes` with `--max-option-quote-age-seconds` to move
+stale accepted options into `rejected_quotes` with reason `stale_quote`. Use
+`--reject-stale-equity-quote` to fail when the equity quote violates the
+freshness or on-or-before-`asof` policy.
 
 Snapshot output includes the documented rate/dividend source metadata, feed,
 rate series, raw and normalized option contract counts when available,
@@ -216,7 +259,10 @@ pytest -q tests/marketdata/test_provider_confidence_checks.py::test_live_provide
 
 The live smoke path runs a narrow SPY snapshot into a temporary local storage
 root and checks the same documented assumptions, current provider scope, key
-artifacts, accepted quote count, and text-artifact secret hygiene.
+artifacts, accepted quote count, provider diagnostics, freshness warnings, and
+text-artifact secret hygiene. Provider-backed snapshots are suitable for
+controlled real-data validation; they are not presented as production-grade
+market data, scheduling, or historical option-chain backfill.
 
 ## Related guides
 

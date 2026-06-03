@@ -20,6 +20,7 @@ from option_pricing.marketdata.pipeline import MarketDataPipeline
 
 DEFAULT_DATA_ROOT = Path("data")
 DEFAULT_RATE_SERIES = "DGS3MO"
+DEFAULT_RATE_LOOKBACK_DAYS = 90
 DEFAULT_TIMEFRAME = "1Day"
 
 
@@ -117,6 +118,11 @@ def _add_common_storage_options(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="Emit one stable JSON object instead of human-readable text.",
     )
+    parser.add_argument(
+        "--library-commit",
+        default=None,
+        help="Optional library commit recorded in manifests and run metadata.",
+    )
 
 
 def _add_run_id_option(parser: argparse.ArgumentParser) -> None:
@@ -147,6 +153,28 @@ def _add_snapshot_query_options(parser: argparse.ArgumentParser) -> None:
         help="FRED rate series ID used for the risk-free rate.",
     )
     parser.add_argument(
+        "--rate-lookback-days",
+        type=int,
+        default=DEFAULT_RATE_LOOKBACK_DAYS,
+        help="FRED lookback window used for snapshot rate selection.",
+    )
+    parser.add_argument(
+        "--curve-series",
+        nargs="*",
+        default=None,
+        help="Zero or more FRED series IDs for the provider rate-curve artifact.",
+    )
+    parser.add_argument(
+        "--no-rate-curve",
+        action="store_true",
+        help="Disable the provider rate-curve artifact for this snapshot run.",
+    )
+    parser.add_argument(
+        "--run-heston-smoke",
+        action="store_true",
+        help="Enable the model-validation bundle Heston smoke check.",
+    )
+    parser.add_argument(
         "--dividend-yield",
         type=float,
         default=0.0,
@@ -162,6 +190,28 @@ def _add_snapshot_query_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--strike-gte", type=float, default=None)
     parser.add_argument("--strike-lte", type=float, default=None)
     parser.add_argument("--option-type", default=None)
+    parser.add_argument(
+        "--max-equity-quote-age-seconds",
+        type=float,
+        default=None,
+        help="Warn/fail when the equity quote is older than this many seconds.",
+    )
+    parser.add_argument(
+        "--max-option-quote-age-seconds",
+        type=float,
+        default=None,
+        help="Warn/reject when option quotes are older than this many seconds.",
+    )
+    parser.add_argument(
+        "--reject-stale-option-quotes",
+        action="store_true",
+        help="Move stale accepted option quotes to rejected_quotes.",
+    )
+    parser.add_argument(
+        "--reject-stale-equity-quote",
+        action="store_true",
+        help="Fail the snapshot when the equity quote violates freshness policy.",
+    )
 
 
 def _build_config(args: argparse.Namespace) -> PipelineConfig:
@@ -175,7 +225,13 @@ def _build_config(args: argparse.Namespace) -> PipelineConfig:
 
 
 def _build_pipeline(args: argparse.Namespace) -> MarketDataPipeline:
-    return MarketDataPipeline(_build_config(args))
+    pipeline = MarketDataPipeline(_build_config(args))
+    if getattr(args, "run_heston_smoke", False):
+        bundle_config = getattr(pipeline, "bundle_config", None)
+        config_cls = getattr(bundle_config, "__class__", None)
+        if bundle_config is not None and config_cls is not None:
+            pipeline.bundle_config = config_cls(run_heston_smoke=True)
+    return pipeline
 
 
 def _run_command(args: argparse.Namespace) -> tuple[str, object]:
@@ -196,7 +252,11 @@ def _run_command(args: argparse.Namespace) -> tuple[str, object]:
                 feed=args.feed,
                 dividend_yield=args.dividend_yield,
                 dividend_yield_source=args.dividend_yield_source,
+                rate_lookback_days=args.rate_lookback_days,
+                curve_series_ids=_curve_series_ids(args),
+                quality_policy=_quality_policy_payload(args),
                 overwrite=args.overwrite,
+                library_commit=args.library_commit,
             ),
         )
     if args.command == "refresh-daily":
@@ -215,7 +275,11 @@ def _run_command(args: argparse.Namespace) -> tuple[str, object]:
                 feed=args.feed,
                 dividend_yield=args.dividend_yield,
                 dividend_yield_source=args.dividend_yield_source,
+                rate_lookback_days=args.rate_lookback_days,
+                curve_series_ids=_curve_series_ids(args),
+                quality_policy=_quality_policy_payload(args),
                 overwrite=args.overwrite,
+                library_commit=args.library_commit,
             ),
         )
     if args.command == "backfill-fred":
@@ -227,6 +291,7 @@ def _run_command(args: argparse.Namespace) -> tuple[str, object]:
                 end=args.end,
                 run_id=args.run_id,
                 overwrite=args.overwrite,
+                library_commit=args.library_commit,
             ),
         )
     if args.command == "backfill-bars":
@@ -240,6 +305,7 @@ def _run_command(args: argparse.Namespace) -> tuple[str, object]:
                 feed=args.feed,
                 run_id=args.run_id,
                 overwrite=args.overwrite,
+                library_commit=args.library_commit,
             ),
         )
 
@@ -313,6 +379,9 @@ def _snapshot_payload(result: object) -> dict[str, object]:
         "provider_rejected_contract_count": _jsonable(
             getattr(result, "provider_rejected_contract_count", None)
         ),
+        "quality_policy": _jsonable(getattr(result, "quality_policy", {})),
+        "quote_freshness": _jsonable(getattr(result, "quote_freshness", {})),
+        "provider_operation_diagnostics": _diagnostics_from_result(result),
         "main_artifact_paths": {
             name: str(path) for name, path in main_paths.items() if path is not None
         },
@@ -486,6 +555,42 @@ def _warnings_from_result(result: object) -> tuple[str, ...]:
     if isinstance(warnings, Sequence):
         return tuple(str(warning) for warning in warnings)
     return (str(warnings),)
+
+
+def _diagnostics_from_result(result: object) -> list[object]:
+    diagnostics = getattr(result, "diagnostics", ())
+    out: list[object] = []
+    for diagnostic in diagnostics:
+        as_dict = getattr(diagnostic, "as_dict", None)
+        if callable(as_dict):
+            out.append(_jsonable(as_dict()))
+        else:
+            out.append(_jsonable(diagnostic))
+    return out
+
+
+def _curve_series_ids(
+    args: argparse.Namespace,
+) -> Sequence[str] | tuple[str, ...] | None:
+    if getattr(args, "no_rate_curve", False):
+        return ()
+    curve_series = getattr(args, "curve_series", None)
+    return curve_series
+
+
+def _quality_policy_payload(args: argparse.Namespace) -> dict[str, object] | None:
+    payload: dict[str, object] = {}
+    max_equity_age = getattr(args, "max_equity_quote_age_seconds", None)
+    if max_equity_age is not None:
+        payload["max_equity_quote_age_seconds"] = max_equity_age
+    max_option_age = getattr(args, "max_option_quote_age_seconds", None)
+    if max_option_age is not None:
+        payload["max_option_quote_age_seconds"] = max_option_age
+    if getattr(args, "reject_stale_option_quotes", False):
+        payload["reject_stale_option_quotes"] = True
+    if getattr(args, "reject_stale_equity_quote", False):
+        payload["reject_stale_equity_quote"] = True
+    return payload or None
 
 
 def _artifact_paths(result: object) -> tuple[Path, ...]:

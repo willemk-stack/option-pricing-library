@@ -68,6 +68,11 @@ from option_pricing.marketdata.provider_backfills import (
     _preflight_fred_backfill_targets,
     _provider_backfill_payload_document,
 )
+from option_pricing.marketdata.provider_diagnostics import (
+    ProviderCallFailedError,
+    _call_provider_with_diagnostic,
+    _normalization_failure_diagnostic,
+)
 from option_pricing.marketdata.provider_policy import (
     _BARS_BACKFILL_WARNING,
     _FRED_BACKFILL_WARNING,
@@ -76,11 +81,18 @@ from option_pricing.marketdata.provider_policy import (
     DEFAULT_RATE_CURVE_SERIES_IDS,
     DEFAULT_RATE_SERIES_ID,
     DEFAULT_SNAPSHOT_RATE_LOOKBACK_DAYS,
+    ProviderSnapshotQualityPolicy,
+    _apply_provider_snapshot_quality_policy,
+    _coerce_provider_snapshot_quality_policy,
     _current_provider_scope,
     _merge_unique_warnings,
+    _provider_snapshot_freshness_stats,
+    _provider_snapshot_quality_failures,
+    _provider_snapshot_quality_warnings,
     _provider_snapshot_warnings,
 )
 from option_pricing.marketdata.provider_results import (
+    ProviderCallDiagnostic,
     ProviderRefreshDailyCounts,
     ProviderRefreshDailyResult,
     ProviderSnapshotResult,
@@ -155,6 +167,17 @@ class _FredClientLike(Protocol):
 class ProviderSnapshotDataUnavailableError(ProviderDataUnavailableError):
     """Raised when a provider-backed snapshot lacks required usable data."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        diagnostic: ProviderCallDiagnostic | None = None,
+        failure_kind: str | None = None,
+    ) -> None:
+        self.diagnostic = diagnostic
+        self.failure_kind = failure_kind
+        super().__init__(message)
+
 
 class MarketDataPipeline:
     """Provider-backed market-data orchestration for one live-capable snapshot."""
@@ -168,6 +191,9 @@ class MarketDataPipeline:
         storage: LocalStorage | StorageConfig | Path | None = None,
         cleaning_policy: QuoteCleaningPolicyV1 | None = None,
         bundle_config: ModelValidationBundleConfig | None = None,
+        quality_policy: (
+            ProviderSnapshotQualityPolicy | Mapping[str, object] | None
+        ) = None,
     ) -> None:
         self.config, self.storage = _coerce_provider_pipeline_inputs(
             config,
@@ -179,6 +205,7 @@ class MarketDataPipeline:
         self.bundle_config = bundle_config or ModelValidationBundleConfig(
             run_heston_smoke=False
         )
+        self.quality_policy = _coerce_provider_snapshot_quality_policy(quality_policy)
 
     def snapshot(
         self,
@@ -197,6 +224,9 @@ class MarketDataPipeline:
         dividend_yield_source: str = "assumption",
         rate_lookback_days: int = DEFAULT_SNAPSHOT_RATE_LOOKBACK_DAYS,
         curve_series_ids: Sequence[str] | None = None,
+        quality_policy: (
+            ProviderSnapshotQualityPolicy | Mapping[str, object] | None
+        ) = None,
         overwrite: bool = False,
         library_commit: str | None = None,
     ) -> ProviderSnapshotResult:
@@ -220,6 +250,10 @@ class MarketDataPipeline:
             curve_series_ids,
             primary_series_id=cleaned_rate_series_id,
         )
+        effective_quality_policy = _coerce_provider_snapshot_quality_policy(
+            quality_policy if quality_policy is not None else self.quality_policy
+        )
+        quality_policy_payload = effective_quality_policy.as_dict()
         cleaned_library_commit = _optional_text(library_commit, "library_commit")
         resolved_feed = feed or self.config.alpaca.feed
         fred_observation_start = asof_timestamp.date() - timedelta(
@@ -259,9 +293,11 @@ class MarketDataPipeline:
         )
 
         asof_label = _utc_isoformat(asof_timestamp)
+        diagnostics: list[ProviderCallDiagnostic] = []
         equity_quote_payload = self._fetch_latest_equity_quote(
             cleaned_underlying,
             asof=asof_label,
+            diagnostics=diagnostics,
         )
         option_chain_payload = self._fetch_option_chain(
             cleaned_underlying,
@@ -272,17 +308,20 @@ class MarketDataPipeline:
             strike_lte=strike_lte,
             option_type=option_type,
             feed=feed,
+            diagnostics=diagnostics,
         )
         fred_payload = self._fetch_fred_observations(
             cleaned_rate_series_id,
             asof=asof_timestamp,
             lookback_days=cleaned_rate_lookback_days,
+            diagnostics=diagnostics,
         )
 
         equity_quotes = _normalize_latest_equity_quotes_for_snapshot(
             equity_quote_payload,
             underlying=cleaned_underlying,
             asof=asof_timestamp,
+            diagnostics=diagnostics,
         )
         spot = _spot_from_equity_quotes(
             equity_quotes,
@@ -295,12 +334,15 @@ class MarketDataPipeline:
                 underlying=cleaned_underlying,
                 asof=asof_timestamp,
                 feed=resolved_feed,
+                diagnostics=diagnostics,
             )
         except ProviderSnapshotDataUnavailableError as exc:
             raise ProviderSnapshotDataUnavailableError(
                 f"{exc}; raw_option_contracts={raw_option_contract_count}, "
                 "normalized_option_contracts=0, "
-                "reason=provider_normalization"
+                "reason=provider_normalization",
+                diagnostic=exc.diagnostic,
+                failure_kind=exc.failure_kind or "normalization_failed",
             ) from None
         option_chain = normalize_option_chain(provider_option_chain.option_chain)
         provider_rejected_contracts = provider_option_chain.rejected_contracts
@@ -311,6 +353,7 @@ class MarketDataPipeline:
             fred_payload,
             series_id=cleaned_rate_series_id,
             asof=asof_timestamp,
+            diagnostics=diagnostics,
         )
         rate_selection = _select_rate_for_snapshot(
             fred_series,
@@ -328,6 +371,7 @@ class MarketDataPipeline:
                 series_id,
                 asof=asof_timestamp,
                 lookback_days=cleaned_rate_lookback_days,
+                diagnostics=diagnostics,
             ),
         )
         rate_source = f"{rate_selection.source}:{rate_selection.series_id}"
@@ -349,15 +393,41 @@ class MarketDataPipeline:
             market_inputs,
             policy=self.cleaning_policy,
         )
+        quote_cleaning = _apply_provider_snapshot_quality_policy(
+            quote_cleaning,
+            asof=asof_timestamp,
+            policy=effective_quality_policy,
+        )
+        quote_freshness = _provider_snapshot_freshness_stats(
+            equity_quotes=equity_quotes,
+            option_chain=option_chain,
+            cleaned_quotes=quote_cleaning.cleaned_quotes,
+            asof=asof_timestamp,
+            policy=effective_quality_policy,
+        )
+        quality_warnings = _provider_snapshot_quality_warnings(
+            stats=quote_freshness,
+            policy=effective_quality_policy,
+        )
+        quality_failures = _provider_snapshot_quality_failures(
+            stats=quote_freshness,
+            policy=effective_quality_policy,
+        )
+        if quality_failures:
+            raise ProviderSnapshotDataUnavailableError(
+                "; ".join(quality_failures),
+                failure_kind="quality_policy_failed",
+            )
         if quote_cleaning.cleaned_quotes.empty:
             raise ProviderSnapshotDataUnavailableError(
                 "No usable option contracts remain after quote cleaning for "
                 f"{cleaned_underlying!r}; accepted=0, "
-                f"rejected={len(quote_cleaning.rejected_quotes)}"
+                f"rejected={len(quote_cleaning.rejected_quotes)}",
+                failure_kind="no_option_contracts_accepted_after_cleaning",
             )
 
         warnings = _provider_snapshot_warnings(
-            cleaning_warnings=quote_cleaning.warnings,
+            cleaning_warnings=(*quality_warnings, *quote_cleaning.warnings),
             dropped_before_cleaning_count=dropped_before_cleaning_count,
             raw_option_contract_count=raw_option_contract_count,
             normalized_option_contract_count=len(option_chain),
@@ -387,6 +457,8 @@ class MarketDataPipeline:
                 "rate_series_id": cleaned_rate_series_id,
                 "feed": resolved_feed,
                 "current_provider_scope": _current_provider_scope(),
+                "quality_policy": quality_policy_payload,
+                "quote_freshness": quote_freshness,
             },
             row_counts={
                 "equity_quotes": int(len(equity_quotes)),
@@ -417,6 +489,9 @@ class MarketDataPipeline:
             rate_series_id=cleaned_rate_series_id,
             feed=resolved_feed,
             request_metadata=snapshot_request_metadata,
+            diagnostics=diagnostics,
+            quality_policy=quality_policy_payload,
+            quote_freshness=quote_freshness,
             overwrite=overwrite,
             library_commit=cleaned_library_commit,
         )
@@ -506,6 +581,10 @@ class MarketDataPipeline:
                 rejected_quote_count=int(
                     len(quote_cleaning_for_artifacts.rejected_quotes)
                 ),
+                diagnostics=diagnostics,
+                quality_policy=quality_policy_payload,
+                quote_freshness=quote_freshness,
+                curve_series_ids=cleaned_curve_series_ids,
                 warnings=warnings,
                 artifact_paths=artifact_paths,
                 library_commit=cleaned_library_commit,
@@ -537,6 +616,9 @@ class MarketDataPipeline:
             model_validation_bundle=model_validation_bundle,
             provider_rejected_contract_count=provider_rejected_contract_count,
             rate_curve_paths=rate_curve_paths,
+            diagnostics=tuple(diagnostics),
+            quality_policy=quality_policy_payload,
+            quote_freshness=quote_freshness,
         )
 
     def refresh_daily(
@@ -556,6 +638,9 @@ class MarketDataPipeline:
         dividend_yield_source: str = "assumption",
         rate_lookback_days: int = DEFAULT_SNAPSHOT_RATE_LOOKBACK_DAYS,
         curve_series_ids: Sequence[str] | None = None,
+        quality_policy: (
+            ProviderSnapshotQualityPolicy | Mapping[str, object] | None
+        ) = None,
         overwrite: bool = False,
         library_commit: str | None = None,
     ) -> ProviderRefreshDailyResult:
@@ -565,6 +650,19 @@ class MarketDataPipeline:
         asof_timestamp = _coerce_asof(asof)
         cleaned_underlyings = _clean_alpaca_symbols(underlyings)
         cleaned_library_commit = _optional_text(library_commit, "library_commit")
+        cleaned_rate_series_id = _clean_rate_series_id(rate_series_id)
+        cleaned_curve_series_ids = _snapshot_curve_series_ids(
+            curve_series_ids,
+            primary_series_id=cleaned_rate_series_id,
+        )
+        cleaned_rate_lookback_days = _nonnegative_int(
+            rate_lookback_days,
+            "rate_lookback_days",
+        )
+        effective_quality_policy = _coerce_provider_snapshot_quality_policy(
+            quality_policy if quality_policy is not None else self.quality_policy
+        )
+        quality_policy_payload = effective_quality_policy.as_dict()
         aggregate_run_id = _new_refresh_daily_run_id(
             asof_timestamp,
             run_id_prefix=run_id_prefix,
@@ -581,7 +679,7 @@ class MarketDataPipeline:
                         underlying,
                         ordinal=index,
                     ),
-                    rate_series_id=rate_series_id,
+                    rate_series_id=cleaned_rate_series_id,
                     expiry_gte=expiry_gte,
                     expiry_lte=expiry_lte,
                     strike_gte=strike_gte,
@@ -590,8 +688,9 @@ class MarketDataPipeline:
                     feed=feed,
                     dividend_yield=dividend_yield,
                     dividend_yield_source=dividend_yield_source,
-                    rate_lookback_days=rate_lookback_days,
-                    curve_series_ids=curve_series_ids,
+                    rate_lookback_days=cleaned_rate_lookback_days,
+                    curve_series_ids=cleaned_curve_series_ids,
+                    quality_policy=effective_quality_policy,
                     overwrite=overwrite,
                     library_commit=cleaned_library_commit,
                 )
@@ -638,8 +737,11 @@ class MarketDataPipeline:
                 child_run_ids=child_run_ids,
                 underlyings=cleaned_underlyings,
                 asof=asof_timestamp,
-                rate_series_id=_clean_rate_series_id(rate_series_id),
+                rate_series_id=cleaned_rate_series_id,
                 feed=feed or self.config.alpaca.feed,
+                rate_lookback_days=cleaned_rate_lookback_days,
+                curve_series_ids=cleaned_curve_series_ids,
+                quality_policy=quality_policy_payload,
                 expiry_gte=expiry_gte,
                 expiry_lte=expiry_lte,
                 strike_gte=strike_gte,
@@ -705,6 +807,7 @@ class MarketDataPipeline:
 
         artifact_paths: list[Path] = []
         requests: list[dict[str, object]] = []
+        diagnostics: list[ProviderCallDiagnostic] = []
         warnings = (_FRED_BACKFILL_WARNING,)
         rows_in = 0
         rows_out = 0
@@ -717,11 +820,11 @@ class MarketDataPipeline:
                 "observation_end": end_date,
                 "sort_order": "asc",
             }
-            payload = self._resolve_fred_client().fetch_observations(
+            payload = self._fetch_fred_observations_window(
                 series_id,
                 observation_start=start_date,
                 observation_end=end_date,
-                sort_order="asc",
+                diagnostics=diagnostics,
             )
             fred_series = normalize_fred_observations(
                 payload,
@@ -760,6 +863,7 @@ class MarketDataPipeline:
                     layer="bronze",
                     artifacts={"observations": "observations.json"},
                     warnings=warnings,
+                    diagnostics=diagnostics,
                     library_commit=cleaned_library_commit,
                 ),
                 layer="bronze",
@@ -788,6 +892,7 @@ class MarketDataPipeline:
                     layer="silver",
                     artifacts={"fred_series": "fred_series.parquet"},
                     warnings=warnings,
+                    diagnostics=diagnostics,
                     library_commit=cleaned_library_commit,
                 ),
                 layer="silver",
@@ -817,6 +922,7 @@ class MarketDataPipeline:
                 rows_in=rows_in,
                 rows_out=rows_out,
                 requests=requests,
+                diagnostics=diagnostics,
                 warnings=warnings,
                 library_commit=cleaned_library_commit,
             ),
@@ -891,7 +997,8 @@ class MarketDataPipeline:
             "feed": cleaned_feed or self.config.alpaca.feed,
             "asof": asof_label,
         }
-        payload = self._resolve_alpaca_client().get_equity_bars(
+        diagnostics: list[ProviderCallDiagnostic] = []
+        payload = self._fetch_equity_bars(
             cleaned_symbols,
             start=start_timestamp.to_pydatetime(),
             end=end_timestamp.to_pydatetime(),
@@ -901,6 +1008,7 @@ class MarketDataPipeline:
             sort=cleaned_sort,
             feed=cleaned_feed,
             asof=asof_label,
+            diagnostics=diagnostics,
         )
         bars = normalize_alpaca_bars(payload, asof=asof)
 
@@ -947,6 +1055,7 @@ class MarketDataPipeline:
                     layer="bronze",
                     artifacts={"bars": "bars.json"},
                     warnings=warnings,
+                    diagnostics=diagnostics,
                     library_commit=cleaned_library_commit,
                 ),
                 layer="bronze",
@@ -977,6 +1086,7 @@ class MarketDataPipeline:
                     layer="silver",
                     artifacts={"equity_bars": "equity_bars.parquet"},
                     warnings=warnings,
+                    diagnostics=diagnostics,
                     library_commit=cleaned_library_commit,
                 ),
                 layer="silver",
@@ -1006,6 +1116,7 @@ class MarketDataPipeline:
                 rows_in=rows_in,
                 rows_out=rows_out,
                 requests=[request],
+                diagnostics=diagnostics,
                 warnings=warnings,
                 library_commit=cleaned_library_commit,
             ),
@@ -1027,16 +1138,30 @@ class MarketDataPipeline:
         underlying: str,
         *,
         asof: str,
+        diagnostics: list[ProviderCallDiagnostic],
     ) -> Mapping[str, Any]:
         try:
-            return self._resolve_alpaca_client().get_latest_equity_quotes(
-                underlying,
-                asof=asof,
+            payload, diagnostic = _call_provider_with_diagnostic(
+                provider="alpaca",
+                operation="latest_equity_quote",
+                request_metadata={"symbols": [underlying], "asof": asof},
+                retry_config=self.config.retry,
+                call=lambda: self._resolve_alpaca_client().get_latest_equity_quotes(
+                    underlying,
+                    asof=asof,
+                ),
+                count_items=_count_alpaca_latest_equity_quotes,
             )
-        except Exception:
+        except ProviderCallFailedError as exc:
+            diagnostics.append(exc.diagnostic)
             raise ProviderSnapshotDataUnavailableError(
-                f"Alpaca latest equity quote is unavailable for {underlying!r}"
+                "Alpaca latest equity quote is unavailable for "
+                f"{underlying!r}; reason={exc.failure_kind}",
+                diagnostic=exc.diagnostic,
+                failure_kind=exc.failure_kind,
             ) from None
+        diagnostics.append(diagnostic)
+        return payload
 
     def _fetch_option_chain(
         self,
@@ -1049,22 +1174,98 @@ class MarketDataPipeline:
         strike_lte: float | None,
         option_type: str | None,
         feed: str | None,
+        diagnostics: list[ProviderCallDiagnostic],
     ) -> Mapping[str, Any]:
         try:
-            return self._resolve_alpaca_client().get_option_chain(
-                underlying,
-                expiry_gte=expiry_gte,
-                expiry_lte=expiry_lte,
-                strike_gte=strike_gte,
-                strike_lte=strike_lte,
-                option_type=option_type,
-                feed=feed,
-                asof=asof,
+            payload, diagnostic = _call_provider_with_diagnostic(
+                provider="alpaca",
+                operation="option_chain",
+                request_metadata={
+                    "underlying": underlying,
+                    "expiry_gte": expiry_gte,
+                    "expiry_lte": expiry_lte,
+                    "strike_gte": strike_gte,
+                    "strike_lte": strike_lte,
+                    "option_type": option_type,
+                    "feed": feed,
+                    "asof": asof,
+                },
+                retry_config=self.config.retry,
+                call=lambda: self._resolve_alpaca_client().get_option_chain(
+                    underlying,
+                    expiry_gte=expiry_gte,
+                    expiry_lte=expiry_lte,
+                    strike_gte=strike_gte,
+                    strike_lte=strike_lte,
+                    option_type=option_type,
+                    feed=feed,
+                    asof=asof,
+                ),
+                count_items=_count_alpaca_option_contracts,
             )
-        except Exception:
+        except ProviderCallFailedError as exc:
+            diagnostics.append(exc.diagnostic)
             raise ProviderSnapshotDataUnavailableError(
-                f"Alpaca option chain is unavailable for {underlying!r}"
+                f"Alpaca option chain is unavailable for {underlying!r}; "
+                f"reason={exc.failure_kind}",
+                diagnostic=exc.diagnostic,
+                failure_kind=exc.failure_kind,
             ) from None
+        diagnostics.append(diagnostic)
+        return payload
+
+    def _fetch_equity_bars(
+        self,
+        symbols: Sequence[str],
+        *,
+        start: datetime,
+        end: datetime,
+        timeframe: str,
+        limit: int | None,
+        adjustment: str | None,
+        sort: str | None,
+        feed: str | None,
+        asof: str,
+        diagnostics: list[ProviderCallDiagnostic],
+    ) -> Mapping[str, Any]:
+        try:
+            payload, diagnostic = _call_provider_with_diagnostic(
+                provider="alpaca",
+                operation="equity_bars",
+                request_metadata={
+                    "symbols": list(symbols),
+                    "start": start,
+                    "end": end,
+                    "timeframe": timeframe,
+                    "limit": limit,
+                    "adjustment": adjustment,
+                    "sort": sort,
+                    "feed": feed,
+                    "asof": asof,
+                },
+                retry_config=self.config.retry,
+                call=lambda: self._resolve_alpaca_client().get_equity_bars(
+                    symbols,
+                    start=start,
+                    end=end,
+                    timeframe=timeframe,
+                    limit=limit,
+                    adjustment=adjustment,
+                    sort=sort,
+                    feed=feed,
+                    asof=asof,
+                ),
+                count_items=_count_alpaca_equity_bars,
+            )
+        except ProviderCallFailedError as exc:
+            diagnostics.append(exc.diagnostic)
+            raise ProviderSnapshotDataUnavailableError(
+                f"Alpaca equity bars are unavailable; reason={exc.failure_kind}",
+                diagnostic=exc.diagnostic,
+                failure_kind=exc.failure_kind,
+            ) from None
+        diagnostics.append(diagnostic)
+        return payload
 
     def _fetch_fred_observations(
         self,
@@ -1072,19 +1273,56 @@ class MarketDataPipeline:
         *,
         asof: pd.Timestamp,
         lookback_days: int,
+        diagnostics: list[ProviderCallDiagnostic] | None = None,
     ) -> Mapping[str, Any]:
         observation_start = asof.date() - timedelta(days=lookback_days)
+        observation_end = asof.date()
+        return self._fetch_fred_observations_window(
+            series_id,
+            observation_start=observation_start,
+            observation_end=observation_end,
+            diagnostics=diagnostics,
+        )
+
+    def _fetch_fred_observations_window(
+        self,
+        series_id: str,
+        *,
+        observation_start: date,
+        observation_end: date,
+        diagnostics: list[ProviderCallDiagnostic] | None = None,
+    ) -> Mapping[str, Any]:
         try:
-            return self._resolve_fred_client().fetch_observations(
-                series_id,
-                observation_start=observation_start,
-                observation_end=asof.date(),
-                sort_order="asc",
+            payload, diagnostic = _call_provider_with_diagnostic(
+                provider="fred",
+                operation="fred_observations",
+                request_metadata={
+                    "series_id": series_id,
+                    "observation_start": observation_start,
+                    "observation_end": observation_end,
+                    "sort_order": "asc",
+                },
+                retry_config=self.config.retry,
+                call=lambda: self._resolve_fred_client().fetch_observations(
+                    series_id,
+                    observation_start=observation_start,
+                    observation_end=observation_end,
+                    sort_order="asc",
+                ),
+                count_items=_count_fred_observations_for_diagnostic,
             )
-        except Exception:
+        except ProviderCallFailedError as exc:
+            if diagnostics is not None:
+                diagnostics.append(exc.diagnostic)
             raise ProviderSnapshotDataUnavailableError(
-                f"FRED observations are unavailable for series_id={series_id!r}"
+                "FRED observations are unavailable for "
+                f"series_id={series_id!r}; reason={exc.failure_kind}",
+                diagnostic=exc.diagnostic,
+                failure_kind=exc.failure_kind,
             ) from None
+        if diagnostics is not None:
+            diagnostics.append(diagnostic)
+        return payload
 
     def _load_snapshot_rate_curve_series(
         self,
@@ -1092,17 +1330,20 @@ class MarketDataPipeline:
         *,
         asof: pd.Timestamp,
         lookback_days: int,
+        diagnostics: list[ProviderCallDiagnostic],
     ) -> pd.DataFrame | None:
         try:
             payload = self._fetch_fred_observations(
                 series_id,
                 asof=asof,
                 lookback_days=lookback_days,
+                diagnostics=diagnostics,
             )
             return _normalize_fred_observations_for_snapshot(
                 payload,
                 series_id=series_id,
                 asof=asof,
+                diagnostics=diagnostics,
             )
         except ProviderSnapshotDataUnavailableError:
             return None
@@ -1182,6 +1423,7 @@ def _coerce_provider_pipeline_inputs(
             alpaca=config.alpaca,
             fred=config.fred,
             storage=local_storage.config,
+            retry=config.retry,
         )
     return resolved_config, local_storage
 
@@ -1303,12 +1545,24 @@ def _normalize_latest_equity_quotes_for_snapshot(
     *,
     underlying: str,
     asof: pd.Timestamp,
+    diagnostics: list[ProviderCallDiagnostic] | None = None,
 ) -> pd.DataFrame:
     try:
         return normalize_alpaca_latest_quotes(payload, asof=asof)
-    except Exception:
+    except Exception as exc:
+        diagnostic = _normalization_failure_diagnostic(
+            provider="alpaca",
+            operation="latest_equity_quote_normalization",
+            request_metadata={"underlying": underlying, "asof": asof},
+            exception=exc,
+        )
+        if diagnostics is not None:
+            diagnostics.append(diagnostic)
         raise ProviderSnapshotDataUnavailableError(
-            f"Alpaca latest equity quote is unavailable for {underlying!r}"
+            "Alpaca latest equity quote is unavailable for "
+            f"{underlying!r}; reason=normalization_failed",
+            diagnostic=diagnostic,
+            failure_kind="normalization_failed",
         ) from None
 
 
@@ -1343,6 +1597,7 @@ def _normalize_option_chain_for_snapshot(
     underlying: str,
     asof: pd.Timestamp,
     feed: str | None,
+    diagnostics: list[ProviderCallDiagnostic] | None = None,
 ) -> AlpacaOptionChainNormalizationAudit:
     try:
         return normalize_alpaca_option_chain_with_audit(
@@ -1351,10 +1606,20 @@ def _normalize_option_chain_for_snapshot(
             asof=asof,
             feed=feed,
         )
-    except Exception:
+    except Exception as exc:
+        diagnostic = _normalization_failure_diagnostic(
+            provider="alpaca",
+            operation="option_chain_normalization",
+            request_metadata={"underlying": underlying, "asof": asof, "feed": feed},
+            exception=exc,
+        )
+        if diagnostics is not None:
+            diagnostics.append(diagnostic)
         raise ProviderSnapshotDataUnavailableError(
             "No usable Alpaca option contracts remain after provider "
-            f"normalization for {underlying!r}"
+            f"normalization for {underlying!r}; reason=normalization_failed",
+            diagnostic=diagnostic,
+            failure_kind="normalization_failed",
         ) from None
 
 
@@ -1363,12 +1628,24 @@ def _normalize_fred_observations_for_snapshot(
     *,
     series_id: str,
     asof: pd.Timestamp,
+    diagnostics: list[ProviderCallDiagnostic] | None = None,
 ) -> pd.DataFrame:
     try:
         return normalize_fred_observations(payload, series_id=series_id, asof=asof)
-    except Exception:
+    except Exception as exc:
+        diagnostic = _normalization_failure_diagnostic(
+            provider="fred",
+            operation="fred_observations_normalization",
+            request_metadata={"series_id": series_id, "asof": asof},
+            exception=exc,
+        )
+        if diagnostics is not None:
+            diagnostics.append(diagnostic)
         raise ProviderSnapshotDataUnavailableError(
-            f"FRED observations are unavailable for series_id={series_id!r}"
+            f"FRED observations are unavailable for series_id={series_id!r}; "
+            "reason=normalization_failed",
+            diagnostic=diagnostic,
+            failure_kind="normalization_failed",
         ) from None
 
 
@@ -1446,6 +1723,50 @@ def _count_alpaca_option_contracts(payload: Mapping[str, Any]) -> int:
     return 0
 
 
+def _count_alpaca_latest_equity_quotes(payload: Mapping[str, Any]) -> int:
+    quotes = payload.get("quotes")
+    quotes = getattr(quotes, "data", quotes)
+    if isinstance(quotes, Mapping):
+        return len(quotes)
+    if isinstance(quotes, Sequence) and not isinstance(
+        quotes,
+        (str, bytes, bytearray),
+    ):
+        return len(quotes)
+    return 0
+
+
+def _count_fred_observations_for_diagnostic(payload: Mapping[str, Any]) -> int:
+    observations = payload.get("observations")
+    observations = getattr(observations, "data", observations)
+    if isinstance(observations, Sequence) and not isinstance(
+        observations,
+        (str, bytes, bytearray),
+    ):
+        return len(observations)
+    return 0
+
+
+def _count_alpaca_equity_bars(payload: Mapping[str, Any]) -> int:
+    bars = payload.get("bars", payload.get("bar"))
+    bars = getattr(bars, "data", bars)
+    if isinstance(bars, Mapping):
+        return sum(_count_alpaca_bar_records(records) for records in bars.values())
+    if isinstance(bars, Sequence) and not isinstance(bars, (str, bytes, bytearray)):
+        return len(bars)
+    return 0 if bars is None else 1
+
+
+def _count_alpaca_bar_records(records: Any) -> int:
+    records = getattr(records, "data", records)
+    if isinstance(records, Sequence) and not isinstance(
+        records,
+        (str, bytes, bytearray),
+    ):
+        return len(records)
+    return 0 if records is None else 1
+
+
 def _provider_refresh_daily_run_details(
     *,
     storage: LocalStorage,
@@ -1455,6 +1776,9 @@ def _provider_refresh_daily_run_details(
     asof: pd.Timestamp,
     rate_series_id: str,
     feed: str,
+    rate_lookback_days: int,
+    curve_series_ids: Sequence[str],
+    quality_policy: Mapping[str, object],
     expiry_gte: date | str | None,
     expiry_lte: date | str | None,
     strike_gte: float | None,
@@ -1476,6 +1800,15 @@ def _provider_refresh_daily_run_details(
         "asof": _utc_isoformat(asof),
         "rate_series_id": rate_series_id,
         "feed": feed,
+        "rate_policy": {
+            "provider": "fred",
+            "series_id": rate_series_id,
+            "lookback_days": rate_lookback_days,
+            "curve_series_ids": [str(series_id) for series_id in curve_series_ids],
+            "curve_interpolation": "not_enabled",
+        },
+        "quality_policy": dict(quality_policy),
+        "current_provider_scope": _current_provider_scope(),
         "filters": {
             "expiry_gte": expiry_gte,
             "expiry_lte": expiry_lte,

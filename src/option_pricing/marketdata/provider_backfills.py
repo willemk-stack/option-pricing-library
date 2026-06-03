@@ -9,6 +9,8 @@ from uuid import uuid4
 import pandas as pd
 
 from option_pricing.marketdata.contracts import RunMetadata
+from option_pricing.marketdata.provider_diagnostics import _diagnostics_payload
+from option_pricing.marketdata.provider_results import ProviderCallDiagnostic
 from option_pricing.marketdata.provider_serialization import (
     _jsonable_provider_value,
     _sanitized_request_metadata,
@@ -303,6 +305,7 @@ def _fred_backfill_manifest(
     artifacts: Mapping[str, str],
     warnings: Sequence[str],
     library_commit: str | None,
+    diagnostics: Sequence[ProviderCallDiagnostic] = (),
 ) -> dict[str, object]:
     return {
         "schema_version": (
@@ -319,6 +322,7 @@ def _fred_backfill_manifest(
         "end_date": end_date,
         "request_metadata": _sanitized_request_metadata(request_metadata),
         "rows": {"raw": raw_rows, "normalized": normalized_rows},
+        "provider_operation_diagnostics": _diagnostics_payload(diagnostics),
         "warnings": list(warnings),
         "artifacts": dict(artifacts),
         "library_commit": library_commit,
@@ -340,6 +344,7 @@ def _bars_backfill_manifest(
     artifacts: Mapping[str, str],
     warnings: Sequence[str],
     library_commit: str | None,
+    diagnostics: Sequence[ProviderCallDiagnostic] = (),
 ) -> dict[str, object]:
     return {
         "schema_version": (
@@ -358,6 +363,7 @@ def _bars_backfill_manifest(
         "feed": feed,
         "request_metadata": _sanitized_request_metadata(request_metadata),
         "rows": {"raw": raw_rows, "normalized": normalized_rows},
+        "provider_operation_diagnostics": _diagnostics_payload(diagnostics),
         "warnings": list(warnings),
         "artifacts": dict(artifacts),
         "library_commit": library_commit,
@@ -376,6 +382,7 @@ def _backfill_run_details(
     requests: Sequence[Mapping[str, object]],
     warnings: Sequence[str],
     library_commit: str | None,
+    diagnostics: Sequence[ProviderCallDiagnostic] = (),
 ) -> dict[str, object]:
     return {
         "operation": operation,
@@ -385,6 +392,7 @@ def _backfill_run_details(
         "end": end,
         "rows": {"raw": rows_in, "normalized": rows_out},
         "requests": [_sanitized_request_metadata(request) for request in requests],
+        "provider_operation_diagnostics": _diagnostics_payload(diagnostics),
         "warnings": list(warnings),
         "library_commit": library_commit,
     }

@@ -11,29 +11,53 @@ __all__ = [
     "LocalStorage",
     "MarketDataPipeline",
     "PipelineConfig",
+    "ProviderCallDiagnostic",
+    "ProviderRetryConfig",
+    "ProviderSnapshotBundleValidationResult",
     "ProviderSnapshotDataUnavailableError",
+    "ProviderSnapshotQualityPolicy",
     "ProviderSnapshotResult",
     "StorageConfig",
+    "validate_provider_snapshot_bundle",
 ]
 
 if TYPE_CHECKING:
-    from .config import AlpacaConfig, FredConfig, PipelineConfig, StorageConfig
+    from .config import (
+        AlpacaConfig,
+        FredConfig,
+        PipelineConfig,
+        ProviderRetryConfig,
+        StorageConfig,
+    )
     from .pipeline import (
         MarketDataPipeline,
         ProviderSnapshotDataUnavailableError,
         ProviderSnapshotResult,
     )
+    from .provider_confidence import (
+        ProviderSnapshotBundleValidationResult,
+        validate_provider_snapshot_bundle,
+    )
+    from .provider_policy import ProviderSnapshotQualityPolicy
+    from .provider_results import ProviderCallDiagnostic
     from .storage import LocalStorage
 
 _PUBLIC_EXPORTS = {
     "AlpacaConfig": "option_pricing.marketdata.config",
     "FredConfig": "option_pricing.marketdata.config",
     "PipelineConfig": "option_pricing.marketdata.config",
+    "ProviderRetryConfig": "option_pricing.marketdata.config",
     "StorageConfig": "option_pricing.marketdata.config",
     "LocalStorage": "option_pricing.marketdata.storage",
     "MarketDataPipeline": "option_pricing.marketdata.pipeline",
+    "ProviderCallDiagnostic": "option_pricing.marketdata.provider_results",
+    "ProviderSnapshotBundleValidationResult": (
+        "option_pricing.marketdata.provider_confidence"
+    ),
     "ProviderSnapshotDataUnavailableError": "option_pricing.marketdata.pipeline",
+    "ProviderSnapshotQualityPolicy": "option_pricing.marketdata.provider_policy",
     "ProviderSnapshotResult": "option_pricing.marketdata.pipeline",
+    "validate_provider_snapshot_bundle": "option_pricing.marketdata.provider_confidence",
 }
 
 

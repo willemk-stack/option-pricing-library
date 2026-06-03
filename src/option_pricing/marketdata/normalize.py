@@ -251,6 +251,15 @@ def normalize_alpaca_option_chain_with_audit(
             rejected_rows.append(rejected)
 
     if not rows:
+        if rejected_rows:
+            first_rejection = rejected_rows[0]
+            reason = first_rejection.get("reason", "unknown")
+            detail = first_rejection.get("rejection_detail", "unknown")
+            raise ValueError(
+                "alpaca option chain has no contracts with usable latest quote "
+                f"bid/ask; first_rejection_reason={reason}; "
+                f"first_rejection_detail={detail}"
+            )
         raise ValueError(
             "alpaca option chain has no contracts with usable latest quote bid/ask"
         )

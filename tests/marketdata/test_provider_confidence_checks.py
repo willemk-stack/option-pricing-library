@@ -19,6 +19,9 @@ from option_pricing.marketdata.config import (
     StorageConfig,
 )
 from option_pricing.marketdata.pipeline import MarketDataPipeline
+from option_pricing.marketdata.provider_confidence import (
+    validate_provider_snapshot_bundle,
+)
 from option_pricing.marketdata.schemas import DatasetName
 from option_pricing.marketdata.validation import validate_dtypes
 
@@ -193,7 +196,9 @@ def test_provider_snapshot_writes_real_parquet_with_fake_providers(
     assert result.silver_paths.fred_series.exists()
     assert result.silver_paths.cleaned_quotes.exists()
     assert result.gold_paths.heston_quotes.exists()
-    assert result.model_validation_bundle.cleaned_quotes.exists()
+    assert (
+        result.model_validation_bundle.manifest_path.parent / "cleaned_quotes.parquet"
+    ).exists()
 
     market_inputs = pd.read_parquet(result.silver_paths.market_inputs)
     option_chain = pd.read_parquet(result.silver_paths.option_chain)
@@ -210,6 +215,16 @@ def test_provider_snapshot_writes_real_parquet_with_fake_providers(
     assert len(cleaned_quotes) == result.accepted_quote_count
     assert set(cleaned_quotes["underlying"].astype(str)) == {"SPY"}
     assert cleaned_quotes["mid"].astype(float).gt(0).all()
+
+    validation = validate_provider_snapshot_bundle(
+        market_data_path=result.gold_paths.market_data,
+        cleaned_quotes_path=result.silver_paths.cleaned_quotes,
+        heston_quotes_path=result.gold_paths.heston_quotes,
+    )
+    assert validation.underlying == "SPY"
+    assert validation.cleaned_quote_count == len(cleaned_quotes)
+    assert validation.heston_quote_count == len(heston_quotes)
+    assert validation.spot == pytest.approx(500.0)
 
 
 def test_live_provider_snapshot_smoke_optional(tmp_path: Path) -> None:

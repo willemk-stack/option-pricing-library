@@ -28,14 +28,21 @@ demonstrates:
 The workflow uses the local fixture snapshot only. It does not call live market
 provider APIs, network clients, or any credential-backed data source.
 
+Provider-backed snapshots have a separate confidence path. After a provider run
+writes artifacts, `validate_provider_snapshot_bundle(...)` can read back
+`market_data.json`, `cleaned_quotes.parquet`, and `heston_quotes.parquet`,
+reconstruct `MarketData`, and verify Heston quote-set compatibility. This is a
+controlled real-data validation check, not a production data-quality claim.
+
 ## What this workflow does not prove
 
 This workflow does not prove production data quality, live-provider correctness,
 calibration quality, trading performance, or empirical research conclusions.
 
 It also does not exercise provider-backed refresh commands, credential setup,
-live-provider CLI paths, or research exports. Those are outside this local demo
-workflow and are documented separately where they apply.
+live-provider CLI paths, provider refresh CLI or production CLI, or research
+exports. Those are outside this local demo workflow and are documented
+separately where they apply.
 
 ## Requirements
 
@@ -501,9 +508,9 @@ exports.
 
 The current workflow intentionally excludes:
 
-- no live-provider execution in this local workflow
+- no live providers in this local workflow
 - no credential use in this local workflow
-- no provider-backed CLI execution in this local workflow
+- no CLI execution in this local workflow
 - no provider refresh path in this local workflow
 - no production data-quality claim
 - no trading-performance claim

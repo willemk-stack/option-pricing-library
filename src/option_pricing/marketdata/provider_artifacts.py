@@ -13,6 +13,7 @@ from option_pricing.marketdata.cleaning import QuoteCleaningResult
 from option_pricing.marketdata.contracts import ModelValidationBundleResult
 from option_pricing.marketdata.errors import ProviderDataUnavailableError
 from option_pricing.marketdata.gold import GoldConversionPaths
+from option_pricing.marketdata.provider_diagnostics import _diagnostics_payload
 from option_pricing.marketdata.provider_policy import (
     DEFAULT_DAY_COUNT,
     DEFAULT_RATE_SERIES_ID,
@@ -251,6 +252,9 @@ def _write_provider_snapshot_bronze(
     rate_series_id: str,
     feed: str,
     request_metadata: Mapping[str, Any],
+    diagnostics: Sequence[object],
+    quality_policy: Mapping[str, object],
+    quote_freshness: Mapping[str, object],
     overwrite: bool,
     library_commit: str | None,
 ) -> ProviderSnapshotBronzePaths:
@@ -287,6 +291,9 @@ def _write_provider_snapshot_bronze(
             rate_series_id=rate_series_id,
             feed=feed,
             request_metadata=request_metadata,
+            diagnostics=diagnostics,
+            quality_policy=quality_policy,
+            quote_freshness=quote_freshness,
             library_commit=library_commit,
         ),
         layer="bronze",
@@ -440,6 +447,16 @@ def _provider_snapshot_rate_curve_manifest(
             "source_type": PROVIDER_SNAPSHOT_SOURCE_TYPE,
             "fixture_name": provider_snapshot.fixture_name,
         },
+        "rate_policy": {
+            "provider": "fred",
+            "primary_series_id": str(provider_snapshot.metadata["rate_series_id"]),
+            "requested_series_ids": [
+                str(series_id) for series_id in requested_series_ids
+            ],
+            "lookback_days": int(lookback_days),
+            "curve_interpolation": "not_enabled",
+        },
+        "current_provider_scope": _current_provider_scope(),
         "library_commit": library_commit,
     }
 
@@ -450,8 +467,12 @@ def _provider_bronze_manifest(
     rate_series_id: str,
     feed: str,
     request_metadata: Mapping[str, Any],
+    diagnostics: Sequence[object],
+    quality_policy: Mapping[str, object],
+    quote_freshness: Mapping[str, object],
     library_commit: str | None,
 ) -> dict[str, object]:
+    sanitized_request = _sanitized_request_metadata(request_metadata)
     return {
         "provider_snapshot_schema_version": PROVIDER_SNAPSHOT_BRONZE_SCHEMA_VERSION,
         "fixture_name": provider_snapshot.fixture_name,
@@ -469,11 +490,23 @@ def _provider_bronze_manifest(
             "default_series_id": DEFAULT_RATE_SERIES_ID,
             "curve_interpolation": "not_enabled",
         },
+        "rate_policy": {
+            "provider": "fred",
+            "series_id": rate_series_id,
+            "default_series_id": DEFAULT_RATE_SERIES_ID,
+            "lookback_days": sanitized_request.get("rate_lookback_days"),
+            "curve_series_ids": sanitized_request.get("curve_series_ids", []),
+            "curve_interpolation": "not_enabled",
+        },
         "dividend_assumptions": _provider_snapshot_dividend_assumptions(
             provider_snapshot
         ),
+        "dividend_policy": _provider_snapshot_dividend_assumptions(provider_snapshot),
         "current_provider_scope": _current_provider_scope(),
-        "request_metadata": _sanitized_request_metadata(request_metadata),
+        "quality_policy": dict(quality_policy),
+        "quote_freshness": dict(quote_freshness),
+        "provider_operation_diagnostics": _diagnostics_payload(cast(Any, diagnostics)),
+        "request_metadata": sanitized_request,
         "rows": dict(provider_snapshot.row_counts),
         "warnings": list(provider_snapshot.warnings),
         "artifacts": {
@@ -772,6 +805,10 @@ def _provider_snapshot_run_details(
     provider_rejected_contract_count: int,
     accepted_quote_count: int,
     rejected_quote_count: int,
+    diagnostics: Sequence[object],
+    quality_policy: Mapping[str, object],
+    quote_freshness: Mapping[str, object],
+    curve_series_ids: Sequence[str],
     warnings: Sequence[str],
     artifact_paths: Sequence[Path],
     library_commit: str | None,
@@ -788,14 +825,32 @@ def _provider_snapshot_run_details(
         "spot_source": spot_source,
         "dividend_yield": dividend_yield,
         "dividend_yield_source": dividend_yield_source,
+        "dividend_policy": {
+            "dividend_yield": dividend_yield,
+            "source": dividend_yield_source,
+            "dividend_inference": "not_enabled",
+        },
         "feed": feed,
         "rate_lookback_days": rate_lookback_days,
+        "rate_policy": {
+            "provider": "fred",
+            "series_id": rate_series_id,
+            "rate_source": rate_source,
+            "rate_observation_date": rate_observation_date.date().isoformat(),
+            "lookback_days": rate_lookback_days,
+            "curve_series_ids": [str(series_id) for series_id in curve_series_ids],
+            "curve_interpolation": "not_enabled",
+        },
         "raw_option_contract_count": raw_option_contract_count,
         "normalized_option_contract_count": normalized_option_contract_count,
         "dropped_before_cleaning_count": dropped_before_cleaning_count,
         "provider_rejected_contract_count": provider_rejected_contract_count,
         "accepted_quote_count": accepted_quote_count,
         "rejected_quote_count": rejected_quote_count,
+        "quality_policy": dict(quality_policy),
+        "quote_freshness": dict(quote_freshness),
+        "provider_operation_diagnostics": _diagnostics_payload(cast(Any, diagnostics)),
+        "current_provider_scope": _current_provider_scope(),
         "warnings": list(warnings),
         "artifact_paths": _relative_artifact_references(storage.root, artifact_paths),
         "library_commit": library_commit,
