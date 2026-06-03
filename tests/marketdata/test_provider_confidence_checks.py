@@ -39,8 +39,10 @@ class _FakeAlpacaClient:
         self,
         symbols: str | Sequence[str],
         *,
+        feed: str | None = None,
         asof: object | None = None,
     ) -> Mapping[str, Any]:
+        del feed
         symbol = _single_symbol(symbols)
         quote_ts = str(asof or _ASOF)
         return {

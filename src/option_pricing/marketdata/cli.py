@@ -167,9 +167,22 @@ def _add_run_id_option(parser: argparse.ArgumentParser) -> None:
 
 def _add_common_provider_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
+        "--equity-feed",
+        default=None,
+        help="Optional Alpaca equity feed override for stock quotes and bars.",
+    )
+    parser.add_argument(
+        "--option-feed",
+        default=None,
+        help="Optional Alpaca option feed override for option chains.",
+    )
+    parser.add_argument(
         "--feed",
         default=None,
-        help="Optional Alpaca feed override for this command.",
+        help=(
+            "Deprecated Alpaca feed alias. For snapshot/refresh it overrides "
+            "the option feed only; for backfill-bars it overrides the equity feed."
+        ),
     )
 
 
@@ -277,12 +290,28 @@ def _add_snapshot_query_options(parser: argparse.ArgumentParser) -> None:
 
 def _build_config(args: argparse.Namespace) -> PipelineConfig:
     default_alpaca = AlpacaConfig()
-    feed = getattr(args, "feed", None) or default_alpaca.feed
+    equity_feed, option_feed = _config_feeds(args, default_alpaca)
     return PipelineConfig(
-        alpaca=AlpacaConfig(feed=feed),
+        alpaca=AlpacaConfig(equity_feed=equity_feed, option_feed=option_feed),
         fred=FredConfig(),
         storage=StorageConfig(root=args.data_root),
     )
+
+
+def _config_feeds(
+    args: argparse.Namespace,
+    default_alpaca: AlpacaConfig,
+) -> tuple[str, str]:
+    legacy_feed = getattr(args, "feed", None)
+    equity_feed = getattr(args, "equity_feed", None) or default_alpaca.equity_feed
+    option_feed = getattr(args, "option_feed", None) or default_alpaca.option_feed
+    if legacy_feed:
+        if getattr(args, "command", None) == "backfill-bars":
+            if getattr(args, "equity_feed", None) is None:
+                equity_feed = legacy_feed
+        elif getattr(args, "option_feed", None) is None:
+            option_feed = legacy_feed
+    return equity_feed, option_feed
 
 
 def _build_pipeline(args: argparse.Namespace) -> MarketDataPipeline:
@@ -320,6 +349,8 @@ def _run_command(args: argparse.Namespace) -> tuple[str, object]:
                 strike_lte=args.strike_lte,
                 option_type=args.option_type,
                 feed=args.feed,
+                equity_feed=args.equity_feed,
+                option_feed=args.option_feed,
                 dividend_yield=args.dividend_yield,
                 dividend_yield_source=args.dividend_yield_source,
                 rate_lookback_days=args.rate_lookback_days,
@@ -343,6 +374,8 @@ def _run_command(args: argparse.Namespace) -> tuple[str, object]:
                 strike_lte=args.strike_lte,
                 option_type=args.option_type,
                 feed=args.feed,
+                equity_feed=args.equity_feed,
+                option_feed=args.option_feed,
                 dividend_yield=args.dividend_yield,
                 dividend_yield_source=args.dividend_yield_source,
                 rate_lookback_days=args.rate_lookback_days,
@@ -373,6 +406,7 @@ def _run_command(args: argparse.Namespace) -> tuple[str, object]:
                 end=args.end,
                 timeframe=args.timeframe,
                 feed=args.feed,
+                equity_feed=args.equity_feed,
                 run_id=args.run_id,
                 overwrite=args.overwrite,
                 library_commit=args.library_commit,

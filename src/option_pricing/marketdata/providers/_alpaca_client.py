@@ -103,13 +103,15 @@ class AlpacaClient:
         self,
         symbols: str | Sequence[str],
         *,
+        feed: str | None = None,
         asof: object | None = None,
     ) -> dict[str, object]:
         """Fetch latest quote data for one or more equity symbols."""
 
         cleaned_symbols = _clean_symbols(symbols)
+        effective_feed = _clean_optional_text(feed, "feed") or self.config.equity_feed
         stock_client = self._resolve_stock_data_client()
-        request = self._latest_quote_request(cleaned_symbols)
+        request = self._latest_quote_request(cleaned_symbols, feed=effective_feed)
 
         getter = getattr(stock_client, "get_stock_latest_quote", None)
         if not callable(getter):
@@ -120,18 +122,18 @@ class AlpacaClient:
 
         try:
             response = getter(request)
-        except Exception:
+        except Exception as exc:
             raise AlpacaRequestError(
                 "Alpaca latest equity quote request failed",
                 symbols=cleaned_symbols,
-            ) from None
+            ) from exc
 
         quotes = _coerce_quote_mapping(response, cleaned_symbols)
         return {
             "symbols": cleaned_symbols,
             "quotes": quotes,
             "source": "alpaca",
-            "feed": self.config.feed,
+            "feed": effective_feed,
             "asof": asof,
         }
 
@@ -160,7 +162,7 @@ class AlpacaClient:
         cleaned_limit = _clean_limit(limit)
         cleaned_adjustment = _clean_optional_text(adjustment, "adjustment")
         cleaned_sort = _clean_optional_text(sort, "sort")
-        effective_feed = _clean_optional_text(feed, "feed") or self.config.feed
+        effective_feed = _clean_optional_text(feed, "feed") or self.config.equity_feed
         cleaned_asof = _clean_optional_text(asof, "asof")
 
         stock_client = self._resolve_stock_data_client()
@@ -185,11 +187,11 @@ class AlpacaClient:
 
         try:
             response = getter(request)
-        except Exception:
+        except Exception as exc:
             raise AlpacaRequestError(
                 "Alpaca equity bars request failed",
                 symbols=cleaned_symbols,
-            ) from None
+            ) from exc
 
         return {
             "symbols": cleaned_symbols,
@@ -219,7 +221,7 @@ class AlpacaClient:
         """Fetch option chain snapshots for one underlying symbol."""
 
         cleaned_underlying = _clean_underlying_symbol(underlying)
-        effective_feed = _clean_optional_text(feed, "feed") or self.config.feed
+        effective_feed = _clean_optional_text(feed, "feed") or self.config.option_feed
         normalized_expiry_gte, normalized_expiry_lte = _option_chain_expiry_bounds(
             expiry_gte,
             expiry_lte,
@@ -262,11 +264,11 @@ class AlpacaClient:
 
         try:
             response = getter(request)
-        except Exception:
+        except Exception as exc:
             raise AlpacaRequestError(
                 "Alpaca option chain request failed",
                 symbols=(cleaned_underlying,),
-            ) from None
+            ) from exc
 
         request_metadata = _option_chain_request_metadata(
             cleaned_underlying,
@@ -297,7 +299,6 @@ class AlpacaClient:
             return client_cls(
                 api_key=self._api_key,
                 secret_key=self._secret_key,
-                sandbox=self.config.sandbox,
             )
         except AlpacaProviderError:
             raise
@@ -315,7 +316,6 @@ class AlpacaClient:
             return client_cls(
                 api_key=self._api_key,
                 secret_key=self._secret_key,
-                sandbox=self.config.sandbox,
             )
         except AlpacaProviderError:
             raise
@@ -324,17 +324,17 @@ class AlpacaClient:
                 "Could not construct Alpaca option data client"
             ) from None
 
-    def _latest_quote_request(self, symbols: tuple[str, ...]) -> object:
+    def _latest_quote_request(self, symbols: tuple[str, ...], *, feed: str) -> object:
         if self._stock_data_client is not None:
             return _LatestQuoteRequest(
                 symbol_or_symbols=symbols,
-                feed=self.config.feed,
+                feed=feed,
             )
 
         try:
             _, request_cls, data_feed_factory = _alpaca_sdk_objects()
-            feed = data_feed_factory(self.config.feed)
-            return request_cls(symbol_or_symbols=list(symbols), feed=feed)
+            data_feed = data_feed_factory(feed)
+            return request_cls(symbol_or_symbols=list(symbols), feed=data_feed)
         except AlpacaProviderError:
             raise
         except Exception:

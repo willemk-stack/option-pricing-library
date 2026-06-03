@@ -56,9 +56,10 @@ class _FakeAlpacaClient:
         self,
         symbols: str,
         *,
+        feed: str | None = None,
         asof: object | None = None,
     ) -> Mapping[str, Any]:
-        self.equity_calls.append({"symbols": symbols, "asof": asof})
+        self.equity_calls.append({"symbols": symbols, "feed": feed, "asof": asof})
         return self.equity_payload
 
     def get_option_chain(
@@ -175,7 +176,7 @@ def _equity_quote_payload() -> dict[str, object]:
             }
         },
         "source": "alpaca",
-        "feed": "indicative",
+        "feed": "iex",
     }
 
 
@@ -325,7 +326,6 @@ def _snapshot(tmp_path: Path, **overrides: object) -> ProviderSnapshotResult:
         "run_id": "b4-test-run",
         "expiry_gte": "2026-06-01",
         "expiry_lte": "2026-06-30",
-        "feed": "indicative",
         "library_commit": "abc123",
     }
     snapshot_kwargs.update(overrides)
@@ -454,6 +454,8 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     assert diagnostics[0]["rows_or_contracts_in"] == 1
     assert diagnostics[1]["rows_or_contracts_in"] == 3
     assert diagnostics[2]["rows_or_contracts_in"] == 2
+    assert diagnostics[0]["request_metadata"]["feed"] == "iex"
+    assert diagnostics[1]["request_metadata"]["feed"] == "indicative"
     assert bronze_manifest["current_provider_scope"] == {
         "curve_interpolation": "not_enabled",
         "dividend_inference": "not_enabled",
@@ -469,6 +471,8 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "strike_lte": None,
         "option_type": None,
         "feed": "indicative",
+        "equity_feed": "iex",
+        "option_feed": "indicative",
         "rate_series_id": "DGS3MO",
         "rate_lookback_days": 90,
         "curve_series_ids": ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2"],
@@ -578,6 +582,8 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
             "dividend_inference": "not_enabled",
         },
         "feed": "indicative",
+        "equity_feed": "iex",
+        "option_feed": "indicative",
         "rate_lookback_days": 90,
         "rate_policy": {
             "provider": "fred",
@@ -623,6 +629,26 @@ def test_provider_snapshot_result_payload_is_json_serializable(
     assert json.loads(encoded)["run_id"] == "b4-test-run"
     assert "DGS3MO" in encoded
     assert "dividend_inference=not_enabled" in encoded
+
+
+def test_provider_snapshot_routes_default_split_alpaca_feeds(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    alpaca_client = _FakeAlpacaClient()
+
+    result = _pipeline(tmp_path, alpaca_client=alpaca_client).snapshot(
+        "SPY",
+        asof="2026-05-22T15:31:00Z",
+        run_id="default-split-feeds",
+        expiry_gte="2026-06-01",
+        expiry_lte="2026-06-30",
+        curve_series_ids=(),
+    )
+
+    assert result.feed == "indicative"
+    assert alpaca_client.equity_calls[0]["feed"] == "iex"
+    assert alpaca_client.option_calls[0]["feed"] == "indicative"
 
 
 def test_refresh_daily_dispatches_snapshots_and_records_aggregate_run(
@@ -671,6 +697,8 @@ def test_refresh_daily_dispatches_snapshots_and_records_aggregate_run(
         for _, call_kwargs in calls
     )
     assert all(call_kwargs["feed"] == "sip" for _, call_kwargs in calls)
+    assert all(call_kwargs["equity_feed"] == "iex" for _, call_kwargs in calls)
+    assert all(call_kwargs["option_feed"] == "sip" for _, call_kwargs in calls)
     assert result.counts.raw_option_contract_count == 6
     assert result.counts.normalized_option_contract_count == 4
     assert result.counts.dropped_before_cleaning_count == 2
@@ -700,6 +728,8 @@ def test_refresh_daily_dispatches_snapshots_and_records_aggregate_run(
         "asof": "2026-05-22T15:31:00Z",
         "rate_series_id": "DGS3MO",
         "feed": "sip",
+        "equity_feed": "iex",
+        "option_feed": "sip",
         "rate_policy": {
             "provider": "fred",
             "series_id": "DGS3MO",
@@ -860,9 +890,10 @@ def test_provider_failure_preserves_sanitized_diagnostic_context(
             self,
             symbols: str,
             *,
+            feed: str | None = None,
             asof: object | None = None,
         ) -> Mapping[str, Any]:
-            self.equity_calls.append({"symbols": symbols, "asof": asof})
+            self.equity_calls.append({"symbols": symbols, "feed": feed, "asof": asof})
             raise RuntimeError(f"boom near {secret}")
 
     with pytest.raises(ProviderSnapshotDataUnavailableError) as excinfo:
@@ -887,6 +918,47 @@ def test_provider_failure_preserves_sanitized_diagnostic_context(
     assert "RuntimeError raised by provider call" in str(diagnostic["message"])
 
 
+def test_provider_failure_preserves_safe_request_error_cause_in_diagnostics(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    class _FailingAlpacaClient(_FakeAlpacaClient):
+        def get_latest_equity_quotes(
+            self,
+            symbols: str,
+            *,
+            feed: str | None = None,
+            asof: object | None = None,
+        ) -> Mapping[str, Any]:
+            self.equity_calls.append({"symbols": symbols, "feed": feed, "asof": asof})
+            raise ProviderRequestError(
+                "Alpaca latest equity quote request failed"
+            ) from RuntimeError("subscription does not permit feed indicative")
+
+    pipeline = MarketDataPipeline(
+        PipelineConfig(
+            alpaca=AlpacaConfig(),
+            fred=FredConfig(),
+            storage=StorageConfig(root=tmp_path),
+            retry=ProviderRetryConfig(retry_enabled=False),
+        ),
+        alpaca_client=_FailingAlpacaClient(),
+        fred_client=_FakeFredClient(),
+    )
+
+    with pytest.raises(ProviderSnapshotDataUnavailableError) as excinfo:
+        pipeline.snapshot(
+            "SPY",
+            asof="2026-05-22T15:31:00Z",
+            run_id="safe-diagnostic-message",
+        )
+
+    assert excinfo.value.diagnostic is not None
+    diagnostic = excinfo.value.diagnostic.as_dict()
+    assert "Alpaca latest equity quote request failed" in str(diagnostic["message"])
+    assert "subscription does not permit feed indicative" in str(diagnostic["message"])
+
+
 def test_provider_retry_retries_transient_request_and_records_retry_count(
     tmp_path: Path,
     fake_parquet: None,
@@ -900,9 +972,10 @@ def test_provider_retry_retries_transient_request_and_records_retry_count(
             self,
             symbols: str,
             *,
+            feed: str | None = None,
             asof: object | None = None,
         ) -> Mapping[str, Any]:
-            self.equity_calls.append({"symbols": symbols, "asof": asof})
+            self.equity_calls.append({"symbols": symbols, "feed": feed, "asof": asof})
             if self.remaining_failures:
                 self.remaining_failures -= 1
                 raise ProviderRequestError("transient latest quote failure")
@@ -946,9 +1019,10 @@ def test_provider_retry_does_not_retry_missing_credentials(
             self,
             symbols: str,
             *,
+            feed: str | None = None,
             asof: object | None = None,
         ) -> Mapping[str, Any]:
-            self.equity_calls.append({"symbols": symbols, "asof": asof})
+            self.equity_calls.append({"symbols": symbols, "feed": feed, "asof": asof})
             raise MissingProviderCredentialError("ALPACA_API_KEY")
 
     alpaca_client = _MissingCredentialsAlpacaClient()
@@ -1414,6 +1488,7 @@ def test_backfill_bars_writes_bronze_and_silver_with_fake_client(
     assert result.stats.rows_out == 1
     assert alpaca_client.bar_calls[0]["symbols"] == ("SPY",)
     assert alpaca_client.bar_calls[0]["timeframe"] == "1Day"
+    assert alpaca_client.bar_calls[0]["feed"] == "iex"
 
     frame = pd.read_parquet(silver_root / "equity_bars.parquet")
     assert frame["symbol"].astype(str).tolist() == ["SPY"]
@@ -1425,7 +1500,7 @@ def test_backfill_bars_writes_bronze_and_silver_with_fake_client(
     assert request_metadata["start"] == "2026-05-20T00:00:00Z"
     assert request_metadata["end"] == "2026-05-23T00:00:00Z"
     assert request_metadata["timeframe"] == "1Day"
-    assert request_metadata["feed"] == "indicative"
+    assert request_metadata["feed"] == "iex"
     assert isinstance(request_metadata["asof"], str)
 
 

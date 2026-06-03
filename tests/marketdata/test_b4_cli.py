@@ -242,6 +242,8 @@ def test_snapshot_cli_parses_arguments_and_calls_pipeline_correctly(
     instance = _FakePipeline.instances[-1]
     assert instance.config.storage.root == tmp_path
     assert instance.config.alpaca.feed == "sip"
+    assert instance.config.alpaca.equity_feed == "iex"
+    assert instance.config.alpaca.option_feed == "sip"
     assert instance.init_kwargs["bundle_config"].run_heston_smoke is True
     name, args, kwargs = _last_call()
     assert name == "snapshot"
@@ -256,6 +258,8 @@ def test_snapshot_cli_parses_arguments_and_calls_pipeline_correctly(
         "strike_lte": 600.0,
         "option_type": "call",
         "feed": "sip",
+        "equity_feed": None,
+        "option_feed": None,
         "dividend_yield": 0.0125,
         "dividend_yield_source": "manual_override",
         "rate_lookback_days": 45,
@@ -285,6 +289,61 @@ def test_snapshot_cli_parses_arguments_and_calls_pipeline_correctly(
     assert "accepted_quote_count: 42" in stdout
     assert "provider_rejected_contract_count: 1" in stdout
     assert "sample warning" in stdout
+
+
+def test_snapshot_cli_parses_split_feed_arguments(tmp_path: Path) -> None:
+    exit_code = cli.main(
+        [
+            "snapshot",
+            "--underlying",
+            "spy",
+            "--data-root",
+            str(tmp_path),
+            "--equity-feed",
+            "sip",
+            "--option-feed",
+            "opra",
+        ]
+    )
+
+    assert exit_code == 0
+    instance = _FakePipeline.instances[-1]
+    assert instance.config.alpaca.equity_feed == "sip"
+    assert instance.config.alpaca.option_feed == "opra"
+    name, args, kwargs = _last_call()
+    assert name == "snapshot"
+    assert args == ("spy",)
+    assert kwargs["feed"] is None
+    assert kwargs["equity_feed"] == "sip"
+    assert kwargs["option_feed"] == "opra"
+
+
+def test_snapshot_cli_defaults_to_split_feeds_for_first_real_run(
+    tmp_path: Path,
+) -> None:
+    exit_code = cli.main(
+        [
+            "snapshot",
+            "--underlying",
+            "spy",
+            "--data-root",
+            str(tmp_path),
+            "--overwrite",
+            "--json",
+        ]
+    )
+
+    assert exit_code == 0
+    instance = _FakePipeline.instances[-1]
+    assert instance.config.alpaca.equity_feed == "iex"
+    assert instance.config.alpaca.option_feed == "indicative"
+    name, args, kwargs = _last_call()
+    assert name == "snapshot"
+    assert args == ("spy",)
+    assert kwargs["feed"] is None
+    assert kwargs["equity_feed"] is None
+    assert kwargs["option_feed"] is None
+    assert kwargs["overwrite"] is True
 
 
 def test_refresh_daily_cli_parses_arguments_and_calls_pipeline_correctly(
@@ -329,6 +388,8 @@ def test_refresh_daily_cli_parses_arguments_and_calls_pipeline_correctly(
     instance = _FakePipeline.instances[-1]
     assert instance.config.storage.root == tmp_path
     assert instance.config.alpaca.feed == "sip"
+    assert instance.config.alpaca.equity_feed == "iex"
+    assert instance.config.alpaca.option_feed == "sip"
     assert instance.init_kwargs["bundle_config"].run_heston_smoke is False
     name, args, kwargs = _last_call()
     assert name == "refresh_daily"
@@ -343,6 +404,8 @@ def test_refresh_daily_cli_parses_arguments_and_calls_pipeline_correctly(
         "strike_lte": 600.0,
         "option_type": "call",
         "feed": "sip",
+        "equity_feed": None,
+        "option_feed": None,
         "dividend_yield": 0.0125,
         "dividend_yield_source": "manual_override",
         "rate_lookback_days": 90,
@@ -523,6 +586,9 @@ def test_backfill_bars_parses_symbols_dates_timeframe_and_calls_pipeline_correct
     )
 
     assert exit_code == 0
+    instance = _FakePipeline.instances[-1]
+    assert instance.config.alpaca.equity_feed == "sip"
+    assert instance.config.alpaca.option_feed == "indicative"
     name, args, kwargs = _last_call()
     assert name == "backfill_bars"
     assert args == (["spy", "qqq"],)
@@ -531,6 +597,7 @@ def test_backfill_bars_parses_symbols_dates_timeframe_and_calls_pipeline_correct
         "end": "2026-05-23",
         "timeframe": "1Hour",
         "feed": "sip",
+        "equity_feed": None,
         "run_id": "bars-cli-run",
         "overwrite": True,
         "library_commit": None,

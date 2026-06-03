@@ -133,7 +133,8 @@ def test_alpaca_client_from_env_uses_configured_env_var_names(
         AlpacaConfig(
             api_key_env="CUSTOM_ALPACA_KEY",
             secret_key_env="CUSTOM_ALPACA_SECRET",
-            feed="iex",
+            equity_feed="iex",
+            option_feed="indicative",
         ),
         stock_data_client=_FakeStockClient(),
     )
@@ -169,7 +170,7 @@ def test_alpaca_client_uses_injected_fake_stock_client() -> None:
     client = AlpacaClient(
         "alpaca-key",
         "alpaca-secret",
-        config=AlpacaConfig(feed="iex"),
+        config=AlpacaConfig(equity_feed="iex", option_feed="indicative"),
         stock_data_client=fake_client,
     )
 
@@ -199,7 +200,7 @@ def test_alpaca_client_get_equity_bars_uses_injected_fake_stock_client() -> None
     client = AlpacaClient(
         "alpaca-key",
         "alpaca-secret",
-        config=AlpacaConfig(feed="iex"),
+        config=AlpacaConfig(equity_feed="iex", option_feed="indicative"),
         stock_data_client=fake_client,
     )
 
@@ -234,12 +235,12 @@ def test_alpaca_client_get_equity_bars_uses_injected_fake_stock_client() -> None
     assert request.asof == "2026-05-22"
 
 
-def test_alpaca_client_get_equity_bars_defaults_to_config_feed() -> None:
+def test_alpaca_client_get_equity_bars_defaults_to_config_equity_feed() -> None:
     fake_client = _FakeStockClient()
     client = AlpacaClient(
         "alpaca-key",
         "alpaca-secret",
-        config=AlpacaConfig(feed="iex"),
+        config=AlpacaConfig(equity_feed="sip", option_feed="indicative"),
         stock_data_client=fake_client,
     )
 
@@ -250,8 +251,23 @@ def test_alpaca_client_get_equity_bars_defaults_to_config_feed() -> None:
         timeframe="1Day",
     )
 
+    assert result["feed"] == "sip"
+    assert fake_client.bars_calls[0].feed == "sip"
+
+
+def test_alpaca_client_legacy_feed_does_not_override_equity_feed() -> None:
+    fake_client = _FakeStockClient()
+    client = AlpacaClient(
+        "alpaca-key",
+        "alpaca-secret",
+        config=AlpacaConfig(feed="opra"),
+        stock_data_client=fake_client,
+    )
+
+    result = client.get_latest_equity_quotes("spy")
+
     assert result["feed"] == "iex"
-    assert fake_client.bars_calls[0].feed == "iex"
+    assert fake_client.calls[0].feed == "iex"
 
 
 def test_alpaca_client_get_equity_bars_start_must_precede_end() -> None:
@@ -310,7 +326,7 @@ def test_alpaca_client_get_option_chain_uses_injected_fake_option_client() -> No
     client = AlpacaClient(
         "alpaca-key",
         "alpaca-secret",
-        config=AlpacaConfig(feed="indicative"),
+        config=AlpacaConfig(equity_feed="iex", option_feed="indicative"),
         option_data_client=fake_client,
     )
 
@@ -359,12 +375,12 @@ def test_alpaca_client_get_option_chain_uses_injected_fake_option_client() -> No
     assert "alpaca-secret" not in repr(metadata)
 
 
-def test_alpaca_client_get_option_chain_defaults_to_config_feed() -> None:
+def test_alpaca_client_get_option_chain_defaults_to_config_option_feed() -> None:
     fake_client = _FakeOptionClient()
     client = AlpacaClient(
         "alpaca-key",
         "alpaca-secret",
-        config=AlpacaConfig(feed="indicative"),
+        config=AlpacaConfig(equity_feed="iex", option_feed="opra"),
         option_data_client=fake_client,
     )
 
@@ -374,8 +390,8 @@ def test_alpaca_client_get_option_chain_defaults_to_config_feed() -> None:
         expiry_lte="2026-06-30",
     )
 
-    assert result["feed"] == "indicative"
-    assert fake_client.calls[0].feed == "indicative"
+    assert result["feed"] == "opra"
+    assert fake_client.calls[0].feed == "opra"
 
 
 def test_alpaca_client_get_option_chain_applies_default_expiry_bounds() -> None:

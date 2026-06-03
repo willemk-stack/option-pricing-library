@@ -6,17 +6,55 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class AlpacaConfig:
     api_key_env: str = "ALPACA_API_KEY"
     secret_key_env: str = "ALPACA_SECRET_KEY"
-    feed: str = "indicative"
+    equity_feed: str = "iex"
+    option_feed: str = "indicative"
     sandbox: bool = False
 
+    def __init__(
+        self,
+        api_key_env: str = "ALPACA_API_KEY",
+        secret_key_env: str = "ALPACA_SECRET_KEY",
+        feed: str | None = None,
+        sandbox: bool = False,
+        *,
+        equity_feed: str | None = None,
+        option_feed: str | None = None,
+    ) -> None:
+        resolved_equity_feed = "iex" if equity_feed is None else equity_feed
+        resolved_option_feed = (
+            feed
+            if option_feed is None and feed is not None
+            else ("indicative" if option_feed is None else option_feed)
+        )
+
+        object.__setattr__(self, "api_key_env", api_key_env)
+        object.__setattr__(self, "secret_key_env", secret_key_env)
+        object.__setattr__(self, "equity_feed", resolved_equity_feed)
+        object.__setattr__(self, "option_feed", resolved_option_feed)
+        object.__setattr__(self, "sandbox", sandbox)
+        self._validate(legacy_feed_provided=feed is not None)
+
     def __post_init__(self) -> None:
+        self._validate(legacy_feed_provided=False)
+
+    def _validate(self, *, legacy_feed_provided: bool) -> None:
         _validate_non_empty_string(self.api_key_env, "alpaca.api_key_env")
         _validate_non_empty_string(self.secret_key_env, "alpaca.secret_key_env")
-        _validate_non_empty_string(self.feed, "alpaca.feed")
+        _validate_non_empty_string(self.equity_feed, "alpaca.equity_feed")
+        _validate_non_empty_string(
+            self.option_feed,
+            "alpaca.feed" if legacy_feed_provided else "alpaca.option_feed",
+        )
+
+    @property
+    def feed(self) -> str:
+        """Backward-compatible alias for the option snapshot feed."""
+
+        return self.option_feed
 
 
 @dataclass(frozen=True, slots=True)

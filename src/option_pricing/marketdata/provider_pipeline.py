@@ -113,6 +113,7 @@ class _AlpacaClientLike(Protocol):
         self,
         symbols: str | Sequence[str],
         *,
+        feed: str | None = None,
         asof: object | None = None,
     ) -> Mapping[str, Any]: ...
 
@@ -220,6 +221,8 @@ class MarketDataPipeline:
         strike_lte: float | None = None,
         option_type: str | None = None,
         feed: str | None = None,
+        equity_feed: str | None = None,
+        option_feed: str | None = None,
         dividend_yield: float = 0.0,
         dividend_yield_source: str = "assumption",
         rate_lookback_days: int = DEFAULT_SNAPSHOT_RATE_LOOKBACK_DAYS,
@@ -255,7 +258,13 @@ class MarketDataPipeline:
         )
         quality_policy_payload = effective_quality_policy.as_dict()
         cleaned_library_commit = _optional_text(library_commit, "library_commit")
-        resolved_feed = feed or self.config.alpaca.feed
+        cleaned_legacy_feed = _optional_text(feed, "feed")
+        cleaned_equity_feed = _optional_text(equity_feed, "equity_feed")
+        cleaned_option_feed = _optional_text(option_feed, "option_feed")
+        resolved_equity_feed = cleaned_equity_feed or self.config.alpaca.equity_feed
+        resolved_option_feed = (
+            cleaned_option_feed or cleaned_legacy_feed or self.config.alpaca.option_feed
+        )
         fred_observation_start = asof_timestamp.date() - timedelta(
             days=cleaned_rate_lookback_days
         )
@@ -272,7 +281,9 @@ class MarketDataPipeline:
             strike_gte=strike_gte,
             strike_lte=strike_lte,
             option_type=option_type,
-            feed=resolved_feed,
+            feed=resolved_option_feed,
+            equity_feed=resolved_equity_feed,
+            option_feed=resolved_option_feed,
             rate_series_id=cleaned_rate_series_id,
             rate_lookback_days=cleaned_rate_lookback_days,
             curve_series_ids=cleaned_curve_series_ids,
@@ -297,6 +308,7 @@ class MarketDataPipeline:
         equity_quote_payload = self._fetch_latest_equity_quote(
             cleaned_underlying,
             asof=asof_label,
+            feed=resolved_equity_feed,
             diagnostics=diagnostics,
         )
         option_chain_payload = self._fetch_option_chain(
@@ -307,7 +319,7 @@ class MarketDataPipeline:
             strike_gte=strike_gte,
             strike_lte=strike_lte,
             option_type=option_type,
-            feed=feed,
+            feed=resolved_option_feed,
             diagnostics=diagnostics,
         )
         fred_payload = self._fetch_fred_observations(
@@ -333,7 +345,7 @@ class MarketDataPipeline:
                 option_chain_payload,
                 underlying=cleaned_underlying,
                 asof=asof_timestamp,
-                feed=resolved_feed,
+                feed=resolved_option_feed,
                 diagnostics=diagnostics,
             )
         except ProviderSnapshotDataUnavailableError as exc:
@@ -455,7 +467,9 @@ class MarketDataPipeline:
                 "source_type": "provider_snapshot",
                 "providers": provider_sources,
                 "rate_series_id": cleaned_rate_series_id,
-                "feed": resolved_feed,
+                "feed": resolved_option_feed,
+                "equity_feed": resolved_equity_feed,
+                "option_feed": resolved_option_feed,
                 "current_provider_scope": _current_provider_scope(),
                 "quality_policy": quality_policy_payload,
                 "quote_freshness": quote_freshness,
@@ -487,7 +501,7 @@ class MarketDataPipeline:
             option_chain_payload=option_chain_payload,
             fred_payload=fred_payload,
             rate_series_id=cleaned_rate_series_id,
-            feed=resolved_feed,
+            feed=resolved_option_feed,
             request_metadata=snapshot_request_metadata,
             diagnostics=diagnostics,
             quality_policy=quality_policy_payload,
@@ -569,7 +583,9 @@ class MarketDataPipeline:
                 spot_source=spot_source,
                 dividend_yield=cleaned_dividend_yield,
                 dividend_yield_source=cleaned_dividend_yield_source,
-                feed=resolved_feed,
+                feed=resolved_option_feed,
+                equity_feed=resolved_equity_feed,
+                option_feed=resolved_option_feed,
                 rate_lookback_days=cleaned_rate_lookback_days,
                 raw_option_contract_count=raw_option_contract_count,
                 normalized_option_contract_count=len(option_chain),
@@ -602,7 +618,7 @@ class MarketDataPipeline:
             rate_series_id=cleaned_rate_series_id,
             dividend_yield=cleaned_dividend_yield,
             dividend_yield_source=cleaned_dividend_yield_source,
-            feed=resolved_feed,
+            feed=resolved_option_feed,
             raw_option_contract_count=int(raw_option_contract_count),
             normalized_option_contract_count=int(len(option_chain)),
             accepted_quote_count=int(len(quote_cleaning_for_artifacts.cleaned_quotes)),
@@ -634,6 +650,8 @@ class MarketDataPipeline:
         strike_lte: float | None = None,
         option_type: str | None = None,
         feed: str | None = None,
+        equity_feed: str | None = None,
+        option_feed: str | None = None,
         dividend_yield: float = 0.0,
         dividend_yield_source: str = "assumption",
         rate_lookback_days: int = DEFAULT_SNAPSHOT_RATE_LOOKBACK_DAYS,
@@ -663,6 +681,13 @@ class MarketDataPipeline:
             quality_policy if quality_policy is not None else self.quality_policy
         )
         quality_policy_payload = effective_quality_policy.as_dict()
+        cleaned_legacy_feed = _optional_text(feed, "feed")
+        cleaned_equity_feed = _optional_text(equity_feed, "equity_feed")
+        cleaned_option_feed = _optional_text(option_feed, "option_feed")
+        resolved_equity_feed = cleaned_equity_feed or self.config.alpaca.equity_feed
+        resolved_option_feed = (
+            cleaned_option_feed or cleaned_legacy_feed or self.config.alpaca.option_feed
+        )
         aggregate_run_id = _new_refresh_daily_run_id(
             asof_timestamp,
             run_id_prefix=run_id_prefix,
@@ -685,7 +710,9 @@ class MarketDataPipeline:
                     strike_gte=strike_gte,
                     strike_lte=strike_lte,
                     option_type=option_type,
-                    feed=feed,
+                    feed=cleaned_legacy_feed,
+                    equity_feed=resolved_equity_feed,
+                    option_feed=resolved_option_feed,
                     dividend_yield=dividend_yield,
                     dividend_yield_source=dividend_yield_source,
                     rate_lookback_days=cleaned_rate_lookback_days,
@@ -738,7 +765,9 @@ class MarketDataPipeline:
                 underlyings=cleaned_underlyings,
                 asof=asof_timestamp,
                 rate_series_id=cleaned_rate_series_id,
-                feed=feed or self.config.alpaca.feed,
+                feed=resolved_option_feed,
+                equity_feed=resolved_equity_feed,
+                option_feed=resolved_option_feed,
                 rate_lookback_days=cleaned_rate_lookback_days,
                 curve_series_ids=cleaned_curve_series_ids,
                 quality_policy=quality_policy_payload,
@@ -950,6 +979,7 @@ class MarketDataPipeline:
         adjustment: str | None = None,
         sort: str | None = "asc",
         feed: str | None = None,
+        equity_feed: str | None = None,
         run_id: str | None = None,
         overwrite: bool = False,
         library_commit: str | None = None,
@@ -968,7 +998,11 @@ class MarketDataPipeline:
         cleaned_timeframe = _required_text(timeframe, "timeframe")
         cleaned_adjustment = _optional_text(adjustment, "adjustment")
         cleaned_sort = _optional_text(sort, "sort")
-        cleaned_feed = _optional_text(feed, "feed")
+        cleaned_legacy_feed = _optional_text(feed, "feed")
+        cleaned_equity_feed = _optional_text(equity_feed, "equity_feed")
+        resolved_equity_feed = (
+            cleaned_equity_feed or cleaned_legacy_feed or self.config.alpaca.equity_feed
+        )
         start_timestamp = _coerce_backfill_timestamp(start, "start")
         end_timestamp = _coerce_backfill_timestamp(end, "end")
         if start_timestamp >= end_timestamp:
@@ -994,7 +1028,7 @@ class MarketDataPipeline:
             "limit": limit,
             "adjustment": cleaned_adjustment,
             "sort": cleaned_sort,
-            "feed": cleaned_feed or self.config.alpaca.feed,
+            "feed": resolved_equity_feed,
             "asof": asof_label,
         }
         diagnostics: list[ProviderCallDiagnostic] = []
@@ -1006,8 +1040,8 @@ class MarketDataPipeline:
             limit=limit,
             adjustment=cleaned_adjustment,
             sort=cleaned_sort,
-            feed=cleaned_feed,
-            asof=asof_label,
+            feed=resolved_equity_feed,
+            asof=None,
             diagnostics=diagnostics,
         )
         bars = normalize_alpaca_bars(payload, asof=asof)
@@ -1048,7 +1082,7 @@ class MarketDataPipeline:
                     start=start_timestamp,
                     end=end_timestamp,
                     timeframe=cleaned_timeframe,
-                    feed=cleaned_feed or self.config.alpaca.feed,
+                    feed=resolved_equity_feed,
                     request_metadata={**request, "symbols": [symbol]},
                     raw_rows=raw_rows,
                     normalized_rows=normalized_rows,
@@ -1079,7 +1113,7 @@ class MarketDataPipeline:
                     start=start_timestamp,
                     end=end_timestamp,
                     timeframe=cleaned_timeframe,
-                    feed=cleaned_feed or self.config.alpaca.feed,
+                    feed=resolved_equity_feed,
                     request_metadata={**request, "symbols": [symbol]},
                     raw_rows=raw_rows,
                     normalized_rows=normalized_rows,
@@ -1138,16 +1172,18 @@ class MarketDataPipeline:
         underlying: str,
         *,
         asof: str,
+        feed: str,
         diagnostics: list[ProviderCallDiagnostic],
     ) -> Mapping[str, Any]:
         try:
             payload, diagnostic = _call_provider_with_diagnostic(
                 provider="alpaca",
                 operation="latest_equity_quote",
-                request_metadata={"symbols": [underlying], "asof": asof},
+                request_metadata={"symbols": [underlying], "feed": feed, "asof": asof},
                 retry_config=self.config.retry,
                 call=lambda: self._resolve_alpaca_client().get_latest_equity_quotes(
                     underlying,
+                    feed=feed,
                     asof=asof,
                 ),
                 count_items=_count_alpaca_latest_equity_quotes,
@@ -1225,7 +1261,7 @@ class MarketDataPipeline:
         adjustment: str | None,
         sort: str | None,
         feed: str | None,
-        asof: str,
+        asof: str | None,
         diagnostics: list[ProviderCallDiagnostic],
     ) -> Mapping[str, Any]:
         try:
@@ -1776,6 +1812,8 @@ def _provider_refresh_daily_run_details(
     asof: pd.Timestamp,
     rate_series_id: str,
     feed: str,
+    equity_feed: str,
+    option_feed: str,
     rate_lookback_days: int,
     curve_series_ids: Sequence[str],
     quality_policy: Mapping[str, object],
@@ -1800,6 +1838,8 @@ def _provider_refresh_daily_run_details(
         "asof": _utc_isoformat(asof),
         "rate_series_id": rate_series_id,
         "feed": feed,
+        "equity_feed": equity_feed,
+        "option_feed": option_feed,
         "rate_policy": {
             "provider": "fred",
             "series_id": rate_series_id,

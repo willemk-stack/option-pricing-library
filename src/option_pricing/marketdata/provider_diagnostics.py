@@ -244,11 +244,24 @@ def _sanitized_exception_message(exc: BaseException) -> str:
         | ProviderDataUnavailableError,
     ):
         message = str(exc)
+        cause_message = _sanitized_cause_message(exc)
+        if cause_message is not None:
+            message = f"{message}; cause={cause_message}"
     elif isinstance(exc, ValueError | TypeError):
         message = str(exc)
     else:
         message = f"{type(exc).__name__} raised by provider call"
     return _truncate_diagnostic_message(_redact_message_fragments(message))
+
+
+def _sanitized_cause_message(exc: BaseException) -> str | None:
+    cause = exc.__cause__
+    if cause is None:
+        return None
+    cause_message = str(cause).strip()
+    if not cause_message:
+        return None
+    return _redact_message_fragments(cause_message)
 
 
 def _redact_message_fragments(message: str) -> str:
