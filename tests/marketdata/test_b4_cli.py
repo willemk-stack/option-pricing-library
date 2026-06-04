@@ -63,6 +63,16 @@ def _snapshot_result(
         rate_observation_date=date(2026, 5, 20),
         rate_series_id="DGS3MO",
         feed="indicative",
+        equity_provider="alpaca",
+        equity_feed="iex",
+        option_provider="alpaca",
+        option_feed="indicative",
+        selected_rate=0.0416,
+        flat_rate=0.0416,
+        rate_policy=_rate_policy(),
+        dividend_policy=_dividend_policy(),
+        option_cleaning_policy=_option_cleaning_policy(),
+        data_policy=_data_policy(),
         dividend_yield=0.0,
         dividend_yield_source="assumption",
         raw_option_contract_count=46,
@@ -123,6 +133,52 @@ def _snapshot_result(
             manifest_path=Path("data/gold/model_validation_bundle/manifest.json")
         ),
     )
+
+
+def _rate_policy() -> dict[str, object]:
+    return {
+        "policy": "flat_fred_series",
+        "provider": "fred",
+        "series_id": "DGS3MO",
+        "rate_source": "fred:DGS3MO",
+        "rate_observation_date": "2026-05-20",
+        "selected_rate": 0.0416,
+        "flat_rate": 0.0416,
+        "lookback_days": 90,
+        "curve_series_ids": ["DGS1MO", "DGS3MO"],
+        "curve_interpolation": "not_enabled",
+    }
+
+
+def _dividend_policy() -> dict[str, object]:
+    return {
+        "policy": "zero_assumption",
+        "dividend_yield": 0.0,
+        "source": "assumption",
+        "dividend_inference": "not_enabled",
+    }
+
+
+def _option_cleaning_policy() -> dict[str, object]:
+    return {
+        "policy": "quote_cleaning_v1",
+        "policy_id": "quote_cleaning_policy.v1",
+        "rejected_quotes_preserved": True,
+        "reason_codes": ["missing_bid_or_ask", "invalid_bid_ask_cross"],
+    }
+
+
+def _data_policy() -> dict[str, object]:
+    return {
+        "schema_version": "provider_snapshot_data_policy.v1",
+        "equity_provider": "alpaca",
+        "equity_feed": "iex",
+        "option_provider": "alpaca",
+        "option_feed": "indicative",
+        "rate_policy": _rate_policy(),
+        "dividend_policy": _dividend_policy(),
+        "option_cleaning_policy": _option_cleaning_policy(),
+    }
 
 
 def _refresh_daily_result() -> object:
@@ -281,7 +337,8 @@ def test_snapshot_cli_parses_arguments_and_calls_pipeline_correctly(
     assert "Market snapshot completed." in stdout
     assert "rate_series_id: DGS3MO" in stdout
     assert "rate_observation_date: 2026-05-20" in stdout
-    assert "feed: indicative" in stdout
+    assert "equity_feed: iex" in stdout
+    assert "option_feed: indicative" in stdout
     assert "dividend_yield_source: assumption" in stdout
     assert "raw_option_contract_count: 46" in stdout
     assert "normalized_option_contract_count: 45" in stdout
@@ -476,10 +533,14 @@ def test_snapshot_json_emits_valid_stable_json(
         ],
         "asof": "2026-05-22T15:31:00+00:00",
         "command": "snapshot",
+        "data_policy": _data_policy(),
+        "dividend_policy": _dividend_policy(),
         "dividend_yield": 0.0,
         "dividend_yield_source": "assumption",
         "dropped_before_cleaning_count": 1,
-        "feed": "indicative",
+        "equity_feed": "iex",
+        "equity_provider": "alpaca",
+        "flat_rate": 0.0416,
         "main_artifact_paths": {
             "bronze_manifest": _p("data/bronze/provider_snapshot/manifest.json"),
             "bundle_manifest": _p("data/gold/model_validation_bundle/manifest.json"),
@@ -493,6 +554,9 @@ def test_snapshot_json_emits_valid_stable_json(
             "silver_manifest": _p("data/silver/cleaned_quotes/manifest.json"),
         },
         "normalized_option_contract_count": 45,
+        "option_cleaning_policy": _option_cleaning_policy(),
+        "option_feed": "indicative",
+        "option_provider": "alpaca",
         "provider_rejected_contract_count": 1,
         "provider_operation_diagnostics": [
             {
@@ -515,6 +579,7 @@ def test_snapshot_json_emits_valid_stable_json(
             "equity_quote_age_seconds": 60.0,
             "stale_option_quote_count": 0,
         },
+        "rate_policy": _rate_policy(),
         "rate_series_id": "DGS3MO",
         "rate": 0.0416,
         "rate_observation_date": "2026-05-20",
@@ -522,6 +587,7 @@ def test_snapshot_json_emits_valid_stable_json(
         "raw_option_contract_count": 46,
         "rejected_quote_count": 3,
         "run_id": "snapshot-cli-run",
+        "selected_rate": 0.0416,
         "spot": 500.0,
         "underlying": "SPY",
         "warnings": ["sample warning"],

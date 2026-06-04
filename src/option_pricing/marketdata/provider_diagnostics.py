@@ -55,6 +55,7 @@ def _call_provider_with_diagnostic[T](
         )
     except _RetryWrappedError as wrapped:
         retry_count = wrapped.retry_count
+        failure_kind = _provider_failure_kind(wrapped.original)
         diagnostic = _provider_call_diagnostic(
             provider=provider,
             operation=operation,
@@ -63,14 +64,16 @@ def _call_provider_with_diagnostic[T](
             started_at=started_at,
             retry_count=retry_count,
             exception=wrapped.original,
+            failure_kind=failure_kind,
         )
         raise ProviderCallFailedError(
             "provider call failed",
             diagnostic=diagnostic,
             original=wrapped.original,
-            failure_kind=_provider_failure_kind(wrapped.original),
+            failure_kind=failure_kind,
         ) from None
     except Exception as exc:
+        failure_kind = _provider_failure_kind(exc)
         diagnostic = _provider_call_diagnostic(
             provider=provider,
             operation=operation,
@@ -79,12 +82,13 @@ def _call_provider_with_diagnostic[T](
             started_at=started_at,
             retry_count=retry_count,
             exception=exc,
+            failure_kind=failure_kind,
         )
         raise ProviderCallFailedError(
             "provider call failed",
             diagnostic=diagnostic,
             original=exc,
-            failure_kind=_provider_failure_kind(exc),
+            failure_kind=failure_kind,
         ) from None
 
     item_count = None if count_items is None else count_items(result)
@@ -123,6 +127,7 @@ def _normalization_failure_diagnostic(
         retry_count=0,
         exception=exception,
         message=_sanitized_exception_message(exception),
+        failure_kind="normalization_failed",
     )
 
 
@@ -177,6 +182,7 @@ def _provider_call_diagnostic(
     retry_count: int,
     exception: BaseException | None = None,
     message: str | None = None,
+    failure_kind: str | None = None,
     rows_or_contracts_in: int | None = None,
     rows_or_contracts_out: int | None = None,
 ) -> ProviderCallDiagnostic:
@@ -195,6 +201,7 @@ def _provider_call_diagnostic(
         elapsed_ms=round(elapsed_ms, 3),
         exception_type=None if exception is None else type(exception).__name__,
         message=diagnostic_message,
+        failure_kind=failure_kind,
         retry_count=retry_count,
         rows_or_contracts_in=rows_or_contracts_in,
         rows_or_contracts_out=rows_or_contracts_out,

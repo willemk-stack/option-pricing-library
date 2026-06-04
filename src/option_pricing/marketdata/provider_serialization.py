@@ -9,7 +9,7 @@ from typing import Any
 import pandas as pd
 
 _SECRET_KEY_PARTS = frozenset(
-    {"api_key", "apikey", "secret", "token", "authorization", "password"}
+    {"api_key", "apikey", "secret", "token", "authorization", "password", "headers"}
 )
 
 

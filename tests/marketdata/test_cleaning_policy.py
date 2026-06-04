@@ -80,17 +80,17 @@ def _is_disallowed_import(name: str) -> bool:
 
 def test_quote_rejection_reason_values_match_contract() -> None:
     assert [reason.value for reason in QuoteRejectionReason] == [
-        "negative_bid",
-        "nonpositive_ask",
-        "crossed_market",
-        "expired_contract",
+        "missing_bid_or_ask",
+        "invalid_bid_ask_cross",
+        "nonpositive_mid",
+        "expired_or_bad_expiry",
         "nonpositive_strike",
-        "missing_required_price",
-        "invalid_mid",
         "below_intrinsic_tolerance",
         "spread_too_wide",
-        "missing_iv_for_iv_required_workflow",
-        "missing_vega_for_weighted_calibration",
+        "missing_iv",
+        "missing_greek",
+        "quote_after_asof",
+        "stale_quote",
     ]
 
 

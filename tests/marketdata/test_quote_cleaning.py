@@ -213,19 +213,22 @@ def test_reason_counts_and_warnings_are_empty_when_all_rows_are_accepted() -> No
 @pytest.mark.parametrize(
     ("option_chain", "reason"),
     [
-        (_option_chain(bid=-1.0), QuoteRejectionReason.NEGATIVE_BID),
-        (_option_chain(bid=0.0, ask=0.0), QuoteRejectionReason.NONPOSITIVE_ASK),
+        (_option_chain(bid=-1.0), QuoteRejectionReason.INVALID_BID_ASK_CROSS),
+        (
+            _option_chain(bid=0.0, ask=0.0),
+            QuoteRejectionReason.INVALID_BID_ASK_CROSS,
+        ),
         (
             _option_chain(bid=5.0, ask=4.0, mid=4.5),
-            QuoteRejectionReason.CROSSED_MARKET,
+            QuoteRejectionReason.INVALID_BID_ASK_CROSS,
         ),
         (
             _option_chain(expiry="2026-05-22"),
-            QuoteRejectionReason.EXPIRED_CONTRACT,
+            QuoteRejectionReason.EXPIRED_OR_BAD_EXPIRY,
         ),
         (_option_chain(strike=0.0), QuoteRejectionReason.NONPOSITIVE_STRIKE),
-        (_option_chain(bid=pd.NA), QuoteRejectionReason.MISSING_REQUIRED_PRICE),
-        (_option_chain(mid=0.0), QuoteRejectionReason.INVALID_MID),
+        (_option_chain(bid=pd.NA), QuoteRejectionReason.MISSING_BID_OR_ASK),
+        (_option_chain(mid=0.0), QuoteRejectionReason.NONPOSITIVE_MID),
         (
             _option_chain(strike=90.0, bid=0.9, ask=1.1, mid=1.0),
             QuoteRejectionReason.BELOW_INTRINSIC_TOLERANCE,
@@ -246,7 +249,7 @@ def test_price_and_contract_rejection_reasons(
 def test_missing_iv_rejects_when_iv_is_required() -> None:
     _assert_single_rejection(
         _option_chain(iv=pd.NA),
-        QuoteRejectionReason.MISSING_IV_FOR_IV_REQUIRED_WORKFLOW,
+        QuoteRejectionReason.MISSING_IV,
         policy=QuoteCleaningPolicyV1(require_iv=True),
     )
 
@@ -254,7 +257,7 @@ def test_missing_iv_rejects_when_iv_is_required() -> None:
 def test_missing_vega_rejects_when_vega_is_required() -> None:
     _assert_single_rejection(
         _option_chain(vega=pd.NA),
-        QuoteRejectionReason.MISSING_VEGA_FOR_WEIGHTED_CALIBRATION,
+        QuoteRejectionReason.MISSING_GREEK,
         policy=QuoteCleaningPolicyV1(require_vega=True),
     )
 
@@ -282,11 +285,11 @@ def test_missing_vega_is_accepted_when_vega_is_not_required() -> None:
         ),
         (
             _option_chain(expiry="2026-05-22", bid=-1.0, ask=0.0, mid=0.0),
-            QuoteRejectionReason.EXPIRED_CONTRACT,
+            QuoteRejectionReason.EXPIRED_OR_BAD_EXPIRY,
         ),
         (
             _option_chain(bid=pd.NA, mid=0.0),
-            QuoteRejectionReason.MISSING_REQUIRED_PRICE,
+            QuoteRejectionReason.MISSING_BID_OR_ASK,
         ),
     ],
 )

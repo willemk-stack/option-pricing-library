@@ -11,6 +11,7 @@ from typing import Any, cast
 
 import pandas as pd
 
+from option_pricing.marketdata.cleaning import QuoteRejectionReason
 from option_pricing.marketdata.schemas import (
     EQUITY_BARS_COLUMNS,
     EQUITY_QUOTES_COLUMNS,
@@ -456,7 +457,7 @@ def _alpaca_option_chain_row_with_audit(
             asof=asof,
             source=source,
             feed=feed,
-            reason="invalid_contract_metadata",
+            reason=_provider_contract_metadata_rejection_reason(exc),
             rejection_detail=str(exc),
             raw_quote_timestamp=raw_quote_ts,
             raw_bid=raw_bid,
@@ -474,7 +475,7 @@ def _alpaca_option_chain_row_with_audit(
             asof=asof,
             source=source,
             feed=feed,
-            reason="missing_required_price",
+            reason=QuoteRejectionReason.MISSING_BID_OR_ASK.value,
             rejection_detail="latest_quote is missing",
             raw_quote_timestamp=raw_quote_ts,
             raw_bid=raw_bid,
@@ -515,7 +516,7 @@ def _alpaca_option_chain_row_with_audit(
             asof=asof,
             source=source,
             feed=feed,
-            reason="missing_required_price",
+            reason=QuoteRejectionReason.MISSING_BID_OR_ASK.value,
             rejection_detail=(
                 "latest_quote is missing " + ", ".join(missing_price_fields)
             ),
@@ -545,7 +546,7 @@ def _alpaca_option_chain_row_with_audit(
             asof=asof,
             source=source,
             feed=feed,
-            reason="unusable_bid_ask",
+            reason=QuoteRejectionReason.MISSING_BID_OR_ASK.value,
             rejection_detail="latest_quote bid/ask must be finite numeric values",
             raw_quote_timestamp=raw_quote_ts,
             raw_bid=raw_bid,
@@ -579,6 +580,15 @@ def _alpaca_option_chain_row_with_audit(
         "source": "alpaca",
         "asof": asof,
     }, None
+
+
+def _provider_contract_metadata_rejection_reason(exc: Exception) -> str:
+    message = str(exc).lower()
+    if "expiry" in message:
+        return QuoteRejectionReason.EXPIRED_OR_BAD_EXPIRY.value
+    if "strike" in message:
+        return QuoteRejectionReason.NONPOSITIVE_STRIKE.value
+    return "invalid_contract_metadata"
 
 
 def _provider_rejected_contract_row(

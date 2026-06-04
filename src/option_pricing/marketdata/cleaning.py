@@ -27,17 +27,17 @@ _ACT_365_SECONDS = 365 * 24 * 3600
 class QuoteRejectionReason(StrEnum):
     """Primary rejection reason for a quote rejected by cleaning policy v1."""
 
-    NEGATIVE_BID = "negative_bid"
-    NONPOSITIVE_ASK = "nonpositive_ask"
-    CROSSED_MARKET = "crossed_market"
-    EXPIRED_CONTRACT = "expired_contract"
+    MISSING_BID_OR_ASK = "missing_bid_or_ask"
+    INVALID_BID_ASK_CROSS = "invalid_bid_ask_cross"
+    NONPOSITIVE_MID = "nonpositive_mid"
+    EXPIRED_OR_BAD_EXPIRY = "expired_or_bad_expiry"
     NONPOSITIVE_STRIKE = "nonpositive_strike"
-    MISSING_REQUIRED_PRICE = "missing_required_price"
-    INVALID_MID = "invalid_mid"
     BELOW_INTRINSIC_TOLERANCE = "below_intrinsic_tolerance"
     SPREAD_TOO_WIDE = "spread_too_wide"
-    MISSING_IV_FOR_IV_REQUIRED_WORKFLOW = "missing_iv_for_iv_required_workflow"
-    MISSING_VEGA_FOR_WEIGHTED_CALIBRATION = "missing_vega_for_weighted_calibration"
+    MISSING_IV = "missing_iv"
+    MISSING_GREEK = "missing_greek"
+    QUOTE_AFTER_ASOF = "quote_after_asof"
+    STALE_QUOTE = "stale_quote"
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,7 +239,7 @@ def _classify_rejection(
 
     if not math.isfinite(expiry_years) or expiry_years <= 0:
         return _Rejection(
-            QuoteRejectionReason.EXPIRED_CONTRACT,
+            QuoteRejectionReason.EXPIRED_OR_BAD_EXPIRY,
             "expiry must be after asof; "
             f"got expiry_years={_format_float(expiry_years)}",
         )
@@ -250,13 +250,13 @@ def _classify_rejection(
 
     if bid is None and ask is None and mid is None:
         return _Rejection(
-            QuoteRejectionReason.MISSING_REQUIRED_PRICE,
+            QuoteRejectionReason.MISSING_BID_OR_ASK,
             "bid, ask, and mid are required; all are missing",
         )
 
     if bid is None or ask is None:
         return _Rejection(
-            QuoteRejectionReason.MISSING_REQUIRED_PRICE,
+            QuoteRejectionReason.MISSING_BID_OR_ASK,
             "bid and ask are required; "
             f"got bid={_format_optional_float(bid)}, "
             f"ask={_format_optional_float(ask)}",
@@ -264,33 +264,33 @@ def _classify_rejection(
 
     if not math.isfinite(bid) or not math.isfinite(ask):
         return _Rejection(
-            QuoteRejectionReason.MISSING_REQUIRED_PRICE,
+            QuoteRejectionReason.MISSING_BID_OR_ASK,
             "bid and ask must be finite; "
             f"got bid={_format_float(bid)}, ask={_format_float(ask)}",
         )
 
     if bid < 0:
         return _Rejection(
-            QuoteRejectionReason.NEGATIVE_BID,
+            QuoteRejectionReason.INVALID_BID_ASK_CROSS,
             f"bid must be >= 0; got {_format_float(bid)}",
         )
 
     if ask <= 0:
         return _Rejection(
-            QuoteRejectionReason.NONPOSITIVE_ASK,
+            QuoteRejectionReason.INVALID_BID_ASK_CROSS,
             f"ask must be > 0; got {_format_float(ask)}",
         )
 
     if ask < bid:
         return _Rejection(
-            QuoteRejectionReason.CROSSED_MARKET,
+            QuoteRejectionReason.INVALID_BID_ASK_CROSS,
             "ask must be >= bid; "
             f"got bid={_format_float(bid)}, ask={_format_float(ask)}",
         )
 
     if mid is None or not math.isfinite(mid) or mid <= 0:
         return _Rejection(
-            QuoteRejectionReason.INVALID_MID,
+            QuoteRejectionReason.NONPOSITIVE_MID,
             f"mid must be finite and > 0; got {_format_optional_float(mid)}",
         )
 
@@ -317,14 +317,14 @@ def _classify_rejection(
     iv = _optional_float(row["iv"])
     if policy.require_iv and (iv is None or not math.isfinite(iv) or iv <= 0):
         return _Rejection(
-            QuoteRejectionReason.MISSING_IV_FOR_IV_REQUIRED_WORKFLOW,
+            QuoteRejectionReason.MISSING_IV,
             f"iv must be finite and > 0; got {_format_optional_float(iv)}",
         )
 
     vega = _optional_float(row["vega"])
     if policy.require_vega and (vega is None or not math.isfinite(vega) or vega <= 0):
         return _Rejection(
-            QuoteRejectionReason.MISSING_VEGA_FOR_WEIGHTED_CALIBRATION,
+            QuoteRejectionReason.MISSING_GREEK,
             f"vega must be finite and > 0; got {_format_optional_float(vega)}",
         )
 

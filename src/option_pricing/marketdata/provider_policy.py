@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pandas as pd
 
-from option_pricing.marketdata.cleaning import QuoteCleaningResult
+from option_pricing.marketdata.cleaning import QuoteCleaningResult, QuoteRejectionReason
 from option_pricing.marketdata.schemas import (
     CLEANED_QUOTES_COLUMNS,
     REJECTED_QUOTES_COLUMNS,
@@ -46,6 +46,12 @@ RATE_CURVE_TENORS = {
 }
 DEFAULT_BARS_TIMEFRAME = "1Day"
 DEFAULT_DAY_COUNT = "ACT/365"
+DATA_POLICY_SCHEMA_VERSION = "provider_snapshot_data_policy.v1"
+RATE_POLICY_FLAT_FRED_SERIES = "flat_fred_series"
+DIVIDEND_POLICY_ZERO_ASSUMPTION = "zero_assumption"
+DIVIDEND_POLICY_MANUAL_STATIC = "manual_static"
+OPTION_CLEANING_POLICY_QUOTE_CLEANING_V1 = "quote_cleaning_v1"
+OPTION_CLEANING_POLICY_ID = "quote_cleaning_policy.v1"
 _DIVIDEND_ASSUMPTION_WARNING = (
     "documented_assumption: dividend_yield=0.0, "
     "dividend_yield_source=assumption, dividend_inference=not_enabled"
@@ -197,6 +203,81 @@ def _current_provider_scope() -> dict[str, str]:
         "dividend_inference": "not_enabled",
         "option_chain_backfill": "not_enabled",
         "scheduling": "not_enabled",
+    }
+
+
+def _provider_snapshot_rate_policy(
+    *,
+    rate_series_id: str,
+    rate_source: str,
+    rate_observation_date: pd.Timestamp,
+    selected_rate: float,
+    lookback_days: int,
+    curve_series_ids: Sequence[str],
+) -> dict[str, object]:
+    observation_date = pd.Timestamp(rate_observation_date).date().isoformat()
+    return {
+        "policy": RATE_POLICY_FLAT_FRED_SERIES,
+        "provider": "fred",
+        "series_id": str(rate_series_id),
+        "rate_source": str(rate_source),
+        "rate_observation_date": observation_date,
+        "selected_rate": float(selected_rate),
+        "flat_rate": float(selected_rate),
+        "lookback_days": int(lookback_days),
+        "curve_series_ids": [str(series_id) for series_id in curve_series_ids],
+        "curve_interpolation": "not_enabled",
+    }
+
+
+def _provider_snapshot_dividend_policy(
+    *,
+    dividend_yield: float,
+    dividend_yield_source: str,
+) -> dict[str, object]:
+    policy = (
+        DIVIDEND_POLICY_ZERO_ASSUMPTION
+        if float(dividend_yield) == 0.0
+        and str(dividend_yield_source).strip().lower()
+        in {"assumption", "zero_assumption"}
+        else DIVIDEND_POLICY_MANUAL_STATIC
+    )
+    return {
+        "policy": policy,
+        "dividend_yield": float(dividend_yield),
+        "source": str(dividend_yield_source),
+        "dividend_inference": "not_enabled",
+    }
+
+
+def _provider_snapshot_option_cleaning_policy() -> dict[str, object]:
+    return {
+        "policy": OPTION_CLEANING_POLICY_QUOTE_CLEANING_V1,
+        "policy_id": OPTION_CLEANING_POLICY_ID,
+        "rejected_quotes_preserved": True,
+        "reason_codes": [reason.value for reason in QuoteRejectionReason],
+    }
+
+
+def _provider_snapshot_data_policy(
+    *,
+    equity_provider: str,
+    equity_feed: str,
+    option_provider: str,
+    option_feed: str,
+    rate_policy: Mapping[str, object],
+    dividend_policy: Mapping[str, object],
+    option_cleaning_policy: Mapping[str, object],
+) -> dict[str, object]:
+    return {
+        "schema_version": DATA_POLICY_SCHEMA_VERSION,
+        "equity_provider": str(equity_provider),
+        "equity_feed": str(equity_feed),
+        "option_provider": str(option_provider),
+        "option_feed": str(option_feed),
+        "rate_policy": dict(rate_policy),
+        "dividend_policy": dict(dividend_policy),
+        "option_cleaning_policy": dict(option_cleaning_policy),
     }
 
 
@@ -440,14 +521,14 @@ def _quality_rejected_quotes(
             _utc_timestamp(asof) - _utc_timestamp(row["quote_ts"])
         ).total_seconds()
         if policy.reject_option_quotes_after_asof and age_seconds < 0.0:
-            rejection_reason = "quote_after_asof"
+            rejection_reason = QuoteRejectionReason.QUOTE_AFTER_ASOF.value
             rejection_detail = "quote_ts is after snapshot asof"
         elif (
             policy.reject_stale_option_quotes
             and max_age_seconds is not None
             and age_seconds > float(max_age_seconds)
         ):
-            rejection_reason = "stale_quote"
+            rejection_reason = QuoteRejectionReason.STALE_QUOTE.value
             rejection_detail = (
                 f"quote_age_seconds={age_seconds:.6g} exceeds "
                 f"max_option_quote_age_seconds={float(max_age_seconds):.6g}"
@@ -594,11 +675,17 @@ def _validate_optional_nonnegative_int(value: int | None, field_name: str) -> No
 
 __all__ = [
     "DEFAULT_BARS_TIMEFRAME",
+    "DATA_POLICY_SCHEMA_VERSION",
     "DEFAULT_DAY_COUNT",
     "DEFAULT_RATE_CURVE_SERIES_IDS",
     "DEFAULT_RATE_SERIES_ID",
     "DEFAULT_SNAPSHOT_RATE_LOOKBACK_DAYS",
+    "DIVIDEND_POLICY_MANUAL_STATIC",
+    "DIVIDEND_POLICY_ZERO_ASSUMPTION",
+    "OPTION_CLEANING_POLICY_ID",
+    "OPTION_CLEANING_POLICY_QUOTE_CLEANING_V1",
     "PROVIDER_RATE_CURVE_COLUMNS",
     "ProviderSnapshotQualityPolicy",
     "RATE_CURVE_TENORS",
+    "RATE_POLICY_FLAT_FRED_SERIES",
 ]

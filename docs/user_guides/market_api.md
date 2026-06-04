@@ -156,6 +156,14 @@ Fetch one market snapshot:
 option-pricing-marketdata snapshot --underlying SPY --asof 2026-05-22T15:31:00Z --data-root out/marketdata-live
 ```
 
+Equity and option data expose separate provider/feed metadata. Use
+`--equity-feed` for stock quotes and bars and `--option-feed` for option chains.
+The legacy `--feed` flag remains as a deprecated shortcut: snapshot and
+refresh commands treat it as an option-feed override, while equity-bar backfills
+treat it as an equity-feed override. Snapshot artifacts also record
+`equity_provider`, `equity_feed`, `option_provider`, and `option_feed` instead
+of relying on one ambiguous top-level feed field.
+
 Use explicit rate, curve, provenance, and freshness controls when preparing a
 controlled real-data validation run:
 
@@ -234,20 +242,32 @@ Documented assumptions and current provider scope are written as warnings or
 manifest notes:
 
 - `dividend_yield` defaults to `0.0` with source `assumption`
+- default dividend handling is recorded as `zero_assumption`; explicit overrides
+  are recorded as `manual_static`
 - the default rate series is FRED `DGS3MO`
-- rate selection uses one FRED series observation; curve interpolation is not
+- rate selection uses one FRED series observation as `selected_rate` and
+  `flat_rate`; curve interpolation and per-expiry/bootstrapped rates are not
   enabled yet
 - dividend inference is not enabled yet
 - no option-chain historical backfill yet
 - scheduling, cron, and background refresh services are not enabled
+- option cleaning records `quote_cleaning_v1` policy metadata and preserves
+  rejected rows with stable reason codes, including `missing_bid_or_ask`,
+  `invalid_bid_ask_cross`, `nonpositive_mid`, `expired_or_bad_expiry`,
+  `nonpositive_strike`, `below_intrinsic_tolerance`, `spread_too_wide`,
+  `missing_iv`, `missing_greek`, `quote_after_asof`, and `stale_quote`
 - Alpaca option contracts without usable bid/ask may be dropped before quote
   cleaning; snapshot warnings include the raw, normalized, and dropped counts
+- local provider artifacts under `data/` or `out/marketdata-live/` are
+  operator-owned evidence and should not be committed with credentials or
+  secrets
 
 Provider diagnostics are written to snapshot manifests and run metadata. They
 record provider, operation, status, sanitized request metadata, elapsed time,
-retry count, and sanitized exception class/message when a call fails. API keys,
-secret keys, bearer tokens, authorization headers, passwords, and raw secret
-values are not written to text artifacts.
+retry count, and safe failure metadata. Failed calls expose `failure_kind` and
+`sanitized_message` rather than raw exception text. API keys, secret keys,
+bearer tokens, authorization headers, passwords, and raw secret values are not
+written to text artifacts.
 
 The provider snapshot freshness policy records:
 
@@ -282,12 +302,13 @@ The command calls `validate_provider_snapshot_bundle(...)` and verifies that
 `market_data.json`, `cleaned_quotes.parquet`, and `heston_quotes.parquet` can be
 read by the library-facing contracts. Add `--json` for stable automation output.
 
-Snapshot output includes the documented rate/dividend source metadata, feed,
-rate series, raw and normalized option contract counts when available,
-dropped/provider-rejected counts, accepted/rejected counts, warnings, and the
-main artifact paths. The `refresh-daily` aggregate result summarizes those same
-counts across all requested underlyings and records one aggregate run alongside
-the child snapshot runs.
+Snapshot output includes the documented rate/dividend source metadata, explicit
+equity/option provider and feed metadata, policy metadata, rate series, raw and
+normalized option contract counts when available, dropped/provider-rejected
+counts, accepted/rejected counts, warnings, and the main artifact paths. The
+`refresh-daily` aggregate result summarizes those same counts across all
+requested underlyings and records one aggregate run alongside the child snapshot
+runs.
 
 Normal tests use mocked providers and do not require credentials. Optional live
 smoke tests are skipped unless all three credentials, `alpaca-py`, and `pyarrow`

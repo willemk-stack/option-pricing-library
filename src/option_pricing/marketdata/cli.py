@@ -467,11 +467,28 @@ def _snapshot_payload(result: object) -> dict[str, object]:
             getattr(result, "rate_observation_date", None)
         ),
         "rate_series_id": _jsonable(getattr(result, "rate_series_id", None)),
-        "feed": _jsonable(getattr(result, "feed", None)),
+        "selected_rate": _jsonable(
+            getattr(result, "selected_rate", getattr(result, "rate", None))
+        ),
+        "flat_rate": _jsonable(
+            getattr(result, "flat_rate", getattr(result, "rate", None))
+        ),
+        "equity_provider": _jsonable(getattr(result, "equity_provider", None)),
+        "equity_feed": _jsonable(getattr(result, "equity_feed", None)),
+        "option_provider": _jsonable(getattr(result, "option_provider", None)),
+        "option_feed": _jsonable(
+            getattr(result, "option_feed", getattr(result, "feed", None))
+        ),
         "dividend_yield": _jsonable(getattr(result, "dividend_yield", None)),
         "dividend_yield_source": _jsonable(
             getattr(result, "dividend_yield_source", None)
         ),
+        "rate_policy": _jsonable(getattr(result, "rate_policy", {})),
+        "dividend_policy": _jsonable(getattr(result, "dividend_policy", {})),
+        "option_cleaning_policy": _jsonable(
+            getattr(result, "option_cleaning_policy", {})
+        ),
+        "data_policy": _jsonable(getattr(result, "data_policy", {})),
         "raw_option_contract_count": _jsonable(
             getattr(result, "raw_option_contract_count", None)
         ),
@@ -573,7 +590,12 @@ def _snapshot_summary_lines(result: object) -> list[str]:
         f"rate_source: {getattr(result, 'rate_source', None)}",
         f"rate_observation_date: {_text(getattr(result, 'rate_observation_date', None))}",
         f"rate_series_id: {getattr(result, 'rate_series_id', None)}",
-        f"feed: {getattr(result, 'feed', None)}",
+        f"selected_rate: {getattr(result, 'selected_rate', getattr(result, 'rate', None))}",
+        f"flat_rate: {getattr(result, 'flat_rate', getattr(result, 'rate', None))}",
+        f"equity_provider: {getattr(result, 'equity_provider', None)}",
+        f"equity_feed: {getattr(result, 'equity_feed', None)}",
+        f"option_provider: {getattr(result, 'option_provider', None)}",
+        f"option_feed: {getattr(result, 'option_feed', getattr(result, 'feed', None))}",
         f"dividend_yield: {getattr(result, 'dividend_yield', None)}",
         f"dividend_yield_source: {getattr(result, 'dividend_yield_source', None)}",
         "raw_option_contract_count: "

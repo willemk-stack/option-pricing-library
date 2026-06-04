@@ -20,6 +20,10 @@ from option_pricing.marketdata.provider_policy import (
     PROVIDER_RATE_CURVE_COLUMNS,
     RATE_CURVE_TENORS,
     _current_provider_scope,
+    _provider_snapshot_data_policy,
+    _provider_snapshot_dividend_policy,
+    _provider_snapshot_option_cleaning_policy,
+    _provider_snapshot_rate_policy,
 )
 from option_pricing.marketdata.provider_results import (
     ProviderSnapshotBronzePaths,
@@ -144,7 +148,6 @@ def _provider_snapshot_request_metadata(
     strike_gte: float | None,
     strike_lte: float | None,
     option_type: str | None,
-    feed: str,
     equity_feed: str,
     option_feed: str,
     rate_series_id: str,
@@ -161,7 +164,6 @@ def _provider_snapshot_request_metadata(
         "strike_gte": strike_gte,
         "strike_lte": strike_lte,
         "option_type": option_type,
-        "feed": feed,
         "equity_feed": equity_feed,
         "option_feed": option_feed,
         "rate_series_id": rate_series_id,
@@ -254,7 +256,6 @@ def _write_provider_snapshot_bronze(
     option_chain_payload: Mapping[str, Any],
     fred_payload: Mapping[str, Any],
     rate_series_id: str,
-    feed: str,
     request_metadata: Mapping[str, Any],
     diagnostics: Sequence[object],
     quality_policy: Mapping[str, object],
@@ -293,7 +294,6 @@ def _write_provider_snapshot_bronze(
         _provider_bronze_manifest(
             provider_snapshot,
             rate_series_id=rate_series_id,
-            feed=feed,
             request_metadata=request_metadata,
             diagnostics=diagnostics,
             quality_policy=quality_policy,
@@ -452,6 +452,7 @@ def _provider_snapshot_rate_curve_manifest(
             "fixture_name": provider_snapshot.fixture_name,
         },
         "rate_policy": {
+            **_metadata_mapping(provider_snapshot, "rate_policy"),
             "provider": "fred",
             "primary_series_id": str(provider_snapshot.metadata["rate_series_id"]),
             "requested_series_ids": [
@@ -469,7 +470,6 @@ def _provider_bronze_manifest(
     provider_snapshot: _ProviderSnapshot,
     *,
     rate_series_id: str,
-    feed: str,
     request_metadata: Mapping[str, Any],
     diagnostics: Sequence[object],
     quality_policy: Mapping[str, object],
@@ -486,7 +486,10 @@ def _provider_bronze_manifest(
         "underlying": provider_snapshot.underlying,
         "valuation_timestamp_utc": _utc_isoformat(provider_snapshot.asof),
         "providers": provider_snapshot.metadata["providers"],
-        "feed": feed,
+        "equity_provider": provider_snapshot.metadata["equity_provider"],
+        "equity_feed": provider_snapshot.metadata["equity_feed"],
+        "option_provider": provider_snapshot.metadata["option_provider"],
+        "option_feed": provider_snapshot.metadata["option_feed"],
         "rate_series_id": rate_series_id,
         "rate_assumptions": {
             "provider": "fred",
@@ -494,18 +497,18 @@ def _provider_bronze_manifest(
             "default_series_id": DEFAULT_RATE_SERIES_ID,
             "curve_interpolation": "not_enabled",
         },
-        "rate_policy": {
-            "provider": "fred",
-            "series_id": rate_series_id,
-            "default_series_id": DEFAULT_RATE_SERIES_ID,
-            "lookback_days": sanitized_request.get("rate_lookback_days"),
-            "curve_series_ids": sanitized_request.get("curve_series_ids", []),
-            "curve_interpolation": "not_enabled",
-        },
+        "selected_rate": provider_snapshot.metadata["selected_rate"],
+        "flat_rate": provider_snapshot.metadata["flat_rate"],
+        "rate_policy": _metadata_mapping(provider_snapshot, "rate_policy"),
         "dividend_assumptions": _provider_snapshot_dividend_assumptions(
             provider_snapshot
         ),
-        "dividend_policy": _provider_snapshot_dividend_assumptions(provider_snapshot),
+        "dividend_policy": _metadata_mapping(provider_snapshot, "dividend_policy"),
+        "option_cleaning_policy": _metadata_mapping(
+            provider_snapshot,
+            "option_cleaning_policy",
+        ),
+        "data_policy": _metadata_mapping(provider_snapshot, "data_policy"),
         "current_provider_scope": _current_provider_scope(),
         "quality_policy": dict(quality_policy),
         "quote_freshness": dict(quote_freshness),
@@ -801,9 +804,9 @@ def _provider_snapshot_run_details(
     spot_source: str,
     dividend_yield: float,
     dividend_yield_source: str,
-    feed: str,
     equity_feed: str,
     option_feed: str,
+    selected_rate: float,
     rate_lookback_days: int,
     raw_option_contract_count: int,
     normalized_option_contract_count: int,
@@ -819,36 +822,51 @@ def _provider_snapshot_run_details(
     artifact_paths: Sequence[Path],
     library_commit: str | None,
 ) -> dict[str, object]:
+    rate_policy = _provider_snapshot_rate_policy(
+        rate_series_id=rate_series_id,
+        rate_source=rate_source,
+        rate_observation_date=rate_observation_date,
+        selected_rate=selected_rate,
+        lookback_days=rate_lookback_days,
+        curve_series_ids=curve_series_ids,
+    )
+    dividend_policy = _provider_snapshot_dividend_policy(
+        dividend_yield=dividend_yield,
+        dividend_yield_source=dividend_yield_source,
+    )
+    option_cleaning_policy = _provider_snapshot_option_cleaning_policy()
+    data_policy = _provider_snapshot_data_policy(
+        equity_provider="alpaca",
+        equity_feed=equity_feed,
+        option_provider="alpaca",
+        option_feed=option_feed,
+        rate_policy=rate_policy,
+        dividend_policy=dividend_policy,
+        option_cleaning_policy=option_cleaning_policy,
+    )
     return {
         "operation": "snapshot",
         "provider": "alpaca+fred",
+        "equity_provider": "alpaca",
+        "equity_feed": equity_feed,
+        "option_provider": "alpaca",
+        "option_feed": option_feed,
         "underlying": underlying,
         "asof": _utc_isoformat(asof),
         "run_id": run_id,
         "rate_series_id": rate_series_id,
         "rate_source": rate_source,
         "rate_observation_date": rate_observation_date.date().isoformat(),
+        "selected_rate": float(selected_rate),
+        "flat_rate": float(selected_rate),
         "spot_source": spot_source,
         "dividend_yield": dividend_yield,
         "dividend_yield_source": dividend_yield_source,
-        "dividend_policy": {
-            "dividend_yield": dividend_yield,
-            "source": dividend_yield_source,
-            "dividend_inference": "not_enabled",
-        },
-        "feed": feed,
-        "equity_feed": equity_feed,
-        "option_feed": option_feed,
+        "dividend_policy": dividend_policy,
         "rate_lookback_days": rate_lookback_days,
-        "rate_policy": {
-            "provider": "fred",
-            "series_id": rate_series_id,
-            "rate_source": rate_source,
-            "rate_observation_date": rate_observation_date.date().isoformat(),
-            "lookback_days": rate_lookback_days,
-            "curve_series_ids": [str(series_id) for series_id in curve_series_ids],
-            "curve_interpolation": "not_enabled",
-        },
+        "rate_policy": rate_policy,
+        "option_cleaning_policy": option_cleaning_policy,
+        "data_policy": data_policy,
         "raw_option_contract_count": raw_option_contract_count,
         "normalized_option_contract_count": normalized_option_contract_count,
         "dropped_before_cleaning_count": dropped_before_cleaning_count,
@@ -863,6 +881,16 @@ def _provider_snapshot_run_details(
         "artifact_paths": _relative_artifact_references(storage.root, artifact_paths),
         "library_commit": library_commit,
     }
+
+
+def _metadata_mapping(
+    provider_snapshot: _ProviderSnapshot,
+    key: str,
+) -> dict[str, object]:
+    value = provider_snapshot.metadata.get(key)
+    if isinstance(value, Mapping):
+        return dict(value)
+    return {}
 
 
 def _required_text(value: str, field_name: str) -> str:

@@ -269,7 +269,7 @@ def test_rejected_quote_fixture_flows_evidence_through_pipeline_and_bundle(
 
     assert not result.quote_cleaning.cleaned_quotes.empty
     assert not result.quote_cleaning.rejected_quotes.empty
-    assert result.quote_cleaning.reason_counts == {"crossed_market": 1}
+    assert result.quote_cleaning.reason_counts == {"invalid_bid_ask_cross": 1}
     assert result.silver_paths.rejected_quotes.exists()
 
     bundle_root = _bundle_root(tmp_path)
@@ -286,7 +286,7 @@ def test_rejected_quote_fixture_flows_evidence_through_pipeline_and_bundle(
     assert manifest["rows"]["rejected_quotes"] == len(
         result.quote_cleaning.rejected_quotes
     )
-    assert manifest["reason_counts"] == {"crossed_market": 1}
+    assert manifest["reason_counts"] == {"invalid_bid_ask_cross": 1}
     manifest_text = result.model_validation_bundle.manifest_path.read_text(
         encoding="utf-8"
     )
@@ -309,7 +309,7 @@ def test_all_quotes_rejected_pipeline_writes_auditable_empty_gold_and_bundle(
     assert result.quote_cleaning.cleaned_quotes.empty
     assert not result.quote_cleaning.rejected_quotes.empty
     assert result.quote_cleaning.reason_counts == {
-        "crossed_market": 1,
+        "invalid_bid_ask_cross": 1,
         "spread_too_wide": 1,
     }
     assert result.quote_cleaning.warnings == ("all_quotes_rejected",)

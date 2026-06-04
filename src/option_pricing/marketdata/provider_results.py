@@ -27,6 +27,7 @@ class ProviderCallDiagnostic:
     elapsed_ms: float
     exception_type: str | None = None
     message: str | None = None
+    failure_kind: str | None = None
     retry_count: int = 0
     rows_or_contracts_in: int | None = None
     rows_or_contracts_out: int | None = None
@@ -45,7 +46,10 @@ class ProviderCallDiagnostic:
         if self.exception_type is not None:
             payload["exception_type"] = self.exception_type
         if self.message is not None:
+            payload["sanitized_message"] = self.message
             payload["message"] = self.message
+        if self.failure_kind is not None:
+            payload["failure_kind"] = self.failure_kind
         if self.rows_or_contracts_in is not None:
             payload["rows_or_contracts_in"] = int(self.rows_or_contracts_in)
         if self.rows_or_contracts_out is not None:
@@ -116,6 +120,16 @@ class ProviderSnapshotResult:
     diagnostics: tuple[ProviderCallDiagnostic, ...] = ()
     quality_policy: Mapping[str, object] = field(default_factory=dict)
     quote_freshness: Mapping[str, object] = field(default_factory=dict)
+    equity_provider: str = "alpaca"
+    equity_feed: str = "iex"
+    option_provider: str = "alpaca"
+    option_feed: str = "indicative"
+    selected_rate: float | None = None
+    flat_rate: float | None = None
+    rate_policy: Mapping[str, object] = field(default_factory=dict)
+    dividend_policy: Mapping[str, object] = field(default_factory=dict)
+    option_cleaning_policy: Mapping[str, object] = field(default_factory=dict)
+    data_policy: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

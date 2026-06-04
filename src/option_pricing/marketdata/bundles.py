@@ -231,6 +231,7 @@ def build_model_validation_manifest(
         "artifacts": _artifact_payload(artifacts),
         "heston_smoke": _heston_smoke_payload(heston_smoke),
     }
+    _add_optional_policy_metadata(manifest, market_data_payload)
     validate_model_validation_manifest(manifest)
     return manifest
 
@@ -307,6 +308,7 @@ def _write_model_validation_bundle_artifacts(
         snapshot_id=snapshot_id,
         cleaning_policy=cleaning_policy,
         library_commit=library_commit,
+        source_metadata=getattr(local_snapshot, "metadata", None),
     )
     market_data_payload = market_data_snapshot_to_json(market_snapshot)
     _require_payload_matches_snapshot(
@@ -888,6 +890,27 @@ def _market_source_text(payload: Mapping[str, object], key: str) -> str:
             source_name="market_data_payload.sources",
         )
     return _required_mapping_text(payload, key, source_name="market_data_payload")
+
+
+def _add_optional_policy_metadata(
+    manifest: dict[str, object],
+    market_data_payload: Mapping[str, object],
+) -> None:
+    for key in (
+        "equity_provider",
+        "equity_feed",
+        "option_provider",
+        "option_feed",
+        "selected_rate",
+        "flat_rate",
+        "rate_policy",
+        "dividend_policy",
+        "option_cleaning_policy",
+        "data_policy",
+    ):
+        value = market_data_payload.get(key)
+        if value is not None:
+            manifest[key] = dict(value) if isinstance(value, Mapping) else value
 
 
 def _int_mapping_payload(

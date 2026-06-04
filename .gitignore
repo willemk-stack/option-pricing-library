@@ -98,6 +98,9 @@ target/
 
 # Virtual environments
 .env
+.env.*
+*.env
+.env.local.ps1
 .venv
 env/
 venv/

@@ -86,9 +86,13 @@ from option_pricing.marketdata.provider_policy import (
     _coerce_provider_snapshot_quality_policy,
     _current_provider_scope,
     _merge_unique_warnings,
+    _provider_snapshot_data_policy,
+    _provider_snapshot_dividend_policy,
     _provider_snapshot_freshness_stats,
+    _provider_snapshot_option_cleaning_policy,
     _provider_snapshot_quality_failures,
     _provider_snapshot_quality_warnings,
+    _provider_snapshot_rate_policy,
     _provider_snapshot_warnings,
 )
 from option_pricing.marketdata.provider_results import (
@@ -281,7 +285,6 @@ class MarketDataPipeline:
             strike_gte=strike_gte,
             strike_lte=strike_lte,
             option_type=option_type,
-            feed=resolved_option_feed,
             equity_feed=resolved_equity_feed,
             option_feed=resolved_option_feed,
             rate_series_id=cleaned_rate_series_id,
@@ -387,6 +390,28 @@ class MarketDataPipeline:
             ),
         )
         rate_source = f"{rate_selection.source}:{rate_selection.series_id}"
+        rate_policy_payload = _provider_snapshot_rate_policy(
+            rate_series_id=cleaned_rate_series_id,
+            rate_source=rate_source,
+            rate_observation_date=rate_selection.observation_date,
+            selected_rate=rate_selection.rate,
+            lookback_days=cleaned_rate_lookback_days,
+            curve_series_ids=cleaned_curve_series_ids,
+        )
+        dividend_policy_payload = _provider_snapshot_dividend_policy(
+            dividend_yield=cleaned_dividend_yield,
+            dividend_yield_source=cleaned_dividend_yield_source,
+        )
+        option_cleaning_policy_payload = _provider_snapshot_option_cleaning_policy()
+        data_policy_payload = _provider_snapshot_data_policy(
+            equity_provider="alpaca",
+            equity_feed=resolved_equity_feed,
+            option_provider="alpaca",
+            option_feed=resolved_option_feed,
+            rate_policy=rate_policy_payload,
+            dividend_policy=dividend_policy_payload,
+            option_cleaning_policy=option_cleaning_policy_payload,
+        )
         market_inputs = normalize_market_inputs(
             _market_inputs_frame(
                 underlying=cleaned_underlying,
@@ -467,9 +492,16 @@ class MarketDataPipeline:
                 "source_type": "provider_snapshot",
                 "providers": provider_sources,
                 "rate_series_id": cleaned_rate_series_id,
-                "feed": resolved_option_feed,
+                "equity_provider": "alpaca",
                 "equity_feed": resolved_equity_feed,
+                "option_provider": "alpaca",
                 "option_feed": resolved_option_feed,
+                "selected_rate": float(rate_selection.rate),
+                "flat_rate": float(rate_selection.rate),
+                "rate_policy": rate_policy_payload,
+                "dividend_policy": dividend_policy_payload,
+                "option_cleaning_policy": option_cleaning_policy_payload,
+                "data_policy": data_policy_payload,
                 "current_provider_scope": _current_provider_scope(),
                 "quality_policy": quality_policy_payload,
                 "quote_freshness": quote_freshness,
@@ -501,7 +533,6 @@ class MarketDataPipeline:
             option_chain_payload=option_chain_payload,
             fred_payload=fred_payload,
             rate_series_id=cleaned_rate_series_id,
-            feed=resolved_option_feed,
             request_metadata=snapshot_request_metadata,
             diagnostics=diagnostics,
             quality_policy=quality_policy_payload,
@@ -583,9 +614,9 @@ class MarketDataPipeline:
                 spot_source=spot_source,
                 dividend_yield=cleaned_dividend_yield,
                 dividend_yield_source=cleaned_dividend_yield_source,
-                feed=resolved_option_feed,
                 equity_feed=resolved_equity_feed,
                 option_feed=resolved_option_feed,
+                selected_rate=rate_selection.rate,
                 rate_lookback_days=cleaned_rate_lookback_days,
                 raw_option_contract_count=raw_option_contract_count,
                 normalized_option_contract_count=len(option_chain),
@@ -635,6 +666,16 @@ class MarketDataPipeline:
             diagnostics=tuple(diagnostics),
             quality_policy=quality_policy_payload,
             quote_freshness=quote_freshness,
+            equity_provider="alpaca",
+            equity_feed=resolved_equity_feed,
+            option_provider="alpaca",
+            option_feed=resolved_option_feed,
+            selected_rate=float(rate_selection.rate),
+            flat_rate=float(rate_selection.rate),
+            rate_policy=rate_policy_payload,
+            dividend_policy=dividend_policy_payload,
+            option_cleaning_policy=option_cleaning_policy_payload,
+            data_policy=data_policy_payload,
         )
 
     def refresh_daily(
@@ -765,9 +806,10 @@ class MarketDataPipeline:
                 underlyings=cleaned_underlyings,
                 asof=asof_timestamp,
                 rate_series_id=cleaned_rate_series_id,
-                feed=resolved_option_feed,
                 equity_feed=resolved_equity_feed,
                 option_feed=resolved_option_feed,
+                selected_rate=float(cast(float, results[0].selected_rate)),
+                rate_observation_date=results[0].rate_observation_date,
                 rate_lookback_days=cleaned_rate_lookback_days,
                 curve_series_ids=cleaned_curve_series_ids,
                 quality_policy=quality_policy_payload,
@@ -1811,9 +1853,10 @@ def _provider_refresh_daily_run_details(
     underlyings: Sequence[str],
     asof: pd.Timestamp,
     rate_series_id: str,
-    feed: str,
     equity_feed: str,
     option_feed: str,
+    selected_rate: float,
+    rate_observation_date: pd.Timestamp,
     rate_lookback_days: int,
     curve_series_ids: Sequence[str],
     quality_policy: Mapping[str, object],
@@ -1829,24 +1872,46 @@ def _provider_refresh_daily_run_details(
     artifact_paths: Sequence[Path],
     library_commit: str | None,
 ) -> dict[str, object]:
+    rate_policy = _provider_snapshot_rate_policy(
+        rate_series_id=rate_series_id,
+        rate_source=f"fred:{rate_series_id}",
+        rate_observation_date=rate_observation_date,
+        selected_rate=selected_rate,
+        lookback_days=rate_lookback_days,
+        curve_series_ids=curve_series_ids,
+    )
+    dividend_policy = _provider_snapshot_dividend_policy(
+        dividend_yield=dividend_yield,
+        dividend_yield_source=dividend_yield_source,
+    )
+    option_cleaning_policy = _provider_snapshot_option_cleaning_policy()
+    data_policy = _provider_snapshot_data_policy(
+        equity_provider="alpaca",
+        equity_feed=equity_feed,
+        option_provider="alpaca",
+        option_feed=option_feed,
+        rate_policy=rate_policy,
+        dividend_policy=dividend_policy,
+        option_cleaning_policy=option_cleaning_policy,
+    )
     return {
         "operation": "refresh_daily",
         "provider": "alpaca+fred",
+        "equity_provider": "alpaca",
+        "equity_feed": equity_feed,
+        "option_provider": "alpaca",
+        "option_feed": option_feed,
         "aggregate_run_id": aggregate_run_id,
         "child_run_ids": list(child_run_ids),
         "underlyings": list(underlyings),
         "asof": _utc_isoformat(asof),
         "rate_series_id": rate_series_id,
-        "feed": feed,
-        "equity_feed": equity_feed,
-        "option_feed": option_feed,
-        "rate_policy": {
-            "provider": "fred",
-            "series_id": rate_series_id,
-            "lookback_days": rate_lookback_days,
-            "curve_series_ids": [str(series_id) for series_id in curve_series_ids],
-            "curve_interpolation": "not_enabled",
-        },
+        "selected_rate": float(selected_rate),
+        "flat_rate": float(selected_rate),
+        "rate_policy": rate_policy,
+        "dividend_policy": dividend_policy,
+        "option_cleaning_policy": option_cleaning_policy,
+        "data_policy": data_policy,
         "quality_policy": dict(quality_policy),
         "current_provider_scope": _current_provider_scope(),
         "filters": {
