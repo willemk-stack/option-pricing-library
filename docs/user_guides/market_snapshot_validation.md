@@ -463,8 +463,8 @@ print(context)
 ```
 
 Review the payload for spot, rate, dividend yield, day-count, compounding,
-source labels, run ID, and `library_commit` when provided. The JSON should stay
-local-only and credential-free.
+source labels, policy metadata, run ID, and `library_commit` when provided. The
+JSON should stay local-only and credential-free.
 
 ### What a reviewer should look for
 
@@ -477,7 +477,7 @@ local-only and credential-free.
   `rejected_quotes.parquet`.
 - Heston smoke is `skipped`, `success`, or `failed` with an actionable message.
 - `market_data.json` records spot, rate, dividend, day-count, compounding,
-  sources, run ID, and library commit if provided.
+  sources, policy metadata, run ID, and library commit if provided.
 - Generated artifacts contain no credentials, provider names, secret-looking
   keys, or live-source claims.
 
@@ -555,7 +555,7 @@ self-contained local bundle.
 
 Quote cleaning is deterministic. The default `QuoteCleaningPolicyV1` values are:
 
-- `max_relative_spread=1.00`
+- `max_relative_spread=None`
 - `intrinsic_tolerance=1e-8`
 - `require_iv=False`
 - `require_vega=False`
@@ -564,6 +564,19 @@ Quote cleaning is deterministic. The default `QuoteCleaningPolicyV1` values are:
 Each rejected row receives one primary rejection reason in policy order. Rejected
 quotes remain first-class evidence and are written to `rejected_quotes.parquet`
 in Silver and in the model-validation bundle.
+
+The provider-backed policy metadata names the staged layers explicitly:
+
+- `raw_option_quotes` preserves provider rows as close to raw as practical
+- `clean_option_quotes` contains market-sane recoverable quotes
+- `model_validation_quotes` is the stricter model-ready subset
+
+Clean quotes may still be missing IV, Greeks, moneyness, or other derived
+fields. The cleaner computes `mid`, `spread`, `relative_spread`,
+`time_to_expiry_years`, `moneyness`, `log_moneyness`, and
+`option_price_for_model` when the needed inputs are available, and records
+readiness flags such as `model_validation_ready`, `iv_validation_ready`, and
+`greek_validation_ready`.
 
 Rejected quote rows must not be duplicated into manifest JSON. Manifests may
 record rejected row counts, reason counts, warnings, and artifact filenames, but
@@ -575,22 +588,28 @@ The local cleaning conventions are:
 - date-only expiry is interpreted as midnight UTC
 - `moneyness = strike / spot`
 - `spot` comes from normalized `market_inputs`
-- intrinsic value uses simple spot intrinsic for calls and puts
 - `relative_spread = (ask - bid) / mid`
 
 Primary rejection reasons are:
 
-- `missing_bid_or_ask`
-- `invalid_bid_ask_cross`
+- `unparseable_contract`
+- `bad_expiry`
+- `expired_contract`
 - `nonpositive_mid`
-- `expired_or_bad_expiry`
 - `nonpositive_strike`
-- `below_intrinsic_tolerance`
-- `spread_too_wide`
-- `missing_iv`
-- `missing_greek`
+- `negative_bid`
+- `negative_ask`
+- `crossed_bid_ask`
 - `quote_after_asof`
 - `stale_quote`
+- `missing_price_source`
+- `missing_spot_for_moneyness`
+- `missing_rate_for_model`
+- `missing_dividend_for_model`
+- `missing_time_to_expiry_for_model`
+- `missing_iv_for_iv_validation`
+- `unsupported_option_right`
+- `nonfinite_numeric_field`
 
 ## Model-validation bundle
 

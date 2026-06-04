@@ -378,7 +378,7 @@ def test_normalize_alpaca_option_chain_missing_last_and_optional_fields_are_null
     assert str(normalized["open_interest"].dtype) == "Int64"
 
 
-def test_normalize_alpaca_option_chain_skips_missing_or_unusable_quotes() -> None:
+def test_normalize_alpaca_option_chain_preserves_recoverable_price_gaps() -> None:
     normalized = normalize_alpaca_option_chain(
         {
             "underlying": "SPY",
@@ -409,22 +409,21 @@ def test_normalize_alpaca_option_chain_skips_missing_or_unusable_quotes() -> Non
         }
     )
 
-    assert normalized["contract_symbol"].astype(str).tolist() == ["SPY260619C00530000"]
+    assert normalized["contract_symbol"].astype(str).tolist() == [
+        "SPY260619C00510000",
+        "SPY260619C00520000",
+        "SPY260619C00530000",
+    ]
+    assert normalized["bid"].isna().tolist() == [True, True, False]
+    assert normalized["ask"].astype(float).tolist() == pytest.approx([2.0, 2.0, 1.4])
 
 
-def test_normalize_alpaca_option_chain_all_unusable_quotes_fail_clearly() -> None:
-    with pytest.raises(ValueError, match="usable latest quote bid/ask"):
+def test_normalize_alpaca_option_chain_all_missing_latest_quotes_fail_clearly() -> None:
+    with pytest.raises(ValueError, match="parsable latest quote"):
         normalize_alpaca_option_chain(
             {
                 "underlying": "SPY",
-                "contracts": {
-                    "SPY260619C00500000": {
-                        "latest_quote": {
-                            "timestamp": "2026-05-22T15:30:00Z",
-                            "ask_price": 4.4,
-                        }
-                    }
-                },
+                "contracts": {"SPY260619C00500000": {"latest_quote": None}},
                 "asof": "2026-05-22T15:31:00Z",
             }
         )

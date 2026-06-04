@@ -172,6 +172,9 @@ option-pricing-marketdata snapshot \
   --underlying SPY \
   --rate-lookback-days 45 \
   --curve-series DGS1MO DGS3MO DGS6MO DGS1 \
+  --quote-freshness-mode intraday_strict \
+  --max-quote-age-seconds 1800 \
+  --stale-quote-action reject \
   --max-equity-quote-age-seconds 900 \
   --max-option-quote-age-seconds 1800 \
   --reject-stale-option-quotes \
@@ -222,11 +225,40 @@ Backfill Alpaca equity bars:
 option-pricing-marketdata backfill-bars --symbols SPY QQQ --start 2026-05-20 --end 2026-05-23 --timeframe 1Day --data-root out/marketdata-live
 ```
 
-Override the documented dividend assumption:
+Override the documented dividend assumption for one run:
 
 ```bash
 option-pricing-marketdata snapshot --underlying SPY --dividend-yield 0.0125 --dividend-yield-source manual_override --data-root out/marketdata-live
 ```
+
+For repeatable per-symbol dividend assumptions, use a local policy config and
+pass it with `--policy-config`:
+
+```json
+{
+  "dividends": {
+    "default_policy": "zero_assumption",
+    "static_yields": {
+      "SPY": {
+        "dividend_yield": 0.0125,
+        "source": "manual_static",
+        "note": "Approximate annualized dividend yield for validation"
+      },
+      "TSLA": {
+        "dividend_yield": 0.0,
+        "source": "manual_static",
+        "note": "Explicit no-dividend assumption"
+      }
+    }
+  }
+}
+```
+
+`manual_static` permits non-zero yields and explicit zero yields. An absent
+symbol falls back to `zero_assumption`. The recognized future policies
+`provider_trailing_yield` and `implied_carry` are intentionally unsupported in
+this pass: the former is a backward-looking provider dividend proxy, and the
+latter is a research/diagnostic artifact inferred from option prices.
 
 Emit stable JSON output for automation:
 
@@ -241,23 +273,27 @@ stays concise by default.
 Documented assumptions and current provider scope are written as warnings or
 manifest notes:
 
-- `dividend_yield` defaults to `0.0` with source `assumption`
-- default dividend handling is recorded as `zero_assumption`; explicit overrides
-  are recorded as `manual_static`
-- the default rate series is FRED `DGS3MO`
-- rate selection uses one FRED series observation as `selected_rate` and
-  `flat_rate`; curve interpolation and per-expiry/bootstrapped rates are not
-  enabled yet
-- dividend inference is not enabled yet
+- `dividend_yield` defaults to `0.0` with policy `zero_assumption`
+- explicit dividend overrides and configured static yields are recorded as
+  `manual_static`
+- rate policy is `fred_treasury_zero_proxy_linear_cc`
+- the rate curve is a FRED Treasury zero-rate proxy with linear interpolation
+  on continuously compounded rates
+- FRED percentage observations are converted to decimal rates and then to
+  continuous rates with `log(1 + r)`
+- the curve uses `DGS1MO`, `DGS3MO`, `DGS6MO`, `DGS1`, and `DGS2` when
+  available; if fewer than two points are usable, the selected flat FRED rate is
+  used as a fallback and recorded
+- the proxy curve is not a bootstrapped zero curve; manifests set
+  `rate_is_bootstrapped=false`
 - no option-chain historical backfill yet
 - scheduling, cron, and background refresh services are not enabled
-- option cleaning records `quote_cleaning_v1` policy metadata and preserves
-  rejected rows with stable reason codes, including `missing_bid_or_ask`,
-  `invalid_bid_ask_cross`, `nonpositive_mid`, `expired_or_bad_expiry`,
-  `nonpositive_strike`, `below_intrinsic_tolerance`, `spread_too_wide`,
-  `missing_iv`, `missing_greek`, `quote_after_asof`, and `stale_quote`
-- Alpaca option contracts without usable bid/ask may be dropped before quote
-  cleaning; snapshot warnings include the raw, normalized, and dropped counts
+- option cleaning records `staged_recoverable_quotes_v1` policy metadata and
+  preserves rejected rows with stable reason codes such as
+  `missing_price_source`, `crossed_bid_ask`, `negative_bid`, `negative_ask`,
+  `quote_after_asof`, and `stale_quote`
+- recoverable option rows are not dropped merely because IV, Greeks,
+  moneyness, or model-derived fields are missing
 - local provider artifacts under `data/` or `out/marketdata-live/` are
   operator-owned evidence and should not be committed with credentials or
   secrets
@@ -271,22 +307,39 @@ written to text artifacts.
 
 The provider snapshot freshness policy records:
 
+- `quote_freshness_mode`: `demo_lenient`, `end_of_day`, or `intraday_strict`
+- `max_quote_age_seconds`, when configured
 - equity quote age in seconds
 - option quote age min/median/max in seconds
+- `quote_age_summary`
 - option quotes after the requested `asof`
-- stale option quote and stale accepted quote counts
+- stale option quote, stale accepted quote, and stale quote counts
+- quote freshness warnings
 - accepted call/put/expiry counts
 
-By default the policy warns but stays compatible with existing Phase B behavior.
+`demo_lenient` warns about stale rows and preserves otherwise usable quotes.
+`end_of_day` can allow latest prior-session data with
+`--allow-prior-session`, while still recording age and warning metadata.
+`intraday_strict` rejects or fails stale rows according to
+`--stale-quote-action` and `--max-quote-age-seconds`.
 Use `--reject-stale-option-quotes` with `--max-option-quote-age-seconds` to move
-stale accepted options into `rejected_quotes` with reason `stale_quote`. Use
-`--reject-option-quotes-after-asof` to move accepted option quotes with
-`quote_ts > asof` into `rejected_quotes` with reason `quote_after_asof`.
+stale accepted options into `rejected_quotes` with reason `stale_quote`. Option
+quotes with `quote_ts > asof` are rejected from clean quotes with reason
+`quote_after_asof`.
 Minimum-shape flags `--min-accepted-contracts`, `--min-accepted-calls`,
 `--min-accepted-puts`, and `--min-expiries` fail the snapshot when the accepted
 set is too small for the intended model run. Use `--reject-stale-equity-quote`
 to fail when the equity quote violates the freshness or on-or-before-`asof`
 policy.
+
+Provider-backed snapshots keep three option quote layers distinct:
+
+- `raw_option_quotes` preserves provider rows as close to raw as practical
+- `clean_option_quotes` keeps market-sane recoverable quotes and computes
+  fields such as `mid`, `spread`, `relative_spread`, `time_to_expiry_years`,
+  `moneyness`, `log_moneyness`, and `option_price_for_model` when possible
+- `model_validation_quotes` is the stricter model-ready subset; provider IV and
+  Greeks are not required unless the validation target specifically needs them
 
 Validate model-facing artifacts after a provider-backed snapshot with the
 credential-free helper:

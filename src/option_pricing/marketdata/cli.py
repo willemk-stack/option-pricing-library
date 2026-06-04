@@ -13,6 +13,7 @@ from option_pricing.marketdata.bundles import ModelValidationBundleConfig
 from option_pricing.marketdata.config import (
     AlpacaConfig,
     FredConfig,
+    MarketDataPolicyConfig,
     PipelineConfig,
     StorageConfig,
 )
@@ -155,6 +156,12 @@ def _add_common_storage_options(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="Optional library commit recorded in manifests and run metadata.",
     )
+    parser.add_argument(
+        "--policy-config",
+        type=Path,
+        default=None,
+        help="Optional JSON/TOML/YAML marketdata policy config.",
+    )
 
 
 def _add_run_id_option(parser: argparse.ArgumentParser) -> None:
@@ -248,6 +255,29 @@ def _add_snapshot_query_options(parser: argparse.ArgumentParser) -> None:
         help="Warn/reject when option quotes are older than this many seconds.",
     )
     parser.add_argument(
+        "--quote-freshness-mode",
+        choices=("demo_lenient", "end_of_day", "intraday_strict"),
+        default="demo_lenient",
+        help="Quote freshness mode used by snapshot cleaning and diagnostics.",
+    )
+    parser.add_argument(
+        "--max-quote-age-seconds",
+        type=float,
+        default=None,
+        help="Unified quote max age for intraday_strict mode.",
+    )
+    parser.add_argument(
+        "--allow-prior-session",
+        action="store_true",
+        help="Allow prior-session quote data in end_of_day mode.",
+    )
+    parser.add_argument(
+        "--stale-quote-action",
+        choices=("warn", "reject", "fail"),
+        default="warn",
+        help="Action for stale option quotes under the selected freshness mode.",
+    )
+    parser.add_argument(
         "--reject-stale-option-quotes",
         action="store_true",
         help="Move stale accepted option quotes to rejected_quotes.",
@@ -291,10 +321,16 @@ def _add_snapshot_query_options(parser: argparse.ArgumentParser) -> None:
 def _build_config(args: argparse.Namespace) -> PipelineConfig:
     default_alpaca = AlpacaConfig()
     equity_feed, option_feed = _config_feeds(args, default_alpaca)
+    policy_config = (
+        MarketDataPolicyConfig()
+        if getattr(args, "policy_config", None) is None
+        else MarketDataPolicyConfig.from_file(args.policy_config)
+    )
     return PipelineConfig(
         alpaca=AlpacaConfig(equity_feed=equity_feed, option_feed=option_feed),
         fred=FredConfig(),
         storage=StorageConfig(root=args.data_root),
+        policy=policy_config,
     )
 
 
@@ -725,6 +761,15 @@ def _curve_series_ids(
 
 def _quality_policy_payload(args: argparse.Namespace) -> dict[str, object] | None:
     payload: dict[str, object] = {}
+    for arg_name in (
+        "quote_freshness_mode",
+        "max_quote_age_seconds",
+        "allow_prior_session",
+        "stale_quote_action",
+    ):
+        value = getattr(args, arg_name, None)
+        if value is not None:
+            payload[arg_name] = value
     max_equity_age = getattr(args, "max_equity_quote_age_seconds", None)
     if max_equity_age is not None:
         payload["max_equity_quote_age_seconds"] = max_equity_age

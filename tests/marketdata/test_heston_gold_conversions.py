@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 
 import numpy as np
@@ -42,6 +43,20 @@ def _cleaned_quote_records() -> list[dict[str, object]]:
             "rho": 0.039,
             "open_interest": 390,
             "moneyness": 0.95,
+            "spread": 0.16,
+            "relative_spread": 0.16 / 7.13,
+            "log_moneyness": math.log(0.95),
+            "time_to_expiry_years": 0.123456789,
+            "option_price_for_model": 7.13,
+            "mid_computed": True,
+            "time_to_expiry_computed": True,
+            "moneyness_computed": True,
+            "provider_iv_available": True,
+            "provider_greeks_available": True,
+            "model_price_available": True,
+            "model_validation_ready": True,
+            "iv_validation_ready": True,
+            "greek_validation_ready": True,
             "source": "unit_test",
             "cleaning_policy": "quote_cleaning_policy.v1",
         },
@@ -66,6 +81,20 @@ def _cleaned_quote_records() -> list[dict[str, object]]:
             "rho": -0.040,
             "open_interest": 415,
             "moneyness": 1.05,
+            "spread": 0.20,
+            "relative_spread": 0.20 / 5.65,
+            "log_moneyness": math.log(1.05),
+            "time_to_expiry_years": 0.234567891,
+            "option_price_for_model": 5.65,
+            "mid_computed": True,
+            "time_to_expiry_computed": True,
+            "moneyness_computed": True,
+            "provider_iv_available": True,
+            "provider_greeks_available": True,
+            "model_price_available": True,
+            "model_validation_ready": True,
+            "iv_validation_ready": True,
+            "greek_validation_ready": True,
             "source": "unit_test",
             "cleaning_policy": "quote_cleaning_policy.v1",
         },

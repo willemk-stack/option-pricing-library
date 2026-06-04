@@ -6,7 +6,26 @@ from typing import Any, cast
 
 import pandas as pd
 
-from option_pricing.marketdata.cleaning import QuoteCleaningResult, QuoteRejectionReason
+from option_pricing.marketdata.cleaning import (
+    MODEL_VALIDATION_POLICY_MODEL_READY_QUOTES_V1,
+    OPTION_CLEANING_POLICY_STAGED_RECOVERABLE_QUOTES_V1,
+    QuoteCleaningResult,
+    QuoteRejectionReason,
+)
+from option_pricing.marketdata.config import (
+    DIVIDEND_POLICY_IMPLIED_CARRY,
+    DIVIDEND_POLICY_MANUAL_STATIC,
+    DIVIDEND_POLICY_PROVIDER_TRAILING_YIELD,
+    DIVIDEND_POLICY_ZERO_ASSUMPTION,
+    MarketDataPolicyConfig,
+)
+from option_pricing.marketdata.rates import (
+    RATE_COMPOUNDING_CONTINUOUS,
+    RATE_CURVE_SOURCE_FRED,
+    RATE_EXTRAPOLATION_CLAMP_WITH_WARNING,
+    RATE_INTERPOLATION_LINEAR,
+    RATE_POLICY_FRED_TREASURY_ZERO_PROXY_LINEAR_CC,
+)
 from option_pricing.marketdata.schemas import (
     CLEANED_QUOTES_COLUMNS,
     REJECTED_QUOTES_COLUMNS,
@@ -28,14 +47,14 @@ DEFAULT_RATE_CURVE_SERIES_IDS = (
     "DGS2",
 )
 PROVIDER_RATE_CURVE_COLUMNS = (
+    "tenor_years",
     "series_id",
-    "tenor",
     "observation_date",
-    "value_percent",
-    "continuous_decimal",
+    "raw_percent_rate",
+    "decimal_rate",
+    "continuous_rate",
     "source",
     "asof",
-    "day_count",
 )
 RATE_CURVE_TENORS = {
     "DGS1MO": "1M",
@@ -47,14 +66,27 @@ RATE_CURVE_TENORS = {
 DEFAULT_BARS_TIMEFRAME = "1Day"
 DEFAULT_DAY_COUNT = "ACT/365"
 DATA_POLICY_SCHEMA_VERSION = "provider_snapshot_data_policy.v1"
-RATE_POLICY_FLAT_FRED_SERIES = "flat_fred_series"
-DIVIDEND_POLICY_ZERO_ASSUMPTION = "zero_assumption"
-DIVIDEND_POLICY_MANUAL_STATIC = "manual_static"
 OPTION_CLEANING_POLICY_QUOTE_CLEANING_V1 = "quote_cleaning_v1"
 OPTION_CLEANING_POLICY_ID = "quote_cleaning_policy.v1"
+QUOTE_FRESHNESS_MODE_DEMO_LENIENT = "demo_lenient"
+QUOTE_FRESHNESS_MODE_END_OF_DAY = "end_of_day"
+QUOTE_FRESHNESS_MODE_INTRADAY_STRICT = "intraday_strict"
+STALE_QUOTE_ACTION_WARN = "warn"
+STALE_QUOTE_ACTION_REJECT = "reject"
+STALE_QUOTE_ACTION_FAIL = "fail"
+SUPPORTED_QUOTE_FRESHNESS_MODES = frozenset(
+    {
+        QUOTE_FRESHNESS_MODE_DEMO_LENIENT,
+        QUOTE_FRESHNESS_MODE_END_OF_DAY,
+        QUOTE_FRESHNESS_MODE_INTRADAY_STRICT,
+    }
+)
+SUPPORTED_STALE_QUOTE_ACTIONS = frozenset(
+    {STALE_QUOTE_ACTION_WARN, STALE_QUOTE_ACTION_REJECT, STALE_QUOTE_ACTION_FAIL}
+)
 _DIVIDEND_ASSUMPTION_WARNING = (
     "documented_assumption: dividend_yield=0.0, "
-    "dividend_yield_source=assumption, dividend_inference=not_enabled"
+    "dividend_policy=zero_assumption, dividend_inference=not_enabled"
 )
 _NO_OPTION_CHAIN_BACKFILL_WARNING = (
     "current_provider_scope: option_chain_backfill=not_enabled"
@@ -74,6 +106,10 @@ _BARS_BACKFILL_WARNING = (
 class ProviderSnapshotQualityPolicy:
     """Freshness and minimum-shape checks for provider-backed snapshots."""
 
+    quote_freshness_mode: str = QUOTE_FRESHNESS_MODE_DEMO_LENIENT
+    max_quote_age_seconds: float | None = None
+    allow_prior_session: bool = False
+    stale_quote_action: str = STALE_QUOTE_ACTION_WARN
     max_equity_quote_age_seconds: float | None = None
     max_option_quote_age_seconds: float | None = None
     warn_on_stale_quotes: bool = True
@@ -88,6 +124,21 @@ class ProviderSnapshotQualityPolicy:
     min_expiries: int | None = None
 
     def __post_init__(self) -> None:
+        _validate_choice(
+            self.quote_freshness_mode,
+            SUPPORTED_QUOTE_FRESHNESS_MODES,
+            "quote_freshness_mode",
+        )
+        _validate_optional_nonnegative_number(
+            self.max_quote_age_seconds,
+            "max_quote_age_seconds",
+        )
+        _validate_bool(self.allow_prior_session, "allow_prior_session")
+        _validate_choice(
+            self.stale_quote_action,
+            SUPPORTED_STALE_QUOTE_ACTIONS,
+            "stale_quote_action",
+        )
         _validate_optional_nonnegative_number(
             self.max_equity_quote_age_seconds,
             "max_equity_quote_age_seconds",
@@ -127,6 +178,10 @@ class ProviderSnapshotQualityPolicy:
 
     def as_dict(self) -> dict[str, object]:
         return {
+            "quote_freshness_mode": self.quote_freshness_mode,
+            "max_quote_age_seconds": self.max_quote_age_seconds,
+            "allow_prior_session": self.allow_prior_session,
+            "stale_quote_action": self.stale_quote_action,
             "max_equity_quote_age_seconds": self.max_equity_quote_age_seconds,
             "max_option_quote_age_seconds": self.max_option_quote_age_seconds,
             "warn_on_stale_quotes": self.warn_on_stale_quotes,
@@ -144,6 +199,34 @@ class ProviderSnapshotQualityPolicy:
             "min_accepted_puts": self.min_accepted_puts,
             "min_expiries": self.min_expiries,
         }
+
+    def effective_max_equity_quote_age_seconds(self) -> float | None:
+        return (
+            self.max_equity_quote_age_seconds
+            if self.max_equity_quote_age_seconds is not None
+            else self.max_quote_age_seconds
+        )
+
+    def effective_max_option_quote_age_seconds(self) -> float | None:
+        return (
+            self.max_option_quote_age_seconds
+            if self.max_option_quote_age_seconds is not None
+            else self.max_quote_age_seconds
+        )
+
+    def rejects_stale_option_quotes(self) -> bool:
+        if self.reject_stale_option_quotes:
+            return True
+        return (
+            self.quote_freshness_mode == QUOTE_FRESHNESS_MODE_INTRADAY_STRICT
+            and self.stale_quote_action != STALE_QUOTE_ACTION_FAIL
+        )
+
+    def fails_stale_option_quotes(self) -> bool:
+        return (
+            self.quote_freshness_mode == QUOTE_FRESHNESS_MODE_INTRADAY_STRICT
+            and self.stale_quote_action == STALE_QUOTE_ACTION_FAIL
+        )
 
 
 def _provider_snapshot_warnings(
@@ -186,21 +269,24 @@ def _snapshot_assumption_warnings(
     dividend_yield_source: str,
 ) -> tuple[str, ...]:
     warnings: list[str] = []
-    if dividend_yield == 0.0 and dividend_yield_source.strip().lower() == "assumption":
+    dividend_source = dividend_yield_source.strip().lower()
+    if dividend_yield == 0.0 and dividend_source in {"assumption", "zero_assumption"}:
         warnings.append(_DIVIDEND_ASSUMPTION_WARNING)
     warnings.append(
         "documented_assumption: "
         f"rate_series_id={rate_series_id}, "
         f"default_rate_series_id={DEFAULT_RATE_SERIES_ID}, "
-        "curve_interpolation=not_enabled"
+        "rate_curve=FRED Treasury zero-rate proxy, "
+        "interpolation=linear, compounding=continuous, "
+        "rate_is_bootstrapped=false"
     )
     return tuple(warnings)
 
 
 def _current_provider_scope() -> dict[str, str]:
     return {
-        "curve_interpolation": "not_enabled",
-        "dividend_inference": "not_enabled",
+        "curve_interpolation": RATE_INTERPOLATION_LINEAR,
+        "dividend_inference": "manual_static_or_zero_assumption",
         "option_chain_backfill": "not_enabled",
         "scheduling": "not_enabled",
     }
@@ -214,19 +300,30 @@ def _provider_snapshot_rate_policy(
     selected_rate: float,
     lookback_days: int,
     curve_series_ids: Sequence[str],
+    flat_rate: float | None = None,
+    rate_warnings: Sequence[str] = (),
+    selected_rate_fallback_used: bool = False,
 ) -> dict[str, object]:
     observation_date = pd.Timestamp(rate_observation_date).date().isoformat()
     return {
-        "policy": RATE_POLICY_FLAT_FRED_SERIES,
+        "policy": RATE_POLICY_FRED_TREASURY_ZERO_PROXY_LINEAR_CC,
         "provider": "fred",
+        "rate_curve_source": RATE_CURVE_SOURCE_FRED,
         "series_id": str(rate_series_id),
         "rate_source": str(rate_source),
         "rate_observation_date": observation_date,
         "selected_rate": float(selected_rate),
-        "flat_rate": float(selected_rate),
+        "flat_rate": float(selected_rate if flat_rate is None else flat_rate),
         "lookback_days": int(lookback_days),
         "curve_series_ids": [str(series_id) for series_id in curve_series_ids],
-        "curve_interpolation": "not_enabled",
+        "rate_curve_series_ids": [str(series_id) for series_id in curve_series_ids],
+        "rate_interpolation": RATE_INTERPOLATION_LINEAR,
+        "curve_interpolation": RATE_INTERPOLATION_LINEAR,
+        "rate_compounding": RATE_COMPOUNDING_CONTINUOUS,
+        "rate_extrapolation": RATE_EXTRAPOLATION_CLAMP_WITH_WARNING,
+        "rate_is_bootstrapped": False,
+        "selected_rate_fallback_used": bool(selected_rate_fallback_used),
+        "rate_warnings": [str(warning) for warning in rate_warnings],
     }
 
 
@@ -234,6 +331,9 @@ def _provider_snapshot_dividend_policy(
     *,
     dividend_yield: float,
     dividend_yield_source: str,
+    dividend_note: str | None = None,
+    dividend_is_explicit: bool | None = None,
+    dividend_fallback_used: bool | None = None,
 ) -> dict[str, object]:
     policy = (
         DIVIDEND_POLICY_ZERO_ASSUMPTION
@@ -246,16 +346,106 @@ def _provider_snapshot_dividend_policy(
         "policy": policy,
         "dividend_yield": float(dividend_yield),
         "source": str(dividend_yield_source),
+        "dividend_source": str(dividend_yield_source),
+        "dividend_is_explicit": (
+            bool(dividend_is_explicit)
+            if dividend_is_explicit is not None
+            else policy == DIVIDEND_POLICY_MANUAL_STATIC
+        ),
+        "dividend_fallback_used": (
+            bool(dividend_fallback_used)
+            if dividend_fallback_used is not None
+            else policy == DIVIDEND_POLICY_ZERO_ASSUMPTION
+        ),
         "dividend_inference": "not_enabled",
+        **({} if dividend_note is None else {"dividend_note": str(dividend_note)}),
     }
+
+
+def _resolve_provider_snapshot_dividend_policy(
+    *,
+    underlying: str,
+    policy_config: MarketDataPolicyConfig,
+    dividend_yield: float,
+    dividend_yield_source: str,
+) -> dict[str, object]:
+    override_source = str(dividend_yield_source).strip()
+    if float(dividend_yield) != 0.0 or override_source.lower() not in {
+        "assumption",
+        "zero_assumption",
+    }:
+        return _provider_snapshot_dividend_policy(
+            dividend_yield=float(dividend_yield),
+            dividend_yield_source=override_source,
+            dividend_is_explicit=True,
+            dividend_fallback_used=False,
+        )
+
+    symbol = str(underlying).strip().upper()
+    static = policy_config.dividends.static_yields.get(symbol)
+    if static is not None:
+        if static.source == DIVIDEND_POLICY_PROVIDER_TRAILING_YIELD:
+            raise NotImplementedError(
+                "provider_trailing_yield is recognized as a future dividend "
+                "policy but is not implemented"
+            )
+        if static.source == DIVIDEND_POLICY_IMPLIED_CARRY:
+            raise NotImplementedError(
+                "implied_carry is recognized as a future research/diagnostic "
+                "dividend policy but is not implemented"
+            )
+        return _provider_snapshot_dividend_policy(
+            dividend_yield=float(static.dividend_yield),
+            dividend_yield_source=static.source,
+            dividend_note=static.note,
+            dividend_is_explicit=True,
+            dividend_fallback_used=False,
+        )
+
+    default_policy = policy_config.dividends.default_policy
+    if default_policy == DIVIDEND_POLICY_ZERO_ASSUMPTION:
+        return _provider_snapshot_dividend_policy(
+            dividend_yield=0.0,
+            dividend_yield_source=DIVIDEND_POLICY_ZERO_ASSUMPTION,
+            dividend_is_explicit=False,
+            dividend_fallback_used=True,
+        )
+    if default_policy == DIVIDEND_POLICY_PROVIDER_TRAILING_YIELD:
+        raise NotImplementedError(
+            "provider_trailing_yield is recognized as a future dividend policy "
+            "but is not implemented"
+        )
+    if default_policy == DIVIDEND_POLICY_IMPLIED_CARRY:
+        raise NotImplementedError(
+            "implied_carry is recognized as a future research/diagnostic artifact "
+            "and is not implemented"
+        )
+    raise ValueError(f"Unsupported dividend policy {default_policy!r}")
 
 
 def _provider_snapshot_option_cleaning_policy() -> dict[str, object]:
     return {
-        "policy": OPTION_CLEANING_POLICY_QUOTE_CLEANING_V1,
+        "policy": OPTION_CLEANING_POLICY_STAGED_RECOVERABLE_QUOTES_V1,
+        "legacy_policy": OPTION_CLEANING_POLICY_QUOTE_CLEANING_V1,
         "policy_id": OPTION_CLEANING_POLICY_ID,
+        "raw_option_quotes_layer": "raw_option_quotes",
+        "clean_option_quotes_layer": "clean_option_quotes",
+        "model_validation_quotes_layer": "model_validation_quotes",
         "rejected_quotes_preserved": True,
         "reason_codes": [reason.value for reason in QuoteRejectionReason],
+        "recoverable_missing_fields": [
+            "mid",
+            "time_to_expiry",
+            "moneyness",
+            "log_moneyness",
+            "forward_moneyness",
+            "iv",
+            "delta",
+            "gamma",
+            "theta",
+            "vega",
+            "rho",
+        ],
     }
 
 
@@ -268,6 +458,8 @@ def _provider_snapshot_data_policy(
     rate_policy: Mapping[str, object],
     dividend_policy: Mapping[str, object],
     option_cleaning_policy: Mapping[str, object],
+    quote_freshness_mode: str = QUOTE_FRESHNESS_MODE_DEMO_LENIENT,
+    model_validation_policy: str = MODEL_VALIDATION_POLICY_MODEL_READY_QUOTES_V1,
 ) -> dict[str, object]:
     return {
         "schema_version": DATA_POLICY_SCHEMA_VERSION,
@@ -277,7 +469,9 @@ def _provider_snapshot_data_policy(
         "option_feed": str(option_feed),
         "rate_policy": dict(rate_policy),
         "dividend_policy": dict(dividend_policy),
+        "quote_freshness_mode": str(quote_freshness_mode),
         "option_cleaning_policy": dict(option_cleaning_policy),
+        "model_validation_policy": str(model_validation_policy),
     }
 
 
@@ -325,6 +519,8 @@ def _provider_snapshot_freshness_stats(
     equity_ages = _quote_age_seconds(equity_quotes, asof_utc)
     option_ages = _quote_age_seconds(option_chain, asof_utc)
     accepted_ages = _quote_age_seconds(cleaned_quotes, asof_utc)
+    max_equity_age = policy.effective_max_equity_quote_age_seconds()
+    max_option_age = policy.effective_max_option_quote_age_seconds()
 
     equity_age = _last_float(equity_ages)
     option_summary = _age_summary(option_ages)
@@ -334,7 +530,26 @@ def _provider_snapshot_freshness_stats(
         int(cleaned_quotes["expiry"].nunique()) if "expiry" in cleaned_quotes else 0
     )
 
+    stale_option_count = _count_stale(option_ages, max_option_age)
+    stale_accepted_count = _count_stale(accepted_ages, max_option_age)
+    warnings = _quote_freshness_warning_codes(
+        policy=policy,
+        equity_age=equity_age,
+        stale_equity_quote=bool(
+            equity_age is not None
+            and max_equity_age is not None
+            and equity_age > max_equity_age
+        ),
+        option_quotes_after_asof_count=_count_after_asof(option_ages),
+        stale_option_quote_count=stale_option_count,
+        stale_accepted_quote_count=stale_accepted_count,
+    )
+
     return {
+        "quote_freshness_mode": policy.quote_freshness_mode,
+        "max_quote_age_seconds": max_option_age,
+        "allow_prior_session": policy.allow_prior_session,
+        "stale_quote_action": policy.stale_quote_action,
         "equity_quote_age_seconds": equity_age,
         "equity_quote_after_asof": bool(
             equity_age is not None
@@ -343,27 +558,24 @@ def _provider_snapshot_freshness_stats(
         ),
         "stale_equity_quote": bool(
             equity_age is not None
-            and policy.max_equity_quote_age_seconds is not None
-            and equity_age > policy.max_equity_quote_age_seconds
+            and max_equity_age is not None
+            and equity_age > max_equity_age
         ),
         "option_quote_age_seconds_min": option_summary["min"],
         "option_quote_age_seconds_median": option_summary["median"],
         "option_quote_age_seconds_max": option_summary["max"],
+        "quote_age_summary": dict(option_summary),
         "option_quote_count": int(len(option_chain)),
         "option_quotes_after_asof_count": _count_after_asof(option_ages),
-        "stale_option_quote_count": _count_stale(
-            option_ages,
-            policy.max_option_quote_age_seconds,
-        ),
+        "stale_quote_count": stale_option_count,
+        "stale_option_quote_count": stale_option_count,
         "accepted_quote_count": int(len(cleaned_quotes)),
         "accepted_call_count": accepted_calls,
         "accepted_put_count": accepted_puts,
         "accepted_expiry_count": accepted_expiries,
-        "stale_accepted_quote_count": _count_stale(
-            accepted_ages,
-            policy.max_option_quote_age_seconds,
-        ),
+        "stale_accepted_quote_count": stale_accepted_count,
         "accepted_quotes_after_asof_count": _count_after_asof(accepted_ages),
+        "quote_freshness_warnings": list(warnings),
     }
 
 
@@ -376,6 +588,8 @@ def _provider_snapshot_quality_warnings(
         return ()
 
     warnings: list[str] = []
+    max_equity_age = policy.effective_max_equity_quote_age_seconds()
+    max_option_age = policy.effective_max_option_quote_age_seconds()
     if bool(stats.get("equity_quote_after_asof")):
         warnings.append(
             "provider_quality: equity_quote_after_asof "
@@ -386,7 +600,7 @@ def _provider_snapshot_quality_warnings(
         warnings.append(
             "provider_quality: stale_equity_quote "
             f"age_seconds={stats.get('equity_quote_age_seconds')}, "
-            f"max_age_seconds={policy.max_equity_quote_age_seconds}"
+            f"max_age_seconds={max_equity_age}"
         )
 
     option_after_asof_count = _int_stat(stats, "option_quotes_after_asof_count")
@@ -402,7 +616,9 @@ def _provider_snapshot_quality_warnings(
         warnings.append(
             "provider_quality: stale_option_quotes "
             f"count={stale_option_count}, "
-            f"max_age_seconds={policy.max_option_quote_age_seconds}"
+            f"max_age_seconds={max_option_age}, "
+            f"quote_freshness_mode={policy.quote_freshness_mode}, "
+            f"stale_quote_action={policy.stale_quote_action}"
         )
 
     stale_accepted_count = _int_stat(stats, "stale_accepted_quote_count")
@@ -410,7 +626,9 @@ def _provider_snapshot_quality_warnings(
         warnings.append(
             "provider_quality: stale_accepted_option_quotes "
             f"count={stale_accepted_count}, "
-            f"max_age_seconds={policy.max_option_quote_age_seconds}"
+            f"max_age_seconds={max_option_age}, "
+            f"quote_freshness_mode={policy.quote_freshness_mode}, "
+            f"stale_quote_action={policy.stale_quote_action}"
         )
     return tuple(warnings)
 
@@ -430,7 +648,16 @@ def _provider_snapshot_quality_failures(
         failures.append(
             "Equity quote is stale under the provider snapshot quality policy "
             f"(age_seconds={stats.get('equity_quote_age_seconds')}, "
-            f"max_age_seconds={policy.max_equity_quote_age_seconds})"
+            f"max_age_seconds={policy.effective_max_equity_quote_age_seconds()})"
+        )
+    if (
+        policy.fails_stale_option_quotes()
+        and _int_stat(stats, "stale_option_quote_count") > 0
+    ):
+        failures.append(
+            "Option quote is stale under intraday_strict freshness policy "
+            f"(stale_quote_count={_int_stat(stats, 'stale_option_quote_count')}, "
+            f"max_age_seconds={policy.effective_max_option_quote_age_seconds()})"
         )
 
     accepted = _int_stat(stats, "accepted_quote_count")
@@ -474,11 +701,9 @@ def _apply_provider_snapshot_quality_policy(
     reject_mask = pd.Series(False, index=result.cleaned_quotes.index)
     if policy.reject_option_quotes_after_asof:
         reject_mask = reject_mask | (ages < 0.0)
-    if (
-        policy.reject_stale_option_quotes
-        and policy.max_option_quote_age_seconds is not None
-    ):
-        reject_mask = reject_mask | (ages > float(policy.max_option_quote_age_seconds))
+    max_option_age = policy.effective_max_option_quote_age_seconds()
+    if policy.rejects_stale_option_quotes() and max_option_age is not None:
+        reject_mask = reject_mask | (ages > float(max_option_age))
     if not bool(reject_mask.any()):
         return result
 
@@ -489,10 +714,15 @@ def _apply_provider_snapshot_quality_policy(
         asof=asof,
         policy=policy,
     )
+    existing_rejections = _coerce_output(
+        result.rejected_quotes,
+        DatasetName.REJECTED_QUOTES,
+    )
+    new_rejections = _coerce_output(quality_rejections, DatasetName.REJECTED_QUOTES)
     rejected = (
-        quality_rejections
-        if result.rejected_quotes.empty
-        else pd.concat([result.rejected_quotes, quality_rejections], ignore_index=True)
+        new_rejections
+        if existing_rejections.empty
+        else pd.concat([existing_rejections, new_rejections], ignore_index=True)
     )
     reason_counts = dict(result.reason_counts)
     for reason, count in (
@@ -516,6 +746,8 @@ def _quality_rejected_quotes(
 ) -> pd.DataFrame:
     rows: list[dict[str, object]] = []
     max_age_seconds = policy.max_option_quote_age_seconds
+    if max_age_seconds is None:
+        max_age_seconds = policy.max_quote_age_seconds
     for _, row in quotes.iterrows():
         age_seconds = (
             _utc_timestamp(asof) - _utc_timestamp(row["quote_ts"])
@@ -524,7 +756,7 @@ def _quality_rejected_quotes(
             rejection_reason = QuoteRejectionReason.QUOTE_AFTER_ASOF.value
             rejection_detail = "quote_ts is after snapshot asof"
         elif (
-            policy.reject_stale_option_quotes
+            policy.rejects_stale_option_quotes()
             and max_age_seconds is not None
             and age_seconds > float(max_age_seconds)
         ):
@@ -590,6 +822,49 @@ def _age_summary(ages: pd.Series) -> dict[str, float | None]:
         "median": float(valid.median()),
         "max": float(valid.max()),
     }
+
+
+def _quote_freshness_warning_codes(
+    *,
+    policy: ProviderSnapshotQualityPolicy,
+    equity_age: float | None,
+    stale_equity_quote: bool,
+    option_quotes_after_asof_count: int,
+    stale_option_quote_count: int,
+    stale_accepted_quote_count: int,
+) -> tuple[str, ...]:
+    warnings: list[str] = []
+    if stale_equity_quote:
+        warnings.append(
+            "stale_equity_quote:"
+            f"age_seconds={equity_age},"
+            f"max_age_seconds={policy.effective_max_equity_quote_age_seconds()}"
+        )
+    if option_quotes_after_asof_count > 0:
+        warnings.append(
+            "option_quotes_after_asof:" f"count={option_quotes_after_asof_count}"
+        )
+    if stale_option_quote_count > 0:
+        warnings.append(
+            "stale_option_quotes:"
+            f"count={stale_option_quote_count},"
+            f"mode={policy.quote_freshness_mode},"
+            f"action={policy.stale_quote_action},"
+            f"max_age_seconds={policy.effective_max_option_quote_age_seconds()}"
+        )
+    if stale_accepted_quote_count > 0:
+        warnings.append(
+            "stale_accepted_option_quotes:"
+            f"count={stale_accepted_quote_count},"
+            f"mode={policy.quote_freshness_mode},"
+            f"action={policy.stale_quote_action}"
+        )
+    if (
+        policy.quote_freshness_mode == QUOTE_FRESHNESS_MODE_END_OF_DAY
+        and policy.allow_prior_session
+    ):
+        warnings.append("end_of_day_prior_session_allowed")
+    return tuple(warnings)
 
 
 def _count_after_asof(ages: pd.Series) -> int:
@@ -660,6 +935,14 @@ def _validate_bool(value: bool, field_name: str) -> None:
         raise TypeError(f"{field_name} must be a boolean")
 
 
+def _validate_choice(value: str, choices: frozenset[str], field_name: str) -> None:
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string")
+    if value not in choices:
+        expected = ", ".join(sorted(choices))
+        raise ValueError(f"{field_name} must be one of: {expected}")
+
+
 def _validate_nonnegative_int(value: int, field_name: str) -> None:
     if isinstance(value, bool) or not isinstance(value, int):
         raise TypeError(f"{field_name} must be an integer")
@@ -682,10 +965,19 @@ __all__ = [
     "DEFAULT_SNAPSHOT_RATE_LOOKBACK_DAYS",
     "DIVIDEND_POLICY_MANUAL_STATIC",
     "DIVIDEND_POLICY_ZERO_ASSUMPTION",
+    "MODEL_VALIDATION_POLICY_MODEL_READY_QUOTES_V1",
     "OPTION_CLEANING_POLICY_ID",
+    "OPTION_CLEANING_POLICY_STAGED_RECOVERABLE_QUOTES_V1",
     "OPTION_CLEANING_POLICY_QUOTE_CLEANING_V1",
     "PROVIDER_RATE_CURVE_COLUMNS",
+    "QUOTE_FRESHNESS_MODE_DEMO_LENIENT",
+    "QUOTE_FRESHNESS_MODE_END_OF_DAY",
+    "QUOTE_FRESHNESS_MODE_INTRADAY_STRICT",
     "ProviderSnapshotQualityPolicy",
     "RATE_CURVE_TENORS",
-    "RATE_POLICY_FLAT_FRED_SERIES",
+    "STALE_QUOTE_ACTION_FAIL",
+    "STALE_QUOTE_ACTION_REJECT",
+    "STALE_QUOTE_ACTION_WARN",
+    "RATE_POLICY_FRED_TREASURY_ZERO_PROXY_LINEAR_CC",
+    "_resolve_provider_snapshot_dividend_policy",
 ]

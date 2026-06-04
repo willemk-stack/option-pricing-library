@@ -21,6 +21,7 @@ from option_pricing.marketdata.cleaning import (
 from option_pricing.marketdata.config import (
     AlpacaConfig,
     FredConfig,
+    MarketDataPolicyConfig,
     PipelineConfig,
     StorageConfig,
 )
@@ -94,6 +95,7 @@ from option_pricing.marketdata.provider_policy import (
     _provider_snapshot_quality_warnings,
     _provider_snapshot_rate_policy,
     _provider_snapshot_warnings,
+    _resolve_provider_snapshot_dividend_policy,
 )
 from option_pricing.marketdata.provider_results import (
     ProviderCallDiagnostic,
@@ -107,7 +109,12 @@ from option_pricing.marketdata.provider_serialization import (
     _utc_isoformat,
     _utc_timestamp,
 )
-from option_pricing.marketdata.rates import select_latest_fred_rate_at_or_before_asof
+from option_pricing.marketdata.rates import (
+    RATE_COMPOUNDING_CONTINUOUS,
+    representative_time_to_expiry_years,
+    resolve_fred_treasury_zero_proxy_rate,
+    select_latest_fred_rate_at_or_before_asof,
+)
 from option_pricing.marketdata.schemas import DatasetName
 from option_pricing.marketdata.storage import LocalStorage
 
@@ -196,6 +203,9 @@ class MarketDataPipeline:
         storage: LocalStorage | StorageConfig | Path | None = None,
         cleaning_policy: QuoteCleaningPolicyV1 | None = None,
         bundle_config: ModelValidationBundleConfig | None = None,
+        policy_config: (
+            MarketDataPolicyConfig | Mapping[str, object] | Path | None
+        ) = None,
         quality_policy: (
             ProviderSnapshotQualityPolicy | Mapping[str, object] | None
         ) = None,
@@ -209,6 +219,9 @@ class MarketDataPipeline:
         self.cleaning_policy = _cleaning_policy(cleaning_policy)
         self.bundle_config = bundle_config or ModelValidationBundleConfig(
             run_heston_smoke=False
+        )
+        self.policy_config = _coerce_marketdata_policy_config(
+            policy_config if policy_config is not None else self.config.policy
         )
         self.quality_policy = _coerce_provider_snapshot_quality_policy(quality_policy)
 
@@ -248,7 +261,10 @@ class MarketDataPipeline:
             dividend_yield_source,
             "dividend_yield_source",
         )
-        cleaned_dividend_yield = _finite_float(dividend_yield, "dividend_yield")
+        cleaned_dividend_yield = _nonnegative_finite_float(
+            dividend_yield,
+            "dividend_yield",
+        )
         cleaned_rate_lookback_days = _nonnegative_int(
             rate_lookback_days,
             "rate_lookback_days",
@@ -389,19 +405,43 @@ class MarketDataPipeline:
                 diagnostics=diagnostics,
             ),
         )
-        rate_source = f"{rate_selection.source}:{rate_selection.series_id}"
+        representative_expiry_years = representative_time_to_expiry_years(
+            option_chain["expiry"].tolist(),
+            asof=asof_timestamp,
+        )
+        rate_resolution = resolve_fred_treasury_zero_proxy_rate(
+            rate_curve,
+            time_to_expiry_years=representative_expiry_years,
+            selected_rate_fallback=rate_selection.rate,
+        )
+        selected_rate = float(rate_resolution.rate)
+        flat_rate_fallback = float(rate_selection.rate)
+        rate_source = (
+            f"{rate_selection.source}:{rate_selection.series_id}"
+            if rate_resolution.selected_rate_fallback_used
+            else "fred:treasury_zero_proxy_curve"
+        )
         rate_policy_payload = _provider_snapshot_rate_policy(
             rate_series_id=cleaned_rate_series_id,
             rate_source=rate_source,
             rate_observation_date=rate_selection.observation_date,
-            selected_rate=rate_selection.rate,
+            selected_rate=selected_rate,
             lookback_days=cleaned_rate_lookback_days,
             curve_series_ids=cleaned_curve_series_ids,
+            flat_rate=flat_rate_fallback,
+            rate_warnings=rate_resolution.warnings,
+            selected_rate_fallback_used=rate_resolution.selected_rate_fallback_used,
         )
-        dividend_policy_payload = _provider_snapshot_dividend_policy(
+        dividend_policy_payload = _resolve_provider_snapshot_dividend_policy(
+            underlying=cleaned_underlying,
+            policy_config=self.policy_config,
             dividend_yield=cleaned_dividend_yield,
             dividend_yield_source=cleaned_dividend_yield_source,
         )
+        resolved_dividend_yield = float(
+            cast(Any, dividend_policy_payload["dividend_yield"])
+        )
+        resolved_dividend_yield_source = str(dividend_policy_payload["source"])
         option_cleaning_policy_payload = _provider_snapshot_option_cleaning_policy()
         data_policy_payload = _provider_snapshot_data_policy(
             equity_provider="alpaca",
@@ -411,18 +451,19 @@ class MarketDataPipeline:
             rate_policy=rate_policy_payload,
             dividend_policy=dividend_policy_payload,
             option_cleaning_policy=option_cleaning_policy_payload,
+            quote_freshness_mode=effective_quality_policy.quote_freshness_mode,
         )
         market_inputs = normalize_market_inputs(
             _market_inputs_frame(
                 underlying=cleaned_underlying,
                 asof=asof_timestamp,
                 spot=spot,
-                rate=rate_selection.rate,
+                rate=selected_rate,
                 rate_source=rate_source,
                 rate_observation_date=rate_selection.observation_date,
-                rate_compounding=rate_selection.rate_compounding,
-                dividend_yield=cleaned_dividend_yield,
-                dividend_yield_source=cleaned_dividend_yield_source,
+                rate_compounding=RATE_COMPOUNDING_CONTINUOUS,
+                dividend_yield=resolved_dividend_yield,
+                dividend_yield_source=resolved_dividend_yield_source,
             )
         )
         quote_cleaning = clean_option_quotes(
@@ -464,14 +505,18 @@ class MarketDataPipeline:
             )
 
         warnings = _provider_snapshot_warnings(
-            cleaning_warnings=(*quality_warnings, *quote_cleaning.warnings),
+            cleaning_warnings=(
+                *rate_resolution.warnings,
+                *quality_warnings,
+                *quote_cleaning.warnings,
+            ),
             dropped_before_cleaning_count=dropped_before_cleaning_count,
             raw_option_contract_count=raw_option_contract_count,
             normalized_option_contract_count=len(option_chain),
             provider_rejected_contract_count=provider_rejected_contract_count,
             rate_series_id=cleaned_rate_series_id,
-            dividend_yield=cleaned_dividend_yield,
-            dividend_yield_source=cleaned_dividend_yield_source,
+            dividend_yield=resolved_dividend_yield,
+            dividend_yield_source=resolved_dividend_yield_source,
         )
         quote_cleaning_for_artifacts = _quote_cleaning_result_with_warnings(
             quote_cleaning,
@@ -496,11 +541,13 @@ class MarketDataPipeline:
                 "equity_feed": resolved_equity_feed,
                 "option_provider": "alpaca",
                 "option_feed": resolved_option_feed,
-                "selected_rate": float(rate_selection.rate),
-                "flat_rate": float(rate_selection.rate),
+                "selected_rate": selected_rate,
+                "flat_rate": flat_rate_fallback,
                 "rate_policy": rate_policy_payload,
                 "dividend_policy": dividend_policy_payload,
                 "option_cleaning_policy": option_cleaning_policy_payload,
+                "quote_freshness_mode": effective_quality_policy.quote_freshness_mode,
+                "model_validation_policy": "model_ready_quotes_v1",
                 "data_policy": data_policy_payload,
                 "current_provider_scope": _current_provider_scope(),
                 "quality_policy": quality_policy_payload,
@@ -612,11 +659,12 @@ class MarketDataPipeline:
                 rate_source=rate_source,
                 rate_observation_date=rate_selection.observation_date,
                 spot_source=spot_source,
-                dividend_yield=cleaned_dividend_yield,
-                dividend_yield_source=cleaned_dividend_yield_source,
+                dividend_yield=resolved_dividend_yield,
+                dividend_yield_source=resolved_dividend_yield_source,
                 equity_feed=resolved_equity_feed,
                 option_feed=resolved_option_feed,
-                selected_rate=rate_selection.rate,
+                selected_rate=selected_rate,
+                flat_rate=flat_rate_fallback,
                 rate_lookback_days=cleaned_rate_lookback_days,
                 raw_option_contract_count=raw_option_contract_count,
                 normalized_option_contract_count=len(option_chain),
@@ -632,6 +680,10 @@ class MarketDataPipeline:
                 quality_policy=quality_policy_payload,
                 quote_freshness=quote_freshness,
                 curve_series_ids=cleaned_curve_series_ids,
+                rate_warnings=rate_resolution.warnings,
+                selected_rate_fallback_used=(
+                    rate_resolution.selected_rate_fallback_used
+                ),
                 warnings=warnings,
                 artifact_paths=artifact_paths,
                 library_commit=cleaned_library_commit,
@@ -643,12 +695,12 @@ class MarketDataPipeline:
             asof=asof_timestamp,
             run_id=effective_run_id,
             spot=spot,
-            rate=rate_selection.rate,
+            rate=selected_rate,
             rate_source=rate_source,
             rate_observation_date=rate_selection.observation_date,
             rate_series_id=cleaned_rate_series_id,
-            dividend_yield=cleaned_dividend_yield,
-            dividend_yield_source=cleaned_dividend_yield_source,
+            dividend_yield=resolved_dividend_yield,
+            dividend_yield_source=resolved_dividend_yield_source,
             feed=resolved_option_feed,
             raw_option_contract_count=int(raw_option_contract_count),
             normalized_option_contract_count=int(len(option_chain)),
@@ -670,8 +722,8 @@ class MarketDataPipeline:
             equity_feed=resolved_equity_feed,
             option_provider="alpaca",
             option_feed=resolved_option_feed,
-            selected_rate=float(rate_selection.rate),
-            flat_rate=float(rate_selection.rate),
+            selected_rate=selected_rate,
+            flat_rate=flat_rate_fallback,
             rate_policy=rate_policy_payload,
             dividend_policy=dividend_policy_payload,
             option_cleaning_policy=option_cleaning_policy_payload,
@@ -1502,8 +1554,23 @@ def _coerce_provider_pipeline_inputs(
             fred=config.fred,
             storage=local_storage.config,
             retry=config.retry,
+            policy=config.policy,
         )
     return resolved_config, local_storage
+
+
+def _coerce_marketdata_policy_config(
+    policy_config: MarketDataPolicyConfig | Mapping[str, object] | Path,
+) -> MarketDataPolicyConfig:
+    if isinstance(policy_config, MarketDataPolicyConfig):
+        return policy_config
+    if isinstance(policy_config, Path):
+        return MarketDataPolicyConfig.from_file(policy_config)
+    if isinstance(policy_config, Mapping):
+        return MarketDataPolicyConfig.from_mapping(policy_config)
+    raise TypeError(
+        "policy_config must be a MarketDataPolicyConfig, mapping, or pathlib.Path"
+    )
 
 
 def _clean_underlying(value: str) -> str:
@@ -1542,6 +1609,13 @@ def _finite_float(value: object, field_name: str) -> float:
         raise TypeError(f"{field_name} must be numeric") from exc
     if not math.isfinite(number):
         raise ValueError(f"{field_name} must be finite")
+    return number
+
+
+def _nonnegative_finite_float(value: object, field_name: str) -> float:
+    number = _finite_float(value, field_name)
+    if number < 0.0:
+        raise ValueError(f"{field_name} must be >= 0")
     return number
 
 

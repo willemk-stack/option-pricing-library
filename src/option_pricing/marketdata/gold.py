@@ -809,6 +809,8 @@ def _add_optional_policy_metadata(
         "rate_policy",
         "dividend_policy",
         "option_cleaning_policy",
+        "quote_freshness_mode",
+        "model_validation_policy",
         "data_policy",
     ):
         value = source_metadata.get(key)

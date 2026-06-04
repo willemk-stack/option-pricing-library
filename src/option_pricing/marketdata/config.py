@@ -2,8 +2,26 @@
 
 from __future__ import annotations
 
+import json
+import tomllib
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from importlib import import_module
 from pathlib import Path
+from typing import Any, cast
+
+DIVIDEND_POLICY_ZERO_ASSUMPTION = "zero_assumption"
+DIVIDEND_POLICY_MANUAL_STATIC = "manual_static"
+DIVIDEND_POLICY_PROVIDER_TRAILING_YIELD = "provider_trailing_yield"
+DIVIDEND_POLICY_IMPLIED_CARRY = "implied_carry"
+SUPPORTED_DIVIDEND_POLICIES = frozenset(
+    {
+        DIVIDEND_POLICY_ZERO_ASSUMPTION,
+        DIVIDEND_POLICY_MANUAL_STATIC,
+        DIVIDEND_POLICY_PROVIDER_TRAILING_YIELD,
+        DIVIDEND_POLICY_IMPLIED_CARRY,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -99,11 +117,127 @@ class ProviderRetryConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class StaticDividendYield:
+    dividend_yield: float
+    source: str = DIVIDEND_POLICY_MANUAL_STATIC
+    note: str | None = None
+
+    def __post_init__(self) -> None:
+        _validate_nonnegative_finite_number(
+            self.dividend_yield,
+            "dividends.static_yields.dividend_yield",
+        )
+        _validate_non_empty_string(self.source, "dividends.static_yields.source")
+        _validate_dividend_policy_name(self.source, "dividends.static_yields.source")
+        if self.note is not None:
+            _validate_non_empty_string(self.note, "dividends.static_yields.note")
+
+
+@dataclass(frozen=True, slots=True)
+class DividendPolicyConfig:
+    default_policy: str = DIVIDEND_POLICY_ZERO_ASSUMPTION
+    static_yields: Mapping[str, StaticDividendYield] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _validate_dividend_policy_name(
+            self.default_policy,
+            "dividends.default_policy",
+        )
+        if not isinstance(self.static_yields, Mapping):
+            raise TypeError("dividends.static_yields must be a mapping")
+
+        normalized: dict[str, StaticDividendYield] = {}
+        for symbol, value in self.static_yields.items():
+            cleaned_symbol = _validate_symbol_key(symbol)
+            normalized[cleaned_symbol] = _coerce_static_dividend_yield(
+                value,
+                f"dividends.static_yields.{cleaned_symbol}",
+            )
+        object.__setattr__(self, "static_yields", normalized)
+
+
+@dataclass(frozen=True, slots=True)
+class MarketDataPolicyConfig:
+    dividends: DividendPolicyConfig = field(default_factory=DividendPolicyConfig)
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, object]) -> MarketDataPolicyConfig:
+        if not isinstance(payload, Mapping):
+            raise TypeError("policy config payload must be a mapping")
+        dividends_payload = payload.get("dividends", {})
+        if not isinstance(dividends_payload, Mapping):
+            raise TypeError("policy config 'dividends' must be a mapping")
+        static_payload = dividends_payload.get("static_yields", {})
+        if not isinstance(static_payload, Mapping):
+            raise TypeError("policy config dividends.static_yields must be a mapping")
+        return cls(
+            dividends=DividendPolicyConfig(
+                default_policy=str(
+                    dividends_payload.get(
+                        "default_policy",
+                        DIVIDEND_POLICY_ZERO_ASSUMPTION,
+                    )
+                ),
+                static_yields={
+                    str(symbol): _coerce_static_dividend_yield(
+                        value,
+                        f"dividends.static_yields.{symbol}",
+                    )
+                    for symbol, value in static_payload.items()
+                },
+            )
+        )
+
+    @classmethod
+    def from_file(cls, path: str | Path) -> MarketDataPolicyConfig:
+        config_path = Path(path)
+        suffix = config_path.suffix.lower()
+        if suffix == ".json":
+            payload = json.loads(config_path.read_text(encoding="utf-8"))
+        elif suffix == ".toml":
+            payload = tomllib.loads(config_path.read_text(encoding="utf-8"))
+        elif suffix in {".yaml", ".yml"}:
+            try:
+                yaml = cast(Any, import_module("yaml"))
+            except ImportError as exc:  # pragma: no cover - optional dependency guard
+                raise ImportError(
+                    "Reading YAML marketdata policy configs requires PyYAML"
+                ) from exc
+            payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        else:
+            raise ValueError(
+                "policy config file must end with .json, .toml, .yaml, or .yml"
+            )
+        if payload is None:
+            payload = {}
+        return cls.from_mapping(cast(Mapping[str, object], payload))
+
+
+@dataclass(frozen=True, slots=True)
 class PipelineConfig:
     alpaca: AlpacaConfig
     fred: FredConfig
     storage: StorageConfig
     retry: ProviderRetryConfig = field(default_factory=ProviderRetryConfig)
+    policy: MarketDataPolicyConfig = field(default_factory=MarketDataPolicyConfig)
+
+
+def _coerce_static_dividend_yield(
+    value: object,
+    field_name: str,
+) -> StaticDividendYield:
+    if isinstance(value, StaticDividendYield):
+        return value
+    if not isinstance(value, Mapping):
+        raise TypeError(f"{field_name} must be a mapping or StaticDividendYield")
+    dividend_yield = value.get("dividend_yield")
+    if dividend_yield is None:
+        raise ValueError(f"{field_name}.dividend_yield is required")
+    return StaticDividendYield(
+        dividend_yield=float(cast(Any, dividend_yield)),
+        source=str(value.get("source", DIVIDEND_POLICY_MANUAL_STATIC)),
+        note=(None if value.get("note") is None else str(cast(Any, value.get("note")))),
+    )
 
 
 def _validate_non_empty_string(value: str, field_name: str) -> None:
@@ -127,10 +261,41 @@ def _validate_nonnegative_number(value: float, field_name: str) -> None:
         raise ValueError(f"{field_name} must be >= 0")
 
 
+def _validate_nonnegative_finite_number(value: float, field_name: str) -> None:
+    _validate_nonnegative_number(value, field_name)
+    number = float(value)
+    if number != number or number in (float("inf"), float("-inf")):
+        raise ValueError(f"{field_name} must be finite")
+
+
+def _validate_symbol_key(value: object) -> str:
+    if not isinstance(value, str):
+        raise TypeError("dividends.static_yields keys must be strings")
+    cleaned = value.strip().upper()
+    if not cleaned:
+        raise ValueError("dividends.static_yields keys must be non-empty")
+    return cleaned
+
+
+def _validate_dividend_policy_name(value: str, field_name: str) -> None:
+    _validate_non_empty_string(value, field_name)
+    if value not in SUPPORTED_DIVIDEND_POLICIES:
+        expected = ", ".join(sorted(SUPPORTED_DIVIDEND_POLICIES))
+        raise ValueError(f"{field_name} must be one of: {expected}")
+
+
 __all__ = [
     "AlpacaConfig",
+    "DIVIDEND_POLICY_IMPLIED_CARRY",
+    "DIVIDEND_POLICY_MANUAL_STATIC",
+    "DIVIDEND_POLICY_PROVIDER_TRAILING_YIELD",
+    "DIVIDEND_POLICY_ZERO_ASSUMPTION",
+    "DividendPolicyConfig",
     "FredConfig",
+    "MarketDataPolicyConfig",
     "PipelineConfig",
     "ProviderRetryConfig",
     "StorageConfig",
+    "StaticDividendYield",
+    "SUPPORTED_DIVIDEND_POLICIES",
 ]

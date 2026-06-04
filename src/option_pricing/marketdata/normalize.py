@@ -257,8 +257,8 @@ def normalize_alpaca_option_chain_with_audit(
             reason = first_rejection.get("reason", "unknown")
             detail = first_rejection.get("rejection_detail", "unknown")
             raise ValueError(
-                "alpaca option chain has no contracts with usable latest quote "
-                f"bid/ask; first_rejection_reason={reason}; "
+                "alpaca option chain has no contracts with a parsable latest "
+                f"quote; first_rejection_reason={reason}; "
                 f"first_rejection_detail={detail}"
             )
         raise ValueError(
@@ -475,7 +475,7 @@ def _alpaca_option_chain_row_with_audit(
             asof=asof,
             source=source,
             feed=feed,
-            reason=QuoteRejectionReason.MISSING_BID_OR_ASK.value,
+            reason=QuoteRejectionReason.MISSING_PRICE_SOURCE.value,
             rejection_detail="latest_quote is missing",
             raw_quote_timestamp=raw_quote_ts,
             raw_bid=raw_bid,
@@ -503,31 +503,6 @@ def _alpaca_option_chain_row_with_audit(
             raw_right=raw_right,
         )
 
-    missing_price_fields = [
-        field_name
-        for field_name, value in (("bid", raw_bid), ("ask", raw_ask))
-        if _is_missing_value(value)
-    ]
-    if missing_price_fields:
-        return None, _provider_rejected_contract_row(
-            underlying=underlying,
-            contract_symbol=metadata.contract_symbol,
-            payload_contract_key=default_symbol,
-            asof=asof,
-            source=source,
-            feed=feed,
-            reason=QuoteRejectionReason.MISSING_BID_OR_ASK.value,
-            rejection_detail=(
-                "latest_quote is missing " + ", ".join(missing_price_fields)
-            ),
-            raw_quote_timestamp=raw_quote_ts,
-            raw_bid=raw_bid,
-            raw_ask=raw_ask,
-            raw_expiry=raw_expiry,
-            raw_strike=raw_strike,
-            raw_right=raw_right,
-        )
-
     metadata = _alpaca_option_contract_metadata(default_symbol, contract)
     bid = _optional_finite_option_quote_number(
         quote,
@@ -538,23 +513,7 @@ def _alpaca_option_chain_row_with_audit(
         _ALPACA_ASK_ALIASES,
     )
     quote_ts = raw_quote_ts
-    if bid is None or ask is None:
-        return None, _provider_rejected_contract_row(
-            underlying=underlying,
-            contract_symbol=metadata.contract_symbol,
-            payload_contract_key=default_symbol,
-            asof=asof,
-            source=source,
-            feed=feed,
-            reason=QuoteRejectionReason.MISSING_BID_OR_ASK.value,
-            rejection_detail="latest_quote bid/ask must be finite numeric values",
-            raw_quote_timestamp=raw_quote_ts,
-            raw_bid=raw_bid,
-            raw_ask=raw_ask,
-            raw_expiry=raw_expiry,
-            raw_strike=raw_strike,
-            raw_right=raw_right,
-        )
+    mid = (bid + ask) / 2 if bid is not None and ask is not None else pd.NA
 
     return {
         "underlying": underlying,
@@ -565,7 +524,7 @@ def _alpaca_option_chain_row_with_audit(
         "right": metadata.right,
         "bid": bid,
         "ask": ask,
-        "mid": (bid + ask) / 2,
+        "mid": mid,
         "last": _alpaca_option_last_price(contract),
         "iv": _optional_option_snapshot_value(contract, _ALPACA_OPTION_IV_ALIASES),
         "delta": _alpaca_option_greek_value(contract, _ALPACA_OPTION_DELTA_ALIASES),
@@ -585,7 +544,7 @@ def _alpaca_option_chain_row_with_audit(
 def _provider_contract_metadata_rejection_reason(exc: Exception) -> str:
     message = str(exc).lower()
     if "expiry" in message:
-        return QuoteRejectionReason.EXPIRED_OR_BAD_EXPIRY.value
+        return QuoteRejectionReason.BAD_EXPIRY.value
     if "strike" in message:
         return QuoteRejectionReason.NONPOSITIVE_STRIKE.value
     return "invalid_contract_metadata"

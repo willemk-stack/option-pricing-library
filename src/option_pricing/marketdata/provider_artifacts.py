@@ -11,14 +11,12 @@ import pandas as pd
 from option_pricing.marketdata.bundles import ModelValidationBundlePaths
 from option_pricing.marketdata.cleaning import QuoteCleaningResult
 from option_pricing.marketdata.contracts import ModelValidationBundleResult
-from option_pricing.marketdata.errors import ProviderDataUnavailableError
 from option_pricing.marketdata.gold import GoldConversionPaths
 from option_pricing.marketdata.provider_diagnostics import _diagnostics_payload
 from option_pricing.marketdata.provider_policy import (
     DEFAULT_DAY_COUNT,
     DEFAULT_RATE_SERIES_ID,
     PROVIDER_RATE_CURVE_COLUMNS,
-    RATE_CURVE_TENORS,
     _current_provider_scope,
     _provider_snapshot_data_policy,
     _provider_snapshot_dividend_policy,
@@ -37,7 +35,7 @@ from option_pricing.marketdata.provider_serialization import (
     _utc_isoformat,
     _utc_timestamp,
 )
-from option_pricing.marketdata.rates import select_latest_fred_rate_at_or_before_asof
+from option_pricing.marketdata.rates import build_fred_treasury_zero_proxy_curve
 from option_pricing.marketdata.schemas import DatasetName
 from option_pricing.marketdata.silver import write_cleaned_quotes_silver
 from option_pricing.marketdata.storage import LocalStorage, PartitionValue
@@ -87,7 +85,7 @@ def _build_provider_snapshot_rate_curve(
     requested_series_ids: Sequence[str],
     load_series_frame: Callable[[str], pd.DataFrame | None],
 ) -> pd.DataFrame:
-    rows: list[dict[str, object]] = []
+    frames_by_series_id: dict[str, pd.DataFrame] = {}
     for series_id in requested_series_ids:
         frame = (
             primary_fred_series
@@ -96,47 +94,12 @@ def _build_provider_snapshot_rate_curve(
         )
         if frame is None:
             continue
-        try:
-            selection = select_latest_fred_rate_at_or_before_asof(
-                frame,
-                series_id=series_id,
-                asof=asof,
-            )
-        except ProviderDataUnavailableError:
-            continue
-        rows.append(
-            {
-                "series_id": selection.series_id,
-                "tenor": RATE_CURVE_TENORS.get(
-                    selection.series_id,
-                    selection.series_id,
-                ),
-                "observation_date": selection.observation_date,
-                "value_percent": selection.value_percent,
-                "continuous_decimal": selection.continuous_decimal,
-                "source": selection.source,
-                "asof": selection.asof,
-                "day_count": day_count,
-            }
-        )
-
-    frame = pd.DataFrame(rows, columns=list(PROVIDER_RATE_CURVE_COLUMNS))
-    for column in ("series_id", "tenor", "source", "day_count"):
-        frame[column] = frame[column].astype("string")
-    frame["observation_date"] = pd.to_datetime(
-        frame["observation_date"],
-        errors="coerce",
-    )
-    frame["value_percent"] = pd.to_numeric(
-        frame["value_percent"],
-        errors="coerce",
-    ).astype("Float64")
-    frame["continuous_decimal"] = pd.to_numeric(
-        frame["continuous_decimal"],
-        errors="coerce",
-    ).astype("Float64")
-    frame["asof"] = pd.to_datetime(frame["asof"], errors="coerce", utc=True)
-    return frame.reset_index(drop=True)
+        frames_by_series_id[str(series_id)] = frame
+    del day_count
+    return build_fred_treasury_zero_proxy_curve(frames_by_series_id, asof=asof).loc[
+        :,
+        list(PROVIDER_RATE_CURVE_COLUMNS),
+    ]
 
 
 def _provider_snapshot_request_metadata(
@@ -459,7 +422,6 @@ def _provider_snapshot_rate_curve_manifest(
                 str(series_id) for series_id in requested_series_ids
             ],
             "lookback_days": int(lookback_days),
-            "curve_interpolation": "not_enabled",
         },
         "current_provider_scope": _current_provider_scope(),
         "library_commit": library_commit,
@@ -495,7 +457,12 @@ def _provider_bronze_manifest(
             "provider": "fred",
             "series_id": rate_series_id,
             "default_series_id": DEFAULT_RATE_SERIES_ID,
-            "curve_interpolation": "not_enabled",
+            "rate_policy": "fred_treasury_zero_proxy_linear_cc",
+            "rate_curve_source": "fred",
+            "rate_interpolation": "linear",
+            "rate_compounding": "continuous",
+            "rate_extrapolation": "clamp_with_warning",
+            "rate_is_bootstrapped": False,
         },
         "selected_rate": provider_snapshot.metadata["selected_rate"],
         "flat_rate": provider_snapshot.metadata["flat_rate"],
@@ -529,11 +496,18 @@ def _provider_snapshot_dividend_assumptions(
     provider_snapshot: _ProviderSnapshot,
 ) -> dict[str, object]:
     market_row = provider_snapshot.market_inputs_raw.iloc[0]
+    dividend_policy = _metadata_mapping(provider_snapshot, "dividend_policy")
     return {
         "dividend_yield": _finite_float(market_row["dividend_yield"], "dividend_yield"),
         "source": _required_text(
             str(market_row["dividend_yield_source"]),
             "dividend_yield_source",
+        ),
+        "dividend_is_explicit": bool(
+            dividend_policy.get("dividend_is_explicit", False)
+        ),
+        "dividend_fallback_used": bool(
+            dividend_policy.get("dividend_fallback_used", False)
         ),
         "dividend_inference": "not_enabled",
     }
@@ -807,6 +781,7 @@ def _provider_snapshot_run_details(
     equity_feed: str,
     option_feed: str,
     selected_rate: float,
+    flat_rate: float,
     rate_lookback_days: int,
     raw_option_contract_count: int,
     normalized_option_contract_count: int,
@@ -818,6 +793,8 @@ def _provider_snapshot_run_details(
     quality_policy: Mapping[str, object],
     quote_freshness: Mapping[str, object],
     curve_series_ids: Sequence[str],
+    rate_warnings: Sequence[str],
+    selected_rate_fallback_used: bool,
     warnings: Sequence[str],
     artifact_paths: Sequence[Path],
     library_commit: str | None,
@@ -827,8 +804,11 @@ def _provider_snapshot_run_details(
         rate_source=rate_source,
         rate_observation_date=rate_observation_date,
         selected_rate=selected_rate,
+        flat_rate=flat_rate,
         lookback_days=rate_lookback_days,
         curve_series_ids=curve_series_ids,
+        rate_warnings=rate_warnings,
+        selected_rate_fallback_used=selected_rate_fallback_used,
     )
     dividend_policy = _provider_snapshot_dividend_policy(
         dividend_yield=dividend_yield,
@@ -843,6 +823,9 @@ def _provider_snapshot_run_details(
         rate_policy=rate_policy,
         dividend_policy=dividend_policy,
         option_cleaning_policy=option_cleaning_policy,
+        quote_freshness_mode=str(
+            quote_freshness.get("quote_freshness_mode", "demo_lenient")
+        ),
     )
     return {
         "operation": "snapshot",
@@ -858,7 +841,7 @@ def _provider_snapshot_run_details(
         "rate_source": rate_source,
         "rate_observation_date": rate_observation_date.date().isoformat(),
         "selected_rate": float(selected_rate),
-        "flat_rate": float(selected_rate),
+        "flat_rate": float(flat_rate),
         "spot_source": spot_source,
         "dividend_yield": dividend_yield,
         "dividend_yield_source": dividend_yield_source,

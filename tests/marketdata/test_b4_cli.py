@@ -59,7 +59,7 @@ def _snapshot_result(
         run_id=run_id,
         spot=500.0,
         rate=0.0416,
-        rate_source="fred:DGS3MO",
+        rate_source="fred:treasury_zero_proxy_curve",
         rate_observation_date=date(2026, 5, 20),
         rate_series_id="DGS3MO",
         feed="indicative",
@@ -74,7 +74,7 @@ def _snapshot_result(
         option_cleaning_policy=_option_cleaning_policy(),
         data_policy=_data_policy(),
         dividend_yield=0.0,
-        dividend_yield_source="assumption",
+        dividend_yield_source="zero_assumption",
         raw_option_contract_count=46,
         normalized_option_contract_count=45,
         dropped_before_cleaning_count=1,
@@ -82,12 +82,21 @@ def _snapshot_result(
         rejected_quote_count=3,
         provider_rejected_contract_count=1,
         quality_policy={
+            "quote_freshness_mode": "demo_lenient",
+            "max_quote_age_seconds": None,
+            "allow_prior_session": False,
+            "stale_quote_action": "warn",
             "min_accepted_contracts": 1,
             "warn_on_stale_quotes": True,
         },
         quote_freshness={
+            "quote_freshness_mode": "demo_lenient",
+            "max_quote_age_seconds": None,
             "equity_quote_age_seconds": 60.0,
             "stale_option_quote_count": 0,
+            "stale_quote_count": 0,
+            "quote_age_summary": {"min": None, "median": None, "max": None},
+            "quote_freshness_warnings": [],
         },
         diagnostics=(
             {
@@ -137,16 +146,24 @@ def _snapshot_result(
 
 def _rate_policy() -> dict[str, object]:
     return {
-        "policy": "flat_fred_series",
+        "policy": "fred_treasury_zero_proxy_linear_cc",
         "provider": "fred",
+        "rate_curve_source": "fred",
         "series_id": "DGS3MO",
-        "rate_source": "fred:DGS3MO",
+        "rate_source": "fred:treasury_zero_proxy_curve",
         "rate_observation_date": "2026-05-20",
         "selected_rate": 0.0416,
         "flat_rate": 0.0416,
         "lookback_days": 90,
         "curve_series_ids": ["DGS1MO", "DGS3MO"],
-        "curve_interpolation": "not_enabled",
+        "rate_curve_series_ids": ["DGS1MO", "DGS3MO"],
+        "rate_interpolation": "linear",
+        "curve_interpolation": "linear",
+        "rate_compounding": "continuous",
+        "rate_extrapolation": "clamp_with_warning",
+        "rate_is_bootstrapped": False,
+        "selected_rate_fallback_used": False,
+        "rate_warnings": [],
     }
 
 
@@ -154,17 +171,25 @@ def _dividend_policy() -> dict[str, object]:
     return {
         "policy": "zero_assumption",
         "dividend_yield": 0.0,
-        "source": "assumption",
+        "source": "zero_assumption",
+        "dividend_source": "zero_assumption",
+        "dividend_is_explicit": False,
+        "dividend_fallback_used": True,
         "dividend_inference": "not_enabled",
     }
 
 
 def _option_cleaning_policy() -> dict[str, object]:
     return {
-        "policy": "quote_cleaning_v1",
+        "policy": "staged_recoverable_quotes_v1",
+        "legacy_policy": "quote_cleaning_v1",
         "policy_id": "quote_cleaning_policy.v1",
         "rejected_quotes_preserved": True,
-        "reason_codes": ["missing_bid_or_ask", "invalid_bid_ask_cross"],
+        "raw_option_quotes_layer": "raw_option_quotes",
+        "clean_option_quotes_layer": "clean_option_quotes",
+        "model_validation_quotes_layer": "model_validation_quotes",
+        "reason_codes": ["missing_price_source", "crossed_bid_ask"],
+        "recoverable_missing_fields": ["iv", "vega"],
     }
 
 
@@ -178,6 +203,8 @@ def _data_policy() -> dict[str, object]:
         "rate_policy": _rate_policy(),
         "dividend_policy": _dividend_policy(),
         "option_cleaning_policy": _option_cleaning_policy(),
+        "quote_freshness_mode": "demo_lenient",
+        "model_validation_policy": "model_ready_quotes_v1",
     }
 
 
@@ -279,6 +306,13 @@ def test_snapshot_cli_parses_arguments_and_calls_pipeline_correctly(
             "120",
             "--max-option-quote-age-seconds",
             "300",
+            "--quote-freshness-mode",
+            "intraday_strict",
+            "--max-quote-age-seconds",
+            "600",
+            "--allow-prior-session",
+            "--stale-quote-action",
+            "reject",
             "--reject-stale-option-quotes",
             "--reject-option-quotes-after-asof",
             "--min-accepted-contracts",
@@ -321,6 +355,10 @@ def test_snapshot_cli_parses_arguments_and_calls_pipeline_correctly(
         "rate_lookback_days": 45,
         "curve_series_ids": ["DGS1MO", "DGS1"],
         "quality_policy": {
+            "quote_freshness_mode": "intraday_strict",
+            "max_quote_age_seconds": 600.0,
+            "allow_prior_session": True,
+            "stale_quote_action": "reject",
             "max_equity_quote_age_seconds": 120.0,
             "max_option_quote_age_seconds": 300.0,
             "reject_stale_option_quotes": True,
@@ -339,7 +377,7 @@ def test_snapshot_cli_parses_arguments_and_calls_pipeline_correctly(
     assert "rate_observation_date: 2026-05-20" in stdout
     assert "equity_feed: iex" in stdout
     assert "option_feed: indicative" in stdout
-    assert "dividend_yield_source: assumption" in stdout
+    assert "dividend_yield_source: zero_assumption" in stdout
     assert "raw_option_contract_count: 46" in stdout
     assert "normalized_option_contract_count: 45" in stdout
     assert "dropped_before_cleaning_count: 1" in stdout
@@ -467,7 +505,11 @@ def test_refresh_daily_cli_parses_arguments_and_calls_pipeline_correctly(
         "dividend_yield_source": "manual_override",
         "rate_lookback_days": 90,
         "curve_series_ids": None,
-        "quality_policy": None,
+        "quality_policy": {
+            "quote_freshness_mode": "demo_lenient",
+            "allow_prior_session": False,
+            "stale_quote_action": "warn",
+        },
         "overwrite": True,
         "library_commit": None,
     }
@@ -505,6 +547,9 @@ def test_refresh_daily_cli_passes_quality_minimums(
     assert name == "refresh_daily"
     assert args == (["spy"],)
     assert kwargs["quality_policy"] == {
+        "quote_freshness_mode": "demo_lenient",
+        "allow_prior_session": False,
+        "stale_quote_action": "warn",
         "reject_option_quotes_after_asof": True,
         "min_accepted_contracts": 8,
         "min_accepted_calls": 3,
@@ -536,7 +581,7 @@ def test_snapshot_json_emits_valid_stable_json(
         "data_policy": _data_policy(),
         "dividend_policy": _dividend_policy(),
         "dividend_yield": 0.0,
-        "dividend_yield_source": "assumption",
+        "dividend_yield_source": "zero_assumption",
         "dropped_before_cleaning_count": 1,
         "equity_feed": "iex",
         "equity_provider": "alpaca",
@@ -572,18 +617,27 @@ def test_snapshot_json_emits_valid_stable_json(
             }
         ],
         "quality_policy": {
+            "quote_freshness_mode": "demo_lenient",
+            "max_quote_age_seconds": None,
+            "allow_prior_session": False,
+            "stale_quote_action": "warn",
             "min_accepted_contracts": 1,
             "warn_on_stale_quotes": True,
         },
         "quote_freshness": {
+            "quote_freshness_mode": "demo_lenient",
+            "max_quote_age_seconds": None,
             "equity_quote_age_seconds": 60.0,
             "stale_option_quote_count": 0,
+            "stale_quote_count": 0,
+            "quote_age_summary": {"min": None, "median": None, "max": None},
+            "quote_freshness_warnings": [],
         },
         "rate_policy": _rate_policy(),
         "rate_series_id": "DGS3MO",
         "rate": 0.0416,
         "rate_observation_date": "2026-05-20",
-        "rate_source": "fred:DGS3MO",
+        "rate_source": "fred:treasury_zero_proxy_curve",
         "raw_option_contract_count": 46,
         "rejected_quote_count": 3,
         "run_id": "snapshot-cli-run",

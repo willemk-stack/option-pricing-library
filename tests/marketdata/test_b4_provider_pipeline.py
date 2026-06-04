@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -334,55 +334,119 @@ def _snapshot(tmp_path: Path, **overrides: object) -> ProviderSnapshotResult:
 
 def _expected_reason_codes() -> list[str]:
     return [
-        "missing_bid_or_ask",
-        "invalid_bid_ask_cross",
+        "unparseable_contract",
+        "bad_expiry",
+        "expired_contract",
         "nonpositive_mid",
-        "expired_or_bad_expiry",
         "nonpositive_strike",
-        "below_intrinsic_tolerance",
-        "spread_too_wide",
-        "missing_iv",
-        "missing_greek",
+        "negative_bid",
+        "negative_ask",
+        "crossed_bid_ask",
         "quote_after_asof",
         "stale_quote",
+        "missing_price_source",
+        "missing_spot_for_moneyness",
+        "missing_rate_for_model",
+        "missing_dividend_for_model",
+        "missing_time_to_expiry_for_model",
+        "missing_iv_for_iv_validation",
+        "unsupported_option_right",
+        "nonfinite_numeric_field",
     ]
 
 
-def _expected_rate_policy(rate: float) -> dict[str, object]:
+def _default_curve_series_ids() -> list[str]:
+    return ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2"]
+
+
+def _expected_rate_policy(
+    rate: float,
+    *,
+    rate_source: str = "fred:treasury_zero_proxy_curve",
+    flat_rate: float | None = None,
+    rate_warnings: Sequence[str] = (),
+    selected_rate_fallback_used: bool = False,
+    curve_series_ids: Sequence[str] | None = None,
+) -> dict[str, object]:
+    series_ids = list(
+        _default_curve_series_ids() if curve_series_ids is None else curve_series_ids
+    )
     return {
-        "policy": "flat_fred_series",
+        "policy": "fred_treasury_zero_proxy_linear_cc",
         "provider": "fred",
+        "rate_curve_source": "fred",
         "series_id": "DGS3MO",
-        "rate_source": "fred:DGS3MO",
+        "rate_source": rate_source,
         "rate_observation_date": "2026-05-20",
         "selected_rate": rate,
-        "flat_rate": rate,
+        "flat_rate": rate if flat_rate is None else flat_rate,
         "lookback_days": 90,
-        "curve_series_ids": ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2"],
-        "curve_interpolation": "not_enabled",
+        "curve_series_ids": series_ids,
+        "rate_curve_series_ids": series_ids,
+        "rate_interpolation": "linear",
+        "curve_interpolation": "linear",
+        "rate_compounding": "continuous",
+        "rate_extrapolation": "clamp_with_warning",
+        "rate_is_bootstrapped": False,
+        "selected_rate_fallback_used": selected_rate_fallback_used,
+        "rate_warnings": list(rate_warnings),
     }
 
 
 def _expected_dividend_policy(
     *,
     dividend_yield: float = 0.0,
-    source: str = "assumption",
+    source: str = "zero_assumption",
     policy: str = "zero_assumption",
+    dividend_is_explicit: bool | None = None,
+    dividend_fallback_used: bool | None = None,
+    dividend_note: str | None = None,
 ) -> dict[str, object]:
-    return {
+    expected = {
         "policy": policy,
         "dividend_yield": dividend_yield,
         "source": source,
+        "dividend_source": source,
+        "dividend_is_explicit": (
+            policy == "manual_static"
+            if dividend_is_explicit is None
+            else dividend_is_explicit
+        ),
+        "dividend_fallback_used": (
+            policy == "zero_assumption"
+            if dividend_fallback_used is None
+            else dividend_fallback_used
+        ),
         "dividend_inference": "not_enabled",
     }
+    if dividend_note is not None:
+        expected["dividend_note"] = dividend_note
+    return expected
 
 
 def _expected_option_cleaning_policy() -> dict[str, object]:
     return {
-        "policy": "quote_cleaning_v1",
+        "policy": "staged_recoverable_quotes_v1",
+        "legacy_policy": "quote_cleaning_v1",
         "policy_id": "quote_cleaning_policy.v1",
         "rejected_quotes_preserved": True,
+        "raw_option_quotes_layer": "raw_option_quotes",
+        "clean_option_quotes_layer": "clean_option_quotes",
+        "model_validation_quotes_layer": "model_validation_quotes",
         "reason_codes": _expected_reason_codes(),
+        "recoverable_missing_fields": [
+            "mid",
+            "time_to_expiry",
+            "moneyness",
+            "log_moneyness",
+            "forward_moneyness",
+            "iv",
+            "delta",
+            "gamma",
+            "theta",
+            "vega",
+            "rho",
+        ],
     }
 
 
@@ -390,10 +454,15 @@ def _expected_data_policy(
     *,
     rate: float,
     dividend_yield: float = 0.0,
-    dividend_source: str = "assumption",
+    dividend_source: str = "zero_assumption",
     dividend_policy: str = "zero_assumption",
     equity_feed: str = "iex",
     option_feed: str = "indicative",
+    rate_source: str = "fred:treasury_zero_proxy_curve",
+    flat_rate: float | None = None,
+    rate_warnings: Sequence[str] = (),
+    selected_rate_fallback_used: bool = False,
+    quote_freshness_mode: str = "demo_lenient",
 ) -> dict[str, object]:
     return {
         "schema_version": "provider_snapshot_data_policy.v1",
@@ -401,13 +470,21 @@ def _expected_data_policy(
         "equity_feed": equity_feed,
         "option_provider": "alpaca",
         "option_feed": option_feed,
-        "rate_policy": _expected_rate_policy(rate),
+        "rate_policy": _expected_rate_policy(
+            rate,
+            rate_source=rate_source,
+            flat_rate=flat_rate,
+            rate_warnings=rate_warnings,
+            selected_rate_fallback_used=selected_rate_fallback_used,
+        ),
         "dividend_policy": _expected_dividend_policy(
             dividend_yield=dividend_yield,
             source=dividend_source,
             policy=dividend_policy,
         ),
         "option_cleaning_policy": _expected_option_cleaning_policy(),
+        "quote_freshness_mode": quote_freshness_mode,
+        "model_validation_policy": "model_ready_quotes_v1",
     }
 
 
@@ -422,7 +499,7 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     assert result.run_id == "b4-test-run"
     assert result.spot == pytest.approx(500.0)
     assert result.rate == pytest.approx(math.log1p(4.25 / 100.0))
-    assert result.rate_source == "fred:DGS3MO"
+    assert result.rate_source == "fred:treasury_zero_proxy_curve"
     assert result.rate_observation_date == pd.Timestamp("2026-05-20")
     assert result.rate_series_id == "DGS3MO"
     assert result.feed == "indicative"
@@ -432,31 +509,35 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     assert result.option_feed == "indicative"
     assert result.selected_rate == pytest.approx(result.rate)
     assert result.flat_rate == pytest.approx(result.rate)
-    assert result.rate_policy == _expected_rate_policy(result.rate)
+    rate_warnings = cast(list[str], result.rate_policy["rate_warnings"])
+    assert result.rate_policy == _expected_rate_policy(
+        result.rate,
+        rate_warnings=rate_warnings,
+    )
     assert result.dividend_policy == _expected_dividend_policy()
     assert result.option_cleaning_policy == _expected_option_cleaning_policy()
-    assert result.data_policy == _expected_data_policy(rate=result.rate)
+    assert result.data_policy == _expected_data_policy(
+        rate=result.rate,
+        rate_warnings=rate_warnings,
+    )
     assert result.dividend_yield == pytest.approx(0.0)
-    assert result.dividend_yield_source == "assumption"
+    assert result.dividend_yield_source == "zero_assumption"
     assert result.raw_option_contract_count == 3
-    assert result.normalized_option_contract_count == 2
+    assert result.normalized_option_contract_count == 3
     assert result.accepted_quote_count == 2
-    assert result.rejected_quote_count == 0
-    assert result.provider_rejected_contract_count == 1
-    assert result.dropped_before_cleaning_count == 1
+    assert result.rejected_quote_count == 1
+    assert result.provider_rejected_contract_count == 0
+    assert result.dropped_before_cleaning_count == 0
     assert result.warnings[:4] == (
         "documented_assumption: dividend_yield=0.0, "
-        "dividend_yield_source=assumption, dividend_inference=not_enabled",
+        "dividend_policy=zero_assumption, dividend_inference=not_enabled",
         "documented_assumption: rate_series_id=DGS3MO, "
-        "default_rate_series_id=DGS3MO, curve_interpolation=not_enabled",
+        "default_rate_series_id=DGS3MO, rate_curve=FRED Treasury zero-rate proxy, "
+        "interpolation=linear, compounding=continuous, rate_is_bootstrapped=false",
         "current_provider_scope: option_chain_backfill=not_enabled",
         "current_provider_scope: scheduling=not_enabled",
     )
-    assert result.warnings[-1] == (
-        "alpaca_option_contracts_dropped_before_cleaning: "
-        "dropped=1, raw=3, normalized=2, "
-        "provider_rejected_contracts=1, stage=provider_normalization"
-    )
+    assert result.warnings[-1] in rate_warnings
 
     for path in result.artifact_paths:
         assert path.exists()
@@ -484,6 +565,7 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     provider_rejected_contracts = pd.read_parquet(
         result.silver_paths.provider_rejected_contracts
     )
+    rejected_quotes = pd.read_parquet(result.silver_paths.rejected_quotes)
     rate_curve = pd.read_parquet(result.rate_curve_paths.rate_curve)
 
     assert bronze_manifest["providers"] == {
@@ -501,19 +583,32 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "provider": "fred",
         "series_id": "DGS3MO",
         "default_series_id": "DGS3MO",
-        "curve_interpolation": "not_enabled",
+        "rate_policy": "fred_treasury_zero_proxy_linear_cc",
+        "rate_curve_source": "fred",
+        "rate_interpolation": "linear",
+        "rate_compounding": "continuous",
+        "rate_extrapolation": "clamp_with_warning",
+        "rate_is_bootstrapped": False,
     }
     assert bronze_manifest["dividend_assumptions"] == {
         "dividend_yield": 0.0,
-        "source": "assumption",
+        "source": "zero_assumption",
+        "dividend_is_explicit": False,
+        "dividend_fallback_used": True,
         "dividend_inference": "not_enabled",
     }
     assert bronze_manifest["dividend_policy"] == _expected_dividend_policy()
-    assert bronze_manifest["rate_policy"] == _expected_rate_policy(result.rate)
+    assert bronze_manifest["rate_policy"] == _expected_rate_policy(
+        result.rate,
+        rate_warnings=rate_warnings,
+    )
     assert bronze_manifest["option_cleaning_policy"] == (
         _expected_option_cleaning_policy()
     )
-    assert bronze_manifest["data_policy"] == _expected_data_policy(rate=result.rate)
+    assert bronze_manifest["data_policy"] == _expected_data_policy(
+        rate=result.rate,
+        rate_warnings=rate_warnings,
+    )
     assert bronze_manifest["quality_policy"]["min_accepted_contracts"] == 1
     assert bronze_manifest["quote_freshness"] == {
         "equity_quote_age_seconds": 60.0,
@@ -522,7 +617,7 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "option_quote_age_seconds_min": 60.0,
         "option_quote_age_seconds_median": 60.0,
         "option_quote_age_seconds_max": 60.0,
-        "option_quote_count": 2,
+        "option_quote_count": 3,
         "option_quotes_after_asof_count": 0,
         "stale_option_quote_count": 0,
         "accepted_quote_count": 2,
@@ -531,6 +626,13 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "accepted_expiry_count": 1,
         "stale_accepted_quote_count": 0,
         "accepted_quotes_after_asof_count": 0,
+        "quote_freshness_mode": "demo_lenient",
+        "max_quote_age_seconds": None,
+        "allow_prior_session": False,
+        "stale_quote_action": "warn",
+        "stale_quote_count": 0,
+        "quote_age_summary": {"min": 60.0, "median": 60.0, "max": 60.0},
+        "quote_freshness_warnings": [],
     }
     diagnostics = cast(
         list[dict[str, object]],
@@ -548,8 +650,8 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
     assert diagnostics[0]["request_metadata"]["feed"] == "iex"
     assert diagnostics[1]["request_metadata"]["feed"] == "indicative"
     assert bronze_manifest["current_provider_scope"] == {
-        "curve_interpolation": "not_enabled",
-        "dividend_inference": "not_enabled",
+        "curve_interpolation": "linear",
+        "dividend_inference": "manual_static_or_zero_assumption",
         "option_chain_backfill": "not_enabled",
         "scheduling": "not_enabled",
     }
@@ -569,19 +671,31 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "fred_observation_start": "2026-02-21",
         "fred_observation_end": "2026-05-22",
     }
-    assert bronze_manifest["rows"]["provider_rejected_contracts"] == 1
+    assert bronze_manifest["rows"]["provider_rejected_contracts"] == 0
     assert bronze_manifest["rows"]["rate_curve_points"] == 5
     assert silver_manifest["source_type"] == "provider_snapshot"
-    assert silver_manifest["rate_source"] == "fred:DGS3MO"
-    assert silver_manifest["rate_policy"] == _expected_rate_policy(result.rate)
-    assert silver_manifest["data_policy"] == _expected_data_policy(rate=result.rate)
-    assert silver_manifest["dividend_yield_source"] == "assumption"
+    assert silver_manifest["rate_source"] == "fred:treasury_zero_proxy_curve"
+    assert silver_manifest["rate_policy"] == _expected_rate_policy(
+        result.rate,
+        rate_warnings=rate_warnings,
+    )
+    assert silver_manifest["data_policy"] == _expected_data_policy(
+        rate=result.rate,
+        rate_warnings=rate_warnings,
+    )
+    assert silver_manifest["dividend_yield_source"] == "zero_assumption"
     assert silver_manifest["warnings"] == list(result.warnings)
     assert gold_manifest["source"]["source_type"] == "provider_snapshot"
-    assert gold_manifest["sources"]["rate_source"] == "fred:DGS3MO"
-    assert gold_manifest["sources"]["dividend_yield_source"] == "assumption"
-    assert gold_manifest["rate_policy"] == _expected_rate_policy(result.rate)
-    assert gold_manifest["data_policy"] == _expected_data_policy(rate=result.rate)
+    assert gold_manifest["sources"]["rate_source"] == "fred:treasury_zero_proxy_curve"
+    assert gold_manifest["sources"]["dividend_yield_source"] == "zero_assumption"
+    assert gold_manifest["rate_policy"] == _expected_rate_policy(
+        result.rate,
+        rate_warnings=rate_warnings,
+    )
+    assert gold_manifest["data_policy"] == _expected_data_policy(
+        rate=result.rate,
+        rate_warnings=rate_warnings,
+    )
     assert rate_curve_manifest == {
         "provider_snapshot_rate_curve_schema_version": "provider_rate_curve_gold.v1",
         "artifact": "rate_curve",
@@ -592,8 +706,8 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "rate_compounding": "continuous",
         "day_count": "ACT/365",
         "lookback_days": 90,
-        "requested_series_ids": ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2"],
-        "included_series_ids": ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2"],
+        "requested_series_ids": _default_curve_series_ids(),
+        "included_series_ids": _default_curve_series_ids(),
         "rows": {"rate_curve": 5},
         "artifacts": {"rate_curve": "rate_curve.parquet"},
         "source": {
@@ -601,16 +715,15 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
             "fixture_name": "provider_snapshot_v1",
         },
         "rate_policy": {
-            **_expected_rate_policy(result.rate),
+            **_expected_rate_policy(result.rate, rate_warnings=rate_warnings),
             "provider": "fred",
             "primary_series_id": "DGS3MO",
-            "requested_series_ids": ["DGS1MO", "DGS3MO", "DGS6MO", "DGS1", "DGS2"],
+            "requested_series_ids": _default_curve_series_ids(),
             "lookback_days": 90,
-            "curve_interpolation": "not_enabled",
         },
         "current_provider_scope": {
-            "curve_interpolation": "not_enabled",
-            "dividend_inference": "not_enabled",
+            "curve_interpolation": "linear",
+            "dividend_inference": "manual_static_or_zero_assumption",
             "option_chain_backfill": "not_enabled",
             "scheduling": "not_enabled",
         },
@@ -624,28 +737,30 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         },
         "written_at": rate_curve_manifest["written_at"],
     }
-    assert bundle_manifest["rate_source"] == "fred:DGS3MO"
-    assert bundle_manifest["rate_policy"] == _expected_rate_policy(result.rate)
-    assert bundle_manifest["data_policy"] == _expected_data_policy(rate=result.rate)
-    assert bundle_manifest["dividend_yield_source"] == "assumption"
+    assert bundle_manifest["rate_source"] == "fred:treasury_zero_proxy_curve"
+    assert bundle_manifest["rate_policy"] == _expected_rate_policy(
+        result.rate,
+        rate_warnings=rate_warnings,
+    )
+    assert bundle_manifest["data_policy"] == _expected_data_policy(
+        rate=result.rate,
+        rate_warnings=rate_warnings,
+    )
+    assert bundle_manifest["dividend_yield_source"] == "zero_assumption"
     assert warnings_payload["warnings"] == list(result.warnings)
-    rejected_row = provider_rejected_contracts.iloc[0]
-    assert len(provider_rejected_contracts) == 1
+    assert len(provider_rejected_contracts) == 0
+    rejected_row = rejected_quotes.iloc[0]
+    assert len(rejected_quotes) == 1
     assert rejected_row["underlying"] == "SPY"
     assert rejected_row["contract_symbol"] == "SPY260619C00510000"
-    assert rejected_row["payload_contract_key"] == "SPY260619C00510000"
     assert rejected_row["asof"] == pd.Timestamp("2026-05-22T15:31:00Z")
     assert rejected_row["source"] == "alpaca"
-    assert rejected_row["feed"] == "indicative"
-    assert rejected_row["rejection_stage"] == "provider_normalization"
-    assert rejected_row["reason"] == "missing_bid_or_ask"
-    assert rejected_row["rejection_detail"] == "latest_quote is missing bid"
-    assert rejected_row["raw_quote_timestamp"] == "2026-05-22T15:30:00Z"
-    assert pd.isna(rejected_row["raw_bid"])
-    assert rejected_row["raw_ask"] == "2.0"
-    assert pd.isna(rejected_row["raw_expiry"])
-    assert pd.isna(rejected_row["raw_strike"])
-    assert pd.isna(rejected_row["raw_right"])
+    assert rejected_row["rejection_reason"] == "missing_price_source"
+    assert rejected_row["rejection_detail"] == (
+        "quote requires bid/ask, mid, or last price source"
+    )
+    assert pd.isna(rejected_row["bid"])
+    assert rejected_row["ask"] == pytest.approx(2.0)
     assert rate_curve["series_id"].astype(str).tolist() == [
         "DGS1MO",
         "DGS3MO",
@@ -653,8 +768,18 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "DGS1",
         "DGS2",
     ]
-    assert rate_curve["tenor"].astype(str).tolist() == ["1M", "3M", "6M", "1Y", "2Y"]
-    assert rate_curve["day_count"].astype(str).tolist() == ["ACT/365"] * 5
+    assert rate_curve["tenor_years"].astype(float).tolist() == pytest.approx(
+        [1.0 / 12.0, 3.0 / 12.0, 6.0 / 12.0, 1.0, 2.0]
+    )
+    assert rate_curve["raw_percent_rate"].astype(float).tolist() == pytest.approx(
+        [4.25] * 5
+    )
+    assert rate_curve["decimal_rate"].astype(float).tolist() == pytest.approx(
+        [0.0425] * 5
+    )
+    assert rate_curve["continuous_rate"].astype(float).tolist() == pytest.approx(
+        [math.log1p(4.25 / 100.0)] * 5
+    )
     assert len(run_entries) == 1
     assert run_entries[0]["artifacts"] == [
         path.relative_to(tmp_path).as_posix() for path in result.artifact_paths
@@ -672,30 +797,36 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "asof": "2026-05-22T15:31:00Z",
         "run_id": "b4-test-run",
         "rate_series_id": "DGS3MO",
-        "rate_source": "fred:DGS3MO",
+        "rate_source": "fred:treasury_zero_proxy_curve",
         "rate_observation_date": "2026-05-20",
         "selected_rate": result.rate,
         "flat_rate": result.rate,
         "spot_source": "alpaca",
         "dividend_yield": 0.0,
-        "dividend_yield_source": "assumption",
+        "dividend_yield_source": "zero_assumption",
         "dividend_policy": _expected_dividend_policy(),
         "rate_lookback_days": 90,
-        "rate_policy": _expected_rate_policy(result.rate),
+        "rate_policy": _expected_rate_policy(
+            result.rate,
+            rate_warnings=rate_warnings,
+        ),
         "option_cleaning_policy": _expected_option_cleaning_policy(),
-        "data_policy": _expected_data_policy(rate=result.rate),
+        "data_policy": _expected_data_policy(
+            rate=result.rate,
+            rate_warnings=rate_warnings,
+        ),
         "raw_option_contract_count": 3,
-        "normalized_option_contract_count": 2,
-        "dropped_before_cleaning_count": 1,
-        "provider_rejected_contract_count": 1,
+        "normalized_option_contract_count": 3,
+        "dropped_before_cleaning_count": 0,
+        "provider_rejected_contract_count": 0,
         "accepted_quote_count": 2,
-        "rejected_quote_count": 0,
+        "rejected_quote_count": 1,
         "quality_policy": bronze_manifest["quality_policy"],
         "quote_freshness": bronze_manifest["quote_freshness"],
         "provider_operation_diagnostics": diagnostics,
         "current_provider_scope": {
-            "curve_interpolation": "not_enabled",
-            "dividend_inference": "not_enabled",
+            "curve_interpolation": "linear",
+            "dividend_inference": "manual_static_or_zero_assumption",
             "option_chain_backfill": "not_enabled",
             "scheduling": "not_enabled",
         },
@@ -718,7 +849,8 @@ def test_provider_snapshot_result_payload_is_json_serializable(
     encoded = json.dumps(payload, sort_keys=True)
     assert json.loads(encoded)["run_id"] == "b4-test-run"
     assert "DGS3MO" in encoded
-    assert "dividend_inference=not_enabled" in encoded
+    assert "dividend_inference" in encoded
+    assert "zero_assumption" in encoded
 
 
 def test_provider_snapshot_routes_default_split_alpaca_feeds(
@@ -827,7 +959,10 @@ def test_refresh_daily_dispatches_snapshots_and_records_aggregate_run(
         "rate_series_id": "DGS3MO",
         "selected_rate": 0.04162167469081947,
         "flat_rate": 0.04162167469081947,
-        "rate_policy": _expected_rate_policy(0.04162167469081947),
+        "rate_policy": _expected_rate_policy(
+            0.04162167469081947,
+            rate_source="fred:DGS3MO",
+        ),
         "dividend_policy": _expected_dividend_policy(
             dividend_yield=0.0125,
             source="manual_override",
@@ -836,12 +971,17 @@ def test_refresh_daily_dispatches_snapshots_and_records_aggregate_run(
         "option_cleaning_policy": _expected_option_cleaning_policy(),
         "data_policy": _expected_data_policy(
             rate=0.04162167469081947,
+            rate_source="fred:DGS3MO",
             dividend_yield=0.0125,
             dividend_source="manual_override",
             dividend_policy="manual_static",
             option_feed="sip",
         ),
         "quality_policy": {
+            "quote_freshness_mode": "demo_lenient",
+            "max_quote_age_seconds": None,
+            "allow_prior_session": False,
+            "stale_quote_action": "warn",
             "max_equity_quote_age_seconds": None,
             "max_option_quote_age_seconds": None,
             "warn_on_stale_quotes": True,
@@ -856,8 +996,8 @@ def test_refresh_daily_dispatches_snapshots_and_records_aggregate_run(
             "min_expiries": None,
         },
         "current_provider_scope": {
-            "curve_interpolation": "not_enabled",
-            "dividend_inference": "not_enabled",
+            "curve_interpolation": "linear",
+            "dividend_inference": "manual_static_or_zero_assumption",
             "option_chain_backfill": "not_enabled",
             "scheduling": "not_enabled",
         },
@@ -904,6 +1044,7 @@ def test_provider_snapshot_dividend_override_flows_through_metadata(
 
     assert result.dividend_yield == pytest.approx(0.015)
     assert result.dividend_yield_source == "manual_override"
+    rate_warnings = cast(list[str], result.rate_policy["rate_warnings"])
     assert result.dividend_policy == _expected_dividend_policy(
         dividend_yield=0.015,
         source="manual_override",
@@ -911,6 +1052,7 @@ def test_provider_snapshot_dividend_override_flows_through_metadata(
     )
     assert result.data_policy == _expected_data_policy(
         rate=result.rate,
+        rate_warnings=rate_warnings,
         dividend_yield=0.015,
         dividend_source="manual_override",
         dividend_policy="manual_static",
@@ -918,6 +1060,8 @@ def test_provider_snapshot_dividend_override_flows_through_metadata(
     assert bronze_manifest["dividend_assumptions"] == {
         "dividend_yield": 0.015,
         "source": "manual_override",
+        "dividend_is_explicit": True,
+        "dividend_fallback_used": False,
         "dividend_inference": "not_enabled",
     }
     assert bronze_manifest["dividend_policy"] == result.dividend_policy
@@ -1176,7 +1320,9 @@ def test_stale_option_quote_warns_by_default_policy(
     )
 
     assert result.accepted_quote_count == 2
-    assert result.quote_freshness["stale_option_quote_count"] == 2
+    assert result.quote_freshness["quote_freshness_mode"] == "demo_lenient"
+    assert result.quote_freshness["stale_option_quote_count"] == 3
+    assert result.quote_freshness["stale_quote_count"] == 3
     assert any("provider_quality: stale_option_quotes" in w for w in result.warnings)
     assert any(
         "provider_quality: stale_accepted_option_quotes" in w for w in result.warnings
@@ -1214,11 +1360,82 @@ def test_stale_option_quote_can_be_rejected_by_policy(
 
     rejected = pd.read_parquet(result.silver_paths.rejected_quotes)
     assert result.accepted_quote_count == 1
+    assert result.rejected_quote_count == 2
+    assert rejected["rejection_reason"].astype(str).tolist() == [
+        "missing_price_source",
+        "stale_quote",
+    ]
+
+
+def test_intraday_strict_quote_freshness_mode_rejects_stale_rows(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    option_payload = _option_chain_payload()
+    contracts = cast(dict[str, Any], option_payload["contracts"])
+    cast(dict[str, Any], contracts["SPY260619C00500000"])["latest_quote"] = {
+        "timestamp": "2026-05-22T15:31:00Z",
+        "bid_price": 4.0,
+        "ask_price": 4.4,
+    }
+    cast(dict[str, Any], contracts["SPY260619P00500000"])["latest_quote"] = {
+        "timestamp": "2026-05-22T15:00:00Z",
+        "bid_price": 3.8,
+        "ask_price": 4.2,
+    }
+
+    result = _pipeline(
+        tmp_path,
+        alpaca_client=_FakeAlpacaClient(option_payload=option_payload),
+    ).snapshot(
+        "SPY",
+        asof="2026-05-22T15:31:00Z",
+        run_id="intraday-strict-rejection",
+        curve_series_ids=(),
+        quality_policy={
+            "quote_freshness_mode": "intraday_strict",
+            "max_quote_age_seconds": 30,
+            "stale_quote_action": "reject",
+        },
+    )
+
+    rejected = pd.read_parquet(result.silver_paths.rejected_quotes)
+    assert result.accepted_quote_count == 1
+    assert result.rejected_quote_count == 2
+    assert result.quote_freshness["quote_freshness_mode"] == "intraday_strict"
+    assert result.quote_freshness["max_quote_age_seconds"] == 30.0
+    assert result.quote_freshness["stale_quote_count"] == 2
+    assert rejected["rejection_reason"].astype(str).tolist() == [
+        "missing_price_source",
+        "stale_quote",
+    ]
+
+
+def test_end_of_day_quote_freshness_mode_allows_prior_session_and_warns(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    result = _snapshot(
+        tmp_path,
+        run_id="end-of-day-prior-session",
+        quality_policy={
+            "quote_freshness_mode": "end_of_day",
+            "max_option_quote_age_seconds": 30,
+            "allow_prior_session": True,
+        },
+    )
+
+    assert result.accepted_quote_count == 2
     assert result.rejected_quote_count == 1
-    assert rejected["rejection_reason"].astype(str).tolist() == ["stale_quote"]
+    assert result.quote_freshness["quote_freshness_mode"] == "end_of_day"
+    assert result.quote_freshness["allow_prior_session"] is True
+    assert result.quote_freshness["stale_quote_count"] == 3
+    assert "end_of_day_prior_session_allowed" in (
+        result.quote_freshness["quote_freshness_warnings"]
+    )
 
 
-def test_option_quote_after_asof_warns_by_default_policy(
+def test_option_quote_after_asof_is_rejected_and_warned_by_default_policy(
     tmp_path: Path,
     fake_parquet: None,
 ) -> None:
@@ -1238,10 +1455,10 @@ def test_option_quote_after_asof_warns_by_default_policy(
         curve_series_ids=(),
     )
 
-    assert result.accepted_quote_count == 2
-    assert result.rejected_quote_count == 0
+    assert result.accepted_quote_count == 1
+    assert result.rejected_quote_count == 2
     assert result.quote_freshness["option_quotes_after_asof_count"] == 1
-    assert result.quote_freshness["accepted_quotes_after_asof_count"] == 1
+    assert result.quote_freshness["accepted_quotes_after_asof_count"] == 0
     assert any(
         "provider_quality: option_quotes_after_asof" in w for w in result.warnings
     )
@@ -1270,12 +1487,16 @@ def test_option_quote_after_asof_can_be_rejected_by_policy(
 
     rejected = pd.read_parquet(result.silver_paths.rejected_quotes)
     assert result.accepted_quote_count == 1
-    assert result.rejected_quote_count == 1
+    assert result.rejected_quote_count == 2
     assert result.quote_freshness["option_quotes_after_asof_count"] == 1
     assert result.quote_freshness["accepted_quotes_after_asof_count"] == 0
-    assert rejected["rejection_reason"].astype(str).tolist() == ["quote_after_asof"]
+    assert rejected["rejection_reason"].astype(str).tolist() == [
+        "quote_after_asof",
+        "missing_price_source",
+    ]
     assert rejected["rejection_detail"].astype(str).tolist() == [
-        "quote_ts is after snapshot asof"
+        "quote_ts is after asof; quote_age_seconds=-60.0",
+        "quote requires bid/ask, mid, or last price source",
     ]
     assert any(
         "provider_quality: option_quotes_after_asof" in w for w in result.warnings
@@ -1401,7 +1622,7 @@ def test_provider_snapshot_no_usable_option_chain_fails_clearly(
 
     with pytest.raises(
         ProviderSnapshotDataUnavailableError,
-        match="No usable Alpaca option contracts",
+        match="No option contracts accepted after cleaning/quality policy",
     ):
         _pipeline(tmp_path, alpaca_client=alpaca_client).snapshot(
             "SPY",
@@ -1422,7 +1643,7 @@ def test_provider_snapshot_fake_clients_do_not_need_provider_credentials(
     result = _snapshot(tmp_path)
 
     assert result.accepted_quote_count == 2
-    assert result.rate_source == "fred:DGS3MO"
+    assert result.rate_source == "fred:treasury_zero_proxy_curve"
 
 
 def test_provider_snapshot_accepts_explicit_dependencies_without_config(

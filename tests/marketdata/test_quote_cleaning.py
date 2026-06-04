@@ -203,6 +203,31 @@ def test_moneyness_equals_strike_divided_by_spot() -> None:
     )
 
 
+def test_clean_quotes_compute_recoverable_fields_and_model_readiness_flags() -> None:
+    option_chain = _option_chain(bid=4.0, ask=4.4)
+    option_chain.loc[0, ["mid", "iv", "delta", "gamma", "theta", "vega", "rho"]] = pd.NA
+
+    result = clean_option_quotes(option_chain, _market_inputs())
+
+    assert len(result.cleaned_quotes) == 1
+    assert result.rejected_quotes.empty
+    row = result.cleaned_quotes.iloc[0]
+    assert row["mid"] == pytest.approx(4.2)
+    assert row["spread"] == pytest.approx(0.4)
+    assert row["relative_spread"] == pytest.approx(0.4 / 4.2)
+    assert row["option_price_for_model"] == pytest.approx(4.2)
+    assert row["time_to_expiry_years"] == pytest.approx(row["expiry_years"])
+    assert bool(row["mid_computed"]) is True
+    assert bool(row["time_to_expiry_computed"]) is True
+    assert bool(row["moneyness_computed"]) is True
+    assert bool(row["provider_iv_available"]) is False
+    assert bool(row["provider_greeks_available"]) is False
+    assert bool(row["model_price_available"]) is True
+    assert bool(row["model_validation_ready"]) is True
+    assert bool(row["iv_validation_ready"]) is False
+    assert bool(row["greek_validation_ready"]) is False
+
+
 def test_reason_counts_and_warnings_are_empty_when_all_rows_are_accepted() -> None:
     result = clean_option_quotes(_fixture_option_chain(), _fixture_market_inputs())
 
@@ -213,29 +238,31 @@ def test_reason_counts_and_warnings_are_empty_when_all_rows_are_accepted() -> No
 @pytest.mark.parametrize(
     ("option_chain", "reason"),
     [
-        (_option_chain(bid=-1.0), QuoteRejectionReason.INVALID_BID_ASK_CROSS),
+        (_option_chain(bid=-1.0), QuoteRejectionReason.NEGATIVE_BID),
         (
-            _option_chain(bid=0.0, ask=0.0),
-            QuoteRejectionReason.INVALID_BID_ASK_CROSS,
+            _option_chain(ask=-1.0),
+            QuoteRejectionReason.NEGATIVE_ASK,
         ),
         (
             _option_chain(bid=5.0, ask=4.0, mid=4.5),
-            QuoteRejectionReason.INVALID_BID_ASK_CROSS,
+            QuoteRejectionReason.CROSSED_BID_ASK,
         ),
         (
             _option_chain(expiry="2026-05-22"),
-            QuoteRejectionReason.EXPIRED_OR_BAD_EXPIRY,
+            QuoteRejectionReason.EXPIRED_CONTRACT,
         ),
         (_option_chain(strike=0.0), QuoteRejectionReason.NONPOSITIVE_STRIKE),
-        (_option_chain(bid=pd.NA), QuoteRejectionReason.MISSING_BID_OR_ASK),
-        (_option_chain(mid=0.0), QuoteRejectionReason.NONPOSITIVE_MID),
         (
-            _option_chain(strike=90.0, bid=0.9, ask=1.1, mid=1.0),
-            QuoteRejectionReason.BELOW_INTRINSIC_TOLERANCE,
+            _option_chain(bid=pd.NA, ask=pd.NA, mid=pd.NA, last=pd.NA),
+            QuoteRejectionReason.MISSING_PRICE_SOURCE,
         ),
         (
-            _option_chain(bid=1.0, ask=5.0, mid=2.0),
-            QuoteRejectionReason.SPREAD_TOO_WIDE,
+            _option_chain(bid=pd.NA, ask=pd.NA, mid=0.0, last=pd.NA),
+            QuoteRejectionReason.NONPOSITIVE_MID,
+        ),
+        (
+            _option_chain(quote_ts="2026-05-22T15:31:00Z"),
+            QuoteRejectionReason.QUOTE_AFTER_ASOF,
         ),
     ],
 )
@@ -249,7 +276,7 @@ def test_price_and_contract_rejection_reasons(
 def test_missing_iv_rejects_when_iv_is_required() -> None:
     _assert_single_rejection(
         _option_chain(iv=pd.NA),
-        QuoteRejectionReason.MISSING_IV,
+        QuoteRejectionReason.MISSING_IV_FOR_IV_VALIDATION,
         policy=QuoteCleaningPolicyV1(require_iv=True),
     )
 
@@ -257,7 +284,7 @@ def test_missing_iv_rejects_when_iv_is_required() -> None:
 def test_missing_vega_rejects_when_vega_is_required() -> None:
     _assert_single_rejection(
         _option_chain(vega=pd.NA),
-        QuoteRejectionReason.MISSING_GREEK,
+        QuoteRejectionReason.NONFINITE_NUMERIC_FIELD,
         policy=QuoteCleaningPolicyV1(require_vega=True),
     )
 
@@ -285,11 +312,11 @@ def test_missing_vega_is_accepted_when_vega_is_not_required() -> None:
         ),
         (
             _option_chain(expiry="2026-05-22", bid=-1.0, ask=0.0, mid=0.0),
-            QuoteRejectionReason.EXPIRED_OR_BAD_EXPIRY,
+            QuoteRejectionReason.EXPIRED_CONTRACT,
         ),
         (
-            _option_chain(bid=pd.NA, mid=0.0),
-            QuoteRejectionReason.MISSING_BID_OR_ASK,
+            _option_chain(bid=-1.0, ask=-1.0, mid=0.0),
+            QuoteRejectionReason.NEGATIVE_BID,
         ),
     ],
 )
