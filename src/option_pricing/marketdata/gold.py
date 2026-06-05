@@ -812,6 +812,7 @@ def _add_optional_policy_metadata(
         "quote_freshness_mode",
         "model_validation_policy",
         "data_policy",
+        "spot_option_chain_diagnostic",
     ):
         value = source_metadata.get(key)
         if value is not None:

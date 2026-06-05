@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, cast
@@ -100,6 +101,9 @@ _BARS_BACKFILL_WARNING = (
     "current_provider_scope: bars_backfill=equity_only, "
     "option_chain_backfill=not_enabled, scheduling=not_enabled"
 )
+_SPOT_CHAIN_PROXY_MIN_MID_SPOT_RATIO = 0.05
+_SPOT_CHAIN_PROXY_MIN_MID_STRIKE_RATIO = 0.02
+_SPOT_CHAIN_MATERIAL_DEVIATION_RATIO = 0.25
 
 
 @dataclass(frozen=True, slots=True)
@@ -579,6 +583,66 @@ def _provider_snapshot_freshness_stats(
     }
 
 
+def _provider_snapshot_spot_option_chain_diagnostic(
+    *,
+    market_inputs: pd.DataFrame,
+    cleaned_quotes: pd.DataFrame,
+) -> dict[str, object]:
+    spot = _market_inputs_spot(market_inputs)
+    call_proxies: list[float] = []
+    put_proxies: list[float] = []
+    if spot is not None and not cleaned_quotes.empty:
+        for _, row in cleaned_quotes.iterrows():
+            right = _optional_row_text(row, "right").lower()
+            strike = _optional_row_float(row, "strike")
+            mid = _optional_row_float(row, "mid")
+            if (
+                right not in {"call", "put"}
+                or strike is None
+                or mid is None
+                or strike <= 0.0
+                or mid <= 0.0
+            ):
+                continue
+            if not _is_deep_itm_proxy_candidate(spot=spot, strike=strike, mid=mid):
+                continue
+            if right == "call":
+                call_proxies.append(strike + mid)
+            elif strike > mid:
+                put_proxies.append(strike - mid)
+
+    proxies = [*call_proxies, *put_proxies]
+    summary = _proxy_summary(proxies)
+    ratio = (
+        None if spot is None or summary["median"] is None else summary["median"] / spot
+    )
+    relative_deviation = None if ratio is None else abs(ratio - 1.0)
+    threshold = _SPOT_CHAIN_MATERIAL_DEVIATION_RATIO
+    failed = bool(relative_deviation is not None and relative_deviation > threshold)
+    status = (
+        "failed"
+        if failed
+        else "passed" if proxies and spot is not None else "insufficient_data"
+    )
+
+    return {
+        "check": QuoteRejectionReason.SPOT_OPTION_CHAIN_MISMATCH.value,
+        "status": status,
+        "spot": spot,
+        "proxy_count": int(len(proxies)),
+        "call_proxy_count": int(len(call_proxies)),
+        "put_proxy_count": int(len(put_proxies)),
+        "proxy_min": summary["min"],
+        "proxy_median": summary["median"],
+        "proxy_max": summary["max"],
+        "median_proxy_to_spot_ratio": ratio,
+        "relative_deviation": relative_deviation,
+        "material_deviation_threshold": threshold,
+        "deep_itm_proxy_min_mid_spot_ratio": _SPOT_CHAIN_PROXY_MIN_MID_SPOT_RATIO,
+        "deep_itm_proxy_min_mid_strike_ratio": (_SPOT_CHAIN_PROXY_MIN_MID_STRIKE_RATIO),
+    }
+
+
 def _provider_snapshot_quality_warnings(
     *,
     stats: Mapping[str, object],
@@ -630,6 +694,15 @@ def _provider_snapshot_quality_warnings(
             f"quote_freshness_mode={policy.quote_freshness_mode}, "
             f"stale_quote_action={policy.stale_quote_action}"
         )
+    spot_chain = _spot_chain_diagnostic(stats)
+    if spot_chain.get("status") == "failed":
+        warnings.append(
+            "provider_quality: spot_option_chain_mismatch "
+            f"median_proxy_to_spot_ratio="
+            f"{spot_chain.get('median_proxy_to_spot_ratio')}, "
+            f"relative_deviation={spot_chain.get('relative_deviation')}, "
+            f"threshold={spot_chain.get('material_deviation_threshold')}"
+        )
     return tuple(warnings)
 
 
@@ -658,6 +731,19 @@ def _provider_snapshot_quality_failures(
             "Option quote is stale under intraday_strict freshness policy "
             f"(stale_quote_count={_int_stat(stats, 'stale_option_quote_count')}, "
             f"max_age_seconds={policy.effective_max_option_quote_age_seconds()})"
+        )
+
+    spot_chain = _spot_chain_diagnostic(stats)
+    if spot_chain.get("status") == "failed":
+        failures.append(
+            "Provider snapshot failed spot_option_chain_mismatch diagnostic "
+            f"(spot={spot_chain.get('spot')}, "
+            f"proxy_count={spot_chain.get('proxy_count')}, "
+            f"median_proxy={spot_chain.get('proxy_median')}, "
+            f"median_proxy_to_spot_ratio="
+            f"{spot_chain.get('median_proxy_to_spot_ratio')}, "
+            f"relative_deviation={spot_chain.get('relative_deviation')}, "
+            f"threshold={spot_chain.get('material_deviation_threshold')})"
         )
 
     accepted = _int_stat(stats, "accepted_quote_count")
@@ -894,6 +980,66 @@ def _right_count(frame: pd.DataFrame, right: str) -> int:
     if frame.empty or "right" not in frame:
         return 0
     return int((frame["right"].astype("string").str.lower() == right).sum())
+
+
+def _market_inputs_spot(market_inputs: pd.DataFrame) -> float | None:
+    if market_inputs.empty or "spot" not in market_inputs:
+        return None
+    try:
+        spot = float(cast(Any, market_inputs.iloc[0]["spot"]))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(spot) or spot <= 0.0:
+        return None
+    return spot
+
+
+def _optional_row_text(row: pd.Series, column: str) -> str:
+    if column not in row.index or pd.isna(row[column]):
+        return ""
+    return str(row[column]).strip()
+
+
+def _optional_row_float(row: pd.Series, column: str) -> float | None:
+    if column not in row.index or pd.isna(row[column]):
+        return None
+    try:
+        value = float(cast(Any, row[column]))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value):
+        return None
+    return value
+
+
+def _is_deep_itm_proxy_candidate(
+    *,
+    spot: float,
+    strike: float,
+    mid: float,
+) -> bool:
+    return mid >= max(
+        _SPOT_CHAIN_PROXY_MIN_MID_SPOT_RATIO * spot,
+        _SPOT_CHAIN_PROXY_MIN_MID_STRIKE_RATIO * strike,
+    )
+
+
+def _proxy_summary(values: Sequence[float]) -> dict[str, float | None]:
+    if not values:
+        return {"min": None, "median": None, "max": None}
+    series = pd.Series(list(values), dtype="float64")
+    return {
+        "min": float(series.min()),
+        "median": float(series.median()),
+        "max": float(series.max()),
+    }
+
+
+def _spot_chain_diagnostic(stats: Mapping[str, object]) -> Mapping[str, object]:
+    value = stats.get("spot_option_chain_diagnostic")
+    if isinstance(value, Mapping):
+        return cast(Mapping[str, object], value)
+    return {}
 
 
 def _utc_timestamp(value: object) -> pd.Timestamp:

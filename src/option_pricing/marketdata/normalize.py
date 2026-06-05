@@ -65,6 +65,16 @@ _ALPACA_OPTION_EXPIRY_ALIASES = (
 _ALPACA_OPTION_STRIKE_ALIASES = ("strike", "strike_price", "strikePrice")
 _ALPACA_OPTION_RIGHT_ALIASES = ("right", "type", "option_type", "optionType")
 _ALPACA_OPTION_CONTRACT_ALIASES = ("contract", "option_contract", "optionContract")
+_ALPACA_OPTION_CONTRACT_SIZE_ALIASES = (
+    "contract_size",
+    "contractSize",
+    "size",
+)
+_ALPACA_OPTION_MULTIPLIER_ALIASES = ("multiplier", "contract_multiplier")
+_ALPACA_OPTION_DELIVERABLE_ALIASES = ("deliverable", "deliverables")
+_ALPACA_OPTION_STATUS_ALIASES = ("status",)
+_ALPACA_OPTION_STYLE_ALIASES = ("style", "exercise_style", "exerciseStyle")
+_ALPACA_OPTION_ROOT_SYMBOL_ALIASES = ("root_symbol", "rootSymbol", "root")
 _ALPACA_OPTION_LATEST_QUOTE_ALIASES = ("latest_quote", "latestQuote", "quote")
 _ALPACA_OPTION_LATEST_TRADE_ALIASES = ("latest_trade", "latestTrade", "trade")
 _ALPACA_OPTION_TRADE_PRICE_ALIASES = ("price", "p", "trade_price", "tradePrice")
@@ -97,6 +107,12 @@ _PROVIDER_REJECTED_CONTRACT_COLUMNS = (
     "raw_expiry",
     "raw_strike",
     "raw_right",
+    "raw_contract_size",
+    "raw_multiplier",
+    "raw_deliverable",
+    "raw_status",
+    "raw_style",
+    "raw_root_symbol",
 )
 
 _ALPACA_BAR_FIELD_ALIASES = (
@@ -118,6 +134,16 @@ class _AlpacaOptionContractMetadata:
     expiry: date
     strike: float
     right: str
+
+
+@dataclass(frozen=True, slots=True)
+class _AlpacaOptionConventionMetadata:
+    contract_size: object
+    multiplier: object
+    deliverable: object
+    status: object
+    style: object
+    root_symbol: object
 
 
 @dataclass(frozen=True, slots=True)
@@ -438,6 +464,7 @@ def _alpaca_option_chain_row_with_audit(
     raw_expiry = _option_metadata_value(contract, _ALPACA_OPTION_EXPIRY_ALIASES)
     raw_strike = _option_metadata_value(contract, _ALPACA_OPTION_STRIKE_ALIASES)
     raw_right = _option_metadata_value(contract, _ALPACA_OPTION_RIGHT_ALIASES)
+    convention = _alpaca_option_convention_metadata(contract)
     quote = _option_snapshot_value(contract, _ALPACA_OPTION_LATEST_QUOTE_ALIASES)
     raw_quote_ts = _MISSING
     raw_bid = _MISSING
@@ -465,6 +492,31 @@ def _alpaca_option_chain_row_with_audit(
             raw_expiry=raw_expiry,
             raw_strike=raw_strike,
             raw_right=raw_right,
+            convention=convention,
+        )
+
+    convention_rejection = _nonstandard_contract_rejection_detail(
+        convention,
+        underlying=underlying,
+        contract_symbol=metadata.contract_symbol,
+    )
+    if convention_rejection is not None:
+        return None, _provider_rejected_contract_row(
+            underlying=underlying,
+            contract_symbol=metadata.contract_symbol,
+            payload_contract_key=default_symbol,
+            asof=asof,
+            source=source,
+            feed=feed,
+            reason=QuoteRejectionReason.NONSTANDARD_OR_ADJUSTED_CONTRACT.value,
+            rejection_detail=convention_rejection,
+            raw_quote_timestamp=raw_quote_ts,
+            raw_bid=raw_bid,
+            raw_ask=raw_ask,
+            raw_expiry=raw_expiry,
+            raw_strike=raw_strike,
+            raw_right=raw_right,
+            convention=convention,
         )
 
     if _is_missing_value(quote):
@@ -483,6 +535,7 @@ def _alpaca_option_chain_row_with_audit(
             raw_expiry=raw_expiry,
             raw_strike=raw_strike,
             raw_right=raw_right,
+            convention=convention,
         )
 
     if _is_missing_value(raw_quote_ts):
@@ -501,9 +554,9 @@ def _alpaca_option_chain_row_with_audit(
             raw_expiry=raw_expiry,
             raw_strike=raw_strike,
             raw_right=raw_right,
+            convention=convention,
         )
 
-    metadata = _alpaca_option_contract_metadata(default_symbol, contract)
     bid = _optional_finite_option_quote_number(
         quote,
         _ALPACA_BID_ALIASES,
@@ -566,6 +619,7 @@ def _provider_rejected_contract_row(
     raw_expiry: object,
     raw_strike: object,
     raw_right: object,
+    convention: _AlpacaOptionConventionMetadata,
 ) -> dict[str, object]:
     return {
         "underlying": underlying,
@@ -583,6 +637,12 @@ def _provider_rejected_contract_row(
         "raw_expiry": _optional_diagnostic_text(raw_expiry),
         "raw_strike": _optional_diagnostic_text(raw_strike),
         "raw_right": _optional_diagnostic_text(raw_right),
+        "raw_contract_size": _optional_diagnostic_text(convention.contract_size),
+        "raw_multiplier": _optional_diagnostic_text(convention.multiplier),
+        "raw_deliverable": _optional_diagnostic_text(convention.deliverable),
+        "raw_status": _optional_diagnostic_text(convention.status),
+        "raw_style": _optional_diagnostic_text(convention.style),
+        "raw_root_symbol": _optional_diagnostic_text(convention.root_symbol),
     }
 
 
@@ -657,6 +717,79 @@ def _alpaca_option_contract_metadata(
     )
 
 
+def _alpaca_option_convention_metadata(
+    contract: Any,
+) -> _AlpacaOptionConventionMetadata:
+    return _AlpacaOptionConventionMetadata(
+        contract_size=_option_metadata_value(
+            contract,
+            _ALPACA_OPTION_CONTRACT_SIZE_ALIASES,
+        ),
+        multiplier=_option_metadata_value(contract, _ALPACA_OPTION_MULTIPLIER_ALIASES),
+        deliverable=_option_metadata_value(
+            contract,
+            _ALPACA_OPTION_DELIVERABLE_ALIASES,
+        ),
+        status=_option_metadata_value(contract, _ALPACA_OPTION_STATUS_ALIASES),
+        style=_option_metadata_value(contract, _ALPACA_OPTION_STYLE_ALIASES),
+        root_symbol=_option_metadata_value(
+            contract,
+            _ALPACA_OPTION_ROOT_SYMBOL_ALIASES,
+        ),
+    )
+
+
+def _nonstandard_contract_rejection_detail(
+    convention: _AlpacaOptionConventionMetadata,
+    *,
+    underlying: str,
+    contract_symbol: str,
+) -> str | None:
+    problems: list[str] = []
+    for field_name, value in (
+        ("contract_size", convention.contract_size),
+        ("multiplier", convention.multiplier),
+    ):
+        numeric = _optional_convention_number(value)
+        if numeric is not None and not math.isclose(
+            numeric,
+            100.0,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            problems.append(f"{field_name}={numeric:g} is not 100")
+
+    if not _is_missing_value(convention.deliverable) and not _is_standard_deliverable(
+        convention.deliverable
+    ):
+        problems.append(
+            f"deliverable={_optional_diagnostic_text(convention.deliverable)!r} "
+            "is not standard 100-share deliverable"
+        )
+
+    status = _optional_convention_text(convention.status).lower()
+    if status and status not in {"active", "tradable", "open", "enabled"}:
+        problems.append(f"status={status!r} is not active/tradable")
+
+    style = _optional_convention_text(convention.style).lower()
+    if style and style not in {"american", "european", "am", "eu"}:
+        problems.append(f"style={style!r} is not a supported vanilla style")
+
+    root_symbol = _optional_convention_text(convention.root_symbol).upper()
+    if root_symbol and root_symbol not in {
+        underlying.upper(),
+        _occ_root_symbol(contract_symbol),
+    }:
+        problems.append(
+            f"root_symbol={root_symbol!r} does not match underlying "
+            f"{underlying.upper()!r}"
+        )
+
+    if not problems:
+        return None
+    return "; ".join(problems)
+
+
 def _option_metadata_value(
     contract: Any,
     aliases: tuple[str, ...],
@@ -674,6 +807,45 @@ def _option_metadata_value(
             return value
 
     return default
+
+
+def _optional_convention_number(value: object) -> float | None:
+    if _is_missing_value(value):
+        return None
+    try:
+        number = float(cast(Any, value))
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def _optional_convention_text(value: object) -> str:
+    diagnostic = _optional_diagnostic_text(value)
+    if _is_missing_value(diagnostic):
+        return ""
+    return str(diagnostic).strip()
+
+
+def _is_standard_deliverable(value: object) -> bool:
+    numeric = _optional_convention_number(value)
+    if numeric is not None:
+        return math.isclose(numeric, 100.0, rel_tol=0.0, abs_tol=1e-12)
+
+    text = _optional_convention_text(value).lower()
+    if not text:
+        return True
+    if text == "standard":
+        return True
+    if "100" in text and "share" in text and "+" not in text and "cash" not in text:
+        return True
+    return False
+
+
+def _occ_root_symbol(contract_symbol: str) -> str:
+    match = _OCC_CONTRACT_SYMBOL_RE.match(contract_symbol.upper())
+    return "" if match is None else match.group(1)
 
 
 def _parse_occ_contract_symbol(symbol: str) -> _AlpacaOptionContractMetadata:

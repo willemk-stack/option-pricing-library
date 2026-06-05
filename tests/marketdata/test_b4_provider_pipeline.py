@@ -352,6 +352,9 @@ def _expected_reason_codes() -> list[str]:
         "missing_iv_for_iv_validation",
         "unsupported_option_right",
         "nonfinite_numeric_field",
+        "vanilla_no_arbitrage_violation",
+        "nonstandard_or_adjusted_contract",
+        "spot_option_chain_mismatch",
     ]
 
 
@@ -633,6 +636,22 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "stale_quote_count": 0,
         "quote_age_summary": {"min": 60.0, "median": 60.0, "max": 60.0},
         "quote_freshness_warnings": [],
+        "spot_option_chain_diagnostic": {
+            "check": "spot_option_chain_mismatch",
+            "status": "insufficient_data",
+            "spot": 500.0,
+            "proxy_count": 0,
+            "call_proxy_count": 0,
+            "put_proxy_count": 0,
+            "proxy_min": None,
+            "proxy_median": None,
+            "proxy_max": None,
+            "median_proxy_to_spot_ratio": None,
+            "relative_deviation": None,
+            "material_deviation_threshold": 0.25,
+            "deep_itm_proxy_min_mid_spot_ratio": 0.05,
+            "deep_itm_proxy_min_mid_strike_ratio": 0.02,
+        },
     }
     diagnostics = cast(
         list[dict[str, object]],
@@ -747,6 +766,9 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         rate_warnings=rate_warnings,
     )
     assert bundle_manifest["dividend_yield_source"] == "zero_assumption"
+    assert bundle_manifest["spot_option_chain_diagnostic"] == (
+        bronze_manifest["quote_freshness"]["spot_option_chain_diagnostic"]
+    )
     assert warnings_payload["warnings"] == list(result.warnings)
     assert len(provider_rejected_contracts) == 0
     rejected_row = rejected_quotes.iloc[0]
@@ -1524,6 +1546,56 @@ def test_equity_quote_after_asof_can_fail_quality_policy(
             run_id="equity-after-asof",
             curve_series_ids=(),
             quality_policy={"reject_stale_equity_quote": True},
+        )
+
+    assert excinfo.value.failure_kind == "quality_policy_failed"
+
+
+def test_factor_two_spot_option_chain_mismatch_fails_quality_policy(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    equity_payload = _equity_quote_payload()
+    quote = cast(dict[str, Any], cast(dict[str, Any], equity_payload["quotes"])["SPY"])
+    quote["bid_price"] = 99.0
+    quote["ask_price"] = 101.0
+    option_payload = {
+        "underlying": "SPY",
+        "contracts": {
+            "SPY260619C00150000": {
+                "latest_quote": {
+                    "timestamp": "2026-05-22T15:30:00Z",
+                    "bid_price": 49.0,
+                    "ask_price": 51.0,
+                },
+            },
+            "SPY260619C00160000": {
+                "latest_quote": {
+                    "timestamp": "2026-05-22T15:30:00Z",
+                    "bid_price": 39.0,
+                    "ask_price": 41.0,
+                },
+            },
+        },
+        "source": "alpaca",
+        "feed": "indicative",
+    }
+
+    with pytest.raises(
+        ProviderSnapshotDataUnavailableError,
+        match="spot_option_chain_mismatch",
+    ) as excinfo:
+        _pipeline(
+            tmp_path,
+            alpaca_client=_FakeAlpacaClient(
+                equity_payload=equity_payload,
+                option_payload=option_payload,
+            ),
+        ).snapshot(
+            "SPY",
+            asof="2026-05-22T15:31:00Z",
+            run_id="spot-chain-mismatch",
+            curve_series_ids=(),
         )
 
     assert excinfo.value.failure_kind == "quality_policy_failed"

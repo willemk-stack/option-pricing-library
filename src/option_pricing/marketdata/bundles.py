@@ -10,6 +10,9 @@ from typing import Any, Literal, Protocol, cast
 
 import pandas as pd
 
+from option_pricing.marketdata.cleaning import (
+    MODEL_VALIDATION_POLICY_MODEL_READY_QUOTES_V1,
+)
 from option_pricing.marketdata.contracts import (
     ModelValidationBundleResult,
     ResultStats,
@@ -230,6 +233,11 @@ def build_model_validation_manifest(
         "warnings": _warnings_payload(warnings),
         "artifacts": _artifact_payload(artifacts),
         "heston_smoke": _heston_smoke_payload(heston_smoke),
+        "model_validation_filters": {
+            "policy": MODEL_VALIDATION_POLICY_MODEL_READY_QUOTES_V1,
+            "bundle_cleaned_quotes": "economically_valid_vanilla_quotes",
+            "vanilla_no_arbitrage_bounds": "passed",
+        },
     }
     _add_optional_policy_metadata(manifest, market_data_payload)
     validate_model_validation_manifest(manifest)
@@ -909,6 +917,7 @@ def _add_optional_policy_metadata(
         "quote_freshness_mode",
         "model_validation_policy",
         "data_policy",
+        "spot_option_chain_diagnostic",
     ):
         value = market_data_payload.get(key)
         if value is not None:

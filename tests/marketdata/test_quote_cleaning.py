@@ -273,6 +273,51 @@ def test_price_and_contract_rejection_reasons(
     _assert_single_rejection(option_chain, reason)
 
 
+def test_impossible_call_mid_above_vanilla_upper_bound_is_rejected() -> None:
+    result = clean_option_quotes(
+        _option_chain(strike=50.0, bid=pd.NA, ask=pd.NA, mid=120.0, last=pd.NA),
+        _market_inputs(),
+    )
+
+    assert result.cleaned_quotes.empty
+    assert len(result.rejected_quotes) == 1
+    row = result.rejected_quotes.iloc[0]
+    assert row["rejection_reason"] == (
+        QuoteRejectionReason.VANILLA_NO_ARBITRAGE_VIOLATION.value
+    )
+    assert "above upper bound" in str(row["rejection_detail"])
+
+
+def test_impossible_put_mid_above_vanilla_upper_bound_is_rejected() -> None:
+    result = clean_option_quotes(
+        _option_chain(
+            contract_symbol="SYNTH260619P00150000",
+            right="put",
+            strike=150.0,
+            bid=pd.NA,
+            ask=pd.NA,
+            mid=200.0,
+            last=pd.NA,
+        ),
+        _market_inputs(),
+    )
+
+    assert result.cleaned_quotes.empty
+    assert len(result.rejected_quotes) == 1
+    row = result.rejected_quotes.iloc[0]
+    assert row["rejection_reason"] == (
+        QuoteRejectionReason.VANILLA_NO_ARBITRAGE_VIOLATION.value
+    )
+    assert "above upper bound" in str(row["rejection_detail"])
+
+
+def test_valid_quote_within_vanilla_bounds_still_passes() -> None:
+    result = clean_option_quotes(_option_chain(), _market_inputs())
+
+    assert len(result.cleaned_quotes) == 1
+    assert result.rejected_quotes.empty
+
+
 def test_missing_iv_rejects_when_iv_is_required() -> None:
     _assert_single_rejection(
         _option_chain(iv=pd.NA),

@@ -610,6 +610,9 @@ Primary rejection reasons are:
 - `missing_iv_for_iv_validation`
 - `unsupported_option_right`
 - `nonfinite_numeric_field`
+- `vanilla_no_arbitrage_violation`
+- `nonstandard_or_adjusted_contract`
+- `spot_option_chain_mismatch`
 
 ## Model-validation bundle
 

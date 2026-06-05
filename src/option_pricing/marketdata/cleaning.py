@@ -24,6 +24,8 @@ _CLEANING_POLICY_ID = "quote_cleaning_policy.v1"
 OPTION_CLEANING_POLICY_STAGED_RECOVERABLE_QUOTES_V1 = "staged_recoverable_quotes_v1"
 MODEL_VALIDATION_POLICY_MODEL_READY_QUOTES_V1 = "model_ready_quotes_v1"
 _ACT_365_SECONDS = 365 * 24 * 3600
+_VANILLA_NO_ARB_ABS_TOL = 1e-7
+_VANILLA_NO_ARB_REL_TOL = 1e-6
 
 
 class QuoteRejectionReason(StrEnum):
@@ -47,6 +49,9 @@ class QuoteRejectionReason(StrEnum):
     MISSING_IV_FOR_IV_VALIDATION = "missing_iv_for_iv_validation"
     UNSUPPORTED_OPTION_RIGHT = "unsupported_option_right"
     NONFINITE_NUMERIC_FIELD = "nonfinite_numeric_field"
+    VANILLA_NO_ARBITRAGE_VIOLATION = "vanilla_no_arbitrage_violation"
+    NONSTANDARD_OR_ADJUSTED_CONTRACT = "nonstandard_or_adjusted_contract"
+    SPOT_OPTION_CHAIN_MISMATCH = "spot_option_chain_mismatch"
     MISSING_BID_OR_ASK = "missing_price_source"
     INVALID_BID_ASK_CROSS = "crossed_bid_ask"
     EXPIRED_OR_BAD_EXPIRY = "bad_expiry"
@@ -92,6 +97,12 @@ class _DerivedQuoteValues(NamedTuple):
     mid_computed: bool
 
 
+class _MarketConvention(NamedTuple):
+    spot: float
+    rate: float
+    dividend_yield: float
+
+
 def clean_option_quotes(
     option_chain: pd.DataFrame,
     market_inputs: pd.DataFrame,
@@ -104,7 +115,7 @@ def clean_option_quotes(
     market_frame = _coerce_input_frame(market_inputs, DatasetName.MARKET_INPUTS)
     option_frame = _coerce_input_frame(option_chain, DatasetName.OPTION_CHAIN)
 
-    spot = _single_spot(market_frame)
+    market = _single_market_convention(market_frame)
 
     cleaned_records: list[dict[str, object]] = []
     rejected_records: list[dict[str, object]] = []
@@ -113,7 +124,7 @@ def clean_option_quotes(
     for _, row in option_frame.iterrows():
         quote_id = _quote_id(row)
         expiry_years = _expiry_years(row["expiry"], row["asof"])
-        derived, rejection = _classify_rejection(row, policy, spot, expiry_years)
+        derived, rejection = _classify_rejection(row, policy, market, expiry_years)
 
         if rejection is None:
             if derived is None:
@@ -124,8 +135,8 @@ def clean_option_quotes(
                     row,
                     quote_id=quote_id,
                     expiry_years=expiry_years,
-                    moneyness=_moneyness(strike, spot),
-                    log_moneyness=_log_moneyness(strike, spot),
+                    moneyness=_moneyness(strike, market.spot),
+                    log_moneyness=_log_moneyness(strike, market.spot),
                     derived=derived,
                     model_validation_ready=_model_validation_ready(
                         row,
@@ -204,7 +215,7 @@ def _coerce_input_frame(
     return ordered
 
 
-def _single_spot(market_inputs: pd.DataFrame) -> float:
+def _single_market_convention(market_inputs: pd.DataFrame) -> _MarketConvention:
     if len(market_inputs) != 1:
         raise ValueError(
             "market_inputs must contain exactly one row for quote cleaning; "
@@ -215,7 +226,19 @@ def _single_spot(market_inputs: pd.DataFrame) -> float:
     if spot is None or not math.isfinite(spot) or spot <= 0:
         raise ValueError("market_inputs spot must be finite and > 0")
 
-    return spot
+    rate = _optional_float(market_inputs.loc[0, "rate"])
+    if rate is None or not math.isfinite(rate):
+        raise ValueError("market_inputs rate must be finite")
+
+    dividend_yield = _optional_float(market_inputs.loc[0, "dividend_yield"])
+    if dividend_yield is None or not math.isfinite(dividend_yield):
+        raise ValueError("market_inputs dividend_yield must be finite")
+
+    return _MarketConvention(
+        spot=spot,
+        rate=rate,
+        dividend_yield=dividend_yield,
+    )
 
 
 def _quote_id(row: pd.Series) -> str:
@@ -278,7 +301,7 @@ def _log_moneyness(strike: float, spot: float) -> float:
 def _classify_rejection(
     row: pd.Series,
     policy: QuoteCleaningPolicyV1,
-    spot: float,
+    market: _MarketConvention,
     expiry_years: float,
 ) -> tuple[_DerivedQuoteValues | None, _Rejection | None]:
     right = _text_value(row["right"]).strip().lower()
@@ -357,6 +380,16 @@ def _classify_rejection(
             QuoteRejectionReason.NONFINITE_NUMERIC_FIELD,
             f"vega must be finite and > 0; got {_format_optional_float(vega)}",
         )
+
+    no_arb_rejection = _vanilla_no_arbitrage_rejection(
+        right=right,
+        strike=strike,
+        expiry_years=expiry_years,
+        mid=derived.mid,
+        market=market,
+    )
+    if no_arb_rejection is not None:
+        return None, no_arb_rejection
 
     return derived, None
 
@@ -454,6 +487,52 @@ def _intrinsic_value(right: str, spot: float, strike: float) -> float:
         return max(strike - spot, 0.0)
 
     raise ValueError(f"option_chain right must be 'call' or 'put'; got {right!r}")
+
+
+def _vanilla_no_arbitrage_rejection(
+    *,
+    right: str,
+    strike: float,
+    expiry_years: float,
+    mid: float,
+    market: _MarketConvention,
+) -> _Rejection | None:
+    df = math.exp(-market.rate * expiry_years)
+    forward = market.spot * math.exp(
+        (market.rate - market.dividend_yield) * expiry_years
+    )
+    if right == "call":
+        lower = max(df * (forward - strike), 0.0)
+        upper = df * forward
+    elif right == "put":
+        lower = max(df * (strike - forward), 0.0)
+        upper = df * strike
+    else:
+        raise ValueError(f"option_chain right must be 'call' or 'put'; got {right!r}")
+
+    lower_tolerance = _bound_tolerance(lower)
+    upper_tolerance = _bound_tolerance(upper)
+    if mid >= lower - lower_tolerance and mid <= upper + upper_tolerance:
+        return None
+
+    side = "below lower bound" if mid < lower - lower_tolerance else "above upper bound"
+    return _Rejection(
+        QuoteRejectionReason.VANILLA_NO_ARBITRAGE_VIOLATION,
+        "mid violates broad vanilla no-arbitrage bounds; "
+        f"side={side}, right={right}, mid={_format_float(mid)}, "
+        f"lower={_format_float(lower)}, upper={_format_float(upper)}, "
+        f"abs_tol={_format_float(_VANILLA_NO_ARB_ABS_TOL)}, "
+        f"rel_tol={_format_float(_VANILLA_NO_ARB_REL_TOL)}, "
+        f"spot={_format_float(market.spot)}, strike={_format_float(strike)}, "
+        f"expiry_years={_format_float(expiry_years)}, "
+        f"rate={_format_float(market.rate)}, "
+        f"dividend_yield={_format_float(market.dividend_yield)}, "
+        f"df={_format_float(df)}, forward={_format_float(forward)}",
+    )
+
+
+def _bound_tolerance(bound: float) -> float:
+    return _VANILLA_NO_ARB_ABS_TOL + _VANILLA_NO_ARB_REL_TOL * max(abs(bound), 1.0)
 
 
 def _cleaned_quote_record(

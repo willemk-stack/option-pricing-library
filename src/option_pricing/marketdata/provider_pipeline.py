@@ -94,6 +94,7 @@ from option_pricing.marketdata.provider_policy import (
     _provider_snapshot_quality_failures,
     _provider_snapshot_quality_warnings,
     _provider_snapshot_rate_policy,
+    _provider_snapshot_spot_option_chain_diagnostic,
     _provider_snapshot_warnings,
     _resolve_provider_snapshot_dividend_policy,
 )
@@ -483,6 +484,14 @@ class MarketDataPipeline:
             asof=asof_timestamp,
             policy=effective_quality_policy,
         )
+        spot_option_chain_diagnostic = _provider_snapshot_spot_option_chain_diagnostic(
+            market_inputs=market_inputs,
+            cleaned_quotes=quote_cleaning.cleaned_quotes,
+        )
+        quote_freshness = {
+            **quote_freshness,
+            "spot_option_chain_diagnostic": spot_option_chain_diagnostic,
+        }
         quality_warnings = _provider_snapshot_quality_warnings(
             stats=quote_freshness,
             policy=effective_quality_policy,
@@ -552,6 +561,7 @@ class MarketDataPipeline:
                 "current_provider_scope": _current_provider_scope(),
                 "quality_policy": quality_policy_payload,
                 "quote_freshness": quote_freshness,
+                "spot_option_chain_diagnostic": spot_option_chain_diagnostic,
             },
             row_counts={
                 "equity_quotes": int(len(equity_quotes)),

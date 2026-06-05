@@ -98,6 +98,9 @@ def test_quote_rejection_reason_values_match_contract() -> None:
         "missing_iv_for_iv_validation",
         "unsupported_option_right",
         "nonfinite_numeric_field",
+        "vanilla_no_arbitrage_violation",
+        "nonstandard_or_adjusted_contract",
+        "spot_option_chain_mismatch",
     ]
 
 

@@ -9,6 +9,7 @@ from option_pricing.marketdata.normalize import (
     normalize_alpaca_bars,
     normalize_alpaca_latest_quotes,
     normalize_alpaca_option_chain,
+    normalize_alpaca_option_chain_with_audit,
 )
 from option_pricing.marketdata.schemas import (
     EQUITY_BARS_COLUMNS,
@@ -416,6 +417,53 @@ def test_normalize_alpaca_option_chain_preserves_recoverable_price_gaps() -> Non
     ]
     assert normalized["bid"].isna().tolist() == [True, True, False]
     assert normalized["ask"].astype(float).tolist() == pytest.approx([2.0, 2.0, 1.4])
+
+
+def test_normalize_alpaca_option_chain_rejects_nonstandard_contract_metadata() -> None:
+    audit = normalize_alpaca_option_chain_with_audit(
+        {
+            "underlying": "SPY",
+            "contracts": {
+                "SPY260619C00500000": {
+                    "latest_quote": {
+                        "timestamp": "2026-05-22T15:30:00Z",
+                        "bid_price": 4.0,
+                        "ask_price": 4.4,
+                    },
+                    "multiplier": "100",
+                    "root_symbol": "SPY",
+                    "status": "active",
+                    "style": "american",
+                },
+                "SPY1260619C00500000": {
+                    "latest_quote": {
+                        "timestamp": "2026-05-22T15:30:00Z",
+                        "bid_price": 4.0,
+                        "ask_price": 4.4,
+                    },
+                    "expiration_date": "2026-06-19",
+                    "strike_price": "500",
+                    "type": "C",
+                    "multiplier": "50",
+                    "root_symbol": "SPY1",
+                    "status": "active",
+                    "style": "american",
+                    "deliverable": "50 shares plus cash",
+                },
+            },
+            "asof": "2026-05-22T15:31:00Z",
+        }
+    )
+
+    assert audit.option_chain["contract_symbol"].astype(str).tolist() == [
+        "SPY260619C00500000"
+    ]
+    rejected = audit.rejected_contracts.iloc[0]
+    assert rejected["reason"] == "nonstandard_or_adjusted_contract"
+    assert rejected["raw_multiplier"] == "50"
+    assert rejected["raw_root_symbol"] == "SPY1"
+    assert rejected["raw_deliverable"] == "50 shares plus cash"
+    assert "multiplier=50 is not 100" in str(rejected["rejection_detail"])
 
 
 def test_normalize_alpaca_option_chain_all_missing_latest_quotes_fail_clearly() -> None:
