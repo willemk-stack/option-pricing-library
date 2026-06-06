@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from ..._scipy_compat import least_squares
 from ...models.heston.calibration.bounds import HestonCalibrationBounds
 from ...models.heston.calibration.heston_types import (
     HestonMultistartResult,
@@ -34,6 +35,7 @@ _OBJECTIVE_SLICE_PAIRS: tuple[tuple[str, str], ...] = (
     ("eta", "rho"),
     ("v", "vbar"),
 )
+_DEFAULT_KAPPA_PROFILE_GRID: tuple[float, ...] = (0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0)
 
 
 def _params_to_dict(params: HestonParams, *, prefix: str = "") -> dict[str, float]:
@@ -298,6 +300,159 @@ def _held_out_errors(
     return pd.DataFrame(rows, columns=columns)
 
 
+def _error_summary_row(
+    *,
+    bucket_type: str,
+    bucket: str,
+    group: pd.DataFrame,
+    notes: str = "",
+) -> dict[str, Any]:
+    price_rmse, price_mae, price_max_abs = _metric_values(
+        group["price_residual"].to_numpy(dtype=np.float64, copy=False)
+    )
+    iv_rmse, iv_mae, iv_max_abs = _metric_values(
+        group["iv_residual_bps"].to_numpy(dtype=np.float64, copy=False)
+    )
+    return {
+        "bucket_type": bucket_type,
+        "bucket": bucket,
+        "n_quotes": int(len(group)),
+        "price_rmse": price_rmse,
+        "price_mae": price_mae,
+        "price_max_abs": price_max_abs,
+        "iv_rmse_bps": iv_rmse,
+        "iv_mae_bps": iv_mae,
+        "iv_max_abs_bps": iv_max_abs,
+        "notes": notes,
+    }
+
+
+def _quantile_bucket_labels(values: np.ndarray, *, prefix: str) -> pd.Series:
+    x = pd.Series(np.asarray(values, dtype=np.float64))
+    finite = np.isfinite(x.to_numpy(dtype=np.float64, copy=False))
+    labels = pd.Series(np.full(len(x), "unavailable", dtype=object))
+    if np.count_nonzero(finite) < 2:
+        return labels
+
+    ranks = x[finite].rank(method="first")
+    try:
+        buckets = pd.qcut(
+            ranks,
+            q=min(3, int(np.count_nonzero(finite))),
+            labels=False,
+            duplicates="drop",
+        )
+    except ValueError:
+        return labels
+
+    bucket_names = {
+        0: f"{prefix}_low",
+        1: f"{prefix}_mid",
+        2: f"{prefix}_high",
+    }
+    labels.loc[finite] = [
+        bucket_names.get(int(value), f"{prefix}_{int(value)}")
+        for value in np.asarray(buckets, dtype=np.int64)
+    ]
+    return labels
+
+
+def _residual_bucket_table(
+    residuals: pd.DataFrame, quotes: HestonQuoteSet
+) -> pd.DataFrame:
+    columns = [
+        "bucket_type",
+        "bucket",
+        "n_quotes",
+        "price_rmse",
+        "price_mae",
+        "price_max_abs",
+        "iv_rmse_bps",
+        "iv_mae_bps",
+        "iv_max_abs_bps",
+        "notes",
+    ]
+    rows: list[dict[str, Any]] = []
+
+    for _expiry, group in residuals.groupby("expiry", sort=True):
+        expiry_value = float(group["expiry"].to_numpy(dtype=np.float64, copy=False)[0])
+        rows.append(
+            _error_summary_row(
+                bucket_type="expiry",
+                bucket=f"{expiry_value:.10g}",
+                group=group,
+            )
+        )
+
+    y = residuals["log_moneyness"].to_numpy(dtype=np.float64, copy=False)
+    y_edges = np.array([-0.10, -0.03, 0.03, 0.10], dtype=np.float64)
+    y_labels = ["y<=-0.10", "-0.10<y<=-0.03", "|y|<=0.03", "0.03<y<=0.10", "y>0.10"]
+    y_bucket_index = np.digitize(y, y_edges, right=True)
+    y_bucket_values = np.asarray(y_labels, dtype=object)[
+        np.clip(y_bucket_index, 0, len(y_labels) - 1)
+    ]
+    y_bucket_values = np.where(np.isfinite(y), y_bucket_values, "unavailable")
+    residuals_mny = residuals.assign(_bucket=y_bucket_values)
+    for bucket, group in residuals_mny.groupby("_bucket", sort=False, observed=False):
+        if group.empty:
+            continue
+        rows.append(
+            _error_summary_row(
+                bucket_type="log_moneyness",
+                bucket=str(bucket),
+                group=group,
+            )
+        )
+
+    for is_call, group in residuals.groupby("is_call", sort=True):
+        rows.append(
+            _error_summary_row(
+                bucket_type="option_right",
+                bucket="call" if bool(is_call) else "put",
+                group=group,
+            )
+        )
+
+    vega = residuals["bs_vega"].to_numpy(dtype=np.float64, copy=False)
+    vega_labels = _quantile_bucket_labels(vega, prefix="vega")
+    residuals_vega = residuals.assign(_bucket=vega_labels.to_numpy(dtype=object))
+    for bucket, group in residuals_vega.groupby("_bucket", sort=True):
+        rows.append(
+            _error_summary_row(
+                bucket_type="vega",
+                bucket=str(bucket),
+                group=group,
+                notes=(
+                    "quotes.bs_vega was unavailable"
+                    if str(bucket) == "unavailable"
+                    else ""
+                ),
+            )
+        )
+
+    if quotes.bid is not None and quotes.ask is not None:
+        spread = np.asarray(quotes.ask - quotes.bid, dtype=np.float64)
+        spread_labels = _quantile_bucket_labels(spread, prefix="spread")
+    else:
+        spread_labels = pd.Series(np.full(quotes.n_quotes, "unavailable", dtype=object))
+    residuals_spread = residuals.assign(_bucket=spread_labels.to_numpy(dtype=object))
+    for bucket, group in residuals_spread.groupby("_bucket", sort=True):
+        rows.append(
+            _error_summary_row(
+                bucket_type="spread",
+                bucket=str(bucket),
+                group=group,
+                notes=(
+                    "quotes.bid/quotes.ask were unavailable"
+                    if str(bucket) == "unavailable"
+                    else ""
+                ),
+            )
+        )
+
+    return pd.DataFrame(rows, columns=columns)
+
+
 def _parameter_recovery_table(
     *,
     fitted_params: HestonParams,
@@ -359,6 +514,114 @@ def _constraint_diagnostics_table(params: HestonParams) -> pd.DataFrame:
             }
         ]
     )
+
+
+def _parameter_boundary_table(
+    *,
+    params: HestonParams,
+    bounds: HestonCalibrationBounds,
+    tolerance: float,
+) -> pd.DataFrame:
+    tol = float(tolerance)
+    if not np.isfinite(tol) or tol < 0.0:
+        raise ValueError("boundary_tolerance must be finite and nonnegative.")
+
+    values = params.as_array()
+    lower = bounds.lower_array()
+    upper = bounds.upper_array()
+    width = upper - lower
+    fraction = (values - lower) / width
+    distance_to_lower = values - lower
+    distance_to_upper = upper - values
+    lower_hit = fraction <= tol
+    upper_hit = (1.0 - fraction) <= tol
+
+    rows = []
+    for i, name in enumerate(HESTON_PARAM_NAMES):
+        rows.append(
+            {
+                "parameter": name,
+                "value": float(values[i]),
+                "lower_bound": float(lower[i]),
+                "upper_bound": float(upper[i]),
+                "normalized_position": float(fraction[i]),
+                "distance_to_lower": float(distance_to_lower[i]),
+                "distance_to_upper": float(distance_to_upper[i]),
+                "normalized_distance_to_lower": float(fraction[i]),
+                "normalized_distance_to_upper": float(1.0 - fraction[i]),
+                "hit_lower": bool(lower_hit[i]),
+                "hit_upper": bool(upper_hit[i]),
+                "hit_boundary": bool(lower_hit[i] or upper_hit[i]),
+                "tolerance": tol,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _multistart_parameter_dispersion_table(
+    *,
+    multistart: HestonMultistartResult | None,
+    bounds: HestonCalibrationBounds,
+    tolerance: float,
+) -> pd.DataFrame:
+    columns = [
+        "parameter",
+        "success_count",
+        "mean",
+        "std",
+        "min",
+        "max",
+        "best_value",
+        "best_hit_lower",
+        "best_hit_upper",
+        "lower_hit_count",
+        "upper_hit_count",
+        "boundary_hit_count",
+        "boundary_hit_frac",
+    ]
+    if multistart is None or not multistart.successful_runs:
+        table = pd.DataFrame(columns=columns)
+        table.attrs["notes"] = ["No successful multistart runs were supplied."]
+        return table
+
+    success_params = np.vstack(
+        [
+            run.fitted_params.as_array()
+            for run in multistart.successful_runs
+            if run.fitted_params is not None
+        ]
+    )
+    best = multistart.best_params.as_array()
+    lower = bounds.lower_array()
+    upper = bounds.upper_array()
+    fraction = (success_params - lower[None, :]) / (upper - lower)[None, :]
+    best_fraction = (best - lower) / (upper - lower)
+    lower_hit = fraction <= float(tolerance)
+    upper_hit = (1.0 - fraction) <= float(tolerance)
+    best_lower_hit = best_fraction <= float(tolerance)
+    best_upper_hit = (1.0 - best_fraction) <= float(tolerance)
+
+    rows: list[dict[str, Any]] = []
+    for i, name in enumerate(HESTON_PARAM_NAMES):
+        boundary_hit = lower_hit[:, i] | upper_hit[:, i]
+        rows.append(
+            {
+                "parameter": name,
+                "success_count": int(success_params.shape[0]),
+                "mean": float(np.mean(success_params[:, i])),
+                "std": float(np.std(success_params[:, i], ddof=0)),
+                "min": float(np.min(success_params[:, i])),
+                "max": float(np.max(success_params[:, i])),
+                "best_value": float(best[i]),
+                "best_hit_lower": bool(best_lower_hit[i]),
+                "best_hit_upper": bool(best_upper_hit[i]),
+                "lower_hit_count": int(np.sum(lower_hit[:, i])),
+                "upper_hit_count": int(np.sum(upper_hit[:, i])),
+                "boundary_hit_count": int(np.sum(boundary_hit)),
+                "boundary_hit_frac": float(np.mean(boundary_hit)),
+            }
+        )
+    return pd.DataFrame(rows, columns=columns)
 
 
 def _multistart_runs_table(
@@ -450,6 +713,211 @@ def _objective_cost(
         raw = params.transform_to_unconstrained()
     residual = objective.residual(raw)
     return float(0.5 * np.sum(residual * residual))
+
+
+def _stable_sigmoid(x: np.ndarray) -> np.ndarray:
+    raw = np.asarray(x, dtype=np.float64)
+    out = np.empty_like(raw, dtype=np.float64)
+    positive = raw >= 0.0
+    out[positive] = 1.0 / (1.0 + np.exp(-raw[positive]))
+    exp_x = np.exp(raw[~positive])
+    out[~positive] = exp_x / (1.0 + exp_x)
+    return out
+
+
+def _params_from_fixed_kappa_raw_free(
+    *,
+    kappa: float,
+    raw_free: np.ndarray,
+    bounds: HestonCalibrationBounds,
+) -> HestonParams:
+    lower = bounds.lower_array()
+    upper = bounds.upper_array()
+    z = _stable_sigmoid(np.asarray(raw_free, dtype=np.float64).reshape(-1))
+    if z.size != 4:
+        raise ValueError("raw_free must contain vbar, eta, rho, and v raw values.")
+    values = lower.copy()
+    values[0] = float(kappa)
+    values[1:] = lower[1:] + (upper[1:] - lower[1:]) * z
+    return HestonParams(
+        kappa=float(values[0]),
+        vbar=float(values[1]),
+        eta=float(values[2]),
+        rho=float(values[3]),
+        v=float(values[4]),
+    )
+
+
+def _profile_error_metrics(
+    *,
+    quotes: HestonQuoteSet,
+    params: HestonParams,
+    backend: HestonBackend,
+    quad_cfg: QuadratureConfig | None,
+) -> dict[str, float]:
+    model_prices = _price_heston_quotes(
+        quotes,
+        params,
+        backend=backend,
+        quad_cfg=quad_cfg,
+    )
+    model_iv = _implied_vols_from_prices(quotes, model_prices)
+    price_residual = np.asarray(model_prices - quotes.mid, dtype=np.float64)
+    market_iv = _market_iv(quotes)
+    iv_residual_bps = np.asarray((model_iv - market_iv) * 1.0e4, dtype=np.float64)
+    price_rmse, price_mae, price_max_abs = _metric_values(price_residual)
+    iv_rmse, iv_mae, iv_max_abs = _metric_values(iv_residual_bps)
+    return {
+        "price_rmse": price_rmse,
+        "price_mae": price_mae,
+        "price_max_abs": price_max_abs,
+        "iv_rmse_bps": iv_rmse,
+        "iv_mae_bps": iv_mae,
+        "iv_max_abs_bps": iv_max_abs,
+    }
+
+
+def run_heston_kappa_profile_diagnostics(
+    *,
+    quotes: HestonQuoteSet,
+    base_params: HestonParams,
+    kappa_grid: Sequence[float] = _DEFAULT_KAPPA_PROFILE_GRID,
+    objective_type: HestonObjectiveType = "vega_scaled_price",
+    sqrt_weights: FloatArray | None = None,
+    backend: HestonBackend = "gauss_legendre",
+    quad_cfg: QuadratureConfig | None = None,
+    bounds: HestonCalibrationBounds | None = None,
+    parameter_transform: HestonParameterTransform = "bounded",
+    refit_remaining: bool = False,
+    loss: str = "soft_l1",
+    max_nfev: int | None = None,
+) -> pd.DataFrame:
+    """Profile the Heston objective over fixed kappa values.
+
+    By default this is a lightweight hold-other-parameters diagnostic. Set
+    ``refit_remaining=True`` to optimize ``vbar, eta, rho, v`` for each fixed
+    kappa with finite-difference least squares. The helper is diagnostic-only
+    and does not mutate or replace the supplied calibration result.
+    """
+
+    if parameter_transform != "bounded":
+        raise ValueError(
+            "kappa profile diagnostics currently require bounded transform."
+        )
+
+    resolved_bounds = HestonCalibrationBounds() if bounds is None else bounds
+    grid = np.asarray(list(kappa_grid), dtype=np.float64).reshape(-1)
+    if grid.size == 0 or not np.all(np.isfinite(grid)):
+        raise ValueError("kappa_grid must contain finite values.")
+    kappa_lo, kappa_hi = resolved_bounds.kappa
+    if np.any((grid < float(kappa_lo)) | (grid > float(kappa_hi))):
+        raise ValueError("kappa_grid values must lie inside calibration bounds.")
+
+    objective = HestonObjective(
+        quotes=quotes,
+        sqrt_weights=sqrt_weights,
+        objective_type=objective_type,
+        backend=backend,
+        quad_cfg=quad_cfg,
+        parameter_transform=parameter_transform,
+        bounds=resolved_bounds,
+    )
+    base_raw = base_params.transform_to_bounded_unconstrained(resolved_bounds)
+    base_cost = _objective_cost(
+        objective=objective,
+        params=base_params,
+        bounds=resolved_bounds,
+        parameter_transform=parameter_transform,
+    )
+
+    rows: list[dict[str, Any]] = []
+    for kappa in grid:
+        kappa_value = float(kappa)
+        status = None
+        message = "held other parameters fixed"
+        success = True
+        nfev = 0
+
+        params = HestonParams(
+            kappa=kappa_value,
+            vbar=base_params.vbar,
+            eta=base_params.eta,
+            rho=base_params.rho,
+            v=base_params.v,
+        )
+        raw_free = base_raw[1:].copy()
+
+        if refit_remaining:
+
+            def residual_free(
+                raw_free_candidate: np.ndarray,
+                *,
+                fixed_kappa: float = kappa_value,
+            ) -> np.ndarray:
+                candidate = _params_from_fixed_kappa_raw_free(
+                    kappa=fixed_kappa,
+                    raw_free=np.asarray(raw_free_candidate, dtype=np.float64),
+                    bounds=resolved_bounds,
+                )
+                raw_full = candidate.transform_to_bounded_unconstrained(resolved_bounds)
+                return objective.residual(raw_full)
+
+            res = least_squares(
+                fun=residual_free,
+                x0=raw_free,
+                jac="2-point",
+                loss=loss,
+                max_nfev=max_nfev,
+            )
+            success = bool(res.success and np.all(np.isfinite(res.x)))
+            status = (
+                int(res.status) if getattr(res, "status", None) is not None else None
+            )
+            message = str(res.message)
+            nfev = int(res.nfev) if getattr(res, "nfev", None) is not None else 0
+            if success:
+                params = _params_from_fixed_kappa_raw_free(
+                    kappa=kappa_value,
+                    raw_free=np.asarray(res.x, dtype=np.float64),
+                    bounds=resolved_bounds,
+                )
+
+        cost = _objective_cost(
+            objective=objective,
+            params=params,
+            bounds=resolved_bounds,
+            parameter_transform=parameter_transform,
+        )
+        metrics = _profile_error_metrics(
+            quotes=quotes,
+            params=params,
+            backend=backend,
+            quad_cfg=quad_cfg,
+        )
+        row = {
+            "kappa": kappa_value,
+            "profile_mode": (
+                "refit_remaining" if refit_remaining else "hold_other_params_fixed"
+            ),
+            "success": bool(success),
+            "cost": float(cost),
+            "delta_cost_vs_base": float(cost - base_cost),
+            "nfev": int(nfev),
+            "status": status,
+            "message": message,
+            **_params_to_dict(params, prefix="fitted_"),
+            **metrics,
+        }
+        rows.append(row)
+
+    table = pd.DataFrame(rows)
+    table.attrs["notes"] = [
+        "Kappa profiles diagnose weak identification; a flat curve is not an "
+        "instruction to widen bounds.",
+        "The default mode holds other parameters fixed. Set refit_remaining=True "
+        "for a slower conditional profile over the remaining Heston parameters.",
+    ]
+    return table
 
 
 def _objective_slices_table(
@@ -565,6 +1033,11 @@ def run_heston_calibration_fit_diagnostics(
     sqrt_weights: FloatArray | None = None,
     bounds: HestonCalibrationBounds | None = None,
     parameter_transform: HestonParameterTransform = "bounded",
+    boundary_tolerance: float = 1.0e-3,
+    include_kappa_profile: bool = True,
+    kappa_profile_grid: Sequence[float] = _DEFAULT_KAPPA_PROFILE_GRID,
+    kappa_profile_refit_remaining: bool = False,
+    kappa_profile_max_nfev: int | None = None,
     objective_slice_grid_size: int = 3,
     objective_slice_relative_width: float = 0.25,
     objective_slice_pairs: Sequence[tuple[str, str]] = _OBJECTIVE_SLICE_PAIRS,
@@ -624,6 +1097,17 @@ def run_heston_calibration_fit_diagnostics(
         seed_params=resolved_seed,
     )
     constraint_diagnostics = _constraint_diagnostics_table(fitted_params)
+    parameter_boundaries = _parameter_boundary_table(
+        params=fitted_params,
+        bounds=resolved_bounds,
+        tolerance=boundary_tolerance,
+    )
+    multistart_parameter_dispersion = _multistart_parameter_dispersion_table(
+        multistart=multistart,
+        bounds=resolved_bounds,
+        tolerance=boundary_tolerance,
+    )
+    residual_buckets = _residual_bucket_table(residuals, quotes)
     quote_policy, quote_policy_summary, quote_policy_meta = (
         heston_calibration_quote_policy_tables(
             n_quotes=quotes.n_quotes,
@@ -644,6 +1128,34 @@ def run_heston_calibration_fit_diagnostics(
         grid_size=objective_slice_grid_size,
         relative_width=objective_slice_relative_width,
         pairs=objective_slice_pairs,
+    )
+    kappa_profile = (
+        run_heston_kappa_profile_diagnostics(
+            quotes=quotes,
+            base_params=fitted_params,
+            kappa_grid=kappa_profile_grid,
+            objective_type=resolved_objective,
+            sqrt_weights=sqrt_weights,
+            backend=resolved_backend,
+            quad_cfg=quad_cfg,
+            bounds=resolved_bounds,
+            parameter_transform=parameter_transform,
+            refit_remaining=kappa_profile_refit_remaining,
+            max_nfev=kappa_profile_max_nfev,
+        )
+        if include_kappa_profile
+        else pd.DataFrame(
+            columns=[
+                "kappa",
+                "profile_mode",
+                "success",
+                "cost",
+                "delta_cost_vs_base",
+                "nfev",
+                "status",
+                "message",
+            ]
+        )
     )
 
     backend_meta = backend_config_meta(
@@ -675,6 +1187,18 @@ def run_heston_calibration_fit_diagnostics(
         "held_out_mask_provided": mask_provided,
         "multistart_result_provided": multistart is not None,
         "objective_slice_grid_size": int(objective_slice_grid_size),
+        "boundary_tolerance": float(boundary_tolerance),
+        "best_solution_boundary_bound": bool(
+            parameter_boundaries["hit_boundary"].any()
+        ),
+        "best_solution_upper_boundary_bound": bool(
+            parameter_boundaries["hit_upper"].any()
+        ),
+        "kappa_hit_upper_bound": bool(
+            parameter_boundaries.set_index("parameter").loc["kappa", "hit_upper"]
+        ),
+        "kappa_profile_included": bool(include_kappa_profile),
+        "kappa_profile_refit_remaining": bool(kappa_profile_refit_remaining),
         "feller_ratio": _coerce_real_scalar(
             constraint_diagnostics.at[0, "value"],
             label="feller_ratio",
@@ -711,11 +1235,15 @@ def run_heston_calibration_fit_diagnostics(
             "iv_residual_grid": iv_residual_grid,
             "parameter_recovery": parameter_recovery,
             "constraint_diagnostics": constraint_diagnostics,
+            "parameter_boundaries": parameter_boundaries,
+            "multistart_parameter_dispersion": multistart_parameter_dispersion,
+            "residual_buckets": residual_buckets,
             "quote_policy": quote_policy,
             "quote_policy_summary": quote_policy_summary,
             "multistart_runs": multistart_runs,
             "held_out_errors": held_out_errors,
             "objective_slices": objective_slices,
+            "kappa_profile": kappa_profile,
         },
         arrays=arrays,
     )
@@ -725,6 +1253,7 @@ run_heston_calibration_diagnostics = run_heston_calibration_fit_diagnostics
 
 
 __all__ = [
+    "run_heston_kappa_profile_diagnostics",
     "run_heston_calibration_diagnostics",
     "run_heston_calibration_fit_diagnostics",
 ]

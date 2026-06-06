@@ -82,6 +82,55 @@ def _multistart_result() -> HestonMultistartResult:
     )
 
 
+def _boundary_multistart_result() -> HestonMultistartResult:
+    best_params = HestonParams(kappa=19.99, vbar=0.04, eta=0.55, rho=-0.55, v=0.045)
+    other_params = HestonParams(
+        kappa=19.995,
+        vbar=0.041,
+        eta=0.57,
+        rho=-0.57,
+        v=0.044,
+    )
+    seed = _seed_params()
+    best = HestonCalibrationRun(
+        seed_index=0,
+        seed_params=seed,
+        fitted_params=best_params,
+        success=True,
+        cost=0.1,
+        optimality=1.0e-8,
+        nfev=6,
+        njev=5,
+        status=1,
+        message="upper boundary solution",
+        raw_x=np.zeros(5, dtype=np.float64),
+    )
+    other = HestonCalibrationRun(
+        seed_index=1,
+        seed_params=HestonParams(kappa=4.0, vbar=0.08, eta=1.2, rho=0.2, v=0.08),
+        fitted_params=other_params,
+        success=True,
+        cost=0.2,
+        optimality=2.0e-8,
+        nfev=7,
+        njev=6,
+        status=1,
+        message="also near upper boundary",
+        raw_x=np.ones(5, dtype=np.float64),
+    )
+    return HestonMultistartResult(
+        best_params=best_params,
+        best_run=best,
+        runs=(best, other),
+        objective_type="vega_scaled_price",
+        parameter_transform="bounded",
+        backend="gauss_legendre",
+        quote_count=6,
+        success_count=2,
+        failure_count=0,
+    )
+
+
 def test_heston_calibration_fit_diagnostics_tables_and_exports() -> None:
     quotes = _quotes()
     held_out = np.zeros(quotes.n_quotes, dtype=np.bool_)
@@ -103,11 +152,15 @@ def test_heston_calibration_fit_diagnostics_tables_and_exports() -> None:
         "iv_residual_grid",
         "parameter_recovery",
         "constraint_diagnostics",
+        "parameter_boundaries",
+        "multistart_parameter_dispersion",
+        "residual_buckets",
         "quote_policy",
         "quote_policy_summary",
         "multistart_runs",
         "held_out_errors",
         "objective_slices",
+        "kappa_profile",
     }
 
     residuals = report.tables["residuals"]
@@ -138,6 +191,19 @@ def test_heston_calibration_fit_diagnostics_tables_and_exports() -> None:
     assert "feller" in feller.index
     assert feller.loc["feller", "policy"] == "reported_not_hard_enforced"
     assert "feller_margin" in report.meta
+
+    boundaries = report.tables["parameter_boundaries"]
+    assert {"parameter", "hit_upper", "normalized_distance_to_upper"} <= set(
+        boundaries.columns
+    )
+
+    buckets = report.tables["residual_buckets"]
+    assert {"expiry", "log_moneyness", "option_right", "vega", "spread"} <= set(
+        buckets["bucket_type"]
+    )
+
+    kappa_profile = report.tables["kappa_profile"]
+    assert {"kappa", "cost", "profile_mode", "price_rmse"} <= set(kappa_profile.columns)
 
 
 def test_heston_calibration_fit_without_truth_or_heldout_is_explicit() -> None:
@@ -198,3 +264,29 @@ def test_heston_calibration_fit_reports_quote_warning_policy() -> None:
     assert report.meta["quarantined_quote_count"] == 2
     assert report.meta["review_quote_count"] == 1
     assert report.meta["quote_filtering_policy"] == "filtered_blocked_and_quarantined"
+
+
+def test_heston_boundary_diagnostics_flag_upper_kappa_without_mutating_fit() -> None:
+    quotes = _quotes()
+    fit = _boundary_multistart_result()
+    before = fit.best_params.as_array().copy()
+
+    report = run_heston_calibration_fit_diagnostics(
+        quotes=quotes,
+        fit=fit,
+        quad_cfg=_quad_cfg(),
+        objective_slice_grid_size=2,
+        boundary_tolerance=1.0e-3,
+        include_kappa_profile=False,
+    )
+
+    np.testing.assert_allclose(fit.best_params.as_array(), before)
+    assert report.meta["best_solution_boundary_bound"] is True
+    assert report.meta["kappa_hit_upper_bound"] is True
+
+    boundaries = report.tables["parameter_boundaries"].set_index("parameter")
+    assert bool(boundaries.loc["kappa", "hit_upper"]) is True
+
+    dispersion = report.tables["multistart_parameter_dispersion"].set_index("parameter")
+    assert int(dispersion.loc["kappa", "upper_hit_count"]) == 2
+    assert float(dispersion.loc["kappa", "boundary_hit_frac"]) == 1.0

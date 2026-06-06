@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import pandas as pd
@@ -47,6 +47,8 @@ class LocalVolGridReport:
     invalid_frac: float
     reason_counts: dict[str, int]
     worst_points: pd.DataFrame
+    invalid_points: pd.DataFrame = field(default_factory=pd.DataFrame)
+    coordinate_conventions: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -70,7 +72,10 @@ class LocalVolCompareReport:
     diff_local_var: np.ndarray  # (nT, nK)
     invalid_union: np.ndarray  # (nT, nK)
 
-    summary: dict[str, float | int]
+    summary: dict[str, float | int | bool]
     worst_diffs: pd.DataFrame
     gatheral_reason_counts: dict[str, int]
     dupire_reason_counts: dict[str, int]
+    invalid_points: pd.DataFrame = field(default_factory=pd.DataFrame)
+    boundary_summary: dict[str, float | int | bool] = field(default_factory=dict)
+    coordinate_conventions: dict[str, str] = field(default_factory=dict)

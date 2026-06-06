@@ -7,6 +7,7 @@ from .calibration import (
 from .calibration_fit import (
     run_heston_calibration_diagnostics,
     run_heston_calibration_fit_diagnostics,
+    run_heston_kappa_profile_diagnostics,
 )
 from .fixtures import (
     MARKET_LIKE_SYNTHETIC_FIXTURE_LABEL,
@@ -84,6 +85,7 @@ __all__ = [
     "run_heston_calibration_benchmark_diagnostics",
     "run_heston_calibration_diagnostics",
     "run_heston_calibration_fit_diagnostics",
+    "run_heston_kappa_profile_diagnostics",
     "run_heston_mc_comparison_sweep",
     "run_heston_pricing_diagnostics",
     "run_heston_slice_diagnostics",
