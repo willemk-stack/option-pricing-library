@@ -93,6 +93,7 @@ from option_pricing.vol import LocalVolSurface, project_essvi_nodes
 
 projection = project_essvi_nodes(fit.nodes)
 if projection.surface is None:
+    # projection.candidate_surface may still be available for diagnostics.
     raise ValueError(projection.diag.message)
 
 ctx = market.to_context()
@@ -104,6 +105,7 @@ localvol = LocalVolSurface.from_implied(
 ```
 
 That path avoids the piecewise-constant-in-time `w_T` approximation used by the generic slice-stack interpolation route.
+When `projection.surface` is `None`, the smooth candidate was not certified. Use `projection.candidate_surface` only to inspect where continuous static no-arbitrage or Dupire diagnostics failed.
 
 ## Query local volatility
 

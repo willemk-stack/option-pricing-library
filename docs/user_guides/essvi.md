@@ -107,6 +107,7 @@ import numpy as np
 from option_pricing.types import MarketData
 from option_pricing.vol import (
     ESSVICalibrationConfig,
+    ESSVIProjectionConfig,
     ESSVINodalSurface,
     calibrate_essvi,
     project_essvi_nodes,
@@ -143,6 +144,22 @@ smoothed_surface = projection.surface
 ```
 
 The calibration result is nodal by design. That gives you an exact arbitrage-aware `ESSVINodalSurface`, and then an explicit projection step decides whether a smooth continuous `ESSVISmoothedSurface` is admissible.
+
+`projection.surface` and `projection.params` are certified-only fields. If the smooth candidate is constructed but rejected by continuous static no-arbitrage or Dupire diagnostics, those fields stay `None` and the rejected candidate is available as `projection.candidate_surface` and `projection.candidate_params` for localization and reporting.
+
+For market data workflows, it is often useful to validate on the observed quote support instead of the default broad-wing range:
+
+```python
+projection_cfg = ESSVIProjectionConfig.from_observed_y(
+    y,
+    validation_padding=0.02,
+    dupire_padding=0.02,
+    calendar_tol=1e-7,
+)
+projection = project_essvi_nodes(fit.nodes, cfg=projection_cfg)
+```
+
+The default broad-wing grid and an observed-domain grid make different claims. Broad-wing validation checks the configured wings even where no quotes were observed. Observed-domain validation checks the quote-supported region only, possibly with a small padding, and should be described as such in diagnostics or notebooks.
 
 ## Validate continuous or nodal constraints
 
