@@ -22,6 +22,9 @@ from option_pricing.marketdata.pipeline import MarketDataPipeline
 from option_pricing.marketdata.provider_confidence import (
     validate_provider_snapshot_bundle,
 )
+from option_pricing.marketdata.provider_results import (
+    provider_snapshot_public_summary,
+)
 
 DEFAULT_DATA_ROOT = Path("data")
 DEFAULT_RATE_SERIES = "DGS3MO"
@@ -493,6 +496,7 @@ def _snapshot_payload(result: object) -> dict[str, object]:
     main_paths = _snapshot_main_artifact_paths(result)
     return {
         "command": "snapshot",
+        "public_summary": provider_snapshot_public_summary(result),
         "underlying": _jsonable(getattr(result, "underlying", None)),
         "asof": _jsonable(getattr(result, "asof", None)),
         "run_id": _jsonable(getattr(result, "run_id", None)),

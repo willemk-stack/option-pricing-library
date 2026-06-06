@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import pandas as pd
 
@@ -131,6 +131,11 @@ class ProviderSnapshotResult:
     option_cleaning_policy: Mapping[str, object] = field(default_factory=dict)
     data_policy: Mapping[str, object] = field(default_factory=dict)
 
+    def public_summary(self) -> dict[str, object]:
+        """Return the compact reviewer-facing provider snapshot summary."""
+
+        return provider_snapshot_public_summary(self)
+
 
 @dataclass(frozen=True, slots=True)
 class ProviderRefreshDailyCounts:
@@ -157,6 +162,155 @@ class ProviderRefreshDailyResult:
     results: tuple[ProviderSnapshotResult, ...]
 
 
+def provider_snapshot_public_summary(result: object) -> dict[str, object]:
+    """Normalize one provider snapshot result into a stable public summary.
+
+    The summary intentionally uses already-normalized result metadata and local
+    artifact references. It does not include provider payload bodies.
+    """
+
+    rate_policy = _mapping_attr(result, "rate_policy")
+    dividend_policy = _mapping_attr(result, "dividend_policy")
+    data_policy = _mapping_attr(result, "data_policy")
+    freshness = _mapping_attr(result, "quote_freshness")
+    warnings = _warnings_attr(result)
+
+    return {
+        "underlying": _json_value(_attr(result, "underlying")),
+        "asof": _json_value(_attr(result, "asof")),
+        "run_id": _json_value(_attr(result, "run_id")),
+        "equity_provider": _json_value(_attr(result, "equity_provider")),
+        "equity_feed": _json_value(_attr(result, "equity_feed")),
+        "option_provider": _json_value(_attr(result, "option_provider")),
+        "option_feed": _json_value(_attr(result, "option_feed", _attr(result, "feed"))),
+        "rate_source": _json_value(_attr(result, "rate_source")),
+        "selected_rate": _json_value(
+            _attr(result, "selected_rate", _attr(result, "rate"))
+        ),
+        "flat_rate": _json_value(_attr(result, "flat_rate", _attr(result, "rate"))),
+        "rate_policy_name": _json_value(rate_policy.get("policy")),
+        "dividend_yield": _json_value(_attr(result, "dividend_yield")),
+        "dividend_policy_name": _json_value(dividend_policy.get("policy")),
+        "dividend_yield_source": _json_value(
+            dividend_policy.get("source", _attr(result, "dividend_yield_source"))
+        ),
+        "raw_option_contract_count": _json_value(
+            _attr(result, "raw_option_contract_count")
+        ),
+        "normalized_option_contract_count": _json_value(
+            _attr(result, "normalized_option_contract_count")
+        ),
+        "provider_rejected_contract_count": _json_value(
+            _attr(result, "provider_rejected_contract_count")
+        ),
+        "accepted_quote_count": _json_value(_attr(result, "accepted_quote_count")),
+        "rejected_quote_count": _json_value(_attr(result, "rejected_quote_count")),
+        "accepted_expiry_count": _json_value(freshness.get("accepted_expiry_count")),
+        "accepted_expiry_days_min": _json_value(
+            freshness.get("accepted_expiry_days_min")
+        ),
+        "accepted_expiry_days_max": _json_value(
+            freshness.get("accepted_expiry_days_max")
+        ),
+        "accepted_expiry_years_min": _json_value(
+            freshness.get("accepted_expiry_years_min")
+        ),
+        "accepted_expiry_years_max": _json_value(
+            freshness.get("accepted_expiry_years_max")
+        ),
+        "accepted_strike_min": _json_value(freshness.get("accepted_strike_min")),
+        "accepted_strike_max": _json_value(freshness.get("accepted_strike_max")),
+        "accepted_call_count": _json_value(freshness.get("accepted_call_count")),
+        "accepted_put_count": _json_value(freshness.get("accepted_put_count")),
+        "quote_freshness_mode": _json_value(
+            freshness.get(
+                "quote_freshness_mode",
+                data_policy.get("quote_freshness_mode"),
+            )
+        ),
+        "warning_count": len(warnings),
+        "main_artifact_paths": _main_artifact_path_summary(result),
+    }
+
+
+def _attr(result: object, name: str, default: object = None) -> object:
+    return getattr(result, name, default)
+
+
+def _mapping_attr(result: object, name: str) -> Mapping[str, object]:
+    value = _attr(result, name, {})
+    if isinstance(value, Mapping):
+        return cast(Mapping[str, object], value)
+    return {}
+
+
+def _warnings_attr(result: object) -> tuple[str, ...]:
+    warnings = _attr(result, "warnings", ())
+    if warnings is None:
+        return ()
+    if isinstance(warnings, str):
+        return (warnings,)
+    if isinstance(warnings, Sequence):
+        return tuple(str(warning) for warning in warnings)
+    return (str(warnings),)
+
+
+def _main_artifact_path_summary(result: object) -> dict[str, str]:
+    bronze_paths = _attr(result, "bronze_paths")
+    silver_paths = _attr(result, "silver_paths")
+    gold_paths = _attr(result, "gold_paths")
+    rate_curve_paths = _attr(result, "rate_curve_paths")
+    bundle = _attr(result, "model_validation_bundle")
+    candidates = {
+        "bronze_manifest": _nested_attr(bronze_paths, "manifest"),
+        "silver_manifest": _nested_attr(silver_paths, "manifest"),
+        "provider_rejected_contracts": _nested_attr(
+            silver_paths,
+            "provider_rejected_contracts",
+        ),
+        "market_data": _nested_attr(gold_paths, "market_data"),
+        "market_manifest": _nested_attr(gold_paths, "market_manifest"),
+        "rate_curve": _nested_attr(rate_curve_paths, "rate_curve"),
+        "rate_curve_manifest": _nested_attr(rate_curve_paths, "manifest"),
+        "bundle_manifest": _nested_attr(bundle, "manifest_path"),
+    }
+    return {
+        name: path
+        for name, value in candidates.items()
+        if (path := _path_reference(value)) is not None
+    }
+
+
+def _nested_attr(value: object, name: str) -> object:
+    if value is None:
+        return None
+    return getattr(value, name, None)
+
+
+def _path_reference(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, Path):
+        return value.as_posix()
+    return str(value).replace("\\", "/")
+
+
+def _json_value(value: object) -> object:
+    if isinstance(value, Path):
+        return value.as_posix()
+    isoformat = getattr(value, "isoformat", None)
+    if callable(isoformat) and not isinstance(value, str):
+        return isoformat()
+    if isinstance(value, Mapping):
+        return {str(key): _json_value(item) for key, item in value.items()}
+    if isinstance(value, Sequence) and not isinstance(
+        value,
+        (str, bytes, bytearray),
+    ):
+        return [_json_value(item) for item in value]
+    return value
+
+
 __all__ = [
     "ProviderCallDiagnostic",
     "ProviderCallStatus",
@@ -166,4 +320,5 @@ __all__ = [
     "ProviderSnapshotRateCurvePaths",
     "ProviderSnapshotResult",
     "ProviderSnapshotSilverPaths",
+    "provider_snapshot_public_summary",
 ]

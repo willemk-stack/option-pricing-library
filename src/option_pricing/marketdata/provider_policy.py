@@ -533,6 +533,8 @@ def _provider_snapshot_freshness_stats(
     accepted_expiries = (
         int(cleaned_quotes["expiry"].nunique()) if "expiry" in cleaned_quotes else 0
     )
+    accepted_expiry_years = _numeric_summary(cleaned_quotes, "expiry_years")
+    accepted_strikes = _numeric_summary(cleaned_quotes, "strike")
 
     stale_option_count = _count_stale(option_ages, max_option_age)
     stale_accepted_count = _count_stale(accepted_ages, max_option_age)
@@ -577,6 +579,12 @@ def _provider_snapshot_freshness_stats(
         "accepted_call_count": accepted_calls,
         "accepted_put_count": accepted_puts,
         "accepted_expiry_count": accepted_expiries,
+        "accepted_expiry_years_min": accepted_expiry_years["min"],
+        "accepted_expiry_years_max": accepted_expiry_years["max"],
+        "accepted_expiry_days_min": _years_to_days(accepted_expiry_years["min"]),
+        "accepted_expiry_days_max": _years_to_days(accepted_expiry_years["max"]),
+        "accepted_strike_min": accepted_strikes["min"],
+        "accepted_strike_max": accepted_strikes["max"],
         "stale_accepted_quote_count": stale_accepted_count,
         "accepted_quotes_after_asof_count": _count_after_asof(accepted_ages),
         "quote_freshness_warnings": list(warnings),
@@ -908,6 +916,19 @@ def _age_summary(ages: pd.Series) -> dict[str, float | None]:
         "median": float(valid.median()),
         "max": float(valid.max()),
     }
+
+
+def _numeric_summary(frame: pd.DataFrame, column: str) -> dict[str, float | None]:
+    if frame.empty or column not in frame:
+        return {"min": None, "max": None}
+    values = pd.to_numeric(frame[column], errors="coerce").dropna()
+    if values.empty:
+        return {"min": None, "max": None}
+    return {"min": float(values.min()), "max": float(values.max())}
+
+
+def _years_to_days(value: float | None) -> float | None:
+    return None if value is None else float(value) * 365.0
 
 
 def _quote_freshness_warning_codes(

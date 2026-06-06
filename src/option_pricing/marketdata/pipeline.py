@@ -36,6 +36,7 @@ from option_pricing.marketdata.provider_results import (
     ProviderSnapshotRateCurvePaths,
     ProviderSnapshotResult,
     ProviderSnapshotSilverPaths,
+    provider_snapshot_public_summary,
 )
 from option_pricing.marketdata.providers.local import (
     LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1,
@@ -387,5 +388,6 @@ __all__ = [
     "ProviderSnapshotRateCurvePaths",
     "ProviderSnapshotResult",
     "ProviderSnapshotSilverPaths",
+    "provider_snapshot_public_summary",
     "run_local_model_validation_pipeline",
 ]

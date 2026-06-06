@@ -18,6 +18,7 @@ __all__ = [
     "ProviderSnapshotQualityPolicy",
     "ProviderSnapshotResult",
     "StorageConfig",
+    "provider_snapshot_public_summary",
     "validate_provider_snapshot_bundle",
 ]
 
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
         MarketDataPipeline,
         ProviderSnapshotDataUnavailableError,
         ProviderSnapshotResult,
+        provider_snapshot_public_summary,
     )
     from .provider_confidence import (
         ProviderSnapshotBundleValidationResult,
@@ -57,6 +59,7 @@ _PUBLIC_EXPORTS = {
     "ProviderSnapshotDataUnavailableError": "option_pricing.marketdata.pipeline",
     "ProviderSnapshotQualityPolicy": "option_pricing.marketdata.provider_policy",
     "ProviderSnapshotResult": "option_pricing.marketdata.pipeline",
+    "provider_snapshot_public_summary": "option_pricing.marketdata.pipeline",
     "validate_provider_snapshot_bundle": "option_pricing.marketdata.provider_confidence",
 }
 

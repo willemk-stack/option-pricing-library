@@ -1,7 +1,7 @@
 # Market Snapshot Validation
 
 The market snapshot validation workflow is a deterministic, local-first review
-path for marketdata artifacts. It runs from checked-in local fixture snapshots
+path for marketdata artifacts. It runs from local synthetic fixture snapshots
 and writes Bronze, Silver, Gold, and model-validation bundle artifacts without
 credentials or live market access.
 
@@ -42,6 +42,71 @@ option-pricing-marketdata validate-bundle \
   --heston-quotes path/to/heston_quotes.parquet
 ```
 
+## Workflow boundaries
+
+### Local synthetic fixture workflow
+
+The local workflow uses synthetic fixtures from `tests/marketdata/fixtures`.
+These inputs are intentionally small, deterministic, redistributable, and
+credential-free. They are the clean path for docs, tests, and examples because
+they contain no licensed provider data.
+
+### Live provider-backed workflow
+
+The provider-backed snapshot and refresh commands may call Alpaca and FRED,
+normalize provider responses, clean option quotes, and write Bronze, Silver,
+Gold, and model-validation bundle artifacts under the configured local storage
+root. Those outputs are local operator evidence. They prove that the library can
+consume provider-derived artifacts and produce model-facing validation bundles;
+they are not redistributable market-data artifacts.
+
+For notebook or CLI display, use the compact summary surface instead of parsing
+raw provider files:
+
+```python
+from pathlib import Path
+
+from option_pricing.marketdata import (
+    MarketDataPipeline,
+    provider_snapshot_public_summary,
+)
+
+pipeline = MarketDataPipeline(storage=Path("data-private-demo"))
+result = pipeline.snapshot("SPY")
+summary = provider_snapshot_public_summary(result)
+print(summary)
+```
+
+The `option-pricing-marketdata snapshot --json` payload also includes
+`public_summary`. It is useful for notebooks because it contains counts, policy
+names, provider/feed labels, freshness shape, warning count, and main local
+artifact references without provider response bodies.
+
+### Provider bundle validation
+
+Provider bundle validation is credential-free once the local provider artifacts
+already exist. It reads the model-facing `market_data.json`,
+`cleaned_quotes.parquet`, and `heston_quotes.parquet` paths and checks that the
+library can reconstruct `MarketData` and consume the Heston-compatible quote
+shape. This validation is compatibility evidence, not a data redistribution
+mechanism and not a production data-quality claim.
+
+### Local-only provider artifacts
+
+Real provider-derived outputs stay in the local evidence roots. This includes:
+
+- Bronze provider JSON payloads
+- Silver provider-normalized Parquet files
+- Gold market snapshots
+- model-validation bundles from real provider runs
+- generated manifests from live provider runs
+- real option-chain summaries, tables, or notebook exports
+- local policy files that encode private dividend, rate, or data-quality
+  assumptions
+
+The default local roots `data/`, `out/`, and `data-private-demo/` are working
+directories for local evidence, separate from the documented synthetic workflow.
+
 ## What this workflow does not prove
 
 This workflow does not prove production data quality, live-provider correctness,
@@ -74,7 +139,7 @@ The only runtime inputs are:
 
 - a writable local storage root, such as `out/marketdata-demo`
 - an explicit `run_id`
-- the explicit checked-in local fixture root used by
+- the explicit local fixture root used by
   `run_local_model_validation_pipeline(...)`
 
 No provider credentials, environment variables, network access, or live market
@@ -82,7 +147,7 @@ data accounts are required.
 
 ## Run the local demo
 
-Use the checked-in demo script for the canonical reviewer path:
+Use the demo script for the canonical local validation path:
 
 ```bash
 python scripts/demo_local_market_validation.py --output-dir out/marketdata-demo --run-id demo-run
@@ -90,9 +155,9 @@ python scripts/demo_local_market_validation.py --output-dir out/marketdata-demo 
 
 The command runs the deterministic local fixture through Bronze, Silver, Gold,
 and model-validation bundle writes. Heston smoke is skipped by default so the
-reviewer path stays fast and deterministic. The script passes the checked-in
-test fixture root explicitly instead of relying on package data. The summary
-prints the key artifact paths:
+path stays fast and deterministic. The script passes the test fixture root
+explicitly instead of relying on package data. The summary prints the key
+artifact paths:
 
 ```text
 Local market validation demo completed.
@@ -509,8 +574,8 @@ Component responsibilities are intentionally narrow:
 - Gold conversion writes `MarketData` reload evidence and Heston-compatible
   quote artifacts.
 - The model-validation bundle packages the local artifacts into one
-  self-contained reviewer directory.
-- The reviewer path documents reproducibility, expected artifacts, and
+  self-contained validation directory.
+- The local validation path documents reproducibility, expected artifacts, and
   limitation boundaries.
 
 The local demo remains deterministic and local-only. It does not call providers,

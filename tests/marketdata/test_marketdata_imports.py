@@ -18,6 +18,7 @@ EXPECTED_MARKETDATA_IMPORTS = {
         "FredConfig",
         "StorageConfig",
         "PipelineConfig",
+        "provider_snapshot_public_summary",
     ),
     "option_pricing.marketdata.config": (
         "AlpacaConfig",
@@ -69,6 +70,7 @@ EXPECTED_PIPELINE_IMPORTS = (
     "ProviderSnapshotDataUnavailableError",
     "ProviderSnapshotResult",
     "ProviderSnapshotSilverPaths",
+    "provider_snapshot_public_summary",
     "run_local_model_validation_pipeline",
 )
 ORDINARY_MARKETDATA_IMPORTS = (

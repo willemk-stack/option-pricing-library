@@ -616,6 +616,51 @@ def test_snapshot_json_emits_valid_stable_json(
                 "status": "ok",
             }
         ],
+        "public_summary": {
+            "accepted_call_count": None,
+            "accepted_expiry_count": None,
+            "accepted_expiry_days_max": None,
+            "accepted_expiry_days_min": None,
+            "accepted_expiry_years_max": None,
+            "accepted_expiry_years_min": None,
+            "accepted_put_count": None,
+            "accepted_quote_count": 42,
+            "accepted_strike_max": None,
+            "accepted_strike_min": None,
+            "asof": "2026-05-22T15:31:00+00:00",
+            "dividend_policy_name": "zero_assumption",
+            "dividend_yield": 0.0,
+            "dividend_yield_source": "zero_assumption",
+            "equity_feed": "iex",
+            "equity_provider": "alpaca",
+            "flat_rate": 0.0416,
+            "main_artifact_paths": {
+                "bronze_manifest": "data/bronze/provider_snapshot/manifest.json",
+                "bundle_manifest": "data/gold/model_validation_bundle/manifest.json",
+                "market_data": "data/gold/market_snapshot/market_data.json",
+                "market_manifest": "data/gold/market_snapshot/manifest.json",
+                "provider_rejected_contracts": (
+                    "data/silver/provider_rejected_contracts/"
+                    "provider_rejected_contracts.parquet"
+                ),
+                "rate_curve": "data/gold/curves/rate_curve.parquet",
+                "rate_curve_manifest": "data/gold/curves/manifest.json",
+                "silver_manifest": "data/silver/cleaned_quotes/manifest.json",
+            },
+            "normalized_option_contract_count": 45,
+            "option_feed": "indicative",
+            "option_provider": "alpaca",
+            "provider_rejected_contract_count": 1,
+            "quote_freshness_mode": "demo_lenient",
+            "rate_policy_name": "fred_treasury_zero_proxy_linear_cc",
+            "rate_source": "fred:treasury_zero_proxy_curve",
+            "raw_option_contract_count": 46,
+            "rejected_quote_count": 3,
+            "run_id": "snapshot-cli-run",
+            "selected_rate": 0.0416,
+            "underlying": "SPY",
+            "warning_count": 1,
+        },
         "quality_policy": {
             "quote_freshness_mode": "demo_lenient",
             "max_quote_age_seconds": None,
@@ -646,6 +691,10 @@ def test_snapshot_json_emits_valid_stable_json(
         "underlying": "SPY",
         "warnings": ["sample warning"],
     }
+    encoded = json.dumps(payload, sort_keys=True)
+    assert "latest_quote" not in encoded
+    assert "bid_price" not in encoded
+    assert "ask_price" not in encoded
 
 
 def test_backfill_fred_parses_series_start_end_and_calls_pipeline_correctly(
@@ -871,6 +920,7 @@ def test_cli_stays_inside_parse_and_dispatch_boundary() -> None:
         "option_pricing.marketdata.errors",
         "option_pricing.marketdata.pipeline",
         "option_pricing.marketdata.provider_confidence",
+        "option_pricing.marketdata.provider_results",
     }
     assert "normalize_" not in source
     assert "clean_option_quotes" not in source

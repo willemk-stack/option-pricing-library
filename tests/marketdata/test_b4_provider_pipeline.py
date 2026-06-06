@@ -27,6 +27,7 @@ from option_pricing.marketdata.pipeline import (
     MarketDataPipeline,
     ProviderSnapshotDataUnavailableError,
     ProviderSnapshotResult,
+    provider_snapshot_public_summary,
     run_local_model_validation_pipeline,
 )
 
@@ -613,6 +614,10 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         rate_warnings=rate_warnings,
     )
     assert bronze_manifest["quality_policy"]["min_accepted_contracts"] == 1
+    accepted_expiry_days = (
+        pd.Timestamp("2026-06-19T00:00:00Z") - pd.Timestamp("2026-05-22T15:31:00Z")
+    ).total_seconds() / 86_400.0
+    accepted_expiry_years = accepted_expiry_days / 365.0
     assert bronze_manifest["quote_freshness"] == {
         "equity_quote_age_seconds": 60.0,
         "equity_quote_after_asof": False,
@@ -627,6 +632,12 @@ def test_provider_snapshot_works_end_to_end_with_fake_clients(
         "accepted_call_count": 1,
         "accepted_put_count": 1,
         "accepted_expiry_count": 1,
+        "accepted_expiry_years_min": pytest.approx(accepted_expiry_years),
+        "accepted_expiry_years_max": pytest.approx(accepted_expiry_years),
+        "accepted_expiry_days_min": pytest.approx(accepted_expiry_days),
+        "accepted_expiry_days_max": pytest.approx(accepted_expiry_days),
+        "accepted_strike_min": 500.0,
+        "accepted_strike_max": 500.0,
         "stale_accepted_quote_count": 0,
         "accepted_quotes_after_asof_count": 0,
         "quote_freshness_mode": "demo_lenient",
@@ -873,6 +884,71 @@ def test_provider_snapshot_result_payload_is_json_serializable(
     assert "DGS3MO" in encoded
     assert "dividend_inference" in encoded
     assert "zero_assumption" in encoded
+    assert "SPY260619C00500000" not in encoded
+    assert "latest_quote" not in encoded
+    assert "bid_price" not in encoded
+
+
+def test_provider_snapshot_public_summary_is_compact_and_path_only(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    result = _snapshot(tmp_path)
+
+    summary = result.public_summary()
+
+    assert summary == provider_snapshot_public_summary(result)
+    assert summary["underlying"] == "SPY"
+    assert summary["asof"] == "2026-05-22T15:31:00+00:00"
+    assert summary["run_id"] == "b4-test-run"
+    assert summary["equity_provider"] == "alpaca"
+    assert summary["equity_feed"] == "iex"
+    assert summary["option_provider"] == "alpaca"
+    assert summary["option_feed"] == "indicative"
+    assert summary["rate_source"] == "fred:treasury_zero_proxy_curve"
+    assert summary["selected_rate"] == pytest.approx(result.rate)
+    assert summary["flat_rate"] == pytest.approx(result.rate)
+    assert summary["rate_policy_name"] == "fred_treasury_zero_proxy_linear_cc"
+    assert summary["dividend_yield"] == 0.0
+    assert summary["dividend_policy_name"] == "zero_assumption"
+    assert summary["dividend_yield_source"] == "zero_assumption"
+    assert summary["raw_option_contract_count"] == 3
+    assert summary["normalized_option_contract_count"] == 3
+    assert summary["provider_rejected_contract_count"] == 0
+    assert summary["accepted_quote_count"] == 2
+    assert summary["rejected_quote_count"] == 1
+    assert summary["accepted_expiry_count"] == 1
+    assert summary["accepted_expiry_days_min"] == pytest.approx(
+        (
+            pd.Timestamp("2026-06-19T00:00:00Z") - pd.Timestamp("2026-05-22T15:31:00Z")
+        ).total_seconds()
+        / 86_400.0
+    )
+    assert summary["accepted_expiry_years_max"] == pytest.approx(
+        cast(float, summary["accepted_expiry_days_min"]) / 365.0
+    )
+    assert summary["accepted_strike_min"] == 500.0
+    assert summary["accepted_strike_max"] == 500.0
+    assert summary["accepted_call_count"] == 1
+    assert summary["accepted_put_count"] == 1
+    assert summary["quote_freshness_mode"] == "demo_lenient"
+    assert summary["warning_count"] == len(result.warnings)
+    assert summary["main_artifact_paths"] == {
+        "bronze_manifest": result.bronze_paths.manifest.as_posix(),
+        "silver_manifest": result.silver_paths.manifest.as_posix(),
+        "provider_rejected_contracts": (
+            result.silver_paths.provider_rejected_contracts.as_posix()
+        ),
+        "market_data": result.gold_paths.market_data.as_posix(),
+        "market_manifest": result.gold_paths.market_manifest.as_posix(),
+        "rate_curve": result.rate_curve_paths.rate_curve.as_posix(),
+        "rate_curve_manifest": result.rate_curve_paths.manifest.as_posix(),
+        "bundle_manifest": result.model_validation_bundle.manifest_path.as_posix(),
+    }
+    summary_json = json.dumps(summary, sort_keys=True)
+    assert "latest_equity_quotes" not in summary_json
+    assert "fred_observations" not in summary_json
+    assert "SPY260619C00500000" not in summary_json
 
 
 def test_provider_snapshot_routes_default_split_alpaca_feeds(
