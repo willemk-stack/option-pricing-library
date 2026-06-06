@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+import option_pricing.models.heston.calibration.seeding as seeding_module
 from option_pricing.models.heston.calibration import heston_seed_grid
 from option_pricing.models.heston.calibration.bounds import HestonCalibrationBounds
 from option_pricing.models.heston.calibration.heston_types import HestonQuoteSet
@@ -43,6 +44,12 @@ def _flat_quotes() -> HestonQuoteSet:
 def _negative_skew_quotes() -> HestonQuoteSet:
     return _quote_set(
         iv_mid=np.array([0.32, 0.25, 0.19, 0.34, 0.27, 0.21], dtype=np.float64)
+    )
+
+
+def _strong_negative_skew_quotes() -> HestonQuoteSet:
+    return _quote_set(
+        iv_mid=np.array([1.20, 0.30, 0.05, 1.35, 0.34, 0.06], dtype=np.float64)
     )
 
 
@@ -88,6 +95,46 @@ def test_heston_seed_grid_respects_bounds() -> None:
         values = seed.as_array()
         assert np.all(values >= lower)
         assert np.all(values <= upper)
+
+
+def test_heston_seed_grid_clips_raw_rho_offset_before_params(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    quotes = _flat_quotes()
+    bounds = HestonCalibrationBounds()
+
+    def fake_default_heston_seed(
+        *_args: object,
+        **_kwargs: object,
+    ) -> HestonParams:
+        return HestonParams(kappa=1.5, vbar=0.04, eta=0.5, rho=-0.85, v=0.04)
+
+    monkeypatch.setattr(seeding_module, "default_heston_seed", fake_default_heston_seed)
+
+    seeds = heston_seed_grid(
+        quotes,
+        bounds=bounds,
+        kappa_values=(),
+        eta_multipliers=(),
+        vbar_multipliers=(),
+        rho_offsets=(-0.25,),
+        max_seeds=None,
+        include_default=False,
+    )
+
+    assert any(np.isclose(seed.rho, bounds.rho[0]) for seed in seeds)
+
+
+def test_heston_seed_grid_returns_only_admissible_rho_params() -> None:
+    seeds = heston_seed_grid(
+        _strong_negative_skew_quotes(),
+        rho_offsets=(-0.25, 0.0, 2.0),
+        max_seeds=None,
+    )
+
+    assert seeds
+    assert all(isinstance(seed, HestonParams) for seed in seeds)
+    assert all(-1.0 <= seed.rho <= 1.0 for seed in seeds)
 
 
 def test_heston_seed_grid_dedupes_after_clipping() -> None:

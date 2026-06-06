@@ -421,6 +421,30 @@ def _clip_params_to_bounds(
     )
 
 
+def _clipped_heston_params_from_scalars(
+    *,
+    kappa: float,
+    vbar: float,
+    eta: float,
+    rho: float,
+    v: float,
+    bounds: HestonCalibrationBounds,
+) -> HestonParams:
+    kappa_lo, kappa_hi = bounds.kappa
+    vbar_lo, vbar_hi = bounds.vbar
+    eta_lo, eta_hi = bounds.eta
+    rho_lo, rho_hi = bounds.rho
+    v_lo, v_hi = bounds.v
+
+    return HestonParams(
+        kappa=_clip(kappa, kappa_lo, kappa_hi),
+        vbar=_clip(vbar, vbar_lo, vbar_hi),
+        eta=_clip(eta, eta_lo, eta_hi),
+        rho=_clip(rho, max(float(rho_lo), -1.0), min(float(rho_hi), 1.0)),
+        v=_clip(v, v_lo, v_hi),
+    )
+
+
 def _dedupe_heston_seeds(
     seeds: list[HestonParams],
     *,
@@ -484,15 +508,13 @@ def heston_seed_grid(
         v: float = base.v,
     ) -> None:
         seeds.append(
-            _clip_params_to_bounds(
-                HestonParams(
-                    kappa=float(kappa),
-                    vbar=float(vbar),
-                    eta=float(eta),
-                    rho=float(rho),
-                    v=float(v),
-                ),
-                resolved_bounds,
+            _clipped_heston_params_from_scalars(
+                kappa=float(kappa),
+                vbar=float(vbar),
+                eta=float(eta),
+                rho=float(rho),
+                v=float(v),
+                bounds=resolved_bounds,
             )
         )
 
