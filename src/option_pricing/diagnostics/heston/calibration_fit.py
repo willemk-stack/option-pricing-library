@@ -36,6 +36,590 @@ _OBJECTIVE_SLICE_PAIRS: tuple[tuple[str, str], ...] = (
     ("v", "vbar"),
 )
 _DEFAULT_KAPPA_PROFILE_GRID: tuple[float, ...] = (0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0)
+_SUMMARY_PARAM_NAMES: tuple[str, ...] = HESTON_PARAM_NAMES
+_SUMMARY_PUBLIC_NOTE = (
+    "Warning labels mean interpret with caution, not that standard Heston is "
+    "invalid. Kappa near its upper bound is a diagnostic warning, not an "
+    "instruction to widen bounds. High eta may indicate strong smile or "
+    "event-risk pressure, or model-shape stress. Read train/holdout errors "
+    "together with quote and expiry coverage."
+)
+
+
+def _summary_scalar(value: Any) -> Any:
+    if value is None or value is pd.NA:
+        return None
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, float):
+        return float(value) if np.isfinite(value) else None
+    if isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, Real):
+        scalar = float(value)
+        return scalar if np.isfinite(scalar) else None
+    return value
+
+
+def _summary_float(value: Any) -> float | None:
+    scalar = _summary_scalar(value)
+    if scalar is None:
+        return None
+    if isinstance(scalar, Real):
+        value_float = float(scalar)
+        return value_float if np.isfinite(value_float) else None
+    return None
+
+
+def _summary_int(value: Any) -> int | None:
+    scalar = _summary_scalar(value)
+    if scalar is None:
+        return None
+    if isinstance(scalar, Real):
+        value_float = float(scalar)
+        return int(value_float) if np.isfinite(value_float) else None
+    return None
+
+
+def _summary_bool(value: Any) -> bool | None:
+    scalar = _summary_scalar(value)
+    if scalar is None:
+        return None
+    if isinstance(scalar, bool):
+        return bool(scalar)
+    if isinstance(scalar, Real):
+        value_float = float(scalar)
+        if np.isfinite(value_float):
+            return bool(value_float)
+    return None
+
+
+def _fit_summary_table(
+    report: HestonCalibrationFitDiagnostics,
+    table_name: str,
+) -> pd.DataFrame:
+    table = report.tables.get(table_name)
+    if isinstance(table, pd.DataFrame):
+        return table
+    return pd.DataFrame()
+
+
+def _fit_summary_parameter_values(
+    report: HestonCalibrationFitDiagnostics,
+) -> dict[str, float | None]:
+    values: dict[str, float | None] = dict.fromkeys(_SUMMARY_PARAM_NAMES, None)
+
+    boundaries = _fit_summary_table(report, "parameter_boundaries")
+    if {"parameter", "value"} <= set(boundaries.columns):
+        for row in boundaries.to_dict(orient="records"):
+            parameter = str(row.get("parameter"))
+            if parameter in values:
+                values[parameter] = _summary_float(row.get("value"))
+        if any(value is not None for value in values.values()):
+            return values
+
+    recovery = _fit_summary_table(report, "parameter_recovery")
+    if {"parameter", "fitted"} <= set(recovery.columns):
+        for row in recovery.to_dict(orient="records"):
+            parameter = str(row.get("parameter"))
+            if parameter in values:
+                values[parameter] = _summary_float(row.get("fitted"))
+        if any(value is not None for value in values.values()):
+            return values
+
+    fitted = report.arrays.get("fitted_params")
+    if fitted is not None:
+        fitted_arr = np.asarray(fitted, dtype=np.float64).reshape(-1)
+        if fitted_arr.size >= len(_SUMMARY_PARAM_NAMES):
+            for parameter, value in zip(
+                _SUMMARY_PARAM_NAMES,
+                fitted_arr[: len(_SUMMARY_PARAM_NAMES)],
+                strict=True,
+            ):
+                values[parameter] = _summary_float(value)
+
+    return values
+
+
+def _fit_summary_boundary_row(
+    report: HestonCalibrationFitDiagnostics,
+    parameter: str,
+) -> dict[str, Any]:
+    boundaries = _fit_summary_table(report, "parameter_boundaries")
+    if "parameter" not in boundaries.columns or boundaries.empty:
+        return {}
+
+    rows = boundaries.loc[boundaries["parameter"].astype(str) == parameter]
+    if rows.empty:
+        return {}
+    return dict(rows.iloc[0].to_dict())
+
+
+def _fit_summary_boundary_tolerance(
+    report: HestonCalibrationFitDiagnostics,
+    explicit_tolerance: float | None,
+) -> float:
+    if explicit_tolerance is not None:
+        return float(explicit_tolerance)
+
+    meta_tolerance = _summary_float(report.meta.get("boundary_tolerance"))
+    if meta_tolerance is not None:
+        return meta_tolerance
+
+    boundaries = _fit_summary_table(report, "parameter_boundaries")
+    if "tolerance" in boundaries.columns and not boundaries.empty:
+        table_tolerance = _summary_float(boundaries["tolerance"].iloc[0])
+        if table_tolerance is not None:
+            return table_tolerance
+
+    return 1.0e-3
+
+
+def _fit_summary_hit_boundary(
+    report: HestonCalibrationFitDiagnostics,
+    *,
+    parameter: str | None = None,
+    side: str | None = None,
+    tolerance: float,
+) -> bool:
+    boundaries = _fit_summary_table(report, "parameter_boundaries")
+    if boundaries.empty:
+        return False
+    if parameter is not None and "parameter" in boundaries.columns:
+        boundaries = boundaries.loc[boundaries["parameter"].astype(str) == parameter]
+    if boundaries.empty:
+        return False
+
+    if side == "upper":
+        if "hit_upper" in boundaries.columns:
+            return bool(boundaries["hit_upper"].fillna(False).astype(bool).any())
+        distance_column = "normalized_distance_to_upper"
+    elif side == "lower":
+        if "hit_lower" in boundaries.columns:
+            return bool(boundaries["hit_lower"].fillna(False).astype(bool).any())
+        distance_column = "normalized_distance_to_lower"
+    else:
+        if "hit_boundary" in boundaries.columns:
+            return bool(boundaries["hit_boundary"].fillna(False).astype(bool).any())
+        if "hit_upper" in boundaries.columns and bool(
+            boundaries["hit_upper"].fillna(False).astype(bool).any()
+        ):
+            return True
+        if "hit_lower" in boundaries.columns and bool(
+            boundaries["hit_lower"].fillna(False).astype(bool).any()
+        ):
+            return True
+        upper_hit = _fit_summary_hit_boundary(
+            report,
+            parameter=parameter,
+            side="upper",
+            tolerance=tolerance,
+        )
+        lower_hit = _fit_summary_hit_boundary(
+            report,
+            parameter=parameter,
+            side="lower",
+            tolerance=tolerance,
+        )
+        return bool(upper_hit or lower_hit)
+
+    if distance_column not in boundaries.columns:
+        return False
+    distances = pd.to_numeric(boundaries[distance_column], errors="coerce")
+    return bool((distances <= float(tolerance)).fillna(False).any())
+
+
+def _fit_summary_feller(
+    report: HestonCalibrationFitDiagnostics,
+) -> tuple[float | None, bool | None]:
+    ratio = _summary_float(report.meta.get("feller_ratio"))
+    satisfied = _summary_bool(report.meta.get("feller_satisfied"))
+    if ratio is not None or satisfied is not None:
+        return ratio, satisfied
+
+    constraints = _fit_summary_table(report, "constraint_diagnostics")
+    if "constraint" not in constraints.columns or constraints.empty:
+        return None, None
+
+    rows = constraints.loc[constraints["constraint"].astype(str) == "feller"]
+    if rows.empty:
+        return None, None
+
+    row = rows.iloc[0]
+    return _summary_float(row.get("value")), _summary_bool(row.get("satisfied"))
+
+
+def _fit_summary_held_out_metrics(
+    report: HestonCalibrationFitDiagnostics,
+) -> dict[str, Any]:
+    metrics: dict[str, Any] = {
+        "held_out_available": False,
+        "train_price_rmse": None,
+        "holdout_price_rmse": None,
+        "train_iv_rmse_bps": None,
+        "holdout_iv_rmse_bps": None,
+    }
+    held_out = _fit_summary_table(report, "held_out_errors")
+    if held_out.empty or "sample" not in held_out.columns:
+        return metrics
+
+    indexed = held_out.copy()
+    indexed["_sample"] = indexed["sample"].astype(str)
+    rows = {
+        str(row["_sample"]): row
+        for row in indexed.to_dict(orient="records")
+        if str(row["_sample"]) in {"train", "held_out"}
+    }
+    if "train" not in rows and "held_out" not in rows:
+        return metrics
+
+    metrics["held_out_available"] = "train" in rows and "held_out" in rows
+    train = rows.get("train", {})
+    held = rows.get("held_out", {})
+    metrics["train_price_rmse"] = _summary_float(train.get("price_rmse"))
+    metrics["holdout_price_rmse"] = _summary_float(held.get("price_rmse"))
+    metrics["train_iv_rmse_bps"] = _summary_float(train.get("iv_rmse_bps"))
+    metrics["holdout_iv_rmse_bps"] = _summary_float(held.get("iv_rmse_bps"))
+    return metrics
+
+
+def _fit_summary_residual_bucket_metrics(
+    report: HestonCalibrationFitDiagnostics,
+) -> dict[str, float | None]:
+    buckets = _fit_summary_table(report, "residual_buckets")
+    metrics: dict[str, float | None] = {
+        "max_bucket_price_rmse": None,
+        "max_bucket_iv_rmse_bps": None,
+    }
+    if buckets.empty:
+        return metrics
+
+    if "price_rmse" in buckets.columns:
+        price_rmse = pd.to_numeric(buckets["price_rmse"], errors="coerce")
+        price_rmse = price_rmse[np.isfinite(price_rmse)]
+        if len(price_rmse) > 0:
+            metrics["max_bucket_price_rmse"] = _summary_float(price_rmse.max())
+
+    if "iv_rmse_bps" in buckets.columns:
+        iv_rmse = pd.to_numeric(buckets["iv_rmse_bps"], errors="coerce")
+        iv_rmse = iv_rmse[np.isfinite(iv_rmse)]
+        if len(iv_rmse) > 0:
+            metrics["max_bucket_iv_rmse_bps"] = _summary_float(iv_rmse.max())
+
+    return metrics
+
+
+def _fit_summary_multistart_counts(
+    report: HestonCalibrationFitDiagnostics,
+) -> tuple[int | None, int | None]:
+    runs = _fit_summary_table(report, "multistart_runs")
+    if not runs.empty and "success" in runs.columns:
+        success = runs["success"].fillna(False).astype(bool)
+        return int(success.sum()), int((~success).sum())
+
+    dispersion = _fit_summary_table(report, "multistart_parameter_dispersion")
+    if not dispersion.empty and "success_count" in dispersion.columns:
+        counts = pd.to_numeric(dispersion["success_count"], errors="coerce")
+        counts = counts[np.isfinite(counts)]
+        if len(counts) > 0:
+            return int(counts.iloc[0]), None
+
+    return None, None
+
+
+def _fit_summary_holdout_weak(
+    metrics: Mapping[str, Any],
+    *,
+    ratio_threshold: float,
+    eps: float,
+) -> bool:
+    train_values = (
+        _summary_float(metrics.get("train_price_rmse")),
+        _summary_float(metrics.get("train_iv_rmse_bps")),
+    )
+    holdout_values = (
+        _summary_float(metrics.get("holdout_price_rmse")),
+        _summary_float(metrics.get("holdout_iv_rmse_bps")),
+    )
+    for train_value, holdout_value in zip(train_values, holdout_values, strict=True):
+        if holdout_value is None:
+            continue
+        if train_value is None:
+            continue
+        if train_value <= eps:
+            if holdout_value > eps:
+                return True
+            continue
+        if holdout_value / train_value >= ratio_threshold:
+            return True
+    return False
+
+
+def _fit_summary_kappa_profile_weak(
+    report: HestonCalibrationFitDiagnostics,
+    *,
+    kappa_near_upper_bound: bool,
+    flat_delta_cost_threshold: float,
+    flat_relative_cost_threshold: float,
+) -> bool:
+    profile = _fit_summary_table(report, "kappa_profile")
+    if profile.empty or "kappa" not in profile.columns:
+        return False
+
+    data = profile.copy()
+    if "success" in data.columns:
+        data = data.loc[data["success"].fillna(False).astype(bool)]
+    if len(data) < 3:
+        return False
+
+    if "delta_cost_vs_base" in data.columns:
+        values = pd.to_numeric(data["delta_cost_vs_base"], errors="coerce")
+    elif "cost" in data.columns:
+        values = pd.to_numeric(data["cost"], errors="coerce")
+    else:
+        return False
+
+    finite_values = values[np.isfinite(values)]
+    if len(finite_values) < 3:
+        return False
+
+    span = float(finite_values.max() - finite_values.min())
+    cost_scale = 1.0
+    if "cost" in data.columns:
+        finite_cost = pd.to_numeric(data["cost"], errors="coerce")
+        finite_cost = finite_cost[np.isfinite(finite_cost)]
+        if len(finite_cost) > 0:
+            cost_scale = max(1.0, float(np.nanmin(np.abs(finite_cost))))
+
+    flat = span <= float(flat_delta_cost_threshold) or span <= (
+        float(flat_relative_cost_threshold) * cost_scale
+    )
+    if flat:
+        return True
+
+    if not kappa_near_upper_bound or "cost" not in data.columns:
+        return False
+
+    costs = pd.to_numeric(data["cost"], errors="coerce")
+    kappas = pd.to_numeric(data["kappa"], errors="coerce")
+    valid = np.isfinite(costs) & np.isfinite(kappas)
+    if not bool(valid.any()):
+        return False
+
+    valid_costs = costs[valid]
+    valid_kappas = kappas[valid]
+    best_idx = valid_costs.idxmin()
+    return bool(float(valid_kappas.loc[best_idx]) >= float(valid_kappas.max()))
+
+
+def _fit_summary_multistart_dispersion_high(
+    report: HestonCalibrationFitDiagnostics,
+    *,
+    normalized_range_threshold: float,
+) -> bool:
+    dispersion = _fit_summary_table(report, "multistart_parameter_dispersion")
+    if dispersion.empty:
+        return False
+
+    required = {"parameter", "success_count", "min", "max"}
+    if not required <= set(dispersion.columns):
+        return False
+
+    boundaries = _fit_summary_table(report, "parameter_boundaries")
+    bound_widths: dict[str, float] = {}
+    if {"parameter", "lower_bound", "upper_bound"} <= set(boundaries.columns):
+        for row in boundaries.to_dict(orient="records"):
+            parameter = str(row.get("parameter"))
+            lower = _summary_float(row.get("lower_bound"))
+            upper = _summary_float(row.get("upper_bound"))
+            if lower is not None and upper is not None and upper > lower:
+                bound_widths[parameter] = upper - lower
+
+    for row in dispersion.to_dict(orient="records"):
+        success_count = _summary_int(row.get("success_count"))
+        if success_count is None or success_count < 3:
+            continue
+
+        low = _summary_float(row.get("min"))
+        high = _summary_float(row.get("max"))
+        if low is None or high is None:
+            continue
+
+        parameter = str(row.get("parameter"))
+        width = bound_widths.get(parameter)
+        span = high - low
+        if width is None:
+            scale = max(
+                1.0,
+                abs(_summary_float(row.get("best_value")) or 0.0),
+                abs(_summary_float(row.get("mean")) or 0.0),
+            )
+        else:
+            scale = width
+        if span / scale >= float(normalized_range_threshold):
+            return True
+    return False
+
+
+def _fit_summary_verdict(
+    warning_labels: Sequence[str],
+    *,
+    params_available: bool,
+    multistart_success_count: int | None,
+) -> str:
+    labels = set(warning_labels)
+    if not params_available:
+        return "failed_or_unreliable"
+    if multistart_success_count == 0:
+        return "failed_or_unreliable"
+    if "HOLDOUT_WEAK" in labels and (
+        "PARAMETER_NEAR_BOUND" in labels or "FELLER_WEAK_OR_VIOLATED" in labels
+    ):
+        return "diagnostic_only"
+    if "THIN_CALIBRATION_UNIVERSE" in labels and len(labels) >= 2:
+        return "diagnostic_only"
+    if len(labels) >= 4:
+        return "diagnostic_only"
+    if labels:
+        return "usable_with_caution"
+    return "usable"
+
+
+def heston_calibration_fit_summary(
+    report: HestonCalibrationFitDiagnostics,
+    *,
+    eta_high_threshold: float = 3.0,
+    min_quote_count: int = 20,
+    min_expiry_count: int = 2,
+    boundary_tolerance: float | None = None,
+    rho_near_boundary_abs_threshold: float = 0.95,
+    feller_weak_threshold: float = 1.0,
+    holdout_rmse_ratio_threshold: float = 2.0,
+    kappa_profile_flat_delta_cost_threshold: float = 1.0e-4,
+    kappa_profile_flat_relative_cost_threshold: float = 1.0e-3,
+    multistart_dispersion_normalized_range_threshold: float = 0.25,
+    as_frame: bool = False,
+) -> dict[str, Any] | pd.DataFrame:
+    """Summarize an existing Heston calibration-fit diagnostics report.
+
+    The helper is intentionally thin: it consumes the report's existing meta,
+    tables, and arrays, and does not reprice, recalibrate, or call optimizers.
+    Warning labels mean "interpret with caution", not "invalid model".
+    """
+
+    tolerance = _fit_summary_boundary_tolerance(report, boundary_tolerance)
+    params = _fit_summary_parameter_values(report)
+    params_available = all(params[name] is not None for name in _SUMMARY_PARAM_NAMES)
+    feller_value, feller_ok = _fit_summary_feller(report)
+    held_out_metrics = _fit_summary_held_out_metrics(report)
+    residual_bucket_metrics = _fit_summary_residual_bucket_metrics(report)
+    multistart_success_count, multistart_failure_count = _fit_summary_multistart_counts(
+        report
+    )
+
+    quote_count = _summary_int(report.meta.get("quote_count"))
+    expiry_count = _summary_int(report.meta.get("expiry_count"))
+    any_parameter_near_boundary = _fit_summary_hit_boundary(
+        report,
+        tolerance=tolerance,
+    )
+    kappa_near_upper_bound = _fit_summary_hit_boundary(
+        report,
+        parameter="kappa",
+        side="upper",
+        tolerance=tolerance,
+    )
+    rho_boundary_row = _fit_summary_boundary_row(report, "rho")
+    rho_hit_boundary = _fit_summary_hit_boundary(
+        report,
+        parameter="rho",
+        tolerance=tolerance,
+    )
+    rho_value = params["rho"]
+    rho_near_boundary = bool(
+        rho_hit_boundary
+        or (
+            rho_value is not None
+            and abs(float(rho_value)) >= float(rho_near_boundary_abs_threshold)
+        )
+        or bool(_summary_bool(rho_boundary_row.get("hit_boundary")))
+    )
+    eta_value = params["eta"]
+    eta_high = bool(
+        eta_value is not None and float(eta_value) >= float(eta_high_threshold)
+    )
+
+    warning_labels: list[str] = []
+    if any_parameter_near_boundary:
+        warning_labels.append("PARAMETER_NEAR_BOUND")
+    if kappa_near_upper_bound:
+        warning_labels.append("KAPPA_NEAR_UPPER_BOUND")
+    if eta_high:
+        warning_labels.append("ETA_HIGH")
+    if rho_near_boundary:
+        warning_labels.append("RHO_NEAR_BOUND")
+    if (
+        feller_value is not None and feller_value < float(feller_weak_threshold)
+    ) or feller_ok is False:
+        warning_labels.append("FELLER_WEAK_OR_VIOLATED")
+    if (quote_count is not None and quote_count < int(min_quote_count)) or (
+        expiry_count is not None and expiry_count < int(min_expiry_count)
+    ):
+        warning_labels.append("THIN_CALIBRATION_UNIVERSE")
+    if _fit_summary_holdout_weak(
+        held_out_metrics,
+        ratio_threshold=holdout_rmse_ratio_threshold,
+        eps=1.0e-12,
+    ):
+        warning_labels.append("HOLDOUT_WEAK")
+    if _fit_summary_kappa_profile_weak(
+        report,
+        kappa_near_upper_bound=kappa_near_upper_bound,
+        flat_delta_cost_threshold=kappa_profile_flat_delta_cost_threshold,
+        flat_relative_cost_threshold=kappa_profile_flat_relative_cost_threshold,
+    ):
+        warning_labels.append("KAPPA_WEAKLY_IDENTIFIED")
+    if _fit_summary_multistart_dispersion_high(
+        report,
+        normalized_range_threshold=multistart_dispersion_normalized_range_threshold,
+    ):
+        warning_labels.append("MULTISTART_DISPERSION_HIGH")
+
+    summary: dict[str, Any] = {
+        "quote_count": quote_count,
+        "expiry_count": expiry_count,
+        "objective_type": _summary_scalar(report.meta.get("objective_type")),
+        "backend": _summary_scalar(report.meta.get("backend")),
+        "kappa": params["kappa"],
+        "vbar": params["vbar"],
+        "eta": params["eta"],
+        "rho": params["rho"],
+        "v": params["v"],
+        "feller_ratio": feller_value,
+        "feller_satisfied": feller_ok,
+        "any_parameter_near_boundary": bool(any_parameter_near_boundary),
+        "kappa_near_upper_bound": bool(kappa_near_upper_bound),
+        "eta_high": bool(eta_high),
+        "rho_near_boundary": bool(rho_near_boundary),
+        **held_out_metrics,
+        **residual_bucket_metrics,
+        "multistart_success_count": multistart_success_count,
+        "multistart_failure_count": multistart_failure_count,
+        "warning_labels": warning_labels,
+        "verdict": _fit_summary_verdict(
+            warning_labels,
+            params_available=params_available,
+            multistart_success_count=multistart_success_count,
+        ),
+        "public_note": _SUMMARY_PUBLIC_NOTE,
+    }
+
+    if as_frame:
+        return pd.DataFrame([summary])
+    return summary
+
+
+summarize_heston_calibration_fit = heston_calibration_fit_summary
 
 
 def _params_to_dict(params: HestonParams, *, prefix: str = "") -> dict[str, float]:
@@ -1108,12 +1692,14 @@ def run_heston_calibration_fit_diagnostics(
         tolerance=boundary_tolerance,
     )
     residual_buckets = _residual_bucket_table(residuals, quotes)
-    quote_policy, quote_policy_summary, quote_policy_meta = (
-        heston_calibration_quote_policy_tables(
-            n_quotes=quotes.n_quotes,
-            quote_diagnostics=quote_diagnostics,
-            fit_used_filtered_quotes=fit_used_filtered_quotes,
-        )
+    (
+        quote_policy,
+        quote_policy_summary,
+        quote_policy_meta,
+    ) = heston_calibration_quote_policy_tables(
+        n_quotes=quotes.n_quotes,
+        quote_diagnostics=quote_diagnostics,
+        fit_used_filtered_quotes=fit_used_filtered_quotes,
     )
     multistart_runs = _multistart_runs_table(multistart)
     objective_slices = _objective_slices_table(
@@ -1253,7 +1839,9 @@ run_heston_calibration_diagnostics = run_heston_calibration_fit_diagnostics
 
 
 __all__ = [
+    "heston_calibration_fit_summary",
     "run_heston_kappa_profile_diagnostics",
     "run_heston_calibration_diagnostics",
     "run_heston_calibration_fit_diagnostics",
+    "summarize_heston_calibration_fit",
 ]

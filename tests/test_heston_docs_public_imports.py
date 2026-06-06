@@ -32,9 +32,11 @@ DOC_EXPORTED_NAMES: dict[str, tuple[str, ...]] = {
     "option_pricing.diagnostics.heston": (
         "HestonDiagnosticsReport",
         "build_market_like_heston_quote_set",
+        "heston_calibration_fit_summary",
         "run_heston_calibration_fit_diagnostics",
         "run_heston_pricing_diagnostics",
         "run_heston_vs_local_vol_comparison",
+        "summarize_heston_calibration_fit",
         "summarize_bias_vs_timestep",
         "summarize_runtime_vs_error",
     ),

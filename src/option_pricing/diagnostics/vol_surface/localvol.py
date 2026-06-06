@@ -129,7 +129,7 @@ def _invalid_points_table(
     y_arr = np.asarray(y, dtype=float)
     reason_arr = np.asarray(reason, dtype=np.uint32)
     boundary = _boundary_mask(
-        invalid_mask.shape,
+        cast(tuple[int, int], invalid_mask.shape),
         trim_t=int(trim_t),
         trim_k=int(trim_k),
     )
@@ -187,7 +187,7 @@ def _boundary_summary(
 ) -> dict[str, float | int | bool]:
     invalid_mask = np.asarray(invalid, dtype=bool)
     boundary = _boundary_mask(
-        invalid_mask.shape,
+        cast(tuple[int, int], invalid_mask.shape),
         trim_t=int(trim_t),
         trim_k=int(trim_k),
     )

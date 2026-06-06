@@ -26,6 +26,45 @@ The report has the standard diagnostics shape:
     policy, multistart runs, held-out errors, and objective slices
 - `arrays`: aligned quote vectors, model prices, model IVs, and parameter arrays
 
+## Public summary verdict
+
+`heston_calibration_fit_summary(report)` is a compact presentation layer over
+an existing `HestonCalibrationFitDiagnostics` report. It does not reprice,
+recalibrate, or replace the detailed evidence tables. It reads the existing
+metadata and diagnostics tables and returns a serialization-friendly summary
+dict by default, or a one-row DataFrame with `as_frame=True`.
+
+The summary exposes fitted parameters, Feller ratio/status, train and held-out
+RMSE when present, worst residual-bucket RMSE when present, multistart counts
+when present, stable warning labels, and a qualitative verdict: `usable`,
+`usable_with_caution`, `diagnostic_only`, or `failed_or_unreliable`.
+
+Warning labels mean interpret with caution, not that standard Heston is
+invalid. A `KAPPA_NEAR_UPPER_BOUND` label is diagnostic evidence, not
+automatically a reason to widen calibration bounds. `ETA_HIGH` is a caution
+flag: high vol-of-vol may reflect strong smile pressure, event-risk pressure,
+or model-shape stress, but it is not mathematically impossible. Feller
+diagnostics are interpretability and stability evidence; they are not a hard
+validity condition in this library. Train and held-out errors should always be
+read together with quote count, expiry count, and maturity coverage.
+
+```python
+from option_pricing.diagnostics.heston import (
+    heston_calibration_fit_summary,
+    run_heston_calibration_fit_diagnostics,
+)
+
+report = run_heston_calibration_fit_diagnostics(
+    quotes=quotes,
+    fit=multistart_result,
+    held_out_mask=held_out_mask,
+    quad_cfg=quad_cfg,
+)
+
+summary = heston_calibration_fit_summary(report)
+summary_table = heston_calibration_fit_summary(report, as_frame=True)
+```
+
 ## What is reported
 
 `residuals` is one row per quote. It includes the market price, Heston model

@@ -352,7 +352,9 @@ The main report families are:
     `price_slice_with_diagnostics(...)`, and
     `probability_slice_with_diagnostics(...)`;
 - calibration fit evidence: `run_heston_calibration_fit_diagnostics(...)` and
-    `run_heston_calibration_diagnostics(...)`;
+    `run_heston_calibration_diagnostics(...)`, plus
+    `heston_calibration_fit_summary(...)` for a compact public verdict over an
+    existing report;
 - Monte Carlo comparison: `run_heston_mc_comparison_sweep(...)`,
     `summarize_bias_vs_timestep(...)`, `summarize_runtime_vs_error(...)`, and
     `compare_heston_mc_schemes(...)`;
@@ -432,7 +434,8 @@ note.
 2. Invert those prices to Black implied vols if you want a smile view.
 3. Build a `HestonQuoteSet` and run `calibrate_heston_multistart(...)`.
 4. Run `run_heston_calibration_fit_diagnostics(...)` on the fitted result.
-5. Review held-out errors separately when a held-out mask exists.
+5. Build `heston_calibration_fit_summary(...)` for a compact verdict, then
+     review held-out errors separately when a held-out mask exists.
 6. Compare against eSSVI and the direct local-vol PDE validation grid with
      `run_heston_vs_local_vol_comparison(...)`.
 7. Re-read the limitations before drawing capstone conclusions.

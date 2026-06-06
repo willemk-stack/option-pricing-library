@@ -122,6 +122,8 @@ for the reviewer-facing Capstone 3 evidence path.
         - probability_slice_with_diagnostics
         - run_heston_calibration_fit_diagnostics
         - run_heston_calibration_diagnostics
+        - heston_calibration_fit_summary
+        - summarize_heston_calibration_fit
         - build_synthetic_heston_quote_set
         - run_heston_calibration_benchmark_diagnostics
         - run_heston_mc_comparison_sweep

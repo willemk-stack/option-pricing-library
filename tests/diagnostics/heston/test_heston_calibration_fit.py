@@ -1,18 +1,29 @@
 from __future__ import annotations
 
+import json
+
 import numpy as np
+import pandas as pd
 
 from option_pricing.diagnostics.heston import (
     HestonCalibrationFitDiagnostics,
     build_synthetic_heston_quote_set,
+    heston_calibration_fit_summary,
     run_heston_calibration_fit_diagnostics,
+    summarize_heston_calibration_fit,
 )
+from option_pricing.diagnostics.heston.contracts import (
+    HESTON_CALIBRATION_FIT_IV_GRID_COLUMNS,
+    HESTON_CALIBRATION_FIT_RESIDUAL_COLUMNS,
+    HESTON_CALIBRATION_FIT_SMILE_COLUMNS,
+)
+from option_pricing.models.heston.calibration.bounds import HestonCalibrationBounds
 from option_pricing.models.heston.calibration.heston_types import (
     HestonCalibrationRun,
     HestonMultistartResult,
 )
 from option_pricing.models.heston.fourier import HestonIntegralWarning
-from option_pricing.models.heston.params import HestonParams
+from option_pricing.models.heston.params import HESTON_PARAM_NAMES, HestonParams
 from option_pricing.numerics.quadrature import QuadratureConfig
 
 
@@ -128,6 +139,200 @@ def _boundary_multistart_result() -> HestonMultistartResult:
         quote_count=6,
         success_count=2,
         failure_count=0,
+    )
+
+
+def _feller_ratio_for_params(params: HestonParams) -> float:
+    if float(params.eta) == 0.0:
+        return np.inf
+    return float(2.0 * params.kappa * params.vbar / (params.eta * params.eta))
+
+
+def _synthetic_parameter_boundaries(params: HestonParams) -> pd.DataFrame:
+    bounds = HestonCalibrationBounds()
+    values = params.as_array()
+    lower = bounds.lower_array()
+    upper = bounds.upper_array()
+    fraction = (values - lower) / (upper - lower)
+    tolerance = 1.0e-3
+    rows = []
+    for idx, parameter in enumerate(HESTON_PARAM_NAMES):
+        hit_lower = bool(fraction[idx] <= tolerance)
+        hit_upper = bool((1.0 - fraction[idx]) <= tolerance)
+        rows.append(
+            {
+                "parameter": parameter,
+                "value": float(values[idx]),
+                "lower_bound": float(lower[idx]),
+                "upper_bound": float(upper[idx]),
+                "normalized_position": float(fraction[idx]),
+                "distance_to_lower": float(values[idx] - lower[idx]),
+                "distance_to_upper": float(upper[idx] - values[idx]),
+                "normalized_distance_to_lower": float(fraction[idx]),
+                "normalized_distance_to_upper": float(1.0 - fraction[idx]),
+                "hit_lower": hit_lower,
+                "hit_upper": hit_upper,
+                "hit_boundary": bool(hit_lower or hit_upper),
+                "tolerance": tolerance,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _synthetic_constraint_diagnostics(params: HestonParams) -> pd.DataFrame:
+    ratio = _feller_ratio_for_params(params)
+    return pd.DataFrame(
+        [
+            {
+                "constraint": "feller",
+                "value": ratio,
+                "margin": float(
+                    2.0 * params.kappa * params.vbar - params.eta * params.eta
+                ),
+                "satisfied": bool(ratio >= 1.0),
+                "policy": "reported_not_hard_enforced",
+                "notes": "synthetic summary-only fixture",
+            }
+        ]
+    )
+
+
+def _synthetic_held_out_errors(*, include: bool = True) -> pd.DataFrame:
+    columns = [
+        "sample",
+        "n_quotes",
+        "price_rmse",
+        "price_mae",
+        "price_max_abs",
+        "iv_rmse_bps",
+        "iv_mae_bps",
+        "iv_max_abs_bps",
+    ]
+    if not include:
+        return pd.DataFrame(columns=columns)
+    return pd.DataFrame(
+        [
+            {
+                "sample": "train",
+                "n_quotes": 48,
+                "price_rmse": 0.02,
+                "price_mae": 0.015,
+                "price_max_abs": 0.05,
+                "iv_rmse_bps": 4.0,
+                "iv_mae_bps": 3.0,
+                "iv_max_abs_bps": 8.0,
+            },
+            {
+                "sample": "held_out",
+                "n_quotes": 12,
+                "price_rmse": 0.025,
+                "price_mae": 0.018,
+                "price_max_abs": 0.06,
+                "iv_rmse_bps": 5.0,
+                "iv_mae_bps": 4.0,
+                "iv_max_abs_bps": 9.0,
+            },
+        ],
+        columns=columns,
+    )
+
+
+def _synthetic_multistart_runs(
+    *,
+    success_count: int = 3,
+    failure_count: int = 0,
+) -> pd.DataFrame:
+    rows = [{"success": True} for _ in range(success_count)]
+    rows.extend({"success": False} for _ in range(failure_count))
+    return pd.DataFrame(rows, columns=["success"])
+
+
+def _synthetic_multistart_dispersion(
+    params: HestonParams,
+    *,
+    success_count: int = 3,
+) -> pd.DataFrame:
+    rows = []
+    for parameter, value in zip(
+        HESTON_PARAM_NAMES,
+        params.as_array(),
+        strict=True,
+    ):
+        rows.append(
+            {
+                "parameter": parameter,
+                "success_count": success_count,
+                "mean": float(value),
+                "std": 1.0e-5,
+                "min": float(value) - 1.0e-4,
+                "max": float(value) + 1.0e-4,
+                "best_value": float(value),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _synthetic_summary_report(
+    params: HestonParams,
+    *,
+    quote_count: int = 60,
+    expiry_count: int = 4,
+    held_out: bool = True,
+    success_count: int = 3,
+    failure_count: int = 0,
+) -> HestonCalibrationFitDiagnostics:
+    ratio = _feller_ratio_for_params(params)
+    return HestonCalibrationFitDiagnostics(
+        meta={
+            "diagnostic": "heston_calibration_fit",
+            "objective_type": "vega_scaled_price",
+            "backend": "gauss_legendre",
+            "quote_count": quote_count,
+            "expiry_count": expiry_count,
+            "boundary_tolerance": 1.0e-3,
+            "feller_ratio": ratio,
+            "feller_satisfied": bool(ratio >= 1.0),
+        },
+        tables={
+            "residuals": pd.DataFrame(columns=HESTON_CALIBRATION_FIT_RESIDUAL_COLUMNS),
+            "smile_fit": pd.DataFrame(columns=HESTON_CALIBRATION_FIT_SMILE_COLUMNS),
+            "iv_residual_grid": pd.DataFrame(
+                columns=HESTON_CALIBRATION_FIT_IV_GRID_COLUMNS
+            ),
+            "parameter_recovery": pd.DataFrame(
+                {
+                    "parameter": HESTON_PARAM_NAMES,
+                    "fitted": params.as_array(),
+                }
+            ),
+            "constraint_diagnostics": _synthetic_constraint_diagnostics(params),
+            "parameter_boundaries": _synthetic_parameter_boundaries(params),
+            "multistart_parameter_dispersion": _synthetic_multistart_dispersion(
+                params,
+                success_count=success_count,
+            ),
+            "residual_buckets": pd.DataFrame(
+                [
+                    {
+                        "bucket_type": "expiry",
+                        "bucket": "1.0",
+                        "n_quotes": quote_count,
+                        "price_rmse": 0.03,
+                        "iv_rmse_bps": 6.0,
+                    }
+                ]
+            ),
+            "quote_policy": pd.DataFrame(),
+            "quote_policy_summary": pd.DataFrame(),
+            "multistart_runs": _synthetic_multistart_runs(
+                success_count=success_count,
+                failure_count=failure_count,
+            ),
+            "held_out_errors": _synthetic_held_out_errors(include=held_out),
+            "objective_slices": pd.DataFrame(),
+            "kappa_profile": pd.DataFrame(),
+        },
+        arrays={"fitted_params": params.as_array()},
     )
 
 
@@ -290,3 +495,111 @@ def test_heston_boundary_diagnostics_flag_upper_kappa_without_mutating_fit() -> 
     dispersion = report.tables["multistart_parameter_dispersion"].set_index("parameter")
     assert int(dispersion.loc["kappa", "upper_hit_count"]) == 2
     assert float(dispersion.loc["kappa", "boundary_hit_frac"]) == 1.0
+
+
+def test_heston_calibration_fit_summary_clean_synthetic_fit() -> None:
+    report = _synthetic_summary_report(
+        HestonParams(kappa=1.5, vbar=0.04, eta=0.25, rho=-0.45, v=0.04)
+    )
+
+    summary = heston_calibration_fit_summary(report)
+
+    assert summary["warning_labels"] == []
+    assert summary["verdict"] == "usable"
+    assert summary["quote_count"] == 60
+    assert summary["expiry_count"] == 4
+    assert summary["held_out_available"] is True
+    assert summary["max_bucket_price_rmse"] == 0.03
+    assert summary["max_bucket_iv_rmse_bps"] == 6.0
+    assert summary["multistart_success_count"] == 3
+    assert summary["multistart_failure_count"] == 0
+    assert summarize_heston_calibration_fit(report) == summary
+
+
+def test_heston_calibration_fit_summary_flags_kappa_near_upper_bound() -> None:
+    report = _synthetic_summary_report(
+        HestonParams(kappa=19.99, vbar=0.04, eta=0.50, rho=-0.45, v=0.04)
+    )
+
+    summary = heston_calibration_fit_summary(report)
+
+    assert summary["kappa_near_upper_bound"] is True
+    assert "PARAMETER_NEAR_BOUND" in summary["warning_labels"]
+    assert "KAPPA_NEAR_UPPER_BOUND" in summary["warning_labels"]
+    assert summary["verdict"] == "usable_with_caution"
+
+
+def test_heston_calibration_fit_summary_flags_weak_feller() -> None:
+    report = _synthetic_summary_report(
+        HestonParams(kappa=0.5, vbar=0.01, eta=0.80, rho=-0.30, v=0.02)
+    )
+
+    summary = heston_calibration_fit_summary(report)
+
+    assert summary["feller_satisfied"] is False
+    assert "FELLER_WEAK_OR_VIOLATED" in summary["warning_labels"]
+
+
+def test_heston_calibration_fit_summary_flags_high_eta() -> None:
+    report = _synthetic_summary_report(
+        HestonParams(kappa=15.0, vbar=0.60, eta=3.50, rho=-0.40, v=0.40)
+    )
+
+    summary = heston_calibration_fit_summary(report)
+
+    assert summary["eta_high"] is True
+    assert "ETA_HIGH" in summary["warning_labels"]
+    assert "strong smile" in summary["public_note"]
+
+
+def test_heston_calibration_fit_summary_missing_heldout_is_explicit() -> None:
+    report = _synthetic_summary_report(
+        HestonParams(kappa=1.5, vbar=0.04, eta=0.25, rho=-0.45, v=0.04),
+        held_out=False,
+    )
+
+    summary = heston_calibration_fit_summary(report)
+
+    assert summary["held_out_available"] is False
+    assert summary["train_price_rmse"] is None
+    assert summary["holdout_price_rmse"] is None
+    assert summary["train_iv_rmse_bps"] is None
+    assert summary["holdout_iv_rmse_bps"] is None
+
+
+def test_heston_calibration_fit_summary_is_serialization_friendly() -> None:
+    report = _synthetic_summary_report(
+        HestonParams(kappa=1.5, vbar=0.04, eta=0.25, rho=-0.45, v=0.04)
+    )
+
+    summary = heston_calibration_fit_summary(report)
+    frame = heston_calibration_fit_summary(report, as_frame=True)
+
+    json.dumps(summary, allow_nan=False)
+    assert isinstance(frame, pd.DataFrame)
+    assert frame.shape[0] == 1
+    assert frame.loc[0, "warning_labels"] == []
+    assert frame.loc[0, "verdict"] == "usable"
+
+
+def test_heston_calibration_fit_summary_calls_no_optimizer_or_pricer(
+    monkeypatch,
+) -> None:
+    import option_pricing.diagnostics.heston.calibration_fit as calibration_fit_module
+
+    def fail_if_called(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        raise AssertionError("summary helper must not run pricing or optimization")
+
+    monkeypatch.setattr(
+        calibration_fit_module,
+        "heston_price_from_ctx",
+        fail_if_called,
+    )
+    monkeypatch.setattr(calibration_fit_module, "least_squares", fail_if_called)
+    report = _synthetic_summary_report(
+        HestonParams(kappa=1.5, vbar=0.04, eta=0.25, rho=-0.45, v=0.04)
+    )
+
+    summary = calibration_fit_module.heston_calibration_fit_summary(report)
+
+    assert summary["verdict"] == "usable"
