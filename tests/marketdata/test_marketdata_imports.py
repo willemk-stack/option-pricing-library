@@ -13,11 +13,13 @@ EXPECTED_MARKETDATA_IMPORTS = {
         "MarketDataPipeline",
         "ProviderSnapshotResult",
         "ProviderSnapshotDataUnavailableError",
+        "LoadedModelValidationBundle",
         "LocalStorage",
         "AlpacaConfig",
         "FredConfig",
         "StorageConfig",
         "PipelineConfig",
+        "load_model_validation_bundle",
         "provider_snapshot_public_summary",
     ),
     "option_pricing.marketdata.config": (

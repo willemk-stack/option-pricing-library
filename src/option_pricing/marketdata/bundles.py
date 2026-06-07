@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -25,6 +26,7 @@ from option_pricing.marketdata.gold import (
     build_market_data_snapshot,
     cleaning_policy_from_cleaned_quotes,
     heston_quote_set_from_frame,
+    market_data_snapshot_from_json,
     market_data_snapshot_to_json,
 )
 from option_pricing.marketdata.manifests import validate_model_validation_manifest
@@ -37,6 +39,7 @@ from option_pricing.marketdata.schemas import (
 from option_pricing.marketdata.storage import LocalStorage, PartitionValue
 from option_pricing.marketdata.validation import coerce_frame, validate_dtypes
 from option_pricing.models.heston.calibration import calibrate_heston_multistart
+from option_pricing.types import MarketData
 
 _MODEL_VALIDATION_ARTIFACTS = {
     "market_data": "market_data.json",
@@ -63,6 +66,21 @@ class ModelValidationBundlePaths:
     surface_inputs: Path
     heston_fit_summary: Path
     warnings: Path
+
+
+@dataclass(frozen=True, slots=True)
+class LoadedModelValidationBundle:
+    root: Path
+    manifest_path: Path
+    manifest: dict[str, Any]
+    warnings: dict[str, Any]
+    market_snapshot: GoldMarketDataSnapshot
+    market_data: MarketData
+    cleaned_quotes: pd.DataFrame
+    rejected_quotes: pd.DataFrame
+    heston_quotes: pd.DataFrame
+    surface_inputs: pd.DataFrame
+    heston_fit_summary: pd.DataFrame
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,6 +291,35 @@ def write_model_validation_bundle_artifacts(
     )
 
 
+def load_model_validation_bundle(path: str | Path) -> LoadedModelValidationBundle:
+    """Load a complete v1 model-validation bundle from a root or manifest path."""
+
+    paths = _model_validation_bundle_paths_from_input(path)
+    _require_complete_model_validation_bundle(paths)
+
+    manifest = _read_bundle_json_object(paths.manifest, root=paths.root)
+    _validate_loaded_model_validation_manifest(manifest, paths.manifest, paths.root)
+    warnings = _read_bundle_json_object(paths.warnings, root=paths.root)
+    market_snapshot = _read_market_data_snapshot(paths.market_data, root=paths.root)
+
+    return LoadedModelValidationBundle(
+        root=paths.root,
+        manifest_path=paths.manifest,
+        manifest=manifest,
+        warnings=warnings,
+        market_snapshot=market_snapshot,
+        market_data=market_snapshot.market_data,
+        cleaned_quotes=_read_bundle_parquet(paths.cleaned_quotes, root=paths.root),
+        rejected_quotes=_read_bundle_parquet(paths.rejected_quotes, root=paths.root),
+        heston_quotes=_read_bundle_parquet(paths.heston_quotes, root=paths.root),
+        surface_inputs=_read_bundle_parquet(paths.surface_inputs, root=paths.root),
+        heston_fit_summary=_read_bundle_csv(
+            paths.heston_fit_summary,
+            root=paths.root,
+        ),
+    )
+
+
 def _write_model_validation_bundle_artifacts(
     storage: LocalStorage,
     *,
@@ -475,6 +522,30 @@ def _write_model_validation_bundle_artifacts(
     )
 
 
+def _model_validation_bundle_paths_from_input(
+    path: str | Path,
+) -> ModelValidationBundlePaths:
+    input_path = Path(path)
+    if input_path.name == "manifest.json":
+        root = input_path.parent
+        manifest_path = input_path
+    else:
+        root = input_path
+        manifest_path = root / "manifest.json"
+
+    return ModelValidationBundlePaths(
+        root=root,
+        manifest=manifest_path,
+        market_data=root / _MODEL_VALIDATION_ARTIFACTS["market_data"],
+        cleaned_quotes=root / _MODEL_VALIDATION_ARTIFACTS["cleaned_quotes"],
+        rejected_quotes=root / _MODEL_VALIDATION_ARTIFACTS["rejected_quotes"],
+        heston_quotes=root / _MODEL_VALIDATION_ARTIFACTS["heston_quotes"],
+        surface_inputs=root / _MODEL_VALIDATION_ARTIFACTS["surface_inputs"],
+        heston_fit_summary=root / _MODEL_VALIDATION_ARTIFACTS["heston_fit_summary"],
+        warnings=root / _MODEL_VALIDATION_ARTIFACTS["warnings"],
+    )
+
+
 def _expected_model_validation_bundle_paths(
     storage: LocalStorage,
     partitions: Mapping[str, PartitionValue],
@@ -493,6 +564,43 @@ def _expected_model_validation_bundle_paths(
     )
 
 
+def _require_complete_model_validation_bundle(
+    paths: ModelValidationBundlePaths,
+) -> None:
+    if not paths.root.exists():
+        raise FileNotFoundError(
+            f"{paths.root} does not exist; path is not a complete "
+            "model-validation bundle"
+        )
+    if not paths.root.is_dir():
+        raise NotADirectoryError(
+            f"{paths.root} is not a directory; path is not a complete "
+            "model-validation bundle"
+        )
+
+    required_paths = (
+        paths.manifest,
+        paths.market_data,
+        paths.cleaned_quotes,
+        paths.rejected_quotes,
+        paths.heston_quotes,
+        paths.surface_inputs,
+        paths.heston_fit_summary,
+        paths.warnings,
+    )
+    for required_path in required_paths:
+        if not required_path.exists():
+            raise FileNotFoundError(
+                f"{required_path} is missing; path is not a complete "
+                "model-validation bundle"
+            )
+        if not required_path.is_file():
+            raise FileNotFoundError(
+                f"{required_path} is not a file; path is not a complete "
+                "model-validation bundle"
+            )
+
+
 def _model_validation_bundle_root(
     storage: LocalStorage,
     partitions: Mapping[str, PartitionValue],
@@ -503,6 +611,68 @@ def _model_validation_bundle_root(
         dataset=dataset,
         partitions=partitions,
     )
+
+
+def _read_bundle_json_object(path: Path, *, root: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise ValueError(
+            f"Could not read {path} as JSON; {root} is not a complete "
+            "model-validation bundle"
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise ValueError(
+            f"{path} must contain a JSON object; {root} is not a complete "
+            "model-validation bundle"
+        )
+    return payload
+
+
+def _validate_loaded_model_validation_manifest(
+    manifest: Mapping[str, object],
+    path: Path,
+    root: Path,
+) -> None:
+    try:
+        validate_model_validation_manifest(manifest)
+    except Exception as exc:
+        raise ValueError(
+            f"Could not validate {path}; {root} is not a complete "
+            "model-validation bundle"
+        ) from exc
+
+
+def _read_market_data_snapshot(path: Path, *, root: Path) -> GoldMarketDataSnapshot:
+    payload = _read_bundle_json_object(path, root=root)
+    try:
+        return market_data_snapshot_from_json(payload)
+    except Exception as exc:
+        raise ValueError(
+            f"Could not rehydrate {path}; {root} is not a complete "
+            "model-validation bundle"
+        ) from exc
+
+
+def _read_bundle_parquet(path: Path, *, root: Path) -> pd.DataFrame:
+    try:
+        return pd.read_parquet(path)
+    except Exception as exc:
+        raise ValueError(
+            f"Could not read {path} as parquet; {root} is not a complete "
+            "model-validation bundle"
+        ) from exc
+
+
+def _read_bundle_csv(path: Path, *, root: Path) -> pd.DataFrame:
+    try:
+        return pd.read_csv(path)
+    except Exception as exc:
+        raise ValueError(
+            f"Could not read {path} as CSV; {root} is not a complete "
+            "model-validation bundle"
+        ) from exc
 
 
 def _ensure_model_validation_bundle_targets_available(
@@ -989,10 +1159,12 @@ def _utc_now_isoformat() -> str:
 
 __all__ = [
     "HestonSmokeResult",
+    "LoadedModelValidationBundle",
     "ModelValidationBundleConfig",
     "ModelValidationBundlePaths",
     "ModelValidationBundleResult",
     "build_model_validation_manifest",
     "build_surface_inputs",
+    "load_model_validation_bundle",
     "write_model_validation_bundle_artifacts",
 ]

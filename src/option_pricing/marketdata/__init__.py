@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 __all__ = [
     "AlpacaConfig",
     "FredConfig",
+    "LoadedModelValidationBundle",
     "LocalStorage",
     "MarketDataPipeline",
     "PipelineConfig",
@@ -18,11 +19,13 @@ __all__ = [
     "ProviderSnapshotQualityPolicy",
     "ProviderSnapshotResult",
     "StorageConfig",
+    "load_model_validation_bundle",
     "provider_snapshot_public_summary",
     "validate_provider_snapshot_bundle",
 ]
 
 if TYPE_CHECKING:
+    from .bundles import LoadedModelValidationBundle, load_model_validation_bundle
     from .config import (
         AlpacaConfig,
         FredConfig,
@@ -50,6 +53,7 @@ _PUBLIC_EXPORTS = {
     "PipelineConfig": "option_pricing.marketdata.config",
     "ProviderRetryConfig": "option_pricing.marketdata.config",
     "StorageConfig": "option_pricing.marketdata.config",
+    "LoadedModelValidationBundle": "option_pricing.marketdata.bundles",
     "LocalStorage": "option_pricing.marketdata.storage",
     "MarketDataPipeline": "option_pricing.marketdata.pipeline",
     "ProviderCallDiagnostic": "option_pricing.marketdata.provider_results",
@@ -59,6 +63,7 @@ _PUBLIC_EXPORTS = {
     "ProviderSnapshotDataUnavailableError": "option_pricing.marketdata.pipeline",
     "ProviderSnapshotQualityPolicy": "option_pricing.marketdata.provider_policy",
     "ProviderSnapshotResult": "option_pricing.marketdata.pipeline",
+    "load_model_validation_bundle": "option_pricing.marketdata.bundles",
     "provider_snapshot_public_summary": "option_pricing.marketdata.pipeline",
     "validate_provider_snapshot_bundle": "option_pricing.marketdata.provider_confidence",
 }
