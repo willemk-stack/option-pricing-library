@@ -330,10 +330,51 @@ def test_fit_heston_from_bundle_accepts_bundle_root_path(
 
 
 def test_workflow_public_imports_expose_canonical_heston_helpers() -> None:
-    assert "fit_heston_from_bundle" in workflows.__all__
-    assert "fit_heston_market" in workflows.__all__
+    assert tuple(workflows.__all__) == (
+        "HestonCalibrationConfig",
+        "HestonMarketFitError",
+        "HestonMarketFitResult",
+        "fit_heston_from_bundle",
+        "fit_heston_market",
+    )
+    assert workflows.HestonCalibrationConfig is HestonCalibrationConfig
+    assert workflows.HestonMarketFitError is HestonMarketFitError
+    assert workflows.HestonMarketFitResult is HestonMarketFitResult
     assert workflows.fit_heston_from_bundle is fit_heston_from_bundle
     assert workflows.fit_heston_market is fit_heston_market
+
+
+def test_loaded_prepared_and_fit_summary_counts_stay_coherent(
+    tmp_path: Path,
+    fake_parquet: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+    _patch_successful_calibration(monkeypatch, calls)
+    root = _write_bundle(tmp_path / "bundle")
+    quotes = _heston_quotes({0: {"iv": pd.NA}})
+    quotes.to_parquet(root / "heston_quotes.parquet", index=False)
+
+    loaded = load_model_validation_bundle(root)
+    prepared = prepare_heston_market_fit(loaded)
+    ladder_result = fit_heston_market(prepared)
+    one_shot_result = fit_heston_from_bundle(root)
+
+    assert prepared.stats.input_quote_count == len(loaded.heston_quotes) == 3
+    assert prepared.stats.selected_quote_count == 2
+    assert prepared.stats.rejected_quote_count == 1
+    assert len(prepared.selected_quotes) + len(prepared.rejected_quotes) == len(
+        loaded.heston_quotes
+    )
+    assert ladder_result.prepared is prepared
+    assert ladder_result.summary["input_quote_count"] == 3
+    assert ladder_result.summary["selected_quote_count"] == 2
+    assert ladder_result.summary["rejected_quote_count"] == 1
+    assert ladder_result.summary["calibration_quote_count"] == 2
+    assert one_shot_result.status == ladder_result.status == "ok"
+    assert one_shot_result.summary["selected_quote_count"] == 2
+    assert calls[0]["quotes"] is prepared.quote_set
+    assert calls[0]["quotes"].n_quotes == 2
 
 
 def test_fit_heston_from_bundle_accepts_manifest_path(

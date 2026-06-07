@@ -13,6 +13,7 @@ EXPECTED_MARKETDATA_IMPORTS = {
         "MarketDataPipeline",
         "ProviderSnapshotResult",
         "ProviderSnapshotDataUnavailableError",
+        "ProviderSnapshotBundleValidationResult",
         "LoadedModelValidationBundle",
         "PreparedHestonMarketFit",
         "HestonReadyStats",
@@ -24,6 +25,7 @@ EXPECTED_MARKETDATA_IMPORTS = {
         "load_model_validation_bundle",
         "prepare_heston_market_fit",
         "provider_snapshot_public_summary",
+        "validate_provider_snapshot_bundle",
     ),
     "option_pricing.marketdata.config": (
         "AlpacaConfig",
@@ -124,6 +126,26 @@ def test_phase_a1_marketdata_public_import_boundaries() -> None:
 
         for symbol in public_symbols:
             assert getattr(module, symbol) is not None
+
+
+def test_marketdata_public_all_locks_provider_bundle_exports() -> None:
+    module = import_module("option_pricing.marketdata")
+
+    expected = {
+        "LoadedModelValidationBundle",
+        "PreparedHestonMarketFit",
+        "MarketDataPipeline",
+        "ProviderSnapshotBundleValidationResult",
+        "ProviderSnapshotResult",
+        "load_model_validation_bundle",
+        "prepare_heston_market_fit",
+        "provider_snapshot_public_summary",
+        "validate_provider_snapshot_bundle",
+    }
+
+    assert expected <= set(module.__all__)
+    for symbol in expected:
+        assert getattr(module, symbol) is not None
 
 
 def test_phase_a1_marketdata_pipeline_facade_exports() -> None:

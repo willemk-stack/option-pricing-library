@@ -898,6 +898,39 @@ def test_provider_snapshot_public_summary_is_compact_and_path_only(
     summary = result.public_summary()
 
     assert summary == provider_snapshot_public_summary(result)
+    assert tuple(summary) == (
+        "underlying",
+        "asof",
+        "run_id",
+        "equity_provider",
+        "equity_feed",
+        "option_provider",
+        "option_feed",
+        "rate_source",
+        "selected_rate",
+        "flat_rate",
+        "rate_policy_name",
+        "dividend_yield",
+        "dividend_policy_name",
+        "dividend_yield_source",
+        "raw_option_contract_count",
+        "normalized_option_contract_count",
+        "provider_rejected_contract_count",
+        "accepted_quote_count",
+        "rejected_quote_count",
+        "accepted_expiry_count",
+        "accepted_expiry_days_min",
+        "accepted_expiry_days_max",
+        "accepted_expiry_years_min",
+        "accepted_expiry_years_max",
+        "accepted_strike_min",
+        "accepted_strike_max",
+        "accepted_call_count",
+        "accepted_put_count",
+        "quote_freshness_mode",
+        "warning_count",
+        "main_artifact_paths",
+    )
     assert summary["underlying"] == "SPY"
     assert summary["asof"] == "2026-05-22T15:31:00+00:00"
     assert summary["run_id"] == "b4-test-run"
@@ -969,6 +1002,9 @@ def test_provider_snapshot_routes_default_split_alpaca_feeds(
     assert result.feed == "indicative"
     assert result.equity_feed == "iex"
     assert result.option_feed == "indicative"
+    assert result.rate_curve_paths is None
+    assert "rate_curve" not in result.public_summary()["main_artifact_paths"]
+    assert "rate_curve_manifest" not in result.public_summary()["main_artifact_paths"]
     assert alpaca_client.equity_calls[0]["feed"] == "iex"
     assert alpaca_client.option_calls[0]["feed"] == "indicative"
 
@@ -1748,6 +1784,39 @@ def test_provider_snapshot_missing_alpaca_quote_fails_clearly(
             asof="2026-05-22T15:31:00Z",
             run_id="missing-quote",
         )
+
+
+def test_provider_snapshot_no_normalized_option_contracts_fails_with_diagnostic(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    alpaca_client = _FakeAlpacaClient(
+        option_payload={
+            "underlying": "SPY",
+            "contracts": {},
+            "source": "alpaca",
+            "feed": "indicative",
+        }
+    )
+
+    with pytest.raises(
+        ProviderSnapshotDataUnavailableError,
+        match=(
+            "raw_option_contracts=0, normalized_option_contracts=0, "
+            "reason=provider_normalization"
+        ),
+    ) as excinfo:
+        _pipeline(tmp_path, alpaca_client=alpaca_client).snapshot(
+            "SPY",
+            asof="2026-05-22T15:31:00Z",
+            run_id="no-normalized-contracts",
+            curve_series_ids=(),
+        )
+
+    assert excinfo.value.failure_kind == "normalization_failed"
+    assert excinfo.value.diagnostic is not None
+    assert excinfo.value.diagnostic.operation == "option_chain_normalization"
+    assert excinfo.value.diagnostic.status == "failed"
 
 
 def test_provider_snapshot_no_usable_option_chain_fails_clearly(
