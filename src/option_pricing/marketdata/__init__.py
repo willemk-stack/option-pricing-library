@@ -8,10 +8,12 @@ from typing import TYPE_CHECKING, Any
 __all__ = [
     "AlpacaConfig",
     "FredConfig",
+    "HestonReadyStats",
     "LoadedModelValidationBundle",
     "LocalStorage",
     "MarketDataPipeline",
     "PipelineConfig",
+    "PreparedHestonMarketFit",
     "ProviderCallDiagnostic",
     "ProviderRetryConfig",
     "ProviderSnapshotBundleValidationResult",
@@ -20,6 +22,7 @@ __all__ = [
     "ProviderSnapshotResult",
     "StorageConfig",
     "load_model_validation_bundle",
+    "prepare_heston_market_fit",
     "provider_snapshot_public_summary",
     "validate_provider_snapshot_bundle",
 ]
@@ -32,6 +35,11 @@ if TYPE_CHECKING:
         PipelineConfig,
         ProviderRetryConfig,
         StorageConfig,
+    )
+    from .model_ready import (
+        HestonReadyStats,
+        PreparedHestonMarketFit,
+        prepare_heston_market_fit,
     )
     from .pipeline import (
         MarketDataPipeline,
@@ -50,7 +58,9 @@ if TYPE_CHECKING:
 _PUBLIC_EXPORTS = {
     "AlpacaConfig": "option_pricing.marketdata.config",
     "FredConfig": "option_pricing.marketdata.config",
+    "HestonReadyStats": "option_pricing.marketdata.model_ready",
     "PipelineConfig": "option_pricing.marketdata.config",
+    "PreparedHestonMarketFit": "option_pricing.marketdata.model_ready",
     "ProviderRetryConfig": "option_pricing.marketdata.config",
     "StorageConfig": "option_pricing.marketdata.config",
     "LoadedModelValidationBundle": "option_pricing.marketdata.bundles",
@@ -64,6 +74,7 @@ _PUBLIC_EXPORTS = {
     "ProviderSnapshotQualityPolicy": "option_pricing.marketdata.provider_policy",
     "ProviderSnapshotResult": "option_pricing.marketdata.pipeline",
     "load_model_validation_bundle": "option_pricing.marketdata.bundles",
+    "prepare_heston_market_fit": "option_pricing.marketdata.model_ready",
     "provider_snapshot_public_summary": "option_pricing.marketdata.pipeline",
     "validate_provider_snapshot_bundle": "option_pricing.marketdata.provider_confidence",
 }
