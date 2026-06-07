@@ -55,6 +55,10 @@ _PREPARE_SVI_MARKET_FIT_GUIDANCE = (
     "Use prepare_svi_market_fit(bundle) before SVI fitting from saved "
     "bundle surface artifacts."
 )
+_PREPARE_ESSVI_MARKET_FIT_GUIDANCE = (
+    "Use prepare_essvi_market_fit(bundle) before eSSVI fitting from saved "
+    "bundle surface artifacts."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +75,17 @@ class SurfaceReadyStats:
 
 @dataclass(frozen=True, slots=True)
 class PreparedSVIMarketFit:
+    model_name: str
+    market_data: MarketData
+    selected_points: pd.DataFrame
+    rejected_points: pd.DataFrame
+    stats: SurfaceReadyStats
+    status: str
+    warnings: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedESSVIMarketFit:
     model_name: str
     market_data: MarketData
     selected_points: pd.DataFrame
@@ -196,12 +211,145 @@ def prepare_svi_market_fit(
     )
 
 
-def _bundle_surface_inputs(bundle: Any) -> pd.DataFrame:
+def prepare_essvi_market_fit(
+    bundle: LoadedModelValidationBundle,
+    *,
+    min_expiry_days: float = 7.0,
+    max_expiry_days: float | None = None,
+    min_points_per_expiry: int = 5,
+    min_expiry_count: int = 3,
+    min_moneyness: float | None = 0.5,
+    max_moneyness: float | None = 2.0,
+    require_mid: bool = True,
+    require_iv: bool = False,
+    raise_on_block: bool = False,
+) -> PreparedESSVIMarketFit:
+    """Prepare a loaded model-validation bundle for future eSSVI fitting.
+
+    This helper starts from ``bundle.surface_inputs`` and computes the
+    cross-maturity point fields needed by ``calibrate_essvi_global``. It does
+    not fit eSSVI parameters or mutate the persisted ``surface_inputs.v1``
+    artifact.
+    """
+
+    min_expiry_days = _validate_nonnegative_float(
+        "min_expiry_days",
+        min_expiry_days,
+    )
+    max_expiry_days = _validate_optional_nonnegative_float(
+        "max_expiry_days",
+        max_expiry_days,
+    )
+    if max_expiry_days is not None and max_expiry_days < min_expiry_days:
+        raise ValueError(
+            "max_expiry_days must be greater than or equal to min_expiry_days"
+        )
+    min_points_per_expiry = _validate_positive_int(
+        "min_points_per_expiry",
+        min_points_per_expiry,
+    )
+    min_expiry_count = _validate_positive_int(
+        "min_expiry_count",
+        min_expiry_count,
+    )
+    min_moneyness = _validate_optional_positive_float(
+        "min_moneyness",
+        min_moneyness,
+    )
+    max_moneyness = _validate_optional_positive_float(
+        "max_moneyness",
+        max_moneyness,
+    )
+    if (
+        min_moneyness is not None
+        and max_moneyness is not None
+        and max_moneyness < min_moneyness
+    ):
+        raise ValueError("max_moneyness must be greater than or equal to min_moneyness")
+    require_mid = _validate_bool("require_mid", require_mid)
+    require_iv = _validate_bool("require_iv", require_iv)
+    raise_on_block = _validate_bool("raise_on_block", raise_on_block)
+
+    market_data = _bundle_market_data(bundle)
+    spot = _positive_finite_market_value(market_data, "spot")
+    source = _bundle_surface_inputs(
+        bundle,
+        guidance=_PREPARE_ESSVI_MARKET_FIT_GUIDANCE,
+    )
+    _validate_required_surface_columns(
+        source,
+        guidance=_PREPARE_ESSVI_MARKET_FIT_GUIDANCE,
+    )
+    working = _with_expiry_years(source)
+
+    reject_reason_lists = _svi_rejection_reason_lists(
+        working,
+        spot=spot,
+        min_expiry_days=min_expiry_days,
+        max_expiry_days=max_expiry_days,
+        min_moneyness=min_moneyness,
+        max_moneyness=max_moneyness,
+        require_iv=require_iv,
+        require_mid=require_mid,
+    )
+    _add_sparse_expiry_reasons(
+        working,
+        reject_reason_lists,
+        min_points_per_expiry=min_points_per_expiry,
+    )
+    enriched = _with_essvi_fields(working, market_data)
+    reject_reasons = [
+        tuple(_dedupe_strings(reasons)) for reasons in reject_reason_lists
+    ]
+    selected_points = _selected_points_frame(enriched, reject_reasons)
+    rejected_points = _rejected_points_frame(enriched, reject_reasons)
+    rejection_counts = _rejection_counts(reject_reasons)
+
+    expiry_count = _selected_expiry_count(selected_points)
+    warnings = _essvi_surface_warnings(
+        selected_point_count=len(selected_points),
+        expiry_count=expiry_count,
+        min_expiry_count=min_expiry_count,
+    )
+    if selected_points.empty:
+        status = "empty"
+    elif expiry_count < min_expiry_count:
+        status = "blocked"
+    else:
+        status = "ready"
+
+    if status == "blocked" and raise_on_block:
+        raise ValueError(
+            "eSSVI preparation blocked global calibration: " + " ".join(warnings)
+        )
+
+    stats = _surface_ready_stats(
+        input_point_count=len(working),
+        selected_points=selected_points,
+        rejected_points=rejected_points,
+        rejection_counts=rejection_counts,
+        warnings=warnings,
+    )
+    return PreparedESSVIMarketFit(
+        model_name="essvi",
+        market_data=market_data,
+        selected_points=selected_points,
+        rejected_points=rejected_points,
+        stats=stats,
+        status=status,
+        warnings=warnings,
+    )
+
+
+def _bundle_surface_inputs(
+    bundle: Any,
+    *,
+    guidance: str = _PREPARE_SVI_MARKET_FIT_GUIDANCE,
+) -> pd.DataFrame:
     surface_inputs = getattr(bundle, "surface_inputs", None)
     if not isinstance(surface_inputs, pd.DataFrame):
         raise TypeError(
-            "bundle.surface_inputs must be a pandas DataFrame. "
-            f"{_PREPARE_SVI_MARKET_FIT_GUIDANCE}"
+            "bundle.surface_inputs must be a pandas DataFrame. " f"{guidance}"
         )
     return surface_inputs.copy(deep=True).reset_index(drop=True)
 
@@ -247,7 +395,11 @@ def _positive_finite_market_value(market_data: MarketData, field_name: str) -> f
     return value
 
 
-def _validate_required_surface_columns(frame: pd.DataFrame) -> None:
+def _validate_required_surface_columns(
+    frame: pd.DataFrame,
+    *,
+    guidance: str = _PREPARE_SVI_MARKET_FIT_GUIDANCE,
+) -> None:
     missing = [
         column
         for column in _REQUIRED_SURFACE_COLUMNS_EXCEPT_COMPUTED
@@ -258,7 +410,7 @@ def _validate_required_surface_columns(frame: pd.DataFrame) -> None:
         raise ValueError(
             "bundle.surface_inputs is missing required columns: "
             f"{joined}. surface_inputs is a candidate artifact; "
-            f"{_PREPARE_SVI_MARKET_FIT_GUIDANCE}"
+            f"{guidance}"
         )
 
 
@@ -526,6 +678,21 @@ def _with_svi_fields(frame: pd.DataFrame, market_data: MarketData) -> pd.DataFra
     return enriched
 
 
+def _with_essvi_fields(frame: pd.DataFrame, market_data: MarketData) -> pd.DataFrame:
+    enriched = _with_svi_fields(frame, market_data)
+    enriched["y"] = enriched["log_moneyness"]
+    enriched["T"] = enriched[_COMPUTABLE_EXPIRY_COLUMN]
+    enriched["price_mkt"] = pd.to_numeric(
+        enriched["mid"],
+        errors="coerce",
+    ).to_numpy(dtype=np.float64, na_value=np.nan)
+    enriched["implied_vol"] = pd.to_numeric(
+        enriched["iv"],
+        errors="coerce",
+    ).to_numpy(dtype=np.float64, na_value=np.nan)
+    return enriched
+
+
 def _market_forward(market_data: MarketData, tau: float) -> float:
     if not math.isfinite(float(tau)) or tau <= 0.0:
         return math.nan
@@ -630,6 +797,29 @@ def _surface_ready_stats(
         max_expiry_days=(None if expiry_days.size == 0 else float(np.max(expiry_days))),
         warnings=warnings,
     )
+
+
+def _selected_expiry_count(selected_points: pd.DataFrame) -> int:
+    return int(np.unique(_selected_expiry_days(selected_points)).size)
+
+
+def _essvi_surface_warnings(
+    *,
+    selected_point_count: int,
+    expiry_count: int,
+    min_expiry_count: int,
+) -> tuple[str, ...]:
+    if selected_point_count == 0:
+        return (
+            "eSSVI preparation selected no surface points; inspect rejected_points "
+            "and stats.rejection_counts before fitting.",
+        )
+    if expiry_count < min_expiry_count:
+        return (
+            "eSSVI global calibration requires at least "
+            f"{min_expiry_count} expiries; selected {expiry_count}.",
+        )
+    return ()
 
 
 def _selected_expiry_days(selected_points: pd.DataFrame) -> np.ndarray:
@@ -749,7 +939,9 @@ def _dedupe_strings(values: tuple[str, ...] | list[str]) -> tuple[str, ...]:
 
 
 __all__ = [
+    "PreparedESSVIMarketFit",
     "PreparedSVIMarketFit",
     "SurfaceReadyStats",
+    "prepare_essvi_market_fit",
     "prepare_svi_market_fit",
 ]

@@ -1,10 +1,13 @@
 # Future market-model workflows
 
-!!! note "Status: Phase 8C SVI fit helpers"
+!!! note "Status: Phase 8E eSSVI market-fit helpers"
     This note documents the intended market-fit workflow architecture beyond
     Heston. Phase 8B added SVI preparation from bundle surface inputs. Phase 8C
-    adds explicit SVI fit helpers on top of that preparation contract, while
-    eSSVI and local-vol fitting helpers described here remain future work.
+    added explicit SVI fit helpers on top of that preparation contract. Phase
+    8D added eSSVI surface preparation from the same bundle surface inputs.
+    Phase 8E adds explicit eSSVI fit helpers on top of
+    `prepare_essvi_market_fit(...)`, while local-vol fitting helpers described
+    here remain future work.
 
 ## Purpose
 
@@ -130,6 +133,74 @@ Partial failure is visible by design. If one expiry fits and another fails, the
 result status is `partial` when `allow_partial=True`; if every expiry fails, the
 status is `failed`. No generic `fit_market_model(...)` registry is introduced.
 
+## Phase 8D eSSVI preparation helper
+
+Phase 8D adds the preparation-only eSSVI handoff:
+
+```python
+from option_pricing.marketdata import (
+    load_model_validation_bundle,
+    prepare_essvi_market_fit,
+)
+
+path = "path/to/model_validation_bundle"
+bundle = load_model_validation_bundle(path)
+prepared = prepare_essvi_market_fit(bundle)
+```
+
+`prepare_essvi_market_fit(...)` starts from `bundle.surface_inputs`, not
+`bundle.heston_quotes`, and returns `selected_points`, `rejected_points`,
+`stats`, `status`, and `warnings`. It computes the surface-level fields needed
+by the global eSSVI calibrator in memory: `y`, `T`, `price_mkt`, `is_call`,
+`sqrt_weight`, strike, forward, discount, implied volatility, and total
+variance. The persisted `surface_inputs.v1` artifact remains unchanged.
+
+Unlike SVI preparation, eSSVI preparation requires a cross-maturity surface by
+default. Sparse expiries are rejected before the global coverage check, and the
+prepared result is `blocked` when selected points remain but fewer than the
+configured minimum number of expiries are available. If every point is rejected,
+the result is `empty` with a warning that points users back to
+`rejected_points` and `stats.rejection_counts`.
+
+## Phase 8E eSSVI fit helpers
+
+Phase 8E adds the explicit eSSVI ladder on top of
+`prepare_essvi_market_fit(...)`:
+
+```python
+from option_pricing.marketdata import (
+    load_model_validation_bundle,
+    prepare_essvi_market_fit,
+)
+from option_pricing.workflows import fit_essvi_market
+
+path = "path/to/model_validation_bundle"
+bundle = load_model_validation_bundle(path)
+prepared = prepare_essvi_market_fit(bundle)
+result = fit_essvi_market(prepared)
+```
+
+The one-shot helper runs the same load -> prepare -> fit path:
+
+```python
+from option_pricing.workflows import fit_essvi_from_bundle
+
+result = fit_essvi_from_bundle(path)
+```
+
+`fit_essvi_market(...)` accepts only `PreparedESSVIMarketFit`. It passes
+`prepared.selected_points["y"]`, `["T"]`, `["price_mkt"]`, `["sqrt_weight"]`,
+and `["is_call"]` into `calibrate_essvi_global(...)` together with the bundle
+market data. The result keeps the prepared selected/rejected points available,
+plus the low-level `ESSVIFitResult`, node and nodal-surface validation reports,
+an `ESSVINodalSurface`, a compact summary, warnings, and errors.
+
+The helper deliberately stops at exact nodal calibration. Smooth projection
+and Dupire-oriented surface handoff remain explicit later steps, not hidden
+repairs inside the market-fit wrapper. A local-vol or Dupire workflow should
+consume a validated fitted eSSVI surface later; it should not consume raw
+`surface_inputs` directly.
+
 ## Model eligibility rules
 
 Direct market-fit workflows are reserved for models whose parameters are
@@ -140,7 +211,7 @@ surface points:
     directly to selected vanilla quotes.
 - Eligible next: raw SVI, because it fits one expiry slice at a time from
     implied-volatility or total-variance points derived from validated quotes.
-- Eligible after SVI: eSSVI, because it fits a cross-maturity volatility
+- Eligible now: eSSVI, because it fits a cross-maturity volatility
     surface from validated surface points and records node or projection
     diagnostics.
 - Derived later: local vol / Dupire, because it should be built from a
@@ -180,9 +251,9 @@ slice-level repair and diagnostics visible, and the
 [eSSVI calibration design](../volatility/essvi_calibration_design.md) treats
 smooth projection as an explicit Dupire-oriented handoff.
 
-## Proposed public APIs
+## Public APIs
 
-The next APIs should follow the Heston split and stay explicit:
+The public APIs follow the Heston split and stay explicit:
 
 ```python
 from option_pricing.marketdata import (
@@ -201,7 +272,7 @@ from option_pricing.workflows import (
 )
 ```
 
-SVI should use:
+SVI uses:
 
 ```text
 load_model_validation_bundle(path)
@@ -215,7 +286,7 @@ and the one-shot helper:
 fit_svi_from_bundle(path)
 ```
 
-eSSVI should use:
+eSSVI uses:
 
 ```text
 load_model_validation_bundle(path)
@@ -238,7 +309,7 @@ Provider adapters should not be passed to any `prepare_*_market_fit(...)` or
 `fit_*_market(...)` helper. Preparation starts from `LoadedModelValidationBundle`
 and its local artifacts.
 
-## Proposed dataclasses
+## Public dataclasses
 
 Heston already establishes the naming pattern:
 
@@ -247,10 +318,11 @@ Heston already establishes the naming pattern:
 - `HestonCalibrationConfig`
 - `HestonMarketFitResult`
 
-SVI should mirror that shape while using point terminology:
+SVI and eSSVI mirror that shape while using point terminology:
 
 - `SurfaceReadyStats`
 - `PreparedSVIMarketFit`
+- `PreparedESSVIMarketFit`
 - `SVIMarketFitConfig`
 - `SVIMarketFitResult`
 
@@ -265,11 +337,9 @@ SVI should mirror that shape while using point terminology:
     expiry years, total variance, optional weights, and option side when needed
 - preparation status, warnings, and rejection counts
 
-eSSVI should use the same point vocabulary:
+eSSVI fitting uses the same point vocabulary:
 
-- `ESSVIReadyStats`
-- `PreparedESSVIMarketFit`
-- `ESSVIMarketCalibrationConfig`
+- `ESSVIMarketFitConfig`
 - `ESSVIMarketFitResult`
 
 `PreparedESSVIMarketFit` should include:
@@ -344,7 +414,7 @@ diagnostics, and derivative-readiness evidence.
 
 ## Testing strategy
 
-Future implementation tests should be layered like the Heston workflow tests:
+Implementation tests should be layered like the Heston workflow tests:
 
 - Bundle loading tests prove `surface_inputs.parquet` is present, schema-valid,
     and loaded through `LoadedModelValidationBundle`.
@@ -363,15 +433,15 @@ Future implementation tests should be layered like the Heston workflow tests:
 - Regression tests keep provider-specific classes out of preparation and fit
     signatures.
 
-The focused command set for this Phase 8A docs note is:
+The focused command set for this Phase 8E market-fit phase is:
 
 ```powershell
-python -m pytest tests/marketdata tests/vol/svi tests/vol/ssvi
+python -m pytest tests/workflows tests/marketdata tests/vol/svi tests/vol/essvi
 ruff check docs src tests
 ```
 
-Future code phases should add workflow-specific tests under `tests/workflows`
-and preparation-specific tests under `tests/marketdata`.
+Workflow-specific tests live under `tests/workflows`, while
+preparation-specific tests stay under `tests/marketdata`.
 
 ## Documentation strategy
 
@@ -382,8 +452,8 @@ The docs should keep the public path explicit and model-specific:
     as the reference implementation page.
 - Add or expand an SVI market-fit guide around `prepare_svi_market_fit(...)`,
     `fit_svi_market(...)`, and `fit_svi_from_bundle(...)`.
-- Add an eSSVI market-fit guide only when `prepare_essvi_market_fit(...)`,
-    `fit_essvi_market(...)`, and `fit_essvi_from_bundle(...)` exist.
+- Expand the eSSVI guide around `prepare_essvi_market_fit(...)`,
+    `fit_essvi_market(...)`, and `fit_essvi_from_bundle(...)`.
 - Keep bundle artifact documentation in
     [market snapshot validation](../../user_guides/market_snapshot_validation.md)
     focused on local evidence and candidate artifacts.
@@ -400,7 +470,7 @@ at least Heston, SVI, and eSSVI have stable public workflow surfaces.
 
 This phase does not:
 
-- implement eSSVI or local-vol market-fit code
+- implement local-vol market-fit code
 - change the `model_validation_bundle.v1` artifact filenames
 - change `surface_inputs.v1`
 - add provider-specific logic to fitting

@@ -6,7 +6,7 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -16,8 +16,20 @@ from option_pricing.marketdata.bundles import (
     load_model_validation_bundle,
 )
 from option_pricing.marketdata.surface_ready import (
+    PreparedESSVIMarketFit,
     PreparedSVIMarketFit,
+    prepare_essvi_market_fit,
     prepare_svi_market_fit,
+)
+from option_pricing.vol.arbitrage import SurfaceNoArbReport, check_surface_noarb
+from option_pricing.vol.ssvi import (
+    ESSVIFitResult,
+    ESSVIGlobalCalibrationConfig,
+    ESSVINodalSmileSlice,
+    ESSVINodalSurface,
+    ESSVINodeConstraintReport,
+    calibrate_essvi_global,
+    validate_essvi_nodes,
 )
 from option_pricing.vol.surface_core import VolSurface
 from option_pricing.vol.svi import (
@@ -35,6 +47,11 @@ _SVI_FIT_WORKFLOW_GUIDANCE = (
     "load_model_validation_bundle(path) -> prepare_svi_market_fit(bundle) "
     "-> fit_svi_market(prepared) when you need each step."
 )
+_ESSVI_FIT_WORKFLOW_GUIDANCE = (
+    "Use fit_essvi_from_bundle(path) for the one-shot workflow, or "
+    "load_model_validation_bundle(path) -> prepare_essvi_market_fit(bundle) "
+    "-> fit_essvi_market(prepared) when you need each step."
+)
 _MIN_SVI_SLICE_POINTS = 5
 _ACT_365_DAYS = 365.0
 _REQUIRED_PREPARED_COLUMNS = (
@@ -42,6 +59,13 @@ _REQUIRED_PREPARED_COLUMNS = (
     "log_moneyness",
     "total_variance",
     "sqrt_weight",
+)
+_ESSVI_REQUIRED_PREPARED_COLUMNS = (
+    "y",
+    "T",
+    "price_mkt",
+    "sqrt_weight",
+    "is_call",
 )
 _PARAMETER_TABLE_COLUMNS = (
     "expiry_years",
@@ -85,6 +109,30 @@ class SVIMarketFitConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class ESSVIMarketFitConfig:
+    """Optional eSSVI market-fit workflow settings.
+
+    The low-level calibration options remain grouped in
+    ``ESSVIGlobalCalibrationConfig`` instead of being mirrored field by field.
+    """
+
+    calibration_config: ESSVIGlobalCalibrationConfig | None = None
+    validate_nodes: bool = True
+    validate_static_noarb: bool = True
+
+    def __post_init__(self) -> None:
+        if self.calibration_config is not None and not isinstance(
+            self.calibration_config,
+            ESSVIGlobalCalibrationConfig,
+        ):
+            raise TypeError(
+                "calibration_config must be an ESSVIGlobalCalibrationConfig or None"
+            )
+        _validate_bool("validate_nodes", self.validate_nodes)
+        _validate_bool("validate_static_noarb", self.validate_static_noarb)
+
+
+@dataclass(frozen=True, slots=True)
 class SVISliceMarketFitResult:
     expiry_years: float
     status: str
@@ -118,6 +166,43 @@ class SVIMarketFitResult:
     @property
     def rejected_points(self) -> pd.DataFrame:
         """Prepared SVI points rejected before calibration."""
+
+        return self.prepared.rejected_points
+
+
+@dataclass(frozen=True, slots=True)
+class ESSVIMarketFitValidation:
+    node_report: ESSVINodeConstraintReport | None
+    surface_noarb_report: SurfaceNoArbReport | None
+    warnings: tuple[str, ...]
+    errors: tuple[str, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not self.errors
+
+
+@dataclass(frozen=True, slots=True)
+class ESSVIMarketFitResult:
+    model_name: str
+    status: str
+    prepared: PreparedESSVIMarketFit
+    fit_result: ESSVIFitResult | None
+    validation: ESSVIMarketFitValidation | None
+    surface: ESSVINodalSurface | None
+    summary: dict[str, Any]
+    warnings: tuple[str, ...]
+    errors: tuple[str, ...]
+
+    @property
+    def selected_points(self) -> pd.DataFrame:
+        """Prepared eSSVI points selected for calibration."""
+
+        return self.prepared.selected_points
+
+    @property
+    def rejected_points(self) -> pd.DataFrame:
+        """Prepared eSSVI points rejected before calibration."""
 
         return self.prepared.rejected_points
 
@@ -271,6 +356,162 @@ def fit_svi_from_bundle(
         raise_on_failure=raise_on_failure,
         allow_partial=allow_partial,
         allow_blocked=allow_blocked,
+    )
+
+
+def fit_essvi_market(
+    prepared: PreparedESSVIMarketFit,
+    *,
+    fit_config: ESSVIMarketFitConfig | ESSVIGlobalCalibrationConfig | None = None,
+    raise_on_failure: bool = False,
+) -> ESSVIMarketFitResult:
+    """Fit global eSSVI nodes from prepared market surface points."""
+
+    if not isinstance(prepared, PreparedESSVIMarketFit):
+        raise TypeError(
+            "prepared must be a PreparedESSVIMarketFit. "
+            "Use prepare_essvi_market_fit(bundle) before fit_essvi_market(...). "
+            f"{_ESSVI_FIT_WORKFLOW_GUIDANCE}"
+        )
+
+    raise_on_failure = _validate_bool("raise_on_failure", raise_on_failure)
+    config = _essvi_workflow_config(fit_config)
+    calibration_config = (
+        ESSVIGlobalCalibrationConfig()
+        if config.calibration_config is None
+        else config.calibration_config
+    )
+
+    warnings = tuple(prepared.warnings)
+    if prepared.status == "empty":
+        message = (
+            "eSSVI market fit skipped because no selected surface points are "
+            "available. Inspect prepared.rejected_points and "
+            f"prepared.stats.rejection_counts. {_ESSVI_FIT_WORKFLOW_GUIDANCE}"
+        )
+        warnings = _dedupe_strings((*warnings, message))
+        return _essvi_result(
+            prepared,
+            status="empty",
+            fit_result=None,
+            validation=None,
+            surface=None,
+            warnings=warnings,
+            errors=(message,),
+        )
+
+    if prepared.status == "blocked":
+        message = (
+            "eSSVI market fit blocked by preparation status. Inspect "
+            f"prepared.warnings before fitting. {_ESSVI_FIT_WORKFLOW_GUIDANCE}"
+        )
+        warnings = _dedupe_strings((*warnings, message))
+        return _essvi_result(
+            prepared,
+            status="blocked",
+            fit_result=None,
+            validation=None,
+            surface=None,
+            warnings=warnings,
+            errors=(message,),
+        )
+
+    try:
+        selected = _essvi_selected_points(prepared.selected_points)
+        fit_result = calibrate_essvi_global(
+            y=_finite_array(selected, "y"),
+            T=_finite_array(selected, "T"),
+            price_mkt=_finite_array(selected, "price_mkt"),
+            market=prepared.market_data,
+            sqrt_weights=_finite_array(selected, "sqrt_weight"),
+            is_call=_bool_array(selected, "is_call"),
+            cfg=calibration_config,
+        )
+        surface, surface_warnings = _essvi_surface_from_fit(prepared, fit_result)
+        validation = _essvi_validation(
+            prepared,
+            fit_result,
+            config=config,
+            calibration_config=calibration_config,
+        )
+    except Exception as exc:
+        message = _essvi_failure_message(prepared, f"{type(exc).__name__}: {exc}")
+        if raise_on_failure:
+            raise RuntimeError(message) from exc
+        return _essvi_result(
+            prepared,
+            status="failed",
+            fit_result=None,
+            validation=None,
+            surface=None,
+            warnings=warnings,
+            errors=(message,),
+        )
+
+    warnings = _dedupe_strings((*warnings, *surface_warnings, *validation.warnings))
+    errors = _dedupe_strings(validation.errors)
+    status = "ok" if validation.ok and surface is not None else "failed"
+    if surface is None:
+        errors = _dedupe_strings(
+            (
+                *errors,
+                "eSSVI calibration succeeded but nodal surface construction failed.",
+            )
+        )
+
+    if status == "failed" and raise_on_failure:
+        detail = "; ".join(errors) if errors else "validation failed"
+        raise RuntimeError(_essvi_failure_message(prepared, detail))
+
+    return _essvi_result(
+        prepared,
+        status=status,
+        fit_result=fit_result,
+        validation=validation,
+        surface=surface,
+        warnings=warnings,
+        errors=errors,
+    )
+
+
+def fit_essvi_from_bundle(
+    path_or_bundle: str | Path | LoadedModelValidationBundle,
+    *,
+    min_expiry_days: float = 7.0,
+    max_expiry_days: float | None = None,
+    min_points_per_expiry: int = 5,
+    min_expiry_count: int = 3,
+    min_moneyness: float | None = 0.5,
+    max_moneyness: float | None = 2.0,
+    require_mid: bool = True,
+    require_iv: bool = False,
+    raise_on_block: bool = False,
+    fit_config: ESSVIMarketFitConfig | ESSVIGlobalCalibrationConfig | None = None,
+    raise_on_failure: bool = False,
+) -> ESSVIMarketFitResult:
+    """Load or accept a bundle, prepare eSSVI points, and fit global eSSVI."""
+
+    bundle = (
+        path_or_bundle
+        if isinstance(path_or_bundle, LoadedModelValidationBundle)
+        else load_model_validation_bundle(path_or_bundle)
+    )
+    prepared = prepare_essvi_market_fit(
+        bundle,
+        min_expiry_days=min_expiry_days,
+        max_expiry_days=max_expiry_days,
+        min_points_per_expiry=min_points_per_expiry,
+        min_expiry_count=min_expiry_count,
+        min_moneyness=min_moneyness,
+        max_moneyness=max_moneyness,
+        require_mid=require_mid,
+        require_iv=require_iv,
+        raise_on_block=raise_on_block,
+    )
+    return fit_essvi_market(
+        prepared,
+        fit_config=fit_config,
+        raise_on_failure=raise_on_failure,
     )
 
 
@@ -438,6 +679,37 @@ def _result(
     )
 
 
+def _essvi_result(
+    prepared: PreparedESSVIMarketFit,
+    *,
+    status: str,
+    fit_result: ESSVIFitResult | None,
+    validation: ESSVIMarketFitValidation | None,
+    surface: ESSVINodalSurface | None,
+    warnings: tuple[str, ...],
+    errors: tuple[str, ...],
+) -> ESSVIMarketFitResult:
+    summary = _essvi_summary(
+        prepared,
+        status=status,
+        fit_result=fit_result,
+        validation=validation,
+        warnings=warnings,
+        errors=errors,
+    )
+    return ESSVIMarketFitResult(
+        model_name=prepared.model_name,
+        status=status,
+        prepared=prepared,
+        fit_result=fit_result,
+        validation=validation,
+        surface=surface,
+        summary=summary,
+        warnings=warnings,
+        errors=errors,
+    )
+
+
 def _calibration_status(
     slice_results: tuple[SVISliceMarketFitResult, ...],
     *,
@@ -456,6 +728,54 @@ def _calibration_status(
     if fitted_count > 0 and failed_count > 0:
         return "partial" if allow_partial else "failed"
     return "failed"
+
+
+def _essvi_summary(
+    prepared: PreparedESSVIMarketFit,
+    *,
+    status: str,
+    fit_result: ESSVIFitResult | None,
+    validation: ESSVIMarketFitValidation | None,
+    warnings: tuple[str, ...],
+    errors: tuple[str, ...],
+) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "model_name": prepared.model_name,
+        "calibration_status": status,
+        "input_point_count": int(prepared.stats.input_point_count),
+        "selected_point_count": int(prepared.stats.selected_point_count),
+        "rejected_point_count": int(prepared.stats.rejected_point_count),
+        "expiry_count": int(prepared.stats.expiry_count),
+        "warning_count": len(warnings),
+        "error_count": len(errors),
+    }
+    if prepared.stats.rejection_counts:
+        summary["rejection_counts"] = dict(prepared.stats.rejection_counts)
+    underlying = _selected_underlying(prepared.selected_points)
+    if underlying is not None:
+        summary["underlying"] = underlying
+    spot = getattr(prepared.market_data, "spot", None)
+    if spot is not None:
+        summary["spot"] = float(spot)
+
+    if fit_result is not None:
+        summary.update(
+            {
+                "node_count": int(fit_result.nodes.expiries.size),
+                "price_rmse": float(fit_result.diag.price_rmse),
+                "max_abs_price_error": float(fit_result.diag.max_abs_price_error),
+                "optimizer_success": bool(fit_result.diag.success),
+                "optimizer_nfev": int(fit_result.diag.nfev),
+                "optimizer_cost": float(fit_result.diag.cost),
+            }
+        )
+    if validation is not None:
+        summary["validation_ok"] = bool(validation.ok)
+        if validation.node_report is not None:
+            summary["node_validation_ok"] = bool(validation.node_report.ok)
+        if validation.surface_noarb_report is not None:
+            summary["surface_noarb_ok"] = bool(validation.surface_noarb_report.ok)
+    return summary
 
 
 def _summary(
@@ -536,6 +856,111 @@ def _parameter_table(
     return pd.DataFrame(rows, columns=list(_PARAMETER_TABLE_COLUMNS))
 
 
+def _essvi_surface_from_fit(
+    prepared: PreparedESSVIMarketFit,
+    fit_result: ESSVIFitResult,
+) -> tuple[ESSVINodalSurface | None, tuple[str, ...]]:
+    try:
+        y_min, y_max = _observed_y_domain(prepared.selected_points)
+        return (
+            ESSVINodalSurface(
+                fit_result.nodes,
+                y_min=y_min,
+                y_max=y_max,
+            ),
+            (),
+        )
+    except Exception as exc:
+        return None, (
+            "eSSVI calibration succeeded but ESSVINodalSurface construction "
+            f"failed: {type(exc).__name__}: {exc}",
+        )
+
+
+def _essvi_validation(
+    prepared: PreparedESSVIMarketFit,
+    fit_result: ESSVIFitResult,
+    *,
+    config: ESSVIMarketFitConfig,
+    calibration_config: ESSVIGlobalCalibrationConfig,
+) -> ESSVIMarketFitValidation:
+    node_report: ESSVINodeConstraintReport | None = None
+    surface_noarb_report: SurfaceNoArbReport | None = None
+    warnings: tuple[str, ...] = ()
+    errors: tuple[str, ...] = ()
+
+    if config.validate_nodes:
+        node_report = validate_essvi_nodes(
+            fit_result.nodes,
+            strict=False,
+            tol=calibration_config.constraint_tol,
+        )
+        if not node_report.ok:
+            errors = _dedupe_strings(
+                (*errors, f"eSSVI node validation failed: {node_report.message}")
+            )
+
+    if config.validate_static_noarb:
+        try:
+            surface_noarb_report = _essvi_static_noarb_report(prepared, fit_result)
+        except Exception as exc:
+            errors = _dedupe_strings(
+                (
+                    *errors,
+                    "eSSVI nodal surface validation failed to run: "
+                    f"{type(exc).__name__}: {exc}",
+                )
+            )
+        else:
+            if not surface_noarb_report.ok:
+                errors = _dedupe_strings(
+                    (
+                        *errors,
+                        "eSSVI nodal surface static no-arbitrage validation "
+                        f"failed: {surface_noarb_report.message}",
+                    )
+                )
+
+    if node_report is None and surface_noarb_report is None:
+        warnings = ("eSSVI fit validation was skipped by ESSVIMarketFitConfig.",)
+
+    return ESSVIMarketFitValidation(
+        node_report=node_report,
+        surface_noarb_report=surface_noarb_report,
+        warnings=warnings,
+        errors=errors,
+    )
+
+
+def _essvi_static_noarb_report(
+    prepared: PreparedESSVIMarketFit,
+    fit_result: ESSVIFitResult,
+) -> SurfaceNoArbReport:
+    expiries = np.asarray(fit_result.nodes.expiries, dtype=np.float64)
+    smiles: list[ESSVINodalSmileSlice] = []
+    for expiry in expiries:
+        y_min, y_max = _observed_y_domain(
+            _essvi_points_for_expiry(prepared.selected_points, float(expiry))
+        )
+        smiles.append(
+            ESSVINodalSmileSlice(
+                T=float(expiry),
+                nodes=fit_result.nodes,
+                y_min=y_min,
+                y_max=y_max,
+            )
+        )
+    surface = VolSurface(
+        expiries=expiries,
+        smiles=tuple(smiles),
+        forward=prepared.market_data.forward,
+    )
+    return check_surface_noarb(
+        surface,
+        df=prepared.market_data.df,
+    )
+
+
 def _surface_from_slice_results(
     prepared: PreparedSVIMarketFit,
     slice_results: tuple[SVISliceMarketFitResult, ...],
@@ -584,6 +1009,22 @@ def _surface_from_slice_results(
     return surface, ()
 
 
+def _essvi_selected_points(selected_points: pd.DataFrame) -> pd.DataFrame:
+    selected = selected_points.copy(deep=True).reset_index(drop=True)
+    _validate_essvi_prepared_columns(selected)
+    if selected.empty:
+        raise ValueError("prepared.selected_points must not be empty")
+    selected["_essvi_fit_T"] = _numeric_series(selected["T"])
+    selected["_essvi_fit_y"] = _numeric_series(selected["y"])
+    selected = selected.sort_values(
+        by=["_essvi_fit_T", "_essvi_fit_y"],
+        kind="mergesort",
+    )
+    return selected.drop(columns=["_essvi_fit_T", "_essvi_fit_y"]).reset_index(
+        drop=True
+    )
+
+
 def _smile_domain(slice_result: SVISliceMarketFitResult) -> tuple[float, float]:
     if slice_result.diagnostics is not None:
         y_lo, y_hi = slice_result.diagnostics.checks.y_domain
@@ -596,6 +1037,35 @@ def _smile_domain(slice_result: SVISliceMarketFitResult) -> tuple[float, float]:
     if values.empty:
         return -1.25, 1.25
     return float(values.min()), float(values.max())
+
+
+def _essvi_points_for_expiry(
+    selected_points: pd.DataFrame,
+    expiry: float,
+) -> pd.DataFrame:
+    if selected_points.empty or "T" not in selected_points:
+        return cast(pd.DataFrame, selected_points.iloc[0:0])
+    T = _numeric_series(selected_points["T"])
+    mask = np.isclose(T, float(expiry), rtol=0.0, atol=1e-12)
+    return cast(pd.DataFrame, selected_points.loc[mask])
+
+
+def _observed_y_domain(points: pd.DataFrame) -> tuple[float, float]:
+    if points.empty or "y" not in points:
+        return -2.5, 2.5
+    y = pd.to_numeric(points["y"], errors="coerce").dropna()
+    if y.empty:
+        return -2.5, 2.5
+    y_values = y.to_numpy(dtype=np.float64, copy=False)
+    y_values = y_values[np.isfinite(y_values)]
+    if y_values.size == 0:
+        return -2.5, 2.5
+    y_min = float(np.min(y_values))
+    y_max = float(np.max(y_values))
+    if not y_min < y_max:
+        return y_min - 0.05, y_max + 0.05
+    padding = max(0.02, 0.05 * (y_max - y_min))
+    return y_min - padding, y_max + padding
 
 
 def _fit_config_kwargs(fit_config: SVIMarketFitConfig | None) -> dict[str, Any]:
@@ -630,6 +1100,21 @@ def _fit_config_kwargs(fit_config: SVIMarketFitConfig | None) -> dict[str, Any]:
     return kwargs
 
 
+def _essvi_workflow_config(
+    fit_config: ESSVIMarketFitConfig | ESSVIGlobalCalibrationConfig | None,
+) -> ESSVIMarketFitConfig:
+    if fit_config is None:
+        return ESSVIMarketFitConfig()
+    if isinstance(fit_config, ESSVIGlobalCalibrationConfig):
+        return ESSVIMarketFitConfig(calibration_config=fit_config)
+    if isinstance(fit_config, ESSVIMarketFitConfig):
+        return fit_config
+    raise TypeError(
+        "fit_config must be an ESSVIMarketFitConfig, "
+        "ESSVIGlobalCalibrationConfig, or None"
+    )
+
+
 def _validate_prepared_columns(selected: pd.DataFrame) -> None:
     missing = [
         column for column in _REQUIRED_PREPARED_COLUMNS if column not in selected
@@ -643,6 +1128,19 @@ def _validate_prepared_columns(selected: pd.DataFrame) -> None:
         )
 
 
+def _validate_essvi_prepared_columns(selected: pd.DataFrame) -> None:
+    missing = [
+        column for column in _ESSVI_REQUIRED_PREPARED_COLUMNS if column not in selected
+    ]
+    if missing:
+        joined = ", ".join(repr(column) for column in missing)
+        raise ValueError(
+            "prepared.selected_points is missing required eSSVI columns: "
+            f"{joined}. Use prepare_essvi_market_fit(bundle) before fitting. "
+            f"{_ESSVI_FIT_WORKFLOW_GUIDANCE}"
+        )
+
+
 def _finite_array(frame: pd.DataFrame, column: str) -> np.ndarray:
     values = _numeric_series(frame[column])
     if not np.all(np.isfinite(values)):
@@ -650,10 +1148,34 @@ def _finite_array(frame: pd.DataFrame, column: str) -> np.ndarray:
     return np.asarray(values, dtype=np.float64)
 
 
+def _bool_array(frame: pd.DataFrame, column: str) -> np.ndarray:
+    values = frame[column]
+    if values.isna().any():
+        raise ValueError(f"selected_points[{column!r}] must not contain missing values")
+    return values.astype(bool).to_numpy(dtype=np.bool_, copy=False)
+
+
 def _numeric_series(series: pd.Series) -> np.ndarray:
     return pd.to_numeric(series, errors="coerce").to_numpy(
         dtype=np.float64,
         na_value=np.nan,
+    )
+
+
+def _essvi_failure_message(prepared: PreparedESSVIMarketFit, detail: str) -> str:
+    context = {
+        "selected_point_count": int(prepared.stats.selected_point_count),
+        "rejected_point_count": int(prepared.stats.rejected_point_count),
+        "preparation_status": prepared.status,
+        "underlying": _selected_underlying(prepared.selected_points),
+        "spot": getattr(prepared.market_data, "spot", None),
+    }
+    rendered = ", ".join(
+        f"{key}={value!r}" for key, value in context.items() if value is not None
+    )
+    return (
+        f"eSSVI market fit failed ({rendered}): {detail}. "
+        f"{_ESSVI_FIT_WORKFLOW_GUIDANCE}"
     )
 
 
@@ -693,10 +1215,14 @@ def _dedupe_strings(values: tuple[str, ...]) -> tuple[str, ...]:
 
 
 __all__ = [
+    "ESSVIMarketFitConfig",
+    "ESSVIMarketFitResult",
     "SVIMarketFitConfig",
     "SVIMarketFitError",
     "SVIMarketFitResult",
     "SVISliceMarketFitResult",
+    "fit_essvi_from_bundle",
+    "fit_essvi_market",
     "fit_svi_from_bundle",
     "fit_svi_market",
 ]
