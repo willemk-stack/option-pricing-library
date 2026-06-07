@@ -18,6 +18,12 @@ GUIDE_INDEX_PATH = ROOT / "docs" / "user_guides" / "index.md"
 MARKET_SNAPSHOT_GUIDE_PATH = (
     ROOT / "docs" / "user_guides" / "market_snapshot_validation.md"
 )
+MARKETDATA_CLI_GUIDE_PATH = ROOT / "docs" / "user_guides" / "marketdata_cli.md"
+MODEL_READY_GUIDE_PATH = (
+    ROOT / "docs" / "user_guides" / "model_ready_heston_workflow.md"
+)
+DOCS_INDEX_PATH = ROOT / "docs" / "index.md"
+RELEASE_NOTE_PATH = ROOT / "docs" / "notes" / "feature_data_providers_release_notes.md"
 README_TEMPLATE_PATH = ROOT / "README.template.md"
 README_PATH = ROOT / "README.md"
 README_RENDER_SCRIPT = ROOT / "scripts" / "render_readme.py"
@@ -244,9 +250,15 @@ def test_market_snapshot_page_is_on_proof_path_not_quickstart() -> None:
     quickstart_paths = _nav_paths(quickstart)
 
     assert "user_guides/market_snapshot_validation.md" in proof_paths
+    assert "user_guides/marketdata_cli.md" in proof_paths
+    assert "user_guides/model_ready_heston_workflow.md" in proof_paths
     assert "user_guides/market_snapshot_validation.md" not in quickstart_paths
+    assert "user_guides/marketdata_cli.md" not in quickstart_paths
     assert {
         "Market snapshot validation": "user_guides/market_snapshot_validation.md"
+    } in proof_path
+    assert {
+        "Marketdata CLI and private provider runs": "user_guides/marketdata_cli.md"
     } in proof_path
 
 
@@ -271,6 +283,54 @@ def test_a6_docs_are_discoverable_from_index_and_readme() -> None:
     assert index_line in guide_index
     assert readme_line in readme_template
     assert readme_line in readme
+
+
+def test_phase6_three_path_story_is_discoverable() -> None:
+    docs_index = DOCS_INDEX_PATH.read_text(encoding="utf-8")
+    guide_index = GUIDE_INDEX_PATH.read_text(encoding="utf-8")
+    marketdata_cli = MARKETDATA_CLI_GUIDE_PATH.read_text(encoding="utf-8")
+    readme_template = README_TEMPLATE_PATH.read_text(encoding="utf-8")
+    readme = README_PATH.read_text(encoding="utf-8")
+
+    for text in (docs_index, marketdata_cli, readme_template, readme):
+        assert "Credential-free proof" in text
+        assert "Private provider-backed evidence" in text
+        assert "Official model-ready Heston workflow" in text
+
+    assert "marketdata_cli.md" in guide_index
+    assert "model_ready_heston_workflow.md" in marketdata_cli
+    assert "market_snapshot_validation.md" in marketdata_cli
+    assert "option-pricing-marketdata" in marketdata_cli
+    assert "fit_heston_from_bundle" in marketdata_cli
+
+
+def test_phase6_release_note_is_short_and_nav_visible() -> None:
+    mkdocs = MKDOCS_PATH.read_text(encoding="utf-8")
+    note = RELEASE_NOTE_PATH.read_text(encoding="utf-8")
+
+    assert "notes/feature_data_providers_release_notes.md" in mkdocs
+    assert "Supported Public APIs" in note
+    assert "Local And Private Boundaries" in note
+    assert "Non-Goals" in note
+    assert "live-provider ci remains out of scope" in note.lower()
+    assert "no redistribution" in note.lower()
+
+
+def test_phase6_documented_public_imports_resolve() -> None:
+    import option_pricing.marketdata as marketdata
+    import option_pricing.workflows as workflows
+
+    for name in (
+        "load_model_validation_bundle",
+        "prepare_heston_market_fit",
+        "MarketDataPipeline",
+        "validate_provider_snapshot_bundle",
+        "provider_snapshot_public_summary",
+    ):
+        assert getattr(marketdata, name) is not None
+
+    for name in ("fit_heston_market", "fit_heston_from_bundle"):
+        assert getattr(workflows, name) is not None
 
 
 def test_readme_is_rendered_from_template() -> None:

@@ -262,6 +262,62 @@ def _last_call() -> tuple[str, tuple[object, ...], dict[str, object]]:
     return _FakePipeline.instances[-1].calls[-1]
 
 
+def _help_output(
+    argv: list[str],
+    capsys: pytest.CaptureFixture[str],
+) -> str:
+    with pytest.raises(SystemExit) as excinfo:
+        cli.parse_args(argv)
+    assert excinfo.value.code == 0
+    return capsys.readouterr().out
+
+
+def test_cli_help_surfaces_phase6_delivery_paths(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    top_help = _help_output(["--help"], capsys)
+
+    assert "usage: option-pricing-marketdata" in top_help
+    assert "Public proof path" in top_help
+    assert "Private provider evidence" in top_help
+    assert "Model-ready path" in top_help
+    for command in (
+        "snapshot",
+        "refresh-daily",
+        "backfill-fred",
+        "backfill-bars",
+        "validate-bundle",
+    ):
+        assert command in top_help
+
+
+def test_cli_subcommand_help_discovers_bundle_heston_and_quality_knobs(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    snapshot_help = _help_output(["snapshot", "--help"], capsys)
+    refresh_help = _help_output(["refresh-daily", "--help"], capsys)
+    validate_help = _help_output(["validate-bundle", "--help"], capsys)
+    snapshot_words = " ".join(snapshot_help.split())
+    validate_words = " ".join(validate_help.split())
+
+    assert "--run-heston-smoke" in snapshot_help
+    assert "not calibration-quality evidence" in snapshot_words
+    assert "--quote-freshness-mode" in snapshot_help
+    assert "--min-accepted-contracts" in snapshot_help
+    assert "--policy-config" in snapshot_help
+    assert "not redistributable" in snapshot_words
+
+    assert "--underlyings" in refresh_help
+    assert "--run-id-prefix" in refresh_help
+    assert "--min-expiries" in refresh_help
+
+    assert "without credentials or live providers" in validate_words
+    assert "--market-data" in validate_help
+    assert "--cleaned-quotes" in validate_help
+    assert "--heston-quotes" in validate_help
+    assert "--json" in validate_help
+
+
 def test_snapshot_cli_parses_arguments_and_calls_pipeline_correctly(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

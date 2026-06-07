@@ -158,6 +158,10 @@ quotes, Gold market snapshots, rate-curve artifacts, and a model-validation
 bundle under the local storage root. Those files are local operator evidence,
 not redistributable provider payloads.
 
+Use [Marketdata CLI and private provider runs](marketdata_cli.md) for the
+provider-backed command surface and local/private evidence boundaries. Once a
+bundle exists, the fitting workflow below is the same as the synthetic path.
+
 After a provider-backed run writes a local model-validation bundle, use the same
 public workflow:
 

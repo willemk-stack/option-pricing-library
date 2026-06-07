@@ -145,6 +145,7 @@ nav:
       - Local-vol and PDE validation: user_guides/localvol_pde_validation.md
       - Heston model comparison: user_guides/heston_model_comparison.md
       - Market snapshot validation: user_guides/market_snapshot_validation.md
+      - Marketdata CLI and private provider runs: user_guides/marketdata_cli.md
       - Model-ready Heston workflow: user_guides/model_ready_heston_workflow.md
   - API:
       - Overview: api/index.md
@@ -194,4 +195,5 @@ nav:
           - Diagnostics notes: notes/diagnostics/diagnostics_notes.md
           - Fixed-rule quadrature: notes/diagnostics/integration_quadrature.md
           - Docs workflow architecture: notes/diagnostics/docs_workflow_architecture.md
+          - Feature data providers release notes: notes/feature_data_providers_release_notes.md
   - Future work: roadmap.md

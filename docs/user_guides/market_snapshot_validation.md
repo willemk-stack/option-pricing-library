@@ -60,6 +60,11 @@ root. Those outputs are local operator evidence. They prove that the library can
 consume provider-derived artifacts and produce model-facing validation bundles;
 they are not redistributable market-data artifacts.
 
+Use [Marketdata CLI and private provider runs](marketdata_cli.md) for the
+installed CLI commands, private evidence boundaries, and quality-policy flags.
+This page keeps the credential-free synthetic fixture workflow as the public
+proof path.
+
 For notebook or CLI display, use the compact summary surface instead of parsing
 raw provider files:
 

@@ -44,6 +44,11 @@ These extras come directly from `pyproject.toml`:
 | Development | `pip install -e ".[dev]"` | Tests, benchmarks, linting, formatting, and type checks |
 | Docs | `pip install -e ".[docs]"` | MkDocs Material and API-reference generation |
 
+After installing `.[marketdata]`, use
+[Marketdata CLI and private provider runs](user_guides/marketdata_cli.md) for
+the supported `option-pricing-marketdata` commands and local/private evidence
+boundaries.
+
 ## Common local commands
 
 Run the same checks used throughout the repo:

@@ -126,6 +126,11 @@ stay thin: they parse arguments and dispatch to the pipeline, while the
 pipeline handles provider calls, normalization, quote cleaning, Bronze/Silver
 storage, Gold conversion, and the model-validation bundle.
 
+For the reviewer/operator path that separates public synthetic proof, private
+provider-backed evidence, and the official Heston bundle-to-fit workflow, use
+[Marketdata CLI and private provider runs](marketdata_cli.md). This section is
+the API-side summary.
+
 Install the marketdata extra before using provider-backed commands:
 
 ```bash

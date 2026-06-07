@@ -105,6 +105,9 @@ turning into one long flat list.
   quadrature and Heston integration rationale.
 - [Docs workflow architecture](diagnostics/docs_workflow_architecture.md) -
   documentation and publishing policy for generated artifacts.
+- [Feature data providers release notes](feature_data_providers_release_notes.md)
+  - maintainer summary for the local proof, private provider evidence, and
+  model-ready Heston workflow delivery surface.
 
 ## Taxonomy for future notes
 

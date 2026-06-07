@@ -34,16 +34,33 @@ DEFAULT_TIMEFRAME = "1Day"
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
+        prog="option-pricing-marketdata",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         description=(
-            "Fetch provider-backed marketdata snapshots, refreshes, and backfills "
-            "through MarketDataPipeline."
-        )
+            "Run local/private marketdata artifact workflows through "
+            "MarketDataPipeline."
+        ),
+        epilog=(
+            "Public proof path: use scripts/demo_local_market_validation.py for the "
+            "deterministic synthetic fixture workflow.\n"
+            "Private provider evidence: snapshot, refresh-daily, backfill-fred, and "
+            "backfill-bars may call Alpaca/FRED and write local-only artifacts.\n"
+            "Model-ready path: validate-bundle checks saved artifacts before "
+            "load_model_validation_bundle -> prepare_heston_market_fit -> "
+            "fit_heston_market."
+        ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     snapshot = subparsers.add_parser(
         "snapshot",
-        help="Fetch, clean, and persist one provider-backed market snapshot.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        help="Fetch, clean, and persist one private provider-backed snapshot.",
+        description=(
+            "Fetch one Alpaca/FRED-backed snapshot, clean option quotes, and write "
+            "Bronze, Silver, Gold, rate-curve, and model-validation bundle artifacts "
+            "under a local data root."
+        ),
     )
     _add_common_storage_options(snapshot)
     _add_run_id_option(snapshot)
@@ -53,7 +70,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
     refresh_daily = subparsers.add_parser(
         "refresh-daily",
-        help="Run one provider-backed snapshot per underlying and aggregate the run.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        help="Run private snapshots for several underlyings and aggregate the run.",
+        description=(
+            "Run one provider-backed snapshot per underlying, write child artifacts, "
+            "and emit one aggregate summary for local/private validation."
+        ),
     )
     _add_common_storage_options(refresh_daily)
     _add_common_provider_options(refresh_daily)
@@ -72,7 +94,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
     backfill_fred = subparsers.add_parser(
         "backfill-fred",
-        help="Backfill one or more FRED series into Bronze and Silver storage.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        help="Backfill FRED series into local Bronze and Silver storage.",
+        description=(
+            "Fetch one or more FRED series and persist local Bronze/Silver "
+            "backfill artifacts for private evidence roots."
+        ),
     )
     _add_common_storage_options(backfill_fred)
     _add_run_id_option(backfill_fred)
@@ -87,7 +114,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
     backfill_bars = subparsers.add_parser(
         "backfill-bars",
-        help="Backfill Alpaca equity bars into Bronze and Silver storage.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        help="Backfill Alpaca equity bars into local Bronze and Silver storage.",
+        description=(
+            "Fetch Alpaca equity bars and persist local Bronze/Silver backfill "
+            "artifacts. This does not backfill historical option chains."
+        ),
     )
     _add_common_storage_options(backfill_bars)
     _add_run_id_option(backfill_bars)
@@ -108,30 +140,36 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
     validate_bundle = subparsers.add_parser(
         "validate-bundle",
-        help="Validate provider-backed model-facing artifacts without providers.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        help="Validate saved model-facing artifacts without provider calls.",
+        description=(
+            "Read already-written market_data.json, cleaned_quotes.parquet, and "
+            "heston_quotes.parquet files and verify the provider snapshot bundle "
+            "contracts without credentials or live providers."
+        ),
     )
     validate_bundle.add_argument(
         "--market-data",
         type=Path,
         required=True,
-        help="Path to provider-backed market_data.json.",
+        help="Path to saved local market_data.json.",
     )
     validate_bundle.add_argument(
         "--cleaned-quotes",
         type=Path,
         required=True,
-        help="Path to provider-backed cleaned_quotes.parquet.",
+        help="Path to saved local cleaned_quotes.parquet.",
     )
     validate_bundle.add_argument(
         "--heston-quotes",
         type=Path,
         required=True,
-        help="Path to provider-backed heston_quotes.parquet.",
+        help="Path to saved local heston_quotes.parquet.",
     )
     validate_bundle.add_argument(
         "--json",
         action="store_true",
-        help="Emit one stable JSON object instead of human-readable text.",
+        help="Emit one stable, sanitized JSON object instead of human-readable text.",
     )
 
     return parser.parse_args(argv)
@@ -142,7 +180,10 @@ def _add_common_storage_options(parser: argparse.ArgumentParser) -> None:
         "--data-root",
         type=Path,
         default=DEFAULT_DATA_ROOT,
-        help="Local data root for Bronze, Silver, Gold, and metadata artifacts.",
+        help=(
+            "Local/private root for Bronze, Silver, Gold, and metadata artifacts. "
+            "Provider-backed outputs from this root are not redistributable."
+        ),
     )
     parser.add_argument(
         "--overwrite",
@@ -152,7 +193,7 @@ def _add_common_storage_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--json",
         action="store_true",
-        help="Emit one stable JSON object instead of human-readable text.",
+        help="Emit one stable, sanitized JSON object instead of human-readable text.",
     )
     parser.add_argument(
         "--library-commit",
@@ -163,7 +204,7 @@ def _add_common_storage_options(parser: argparse.ArgumentParser) -> None:
         "--policy-config",
         type=Path,
         default=None,
-        help="Optional JSON/TOML/YAML marketdata policy config.",
+        help="Optional local JSON/TOML/YAML marketdata policy config.",
     )
 
 
@@ -200,7 +241,7 @@ def _add_snapshot_query_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--asof",
         default=None,
-        help="Optional valuation timestamp accepted by MarketDataPipeline snapshot methods.",
+        help="Optional valuation timestamp accepted by snapshot methods.",
     )
     parser.add_argument(
         "--rate-series",
@@ -217,7 +258,7 @@ def _add_snapshot_query_options(parser: argparse.ArgumentParser) -> None:
         "--curve-series",
         nargs="*",
         default=None,
-        help="Zero or more FRED series IDs for the provider rate-curve artifact.",
+        help="Zero or more FRED series IDs for the local rate-curve artifact.",
     )
     parser.add_argument(
         "--no-rate-curve",
@@ -227,7 +268,10 @@ def _add_snapshot_query_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--run-heston-smoke",
         action="store_true",
-        help="Enable the model-validation bundle Heston smoke check.",
+        help=(
+            "Enable the optional model-validation bundle Heston smoke check. "
+            "This is compatibility evidence, not calibration-quality evidence."
+        ),
     )
     parser.add_argument(
         "--dividend-yield",
@@ -870,6 +914,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         command, result = _run_command(args)
     except (
         MarketDataProviderError,
+        FileNotFoundError,
         ValueError,
         FileExistsError,
     ) as exc:

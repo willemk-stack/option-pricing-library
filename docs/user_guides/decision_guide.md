@@ -19,6 +19,7 @@ Use this page to route into the strongest engineering proof in the repo. The pro
 | The local-vol handoff is smoother than a slice stack | [eSSVI smooth handoff](essvi_smooth_handoff.md) | [07_essvi_smooth_surface_for_dupire.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/07_essvi_smooth_surface_for_dupire.ipynb) | This is where the repo proves the time-derivative problem is understood and explicitly improved. |
 | The numerics are validated rather than just implemented | [Local-vol and PDE validation](localvol_pde_validation.md) | [08_localvol_pde_repricing.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/08_localvol_pde_repricing.ipynb) | This page shows repricing accuracy, error structure, and convergence rather than a black-box PDE result. |
 | The repo can compare volatility models rather than just fit one | [Heston model comparison](heston_model_comparison.md) | [13_heston_calibration_vs_localvol.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/13_heston_calibration_vs_localvol.ipynb) | Shows model-choice judgment: Heston interpretability versus eSSVI/local-vol vanilla-fit flexibility, with calibration diagnostics and validation evidence. |
+| The marketdata delivery path is complete without publishing private data | [Market snapshot validation](market_snapshot_validation.md), then [Marketdata CLI and private provider runs](marketdata_cli.md), then [Model-ready Heston workflow](model_ready_heston_workflow.md) | Synthetic local fixtures first; provider-backed runs remain local/private | Separates redistributable proof artifacts, private Alpaca/FRED-backed evidence roots, and the official bundle-to-fit Heston workflow. |
 | The benchmark story is real and reproducible | [Performance evidence](../performance.md) | Benchmark artifacts under `benchmarks/artifacts/` | This is where scaling, remedy tradeoffs, and end-to-end stage budgets are measured. |
 | The system design is deliberate and typed | [Architecture](../architecture.md) | [09_surface_to_localvol_pde_integration.ipynb](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/09_surface_to_localvol_pde_integration.ipynb) | The architecture page explains how the pricing, volatility, numerics, and validation layers fit together. |
 
@@ -30,3 +31,11 @@ Use this page to route into the strongest engineering proof in the repo. The pro
 4. Finish with [Heston model comparison](heston_model_comparison.md) for the reviewer-facing stochastic-volatility proof path, then open [Heston](heston.md) for the broader implementation guide.
 
 Use [Performance evidence](../performance.md) and [Architecture](../architecture.md) after that sequence when the follow-up questions turn to scaling, cost, or system design.
+
+For the data-provider delivery layer, follow
+[Market snapshot validation](market_snapshot_validation.md) first because it is
+credential-free and redistributable. Use
+[Marketdata CLI and private provider runs](marketdata_cli.md) only for
+local/private Alpaca/FRED-backed evidence, then use the
+[Model-ready Heston workflow](model_ready_heston_workflow.md) for the official
+bundle -> prepare -> fit path.

@@ -40,6 +40,22 @@ hide:
 | Capstone 2 | eSSVI/local-vol/PDE | [Local-vol and PDE validation](user_guides/localvol_pde_validation.md) | Smooth surface handoff and numerical validation |
 | Capstone 3 | Heston/model comparison | [Heston model comparison](user_guides/heston_model_comparison.md) | Calibration, Monte Carlo validation, and model-choice judgment |
 
+## Marketdata Delivery Paths
+
+The data-provider branch keeps three paths separate:
+
+- **Credential-free proof path:** [Market snapshot validation](user_guides/market_snapshot_validation.md)
+  uses deterministic synthetic fixtures, local artifact writes, no live
+  providers, and redistributable review evidence.
+- **Private provider-backed evidence path:** [Marketdata CLI and private provider runs](user_guides/marketdata_cli.md)
+  covers the optional Alpaca/FRED-backed path for local-only evidence roots.
+  Those artifacts are useful for private validation and should not be committed
+  or redistributed.
+- **Official model-ready Heston workflow:** [Model-ready Heston workflow](user_guides/model_ready_heston_workflow.md)
+  is the bundle -> prepare -> fit path:
+  `load_model_validation_bundle(...)`, `prepare_heston_market_fit(...)`, then
+  `fit_heston_market(...)`, or `fit_heston_from_bundle(...)`.
+
 ## Signature proof moment
 
 <p class="doc-section-lead">The fastest way to understand the full proof path now is the Heston model-comparison summary card. It compresses the calibration, residual, stability, and model-choice judgment into one reviewer-facing artifact while still leaning on the earlier eSSVI and local-vol/PDE proof pages as visible baseline evidence.</p>
@@ -84,5 +100,6 @@ hide:
 
 - [Architecture](architecture.md) for the recruiter-facing systems view and safeguard story
 - [Decision guide](user_guides/decision_guide.md) if you want the proof sequence in one routing page
+- [Marketdata CLI and private provider runs](user_guides/marketdata_cli.md) for optional local/private provider-backed evidence
 - [API reference](api/index.md) for the typed public surface and generated symbol docs
 - [Installation](installation.md) for local setup and editable development
