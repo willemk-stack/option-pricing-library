@@ -37,6 +37,7 @@ from option_pricing.workflows import (
     HestonMarketFitResult,
     fit_heston_from_bundle,
     fit_heston_market,
+    fit_market_model,
 )
 
 ASOF = "2026-05-22T15:30:00Z"
@@ -343,6 +344,7 @@ def test_workflow_public_imports_expose_canonical_heston_helpers() -> None:
         "fit_essvi_market",
         "fit_heston_from_bundle",
         "fit_heston_market",
+        "fit_market_model",
         "fit_svi_from_bundle",
         "fit_svi_market",
     )
@@ -351,6 +353,7 @@ def test_workflow_public_imports_expose_canonical_heston_helpers() -> None:
     assert workflows.HestonMarketFitResult is HestonMarketFitResult
     assert workflows.fit_heston_from_bundle is fit_heston_from_bundle
     assert workflows.fit_heston_market is fit_heston_market
+    assert workflows.fit_market_model is fit_market_model
 
 
 def test_loaded_prepared_and_fit_summary_counts_stay_coherent(

@@ -18,6 +18,7 @@ __all__ = [
     "fit_essvi_market",
     "fit_heston_from_bundle",
     "fit_heston_market",
+    "fit_market_model",
     "fit_svi_from_bundle",
     "fit_svi_market",
 ]
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
         fit_heston_from_bundle,
         fit_heston_market,
     )
+    from .router import fit_market_model
     from .surface_fit import (
         ESSVIMarketFitConfig,
         ESSVIMarketFitResult,
@@ -55,6 +57,7 @@ _PUBLIC_EXPORTS = {
     "fit_essvi_market": "option_pricing.workflows.surface_fit",
     "fit_heston_from_bundle": "option_pricing.workflows.market_fit",
     "fit_heston_market": "option_pricing.workflows.market_fit",
+    "fit_market_model": "option_pricing.workflows.router",
     "fit_svi_from_bundle": "option_pricing.workflows.surface_fit",
     "fit_svi_market": "option_pricing.workflows.surface_fit",
 }

@@ -36,6 +36,7 @@ from option_pricing.workflows import (
     fit_essvi_from_bundle,
     fit_essvi_market,
     fit_heston_market,
+    fit_market_model,
     fit_svi_market,
 )
 
@@ -355,11 +356,12 @@ def test_public_workflow_exports_expose_essvi_helpers() -> None:
     assert "ESSVIMarketFitResult" in workflows.__all__
     assert "fit_essvi_market" in workflows.__all__
     assert "fit_essvi_from_bundle" in workflows.__all__
+    assert "fit_market_model" in workflows.__all__
     assert workflows.ESSVIMarketFitConfig is ESSVIMarketFitConfig
     assert workflows.ESSVIMarketFitResult is ESSVIMarketFitResult
     assert workflows.fit_essvi_market is fit_essvi_market
     assert workflows.fit_essvi_from_bundle is fit_essvi_from_bundle
-    assert not hasattr(workflows, "fit_market_model")
+    assert workflows.fit_market_model is fit_market_model
 
 
 def test_svi_and_heston_workflow_imports_still_work() -> None:

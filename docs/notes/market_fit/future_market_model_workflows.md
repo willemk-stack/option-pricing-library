@@ -1,12 +1,13 @@
 # Future market-model workflows
 
-!!! note "Status: Phase 8E eSSVI market-fit helpers"
+!!! note "Status: Phase 8F thin market-fit convenience router"
     This note documents the intended market-fit workflow architecture beyond
     Heston. Phase 8B added SVI preparation from bundle surface inputs. Phase 8C
     added explicit SVI fit helpers on top of that preparation contract. Phase
     8D added eSSVI surface preparation from the same bundle surface inputs.
     Phase 8E adds explicit eSSVI fit helpers on top of
-    `prepare_essvi_market_fit(...)`, while local-vol fitting helpers described
+    `prepare_essvi_market_fit(...)`. Phase 8F adds a thin convenience router
+    over the three one-shot helpers, while local-vol fitting helpers described
     here remain future work.
 
 ## Purpose
@@ -131,7 +132,9 @@ summary, warnings, and errors.
 
 Partial failure is visible by design. If one expiry fits and another fails, the
 result status is `partial` when `allow_partial=True`; if every expiry fails, the
-status is `failed`. No generic `fit_market_model(...)` registry is introduced.
+status is `failed`. No generic registry is introduced; the later
+`fit_market_model(...)` convenience router delegates only to explicit one-shot
+helpers.
 
 ## Phase 8D eSSVI preparation helper
 
@@ -201,6 +204,40 @@ repairs inside the market-fit wrapper. A local-vol or Dupire workflow should
 consume a validated fitted eSSVI surface later; it should not consume raw
 `surface_inputs` directly.
 
+## Phase 8F thin convenience router
+
+Phase 8F adds a small router only because the Heston, SVI, and eSSVI one-shot
+result contracts now share enough public shape for dispatch: `model_name`,
+`status`, `summary`, `warnings`, `errors`, and a model-specific prepared
+payload. The router does not normalize the result into a common base class and
+does not hide model-specific diagnostics.
+
+The explicit helpers remain the primary public API:
+
+```python
+from option_pricing.workflows import (
+    fit_essvi_from_bundle,
+    fit_heston_from_bundle,
+    fit_svi_from_bundle,
+)
+```
+
+For CLI or notebook code that already receives the model name as data, the
+router can delegate to those helpers:
+
+```python
+from option_pricing.workflows import fit_market_model
+
+result = fit_market_model("heston", path)
+```
+
+The implementation is intentionally only an `if`/`elif` delegate over
+`"heston"`, `"svi"`, and `"essvi"`. It is not a plugin registry, does not
+replace explicit helpers, and does not create dynamic import machinery beyond
+the existing lazy `option_pricing.workflows` export style. Unsupported models
+fail with a message that Black-Scholes, trees, Monte Carlo, PDE, and direct
+local-vol are not direct market-fit workflows.
+
 ## Model eligibility rules
 
 Direct market-fit workflows are reserved for models whose parameters are
@@ -209,7 +246,7 @@ surface points:
 
 - Eligible now: Heston, because it calibrates stochastic-volatility parameters
     directly to selected vanilla quotes.
-- Eligible next: raw SVI, because it fits one expiry slice at a time from
+- Eligible now: raw SVI, because it fits one expiry slice at a time from
     implied-volatility or total-variance points derived from validated quotes.
 - Eligible now: eSSVI, because it fits a cross-maturity volatility
     surface from validated surface points and records node or projection
@@ -235,14 +272,16 @@ future issue defines a genuine quote-calibrated model layer above them.
 
 ## Recommended support order
 
-The implementation order should stay narrow and reviewable:
+The support order stays narrow and reviewable:
 
 1. Heston remains the reference path and public example.
-2. SVI comes next, using `surface_inputs.parquet` as the bundle seed for
+2. SVI uses `surface_inputs.parquet` as the bundle seed for
     slice-level total-variance preparation.
-3. eSSVI follows, also using `surface_inputs.parquet`, with cross-maturity
+3. eSSVI also uses `surface_inputs.parquet`, with cross-maturity
     preparation and node-level diagnostics.
-4. Local vol / Dupire comes later as a derived workflow from a validated fitted
+4. The optional router delegates only across the three explicit one-shot
+    helpers.
+5. Local vol / Dupire comes later as a derived workflow from a validated fitted
     SVI or eSSVI surface.
 
 This order matches the existing volatility notes: the
@@ -270,6 +309,13 @@ from option_pricing.workflows import (
     fit_svi_from_bundle,
     fit_svi_market,
 )
+```
+
+When a caller already has a validated model name as data, the optional
+convenience router is available:
+
+```python
+from option_pricing.workflows import fit_market_model
 ```
 
 SVI uses:
@@ -300,10 +346,11 @@ and the one-shot helper:
 fit_essvi_from_bundle(path)
 ```
 
-Do not introduce a generic `fit_market_model(...)` registry yet. The explicit
-helpers should come first so the library can learn the real preparation
-contracts, result shapes, diagnostics, and naming conventions for Heston, SVI,
-and eSSVI before abstracting over them.
+Do not introduce a generic registry. The explicit helpers stay first so the
+library can keep the real preparation contracts, result shapes, diagnostics,
+and naming conventions for Heston, SVI, and eSSVI visible. The
+`fit_market_model(...)` router is only a convenience delegate to the three
+one-shot helpers.
 
 Provider adapters should not be passed to any `prepare_*_market_fit(...)` or
 `fit_*_market(...)` helper. Preparation starts from `LoadedModelValidationBundle`
@@ -476,7 +523,8 @@ This phase does not:
 - add provider-specific logic to fitting
 - promote `heston_quotes.parquet` or `surface_inputs.parquet` to
     automatically calibration-ready artifacts
-- introduce `fit_market_model(...)` or a model registry
+- introduce a plugin registry or route non-market-fit engines through
+    `fit_market_model(...)`
 - make Black-Scholes, binomial trees, Monte Carlo engines, or
     finite-difference engines direct market-fit workflows
 - claim that synthetic fixture validation proves live-market calibration

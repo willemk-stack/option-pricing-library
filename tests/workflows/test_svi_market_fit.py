@@ -22,6 +22,7 @@ from option_pricing.workflows import (
     SVIMarketFitResult,
     SVISliceMarketFitResult,
     fit_heston_market,
+    fit_market_model,
     fit_svi_from_bundle,
     fit_svi_market,
 )
@@ -277,12 +278,13 @@ def test_public_workflow_exports_expose_svi_helpers() -> None:
     assert "SVIMarketFitResult" in workflows.__all__
     assert "fit_svi_market" in workflows.__all__
     assert "fit_svi_from_bundle" in workflows.__all__
+    assert "fit_market_model" in workflows.__all__
     assert workflows.SVIMarketFitConfig is SVIMarketFitConfig
     assert workflows.SVISliceMarketFitResult is SVISliceMarketFitResult
     assert workflows.SVIMarketFitResult is SVIMarketFitResult
     assert workflows.fit_svi_market is fit_svi_market
     assert workflows.fit_svi_from_bundle is fit_svi_from_bundle
-    assert not hasattr(workflows, "fit_market_model")
+    assert workflows.fit_market_model is fit_market_model
 
 
 def test_heston_workflow_imports_still_work() -> None:
