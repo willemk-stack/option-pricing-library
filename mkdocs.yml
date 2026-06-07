@@ -130,6 +130,7 @@ nav:
       - PDE pricing: user_guides/pde_pricing.md
       - Diagnostics: user_guides/diagnostics.md
       - Heston: user_guides/heston.md
+      - Model-ready Heston workflow: user_guides/model_ready_heston_workflow.md
       - Heston diagnostics: user_guides/heston_diagnostics.md
       - Implied volatility: user_guides/implied_vol.md
       - Volatility surface: user_guides/vol_surface.md
@@ -144,6 +145,7 @@ nav:
       - Local-vol and PDE validation: user_guides/localvol_pde_validation.md
       - Heston model comparison: user_guides/heston_model_comparison.md
       - Market snapshot validation: user_guides/market_snapshot_validation.md
+      - Model-ready Heston workflow: user_guides/model_ready_heston_workflow.md
   - API:
       - Overview: api/index.md
       - Public: api/public.md

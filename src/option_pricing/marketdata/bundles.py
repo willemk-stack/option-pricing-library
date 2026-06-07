@@ -53,6 +53,10 @@ _MODEL_VALIDATION_ARTIFACTS = {
 _NO_CLEANED_QUOTES_HESTON_SMOKE_MESSAGE = (
     "Heston smoke skipped because no cleaned quotes are available."
 )
+_LOAD_MODEL_VALIDATION_BUNDLE_GUIDANCE = (
+    "Use load_model_validation_bundle(path) to load a complete "
+    "model-validation bundle."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -570,12 +574,12 @@ def _require_complete_model_validation_bundle(
     if not paths.root.exists():
         raise FileNotFoundError(
             f"{paths.root} does not exist; path is not a complete "
-            "model-validation bundle"
+            f"model-validation bundle. {_LOAD_MODEL_VALIDATION_BUNDLE_GUIDANCE}"
         )
     if not paths.root.is_dir():
         raise NotADirectoryError(
             f"{paths.root} is not a directory; path is not a complete "
-            "model-validation bundle"
+            f"model-validation bundle. {_LOAD_MODEL_VALIDATION_BUNDLE_GUIDANCE}"
         )
 
     required_paths = (
@@ -592,12 +596,12 @@ def _require_complete_model_validation_bundle(
         if not required_path.exists():
             raise FileNotFoundError(
                 f"{required_path} is missing; path is not a complete "
-                "model-validation bundle"
+                f"model-validation bundle. {_LOAD_MODEL_VALIDATION_BUNDLE_GUIDANCE}"
             )
         if not required_path.is_file():
             raise FileNotFoundError(
                 f"{required_path} is not a file; path is not a complete "
-                "model-validation bundle"
+                f"model-validation bundle. {_LOAD_MODEL_VALIDATION_BUNDLE_GUIDANCE}"
             )
 
 
@@ -619,13 +623,13 @@ def _read_bundle_json_object(path: Path, *, root: Path) -> dict[str, Any]:
     except Exception as exc:
         raise ValueError(
             f"Could not read {path} as JSON; {root} is not a complete "
-            "model-validation bundle"
+            f"model-validation bundle. {_LOAD_MODEL_VALIDATION_BUNDLE_GUIDANCE}"
         ) from exc
 
     if not isinstance(payload, dict):
         raise ValueError(
             f"{path} must contain a JSON object; {root} is not a complete "
-            "model-validation bundle"
+            f"model-validation bundle. {_LOAD_MODEL_VALIDATION_BUNDLE_GUIDANCE}"
         )
     return payload
 
@@ -640,7 +644,7 @@ def _validate_loaded_model_validation_manifest(
     except Exception as exc:
         raise ValueError(
             f"Could not validate {path}; {root} is not a complete "
-            "model-validation bundle"
+            f"model-validation bundle. {_LOAD_MODEL_VALIDATION_BUNDLE_GUIDANCE}"
         ) from exc
 
 
@@ -651,7 +655,7 @@ def _read_market_data_snapshot(path: Path, *, root: Path) -> GoldMarketDataSnaps
     except Exception as exc:
         raise ValueError(
             f"Could not rehydrate {path}; {root} is not a complete "
-            "model-validation bundle"
+            f"model-validation bundle. {_LOAD_MODEL_VALIDATION_BUNDLE_GUIDANCE}"
         ) from exc
 
 
@@ -661,7 +665,7 @@ def _read_bundle_parquet(path: Path, *, root: Path) -> pd.DataFrame:
     except Exception as exc:
         raise ValueError(
             f"Could not read {path} as parquet; {root} is not a complete "
-            "model-validation bundle"
+            f"model-validation bundle. {_LOAD_MODEL_VALIDATION_BUNDLE_GUIDANCE}"
         ) from exc
 
 
@@ -671,7 +675,7 @@ def _read_bundle_csv(path: Path, *, root: Path) -> pd.DataFrame:
     except Exception as exc:
         raise ValueError(
             f"Could not read {path} as CSV; {root} is not a complete "
-            "model-validation bundle"
+            f"model-validation bundle. {_LOAD_MODEL_VALIDATION_BUNDLE_GUIDANCE}"
         ) from exc
 
 

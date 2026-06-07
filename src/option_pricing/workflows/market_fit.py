@@ -25,6 +25,12 @@ from option_pricing.models.heston.calibration import (
 )
 from option_pricing.models.heston.params import HestonParams
 
+_HESTON_FIT_WORKFLOW_GUIDANCE = (
+    "Use fit_heston_from_bundle(path) for the canonical one-shot workflow, "
+    "or load_model_validation_bundle(path) -> prepare_heston_market_fit(bundle) "
+    "-> fit_heston_market(prepared) when you need each step."
+)
+
 
 @dataclass(frozen=True, slots=True)
 class HestonCalibrationConfig:
@@ -78,7 +84,11 @@ def fit_heston_market(
     """Fit Heston to a prepared market universe."""
 
     if not isinstance(prepared, PreparedHestonMarketFit):
-        raise TypeError("prepared must be a PreparedHestonMarketFit")
+        raise TypeError(
+            "prepared must be a PreparedHestonMarketFit. "
+            "Use prepare_heston_market_fit(bundle) before fit_heston_market(...). "
+            f"{_HESTON_FIT_WORKFLOW_GUIDANCE}"
+        )
 
     raise_on_failure = _validate_bool("raise_on_failure", raise_on_failure)
     allow_blocked = _validate_bool("allow_blocked", allow_blocked)
@@ -90,7 +100,11 @@ def fit_heston_market(
     errors: tuple[str, ...] = ()
 
     if prepared.status == "empty":
-        message = "Heston market fit skipped because no selected quotes are available."
+        message = (
+            "Heston market fit skipped because no selected quotes are available. "
+            "Inspect prepared.rejected_quotes and prepared.stats.rejection_counts. "
+            f"{_HESTON_FIT_WORKFLOW_GUIDANCE}"
+        )
         warnings = _dedupe_strings((*warnings, message))
         errors = (message,)
         return _result(
@@ -102,8 +116,14 @@ def fit_heston_market(
         )
 
     if prepared.status == "blocked" and not allow_blocked:
-        message = "Heston market fit blocked by quote preflight."
+        message = (
+            "Heston market fit blocked by quote preflight. "
+            "Inspect prepared.preflight and prepared.warnings, or pass "
+            "allow_blocked=True only for an explicit advanced rerun. "
+            f"{_HESTON_FIT_WORKFLOW_GUIDANCE}"
+        )
         warnings = _dedupe_strings((*warnings, message))
+        errors = (message,)
         return _result(
             prepared,
             status="blocked",
@@ -115,7 +135,8 @@ def fit_heston_market(
     if prepared.quote_set is None:
         message = (
             "Heston market fit failed because prepared.quote_set is not available "
-            f"for prepared status {prepared.status!r}."
+            f"for prepared status {prepared.status!r}. "
+            f"{_HESTON_FIT_WORKFLOW_GUIDANCE}"
         )
         errors = (_failure_message(prepared, message),)
         if raise_on_failure:
@@ -355,7 +376,10 @@ def _failure_message(prepared: PreparedHestonMarketFit, detail: str) -> str:
     rendered = ", ".join(
         f"{key}={value!r}" for key, value in context.items() if value is not None
     )
-    return f"Heston market fit failed ({rendered}): {detail}"
+    return (
+        f"Heston market fit failed ({rendered}): {detail}. "
+        f"{_HESTON_FIT_WORKFLOW_GUIDANCE}"
+    )
 
 
 def _selected_underlying(selected_quotes: pd.DataFrame) -> str | None:

@@ -383,5 +383,50 @@ def test_missing_required_heston_column_raises_clear_validation_error(
 ) -> None:
     quotes = _heston_quotes(drop_columns=("mid",))
 
-    with pytest.raises(ValueError, match="missing required columns.*'mid'"):
+    with pytest.raises(ValueError, match="missing required columns.*'mid'") as exc_info:
         prepare_heston_market_fit(_bundle(tmp_path, quotes))
+
+    message = str(exc_info.value)
+    assert "heston_quotes is a candidate artifact" in message
+    assert "prepare_heston_market_fit(bundle)" in message
+
+
+def test_missing_heston_quote_frame_mentions_preparation_helper(
+    tmp_path: Path,
+) -> None:
+    bundle = _bundle(tmp_path, _heston_quotes())
+    broken_bundle = LoadedModelValidationBundle(
+        root=bundle.root,
+        manifest_path=bundle.manifest_path,
+        manifest=bundle.manifest,
+        warnings=bundle.warnings,
+        market_snapshot=bundle.market_snapshot,
+        market_data=bundle.market_data,
+        cleaned_quotes=bundle.cleaned_quotes,
+        rejected_quotes=bundle.rejected_quotes,
+        heston_quotes="not-a-frame",  # type: ignore[arg-type]
+        surface_inputs=bundle.surface_inputs,
+        heston_fit_summary=bundle.heston_fit_summary,
+    )
+
+    with pytest.raises(TypeError) as exc_info:
+        prepare_heston_market_fit(broken_bundle)
+
+    message = str(exc_info.value)
+    assert "bundle.heston_quotes must be a pandas DataFrame" in message
+    assert "prepare_heston_market_fit(bundle)" in message
+
+
+def test_invalid_market_data_assumptions_raise_guided_errors(
+    tmp_path: Path,
+) -> None:
+    invalid_market = MarketData(spot=0.0, rate=0.02, dividend_yield=0.0)
+
+    with pytest.raises(ValueError) as exc_info:
+        prepare_heston_market_fit(
+            _bundle(tmp_path, _heston_quotes(), market_data=invalid_market)
+        )
+
+    message = str(exc_info.value)
+    assert "bundle.market_data.spot must be positive" in message
+    assert "Heston preparation requires a positive spot" in message

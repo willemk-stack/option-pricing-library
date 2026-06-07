@@ -91,6 +91,11 @@ library can reconstruct `MarketData` and consume the Heston-compatible quote
 shape. This validation is compatibility evidence, not a data redistribution
 mechanism and not a production data-quality claim.
 
+For calibration from the packaged local bundle, use the
+[model-ready Heston workflow](model_ready_heston_workflow.md):
+`load_model_validation_bundle(...)`, `prepare_heston_market_fit(...)`, then
+`fit_heston_market(...)`, or the shorthand `fit_heston_from_bundle(...)`.
+
 ### Local-only provider artifacts
 
 Real provider-derived outputs stay in the local evidence roots. This includes:
@@ -436,7 +441,11 @@ claims.
 ### Inspect Heston-compatible quotes
 
 `heston_quotes.parquet` is the Heston-compatible quote artifact used to
-reconstruct model inputs from cleaned local quotes.
+reconstruct model inputs from cleaned local quotes. Treat it as a candidate
+artifact: it proves the saved rows have the Heston-compatible shape, not that
+every row is calibration-ready. The
+[model-ready Heston workflow](model_ready_heston_workflow.md) uses
+`prepare_heston_market_fit(...)` to select and reject rows before fitting.
 
 ```python
 from pathlib import Path
@@ -615,6 +624,11 @@ The model-validation bundle packages the same local contracts. It collects the
 reloaded market data payload, cleaned quotes, rejected quotes, Heston-compatible
 quotes, surface inputs, warnings, and a minimal Heston smoke summary into one
 self-contained local bundle.
+
+To fit Heston from that bundle, follow the
+[model-ready Heston workflow](model_ready_heston_workflow.md) instead of
+manually reading `market_data.json` and `heston_quotes.parquet` in notebook
+code.
 
 ## Quote-cleaning policy
 

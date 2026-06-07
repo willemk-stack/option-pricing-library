@@ -62,6 +62,10 @@ _REJECTION_REASON_ORDER = (
     "mid_outside_bid_ask",
     "extreme_moneyness",
 )
+_PREPARE_HESTON_MARKET_FIT_GUIDANCE = (
+    "Use prepare_heston_market_fit(bundle) before calibrating from saved "
+    "bundle artifacts."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,20 +244,31 @@ def _validate_required_heston_columns(frame: pd.DataFrame) -> None:
     ]
     if missing:
         joined = ", ".join(repr(column) for column in missing)
-        raise ValueError(f"bundle.heston_quotes is missing required columns: {joined}")
+        raise ValueError(
+            "bundle.heston_quotes is missing required columns: "
+            f"{joined}. heston_quotes is a candidate artifact; "
+            f"{_PREPARE_HESTON_MARKET_FIT_GUIDANCE}"
+        )
 
 
 def _bundle_heston_quotes(bundle: Any) -> pd.DataFrame:
     heston_quotes = getattr(bundle, "heston_quotes", None)
     if not isinstance(heston_quotes, pd.DataFrame):
-        raise TypeError("bundle.heston_quotes must be a pandas DataFrame")
+        raise TypeError(
+            "bundle.heston_quotes must be a pandas DataFrame. "
+            f"{_PREPARE_HESTON_MARKET_FIT_GUIDANCE}"
+        )
     return heston_quotes.copy(deep=True).reset_index(drop=True)
 
 
 def _bundle_market_data(bundle: Any) -> MarketData:
     market_data = getattr(bundle, "market_data", None)
     if not isinstance(market_data, MarketData):
-        raise TypeError("bundle.market_data must be a MarketData instance")
+        raise TypeError(
+            "bundle.market_data must be a MarketData instance. "
+            "Use load_model_validation_bundle(path) to load bundle market data "
+            "before preparation."
+        )
     for field_name in ("rate", "dividend_yield"):
         _finite_market_value(market_data, field_name)
     return market_data
@@ -263,16 +278,27 @@ def _finite_market_value(market_data: MarketData, field_name: str) -> float:
     try:
         value = float(getattr(market_data, field_name))
     except (TypeError, ValueError) as exc:
-        raise TypeError(f"bundle.market_data.{field_name} must be numeric") from exc
+        raise TypeError(
+            f"bundle.market_data.{field_name} must be numeric. "
+            "Saved model-validation bundles must provide numeric spot, rate, "
+            "and dividend_yield assumptions."
+        ) from exc
     if not math.isfinite(value):
-        raise ValueError(f"bundle.market_data.{field_name} must be finite")
+        raise ValueError(
+            f"bundle.market_data.{field_name} must be finite. "
+            "Saved model-validation bundles must provide finite market data "
+            "assumptions before Heston preparation."
+        )
     return value
 
 
 def _positive_finite_market_value(market_data: MarketData, field_name: str) -> float:
     value = _finite_market_value(market_data, field_name)
     if value <= 0.0:
-        raise ValueError(f"bundle.market_data.{field_name} must be positive")
+        raise ValueError(
+            f"bundle.market_data.{field_name} must be positive. "
+            "Heston preparation requires a positive spot in bundle.market_data."
+        )
     return value
 
 

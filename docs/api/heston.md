@@ -17,8 +17,12 @@
 - `option_pricing.models.heston.calibration` for calibrators, quote preflight helpers, bounds, multistart results, and seed helpers.
 - `option_pricing.models.heston.calibration.heston_types` for the quote-set container used by calibration and diagnostics.
 - `option_pricing.diagnostics.heston` for notebook-facing diagnostics, generated-report helpers, and model comparison.
+- `option_pricing.marketdata` for loading model-validation bundles and preparing Heston market fits.
+- `option_pricing.workflows` for fitting prepared Heston market universes or running the one-shot bundle fit helper.
 
 See the [Heston guide](../user_guides/heston.md) for the workflow narrative and
+the [model-ready Heston workflow](../user_guides/model_ready_heston_workflow.md)
+for saved marketdata bundles. Use
 the [Heston model comparison](../user_guides/heston_model_comparison.md) page
 for the reviewer-facing Capstone 3 evidence path.
 
@@ -80,9 +84,40 @@ for the reviewer-facing Capstone 3 evidence path.
         - simulate_heston_terminal
         - simulate_heston_paths
 
+## Model-Ready Market-Fit Workflow
+
+<p class="doc-section-lead">These helpers are the official public path from local model-validation bundles to Heston fitting. Bundle loading and preparation live in marketdata; fitting lives in workflows.</p>
+
+::: option_pricing.marketdata.bundles
+    options:
+      members:
+        - LoadedModelValidationBundle
+        - load_model_validation_bundle
+
+::: option_pricing.marketdata.model_ready
+    options:
+      members:
+        - HestonReadyStats
+        - PreparedHestonMarketFit
+        - prepare_heston_market_fit
+
+::: option_pricing.workflows.market_fit
+    options:
+      members:
+        - HestonCalibrationConfig
+        - HestonMarketFitError
+        - HestonMarketFitResult
+        - fit_heston_market
+        - fit_heston_from_bundle
+
 ## Calibration
 
 <p class="doc-section-lead">Calibration is intentionally kept under the Heston model namespace. Bounds and seed helpers are optimizer safeguards and diagnostics inputs, not claims of parameter uniqueness.</p>
+
+For saved model-validation bundles, prefer the public loader, preparation, and
+workflow helpers before dropping to the low-level calibrators. They preserve the
+selected quotes, rejected quotes, stats, preflight, summary, warnings, and
+errors that reviewers need.
 
 ::: option_pricing.models.heston.calibration
     options:

@@ -179,11 +179,13 @@ def test_missing_manifest_raises_clear_error(tmp_path: Path) -> None:
     root = tmp_path / "bundle"
     root.mkdir()
 
-    with pytest.raises(
-        FileNotFoundError,
-        match=r"manifest\.json.*complete model-validation bundle",
-    ):
+    with pytest.raises(FileNotFoundError) as exc_info:
         load_model_validation_bundle(root)
+
+    message = str(exc_info.value)
+    assert "manifest.json" in message
+    assert "complete model-validation bundle" in message
+    assert "load_model_validation_bundle(path)" in message
 
 
 def test_missing_required_artifact_raises_clear_error(
@@ -193,11 +195,13 @@ def test_missing_required_artifact_raises_clear_error(
     root = _write_complete_bundle(tmp_path / "bundle")
     (root / "surface_inputs.parquet").unlink()
 
-    with pytest.raises(
-        FileNotFoundError,
-        match=r"surface_inputs\.parquet.*complete model-validation bundle",
-    ):
+    with pytest.raises(FileNotFoundError) as exc_info:
         load_model_validation_bundle(root)
+
+    message = str(exc_info.value)
+    assert "surface_inputs.parquet" in message
+    assert "complete model-validation bundle" in message
+    assert "load_model_validation_bundle(path)" in message
 
 
 def test_invalid_json_raises_clear_error(
@@ -209,7 +213,7 @@ def test_invalid_json_raises_clear_error(
 
     with pytest.raises(
         ValueError,
-        match=r"manifest\.json.*complete model-validation bundle",
+        match=r"manifest\.json.*complete model-validation bundle.*load_model_validation_bundle",
     ):
         load_model_validation_bundle(root)
 

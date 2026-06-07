@@ -8,6 +8,7 @@ from typing import cast
 import pandas as pd
 import pytest
 
+import option_pricing.workflows as workflows
 import option_pricing.workflows.market_fit as market_fit
 from option_pricing.marketdata.bundles import (
     HestonSmokeResult,
@@ -328,6 +329,13 @@ def test_fit_heston_from_bundle_accepts_bundle_root_path(
     assert len(calls) == 1
 
 
+def test_workflow_public_imports_expose_canonical_heston_helpers() -> None:
+    assert "fit_heston_from_bundle" in workflows.__all__
+    assert "fit_heston_market" in workflows.__all__
+    assert workflows.fit_heston_from_bundle is fit_heston_from_bundle
+    assert workflows.fit_heston_market is fit_heston_market
+
+
 def test_fit_heston_from_bundle_accepts_manifest_path(
     tmp_path: Path,
     fake_parquet: None,
@@ -490,6 +498,73 @@ def test_calibration_exception_raises_when_requested(
 
     with pytest.raises(HestonMarketFitError, match="synthetic calibration failure"):
         fit_heston_market(prepared, raise_on_failure=True)
+
+
+def test_fit_heston_market_requires_prepared_helper_guidance(tmp_path: Path) -> None:
+    bundle = _loaded_bundle(tmp_path)
+
+    with pytest.raises(TypeError) as exc_info:
+        fit_heston_market(bundle)  # type: ignore[arg-type]
+
+    message = str(exc_info.value)
+    assert "PreparedHestonMarketFit" in message
+    assert "prepare_heston_market_fit(bundle)" in message
+    assert "fit_heston_from_bundle(path)" in message
+
+
+def test_empty_result_error_mentions_public_recovery_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+    _patch_successful_calibration(monkeypatch, calls)
+    quotes = _heston_quotes(
+        {
+            0: {"expiry_years": 1.0 / 365.0},
+            1: {"expiry_years": 2.0 / 365.0},
+            2: {"expiry_years": 3.0 / 365.0},
+        }
+    )
+    prepared = prepare_heston_market_fit(_loaded_bundle(tmp_path, quotes))
+
+    result = fit_heston_market(prepared)
+
+    assert result.status == "empty"
+    assert "prepared.rejected_quotes" in result.errors[0]
+    assert "fit_heston_from_bundle(path)" in result.errors[0]
+
+
+def test_blocked_result_error_preserves_preflight_guidance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+    _patch_successful_calibration(monkeypatch, calls)
+    prepared = _blocked_prepared(_prepared(tmp_path))
+
+    result = fit_heston_market(prepared)
+
+    assert result.status == "blocked"
+    assert "prepared.preflight" in result.errors[0]
+    assert "allow_blocked=True" in result.errors[0]
+    assert "fit_heston_from_bundle(path)" in result.errors[0]
+
+
+def test_failed_result_error_mentions_one_shot_helper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_calibration(*_args: object, **_kwargs: object) -> HestonMultistartResult:
+        raise RuntimeError("synthetic calibration failure")
+
+    monkeypatch.setattr(market_fit, "calibrate_heston_multistart", fail_calibration)
+    prepared = _prepared(tmp_path)
+
+    result = fit_heston_market(prepared)
+
+    assert result.status == "failed"
+    assert "selected_quote_count=3" in result.errors[0]
+    assert "fit_heston_from_bundle(path)" in result.errors[0]
 
 
 def test_successful_synthetic_calibration_returns_ok(

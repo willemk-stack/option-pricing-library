@@ -191,6 +191,12 @@ Pass `--no-rate-curve` to skip the curve artifact when only the selected flat
 rate is needed. Pass `--run-heston-smoke` to enable the lightweight Heston
 smoke check inside the model-validation bundle.
 
+Once a local model-validation bundle exists, use the
+[model-ready Heston workflow](model_ready_heston_workflow.md) for fitting:
+`load_model_validation_bundle(...)`, `prepare_heston_market_fit(...)`, then
+`fit_heston_market(...)`, or `fit_heston_from_bundle(...)` for the one-shot
+helper.
+
 For a first real provider-backed model run, start warning-only:
 
 ```bash
@@ -354,6 +360,9 @@ option-pricing-marketdata validate-bundle \
 The command calls `validate_provider_snapshot_bundle(...)` and verifies that
 `market_data.json`, `cleaned_quotes.parquet`, and `heston_quotes.parquet` can be
 read by the library-facing contracts. Add `--json` for stable automation output.
+That validation is compatibility evidence. Use the
+[model-ready Heston workflow](model_ready_heston_workflow.md) before treating
+the saved Heston-compatible quotes as calibration inputs.
 
 Snapshot output includes the documented rate/dividend source metadata, explicit
 equity/option provider and feed metadata, policy metadata, rate series, raw and
