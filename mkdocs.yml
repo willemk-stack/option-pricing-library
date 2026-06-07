@@ -175,6 +175,8 @@ nav:
           - SVI calibration design: notes/volatility/svi_calibration_design.md
           - eSSVI calibration design: notes/volatility/essvi_calibration_design.md
           - Interpolation: notes/volatility/interpolation.md
+      - Market fit:
+          - Future market-model workflows: notes/market_fit/future_market_model_workflows.md
       - Local-vol and PDE:
           - Dupire local vol: notes/local-vol-pde/dupire_local_vol.md
           - Finite differences: notes/local-vol-pde/finite_difference_pde.md
