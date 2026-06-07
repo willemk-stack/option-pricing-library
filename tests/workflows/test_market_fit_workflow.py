@@ -334,8 +334,13 @@ def test_workflow_public_imports_expose_canonical_heston_helpers() -> None:
         "HestonCalibrationConfig",
         "HestonMarketFitError",
         "HestonMarketFitResult",
+        "SVIMarketFitConfig",
+        "SVIMarketFitResult",
+        "SVISliceMarketFitResult",
         "fit_heston_from_bundle",
         "fit_heston_market",
+        "fit_svi_from_bundle",
+        "fit_svi_market",
     )
     assert workflows.HestonCalibrationConfig is HestonCalibrationConfig
     assert workflows.HestonMarketFitError is HestonMarketFitError

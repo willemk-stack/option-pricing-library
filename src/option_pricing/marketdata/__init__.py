@@ -20,9 +20,12 @@ __all__ = [
     "ProviderSnapshotDataUnavailableError",
     "ProviderSnapshotQualityPolicy",
     "ProviderSnapshotResult",
+    "PreparedSVIMarketFit",
+    "SurfaceReadyStats",
     "StorageConfig",
     "load_model_validation_bundle",
     "prepare_heston_market_fit",
+    "prepare_svi_market_fit",
     "provider_snapshot_public_summary",
     "validate_provider_snapshot_bundle",
 ]
@@ -54,6 +57,11 @@ if TYPE_CHECKING:
     from .provider_policy import ProviderSnapshotQualityPolicy
     from .provider_results import ProviderCallDiagnostic
     from .storage import LocalStorage
+    from .surface_ready import (
+        PreparedSVIMarketFit,
+        SurfaceReadyStats,
+        prepare_svi_market_fit,
+    )
 
 _PUBLIC_EXPORTS = {
     "AlpacaConfig": "option_pricing.marketdata.config",
@@ -63,6 +71,8 @@ _PUBLIC_EXPORTS = {
     "PreparedHestonMarketFit": "option_pricing.marketdata.model_ready",
     "ProviderRetryConfig": "option_pricing.marketdata.config",
     "StorageConfig": "option_pricing.marketdata.config",
+    "PreparedSVIMarketFit": "option_pricing.marketdata.surface_ready",
+    "SurfaceReadyStats": "option_pricing.marketdata.surface_ready",
     "LoadedModelValidationBundle": "option_pricing.marketdata.bundles",
     "LocalStorage": "option_pricing.marketdata.storage",
     "MarketDataPipeline": "option_pricing.marketdata.pipeline",
@@ -75,6 +85,7 @@ _PUBLIC_EXPORTS = {
     "ProviderSnapshotResult": "option_pricing.marketdata.pipeline",
     "load_model_validation_bundle": "option_pricing.marketdata.bundles",
     "prepare_heston_market_fit": "option_pricing.marketdata.model_ready",
+    "prepare_svi_market_fit": "option_pricing.marketdata.surface_ready",
     "provider_snapshot_public_summary": "option_pricing.marketdata.pipeline",
     "validate_provider_snapshot_bundle": "option_pricing.marketdata.provider_confidence",
 }

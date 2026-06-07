@@ -1,9 +1,10 @@
 # Future market-model workflows
 
-!!! note "Status: Phase 8A architecture note"
+!!! note "Status: Phase 8C SVI fit helpers"
     This note documents the intended market-fit workflow architecture beyond
-    Heston. It is a design contract for future implementation work, not a claim
-    that the SVI, eSSVI, or local-vol helpers described here already exist.
+    Heston. Phase 8B added SVI preparation from bundle surface inputs. Phase 8C
+    adds explicit SVI fit helpers on top of that preparation contract, while
+    eSSVI and local-vol fitting helpers described here remain future work.
 
 ## Purpose
 
@@ -64,6 +65,70 @@ automatically calibration-ready artifact. It proves that accepted quote rows can
 be represented in the Heston-compatible shape. `prepare_heston_market_fit(...)`
 is the layer that decides whether each candidate quote is selected for the
 chosen Heston objective or rejected with preparation reasons.
+
+## Phase 8B SVI preparation helper
+
+Phase 8B adds the preparation-only SVI handoff:
+
+```python
+from option_pricing.marketdata import (
+    load_model_validation_bundle,
+    prepare_svi_market_fit,
+)
+
+path = "path/to/model_validation_bundle"
+bundle = load_model_validation_bundle(path)
+prepared = prepare_svi_market_fit(bundle)
+```
+
+`prepare_svi_market_fit(...)` starts from `bundle.surface_inputs`, not
+`bundle.heston_quotes`, and returns `selected_points`, `rejected_points`,
+`stats`, `status`, and `warnings`. It computes SVI-specific fields in memory:
+expiry days, forward, discount, log-forward moneyness, total variance, default
+square-root weights, and option side. The persisted `surface_inputs.v1`
+artifact remains unchanged.
+
+The preparation layer is intentionally not fitting. The Phase 8C SVI workflow
+consumes `PreparedSVIMarketFit`, lets users inspect
+`prepared.stats.rejection_counts`, and then performs slice-level SVI
+calibration only after the preparation contract has selected enough points per
+expiry.
+
+## Phase 8C SVI fit helpers
+
+Phase 8C adds the explicit SVI ladder on top of
+`prepare_svi_market_fit(...)`:
+
+```python
+from option_pricing.marketdata import (
+    load_model_validation_bundle,
+    prepare_svi_market_fit,
+)
+from option_pricing.workflows import fit_svi_from_bundle, fit_svi_market
+
+path = "path/to/model_validation_bundle"
+bundle = load_model_validation_bundle(path)
+prepared = prepare_svi_market_fit(bundle)
+result = fit_svi_market(prepared)
+```
+
+The one-shot helper runs the same load -> prepare -> fit path:
+
+```python
+result = fit_svi_from_bundle(path)
+```
+
+`fit_svi_market(...)` accepts only `PreparedSVIMarketFit`. It groups
+`prepared.selected_points` by `expiry_years`, passes the prepared
+`log_moneyness`, `total_variance`, and `sqrt_weight` arrays into
+`calibrate_svi(...)`, and records each expiry independently. The result keeps
+the prepared selected/rejected points available, plus per-expiry params and
+diagnostics, a `parameter_table`, an optional analytic `VolSurface`, a compact
+summary, warnings, and errors.
+
+Partial failure is visible by design. If one expiry fits and another fails, the
+result status is `partial` when `allow_partial=True`; if every expiry fails, the
+status is `failed`. No generic `fit_market_model(...)` registry is introduced.
 
 ## Model eligibility rules
 
@@ -184,9 +249,9 @@ Heston already establishes the naming pattern:
 
 SVI should mirror that shape while using point terminology:
 
-- `SVIReadyStats`
+- `SurfaceReadyStats`
 - `PreparedSVIMarketFit`
-- `SVIMarketCalibrationConfig`
+- `SVIMarketFitConfig`
 - `SVIMarketFitResult`
 
 `PreparedSVIMarketFit` should include:
@@ -315,8 +380,8 @@ The docs should keep the public path explicit and model-specific:
 - Keep the
     [model-ready Heston workflow](../../user_guides/model_ready_heston_workflow.md)
     as the reference implementation page.
-- Add an SVI market-fit guide only when `prepare_svi_market_fit(...)`,
-    `fit_svi_market(...)`, and `fit_svi_from_bundle(...)` exist.
+- Add or expand an SVI market-fit guide around `prepare_svi_market_fit(...)`,
+    `fit_svi_market(...)`, and `fit_svi_from_bundle(...)`.
 - Add an eSSVI market-fit guide only when `prepare_essvi_market_fit(...)`,
     `fit_essvi_market(...)`, and `fit_essvi_from_bundle(...)` exist.
 - Keep bundle artifact documentation in
@@ -335,7 +400,7 @@ at least Heston, SVI, and eSSVI have stable public workflow surfaces.
 
 This phase does not:
 
-- implement SVI, eSSVI, or local-vol market-fit code
+- implement eSSVI or local-vol market-fit code
 - change the `model_validation_bundle.v1` artifact filenames
 - change `surface_inputs.v1`
 - add provider-specific logic to fitting
