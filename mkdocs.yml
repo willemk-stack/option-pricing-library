@@ -146,6 +146,7 @@ nav:
       - Heston model comparison: user_guides/heston_model_comparison.md
       - Market snapshot validation: user_guides/market_snapshot_validation.md
       - Marketdata CLI and private provider runs: user_guides/marketdata_cli.md
+      - Real-market provider evidence: user_guides/provider_market_evidence.md
       - Model-ready Heston workflow: user_guides/model_ready_heston_workflow.md
   - API:
       - Overview: api/index.md

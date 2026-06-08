@@ -11,6 +11,7 @@ hide:
 [Review Heston model comparison](user_guides/heston_model_comparison.md){ .md-button .md-button--primary }
 [Start with surface repair](user_guides/surface_workflow.md){ .md-button }
 [See local-vol/PDE validation](user_guides/localvol_pde_validation.md){ .md-button }
+[Review real-market provider evidence](user_guides/provider_market_evidence.md){ .md-button }
 </div>
 </div>
 
@@ -60,6 +61,16 @@ The data-provider branch keeps three paths separate:
 
 <p class="doc-section-lead">The fastest way to understand the full proof path now is the Heston model-comparison summary card. It compresses the calibration, residual, stability, and model-choice judgment into one reviewer-facing artifact while still leaning on the earlier eSSVI and local-vol/PDE proof pages as visible baseline evidence.</p>
 
+## Marketdata delivery paths
+
+<p class="doc-section-lead">The deterministic synthetic path remains the reproducibility baseline. The provider-backed path adds a sanitized public evidence layer for ingestion, normalization, quote cleaning, model-ready preparation, and Heston fit status on real-market provider runs.</p>
+
+<figure class="diagram diagram--quiet" style="--diagram-max-width: 980px" markdown="1">
+![Real-market provider evidence summary showing provider labels, stage counts, policy names, model-ready status, and Heston fit status](assets/generated/provider_evidence/provider_evidence_summary_card.light.svg){ .diagram-img .diagram-light }
+![Real-market provider evidence summary showing provider labels, stage counts, policy names, model-ready status, and Heston fit status](assets/generated/provider_evidence/provider_evidence_summary_card.dark.svg){ .diagram-img .diagram-dark }
+<figcaption><a href="user_guides/provider_market_evidence/">Real-market provider evidence</a> publishes sanitized summaries from provider-backed runs while keeping raw provider payloads and full provider-derived quote rows local/private.</figcaption>
+</figure>
+
 <div class="homepage-signature-layout" markdown="1">
 <figure class="diagram diagram--hero homepage-signature-figure" style="--diagram-max-width: 980px" markdown="1">
 ![Heston model-comparison summary showing the target smile, Heston residual structure, calibration stability, and bucketed model-comparison errors](assets/generated/heston/heston_comparison_summary_card.light.png){ .diagram-img .diagram-light }
@@ -92,6 +103,8 @@ The data-provider branch keeps three paths separate:
 [<span class="doc-card__eyebrow">Proof path step 3</span><span class="doc-link-card__title">Local-vol / PDE validation</span><span class="doc-link-card__copy">See repricing scatter, error localization, and convergence evidence for the final numerical leg of the workflow.</span>](user_guides/localvol_pde_validation.md){ .doc-link-card .doc-link-card--quiet }
 
 [<span class="doc-card__eyebrow">Proof path step 4</span><span class="doc-link-card__title">Heston model comparison</span><span class="doc-link-card__copy">Review Fourier pricing, calibration diagnostics, Monte Carlo cross-checks, and the tradeoff between Heston interpretability and eSSVI/local-vol flexibility.</span>](user_guides/heston_model_comparison.md){ .doc-link-card .doc-link-card--quiet }
+
+[<span class="doc-card__eyebrow">Provider evidence</span><span class="doc-link-card__title">Real-market provider evidence</span><span class="doc-link-card__copy">Review sanitized provider-backed ingestion, normalization, quote-cleaning, model-ready, and Heston fit-status evidence.</span>](user_guides/provider_market_evidence.md){ .doc-link-card .doc-link-card--quiet }
 
 [<span class="doc-card__eyebrow">Proof path follow-up</span><span class="doc-link-card__title">Performance evidence</span><span class="doc-link-card__copy">Open the authored benchmark page for implied-vol scaling, PDE runtime/error tradeoffs, digital remedies, and stage budgets.</span>](performance.md){ .doc-link-card .doc-link-card--quiet }
 </div>

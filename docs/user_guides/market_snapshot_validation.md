@@ -117,6 +117,18 @@ Real provider-derived outputs stay in the local evidence roots. This includes:
 The default local roots `data/`, `out/`, and `data-private-demo/` are working
 directories for local evidence, separate from the documented synthetic workflow.
 
+## Synthetic vs real-provider evidence
+
+The deterministic local snapshot remains the reproducibility baseline. It is the
+right page for local fixture mechanics, Bronze/Silver/Gold artifact contracts,
+quote-cleaning auditability, and model-validation bundle packaging.
+
+The companion [Real-market provider evidence](provider_market_evidence.md) page
+answers the production-shaped provider question. It publishes sanitized
+provider-backed summaries for ingestion, normalization, quote cleaning,
+policy capture, model-ready Heston preparation, and fit status while keeping raw
+provider payloads and full provider-derived quote rows local/private.
+
 ## What this workflow does not prove
 
 This workflow does not prove production data quality, live-provider correctness,

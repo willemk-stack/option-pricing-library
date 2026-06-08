@@ -81,6 +81,21 @@ The architecture is not trying to hide complexity. It is trying to put complexit
   <figcaption>The supporting workflow view stays quieter than the main systems graphic: it traces the same path from repaired surface to local-vol extraction, PDE solve, and downstream diagnostics without becoming a second competing hero.</figcaption>
 </figure>
 
+## Provider-backed evidence layer
+
+<p class="doc-section-lead">Provider ingestion is treated as an upstream system boundary, not as a hidden shortcut into calibration. The public docs publish sanitized provider evidence after the private/local provider run has already produced auditable Bronze, Silver, Gold, model-ready, and fit-status artifacts.</p>
+
+<figure markdown class="diagram" style="--diagram-max-width: 980px">
+  ![Provider pipeline flow from Alpaca and FRED through Bronze, Silver, Gold, model-ready preparation, and Heston fit evidence](assets/generated/provider_evidence/provider_pipeline_flow.light.svg){ .diagram-img .diagram-light }
+  ![Provider pipeline flow from Alpaca and FRED through Bronze, Silver, Gold, model-ready preparation, and Heston fit evidence](assets/generated/provider_evidence/provider_pipeline_flow.dark.svg){ .diagram-img .diagram-dark }
+  <figcaption markdown="1">The [real-market provider evidence](user_guides/provider_market_evidence.md) layer demonstrates provider ingestion, normalization, quote cleaning, policy capture, model-ready preparation, and Heston fit status while keeping raw provider payloads and full provider-derived quote rows local/private.</figcaption>
+</figure>
+
+The architectural boundary is deliberate: provider response bodies and full
+provider-derived rows are operational artifacts, while public Pages evidence is
+limited to counts, reason summaries, coverage summaries, policy names, model-ready
+status, fit status, warnings, and caveats.
+
 ## Public Routes Into The Stack
 
 <p class="doc-section-lead">The package exposes several entry styles, but they are not equal in purpose. The point is to keep the default public path readable without hiding the more explicit routes needed for quant workflows.</p>
