@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from importlib import import_module
+from time import sleep
 from typing import Any, cast
 
 from option_pricing.marketdata.config import ProviderRetryConfig
@@ -149,7 +150,7 @@ def _execute_with_optional_tenacity_retry[T](
     try:
         tenacity = import_module("tenacity")
     except ModuleNotFoundError:
-        return call(), 0
+        return _execute_with_builtin_retry(call, retry_config=retry_config)
 
     attempts = 0
     retrying = tenacity.Retrying(
@@ -170,6 +171,32 @@ def _execute_with_optional_tenacity_retry[T](
         raise _RetryWrappedError(exc, max(0, attempts - 1)) from None
 
     return call(), max(0, attempts - 1)
+
+
+def _execute_with_builtin_retry[T](
+    call: Callable[[], T],
+    *,
+    retry_config: ProviderRetryConfig,
+) -> tuple[T, int]:
+    attempts = 0
+    delay = max(0.0, float(retry_config.wait_initial_seconds))
+    max_delay = max(0.0, float(retry_config.wait_max_seconds))
+
+    while True:
+        try:
+            attempts += 1
+            return call(), max(0, attempts - 1)
+        except Exception as exc:
+            retry_count = max(0, attempts - 1)
+            if (
+                not _is_transient_provider_exception(exc)
+                or attempts >= retry_config.max_attempts
+            ):
+                raise _RetryWrappedError(exc, retry_count) from None
+            if delay > 0.0:
+                sleep(delay)
+            if max_delay > 0.0:
+                delay = min(max_delay, delay * 2.0 if delay > 0.0 else max_delay)
 
 
 def _provider_call_diagnostic(
