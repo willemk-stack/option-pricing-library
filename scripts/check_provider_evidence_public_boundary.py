@@ -7,10 +7,13 @@ import re
 from pathlib import Path
 from typing import Any
 
+# Match actual secret-like values, not safe documentation words such as
+# "credentials stay local/private".
 SENSITIVE_TEXT_PATTERNS = (
     re.compile(r"AKIA[0-9A-Z]{16}"),
+    re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{20,}"),
     re.compile(
-        r"(?i)\b(api[_-]?key|secret|authorization|bearer|token|password|credential)\b"
+        r"(?i)\b(api[_-]?key|secret|password|token)\b\s*[:=]\s*[\"']?[A-Za-z0-9_./+=-]{16,}"
     ),
 )
 
@@ -47,7 +50,7 @@ def _walk_json_keys(payload: Any, path: str = "$") -> list[str]:
 
 
 def _scan_text(path: Path) -> list[str]:
-    text = path.read_text(encoding="utf-8", errors="replace")
+    text = path.read_text(encoding="utf-8-sig", errors="replace")
     hits = []
     for pattern in SENSITIVE_TEXT_PATTERNS:
         if pattern.search(text):
@@ -56,12 +59,12 @@ def _scan_text(path: Path) -> list[str]:
 
 
 def _scan_json(path: Path) -> list[str]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
     return [f"{path}: forbidden JSON key {hit}" for hit in _walk_json_keys(payload)]
 
 
 def _scan_csv(path: Path) -> list[str]:
-    with path.open(newline="", encoding="utf-8") as handle:
+    with path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.reader(handle)
         header = next(reader, [])
     hits = []
