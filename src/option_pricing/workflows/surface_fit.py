@@ -211,6 +211,10 @@ class SVIMarketFitError(RuntimeError):
     """Raised when an SVI market-fit workflow fails with raise_on_failure."""
 
 
+class ESSVIMarketFitError(RuntimeError):
+    """Raised when an eSSVI market-fit workflow fails with raise_on_failure."""
+
+
 def fit_svi_market(
     prepared: PreparedSVIMarketFit,
     *,
@@ -332,7 +336,12 @@ def fit_svi_from_bundle(
     allow_partial: bool = True,
     allow_blocked: bool = False,
 ) -> SVIMarketFitResult:
-    """Load or accept a bundle, prepare SVI points, and fit per-expiry SVI."""
+    """Load or accept a bundle, prepare SVI points, and fit per-expiry SVI.
+
+    ``raise_on_block`` is accepted for symmetry with other market-fit workflows.
+    SVI preparation currently returns ``ready`` or ``empty`` in normal use; the
+    flag is reserved for future structural SVI preparation blocks.
+    """
 
     bundle = (
         path_or_bundle
@@ -437,7 +446,7 @@ def fit_essvi_market(
     except Exception as exc:
         message = _essvi_failure_message(prepared, f"{type(exc).__name__}: {exc}")
         if raise_on_failure:
-            raise RuntimeError(message) from exc
+            raise ESSVIMarketFitError(message) from exc
         return _essvi_result(
             prepared,
             status="failed",
@@ -461,7 +470,7 @@ def fit_essvi_market(
 
     if status == "failed" and raise_on_failure:
         detail = "; ".join(errors) if errors else "validation failed"
-        raise RuntimeError(_essvi_failure_message(prepared, detail))
+        raise ESSVIMarketFitError(_essvi_failure_message(prepared, detail))
 
     return _essvi_result(
         prepared,
@@ -1216,6 +1225,7 @@ def _dedupe_strings(values: tuple[str, ...]) -> tuple[str, ...]:
 
 __all__ = [
     "ESSVIMarketFitConfig",
+    "ESSVIMarketFitError",
     "ESSVIMarketFitResult",
     "SVIMarketFitConfig",
     "SVIMarketFitError",

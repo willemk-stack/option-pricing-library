@@ -123,6 +123,10 @@ def prepare_svi_market_fit(
     This helper starts from ``bundle.surface_inputs`` and computes SVI-specific
     point fields in memory. It does not fit SVI parameters or mutate the
     persisted ``surface_inputs.v1`` artifact.
+
+    ``raise_on_block`` is reserved for future structural SVI preparation
+    blocks. Today this helper returns ``ready`` when points are selected and
+    ``empty`` when selection filters leave no usable points.
     """
 
     min_expiry_days = _validate_nonnegative_float(

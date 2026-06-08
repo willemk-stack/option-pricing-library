@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 __all__ = [
     "ESSVIMarketFitConfig",
+    "ESSVIMarketFitError",
     "ESSVIMarketFitResult",
     "HestonCalibrationConfig",
     "HestonMarketFitError",
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
     from .router import fit_market_model
     from .surface_fit import (
         ESSVIMarketFitConfig,
+        ESSVIMarketFitError,
         ESSVIMarketFitResult,
         SVIMarketFitConfig,
         SVIMarketFitResult,
@@ -46,6 +48,7 @@ if TYPE_CHECKING:
 
 _PUBLIC_EXPORTS = {
     "ESSVIMarketFitConfig": "option_pricing.workflows.surface_fit",
+    "ESSVIMarketFitError": "option_pricing.workflows.surface_fit",
     "ESSVIMarketFitResult": "option_pricing.workflows.surface_fit",
     "HestonCalibrationConfig": "option_pricing.workflows.market_fit",
     "HestonMarketFitError": "option_pricing.workflows.market_fit",

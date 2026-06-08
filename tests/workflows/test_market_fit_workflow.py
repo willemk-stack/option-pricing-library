@@ -333,6 +333,7 @@ def test_fit_heston_from_bundle_accepts_bundle_root_path(
 def test_workflow_public_imports_expose_canonical_heston_helpers() -> None:
     assert tuple(workflows.__all__) == (
         "ESSVIMarketFitConfig",
+        "ESSVIMarketFitError",
         "ESSVIMarketFitResult",
         "HestonCalibrationConfig",
         "HestonMarketFitError",

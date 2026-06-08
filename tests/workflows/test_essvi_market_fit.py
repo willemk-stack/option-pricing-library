@@ -28,6 +28,7 @@ from option_pricing.vol.ssvi import (
 )
 from option_pricing.workflows import (
     ESSVIMarketFitConfig,
+    ESSVIMarketFitError,
     ESSVIMarketFitResult,
     HestonCalibrationConfig,
     HestonMarketFitResult,
@@ -337,7 +338,10 @@ def test_failure_returns_failed_unless_raise_requested(
     assert result.surface is None
     assert "synthetic eSSVI calibration failure" in result.errors[0]
 
-    with pytest.raises(RuntimeError, match="synthetic eSSVI calibration failure"):
+    with pytest.raises(
+        ESSVIMarketFitError,
+        match="synthetic eSSVI calibration failure",
+    ):
         fit_essvi_market(prepared, raise_on_failure=True)
 
 
@@ -353,11 +357,13 @@ def test_fit_essvi_market_requires_prepared_helper_guidance() -> None:
 
 def test_public_workflow_exports_expose_essvi_helpers() -> None:
     assert "ESSVIMarketFitConfig" in workflows.__all__
+    assert "ESSVIMarketFitError" in workflows.__all__
     assert "ESSVIMarketFitResult" in workflows.__all__
     assert "fit_essvi_market" in workflows.__all__
     assert "fit_essvi_from_bundle" in workflows.__all__
     assert "fit_market_model" in workflows.__all__
     assert workflows.ESSVIMarketFitConfig is ESSVIMarketFitConfig
+    assert workflows.ESSVIMarketFitError is ESSVIMarketFitError
     assert workflows.ESSVIMarketFitResult is ESSVIMarketFitResult
     assert workflows.fit_essvi_market is fit_essvi_market
     assert workflows.fit_essvi_from_bundle is fit_essvi_from_bundle
