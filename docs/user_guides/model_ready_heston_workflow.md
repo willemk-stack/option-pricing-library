@@ -1,4 +1,4 @@
-# Model-Ready Heston Workflow
+﻿# Model-Ready Heston Workflow
 
 This guide is the canonical public path from saved marketdata validation
 artifacts to a Heston market fit.
@@ -187,3 +187,38 @@ controls, or are building diagnostics from synthetic fixtures.
 For saved model-validation bundles, prefer the public workflow first. It keeps
 the artifact loading, preparation, preflight, fit status, selected quotes,
 rejected quotes, summaries, warnings, and errors in one reviewable path.
+
+## Real-provider evidence example
+
+The model-ready Heston workflow is not limited to synthetic fixtures. A local
+provider-backed run can feed the same model-validation bundle shape, then publish
+a sanitized public summary through the real-market provider evidence page.
+
+The public evidence page references these generated files:
+
+- `docs/assets/generated/provider_evidence/data/provider_model_ready_summary.json`
+- `docs/assets/generated/provider_evidence/data/provider_heston_fit_summary.csv`
+- `docs/assets/generated/provider_evidence/data/provider_heston_parameter_summary.csv`
+- `docs/assets/generated/provider_evidence/data/provider_warnings.json`
+
+The model-ready summary should disclose:
+
+- `status`
+- `candidate_heston_rows`
+- `selected_quotes`
+- `rejected_quotes`
+- `expiry_count`
+- `call_count`
+- `put_count`
+- `preflight_status`
+- `objective`
+- `warning_count`
+
+This is workflow evidence, not a trading claim. The public files should prove
+that provider-backed cleaned quotes can reach the Heston preparation and fit
+status layer while raw provider payloads and full provider-derived quote rows
+remain local/private.
+
+See [Real-market provider evidence](provider_market_evidence.md) for the public
+artifact bundle and publication boundary.
+

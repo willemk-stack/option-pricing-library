@@ -1,4 +1,4 @@
-# Marketdata CLI And Private Provider Runs
+﻿# Marketdata CLI And Private Provider Runs
 
 This guide explains how the installed `option-pricing-marketdata` CLI fits into
 the public proof path and the private provider-backed evidence path.
@@ -170,3 +170,46 @@ before `fit_heston_market(...)` runs.
 Use the [Market APIs](market_api.md) page for the lower-level market input API
 context, and use [Market snapshot validation](market_snapshot_validation.md) for
 the deterministic local artifact proof.
+
+## Publishing sanitized provider evidence
+
+The provider refresh path can produce local/private provider artifacts, but the
+public documentation bundle should publish only sanitized summaries. Raw provider
+payloads, full provider-derived quote rows, credentials, tokens, and response
+bodies stay local/private.
+
+After a provider-backed model-validation bundle has been written locally, build
+the public evidence bundle with:
+
+```bash
+python scripts/build_provider_evidence_artifacts.py \
+  --bundle-root out/marketdata-live/gold/model_validation_bundle/underlying=SPY/date=YYYY-MM-DD/run_id=<run-id> \
+  --provider-summary-json out/marketdata-live/provider_public_summary.json \
+  --output-dir docs/assets/generated/provider_evidence \
+  --profile release
+```
+
+Publish these generated summaries on Pages:
+
+- provider/feed labels, as-of timestamp, underlying, and run ID
+- raw, normalized, accepted, rejected, and selected counts
+- rejection reason counts and stage summaries
+- expiry, strike, moneyness, call, and put coverage summaries
+- rate, dividend, quality, and data-policy names
+- model-ready selection/rejection counts and preflight status
+- Heston fit status, objective, best cost, parameter summary, warning count
+
+Keep these artifacts local/private:
+
+- raw Alpaca latest equity quote payloads
+- raw Alpaca option-chain JSON payloads
+- full provider-normalized `option_chain.parquet`
+- full provider-derived `cleaned_quotes.parquet`
+- full `heston_quotes.parquet` if it reconstructs provider quote rows
+- screenshots or tables exposing raw bid/ask rows
+- credentials, private policy files, provider response bodies, tokens, and
+  authorization headers
+
+Use [Real-market provider evidence](provider_market_evidence.md) for the
+reviewer-facing public proof page.
+
