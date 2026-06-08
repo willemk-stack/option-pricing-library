@@ -20,6 +20,7 @@ Package / import name: `option_pricing`
 - Surface repair and eSSVI smoothing with diagnostics that stay visible during review.
 - Local-vol and PDE validation backed by repricing, convergence, and no-arbitrage evidence.
 - Heston stochastic-volatility pricing, Monte Carlo validation, calibration diagnostics, and comparison against the eSSVI/local-vol stack.
+- Saved-bundle model-fit workflows for Heston, SVI, and eSSVI, with model-specific preparation, selected/rejected rows, summaries, warnings, and errors.
 - CI-checked docs, generated visuals, and benchmark publishing tied to committed sources.
 
 ## Why I built it this way
@@ -82,17 +83,34 @@ Evidence is based on deterministic synthetic fixtures and reference-price tests,
 
 The proof card above is generated from the published eSSVI and local-vol validation pages plus the committed benchmark artifacts, so the README stays aligned with the same source of truth as the performance page.
 
-### Marketdata and Heston fit paths
+### Marketdata, provider evidence, and model-fit paths
 
-The marketdata layer has three intentionally separate review paths:
+The marketdata and model-fit layer has four intentionally separate review paths:
 
 | Path | What to use | Boundary |
 | --- | --- | --- |
 | Credential-free proof | [Market snapshot validation](https://willemk-stack.github.io/option-pricing-library/user_guides/market_snapshot_validation/) and `scripts/demo_local_market_validation.py` | Synthetic local fixtures, no live providers or credentials, redistributable artifacts. |
-| Private provider-backed evidence | [Marketdata CLI and private provider runs](https://willemk-stack.github.io/option-pricing-library/user_guides/marketdata_cli/) and `option-pricing-marketdata` | Alpaca/FRED-backed local artifacts for private validation; do not commit or redistribute provider data. |
-| Official model-ready Heston workflow | [Model-ready Heston workflow](https://willemk-stack.github.io/option-pricing-library/user_guides/model_ready_heston_workflow/) | `load_model_validation_bundle(...) -> prepare_heston_market_fit(...) -> fit_heston_market(...)`, or `fit_heston_from_bundle(...)`. |
+| Private provider-backed artifact generation | [Marketdata CLI and private provider runs](https://willemk-stack.github.io/option-pricing-library/user_guides/marketdata_cli/) and `option-pricing-marketdata` | Alpaca/FRED-backed local artifacts for private validation; do not commit or redistribute provider data. |
+| Sanitized real-market provider evidence | [Real-market provider evidence](https://willemk-stack.github.io/option-pricing-library/user_guides/provider_market_evidence/) | Public summaries of provider/feed labels, counts, policies, warnings, coverage, model-ready status, and fit status; raw payloads and full provider-derived quote rows stay local/private. |
+| Saved-bundle model-fit workflows | `load_model_validation_bundle(...) -> prepare_*_market_fit(...) -> fit_*_market(...)`, or `fit_*_from_bundle(...)` | Provider-agnostic local artifact workflow. Supported one-shot model fits are Heston, SVI, and eSSVI. |
 
-Provider-backed runs are useful evidence surfaces, not the public proof path and not a production trading or universal calibration claim.
+Provider-backed runs are useful evidence surfaces, not the public reproducibility baseline and not a production trading or universal calibration claim. Provider adapters are upstream evidence producers; once a model-validation bundle exists, fitting consumes local artifacts and typed market assumptions rather than provider clients or raw provider response bodies.
+
+```python
+from option_pricing.workflows import (
+    fit_essvi_from_bundle,
+    fit_heston_from_bundle,
+    fit_market_model,
+    fit_svi_from_bundle,
+)
+
+result = fit_heston_from_bundle(path)
+surface = fit_svi_from_bundle(path)
+smooth_surface = fit_essvi_from_bundle(path)
+
+# Narrow dispatch helper for CLI/notebook selectors:
+chosen = fit_market_model("essvi", path)
+```
 
 | Area | What to review | Open |
 | --- | --- | --- |
@@ -108,7 +126,9 @@ Provider-backed runs are useful evidence surfaces, not the public proof path and
 - [Heston model comparison](https://willemk-stack.github.io/option-pricing-library/user_guides/heston_model_comparison/) for the reviewer-facing model-choice proof path
 - [Market snapshot validation](https://willemk-stack.github.io/option-pricing-library/user_guides/market_snapshot_validation/) for the local fixture-to-artifact reviewer workflow with no live providers or credentials
 - [Marketdata CLI and private provider runs](https://willemk-stack.github.io/option-pricing-library/user_guides/marketdata_cli/) for the optional local/private provider-backed artifact workflow
-- [Model-ready Heston workflow](https://willemk-stack.github.io/option-pricing-library/user_guides/model_ready_heston_workflow/) for the bundle -> prepare -> fit path
+- [Real-market provider evidence](https://willemk-stack.github.io/option-pricing-library/user_guides/provider_market_evidence/) for sanitized provider-backed ingestion, cleaning, model-ready, and fit-status evidence
+- [Model-ready Heston workflow](https://willemk-stack.github.io/option-pricing-library/user_guides/model_ready_heston_workflow/) for the Heston-specific bundle -> prepare -> fit path
+- [Future market-model workflows](https://willemk-stack.github.io/option-pricing-library/notes/market_fit/future_market_model_workflows/) for the design note behind Heston, SVI, eSSVI, and the thin router
 - [Validation matrix](https://willemk-stack.github.io/option-pricing-library/validation_matrix/) for the claim-to-evidence map across the library
 - [Heston guide](https://willemk-stack.github.io/option-pricing-library/user_guides/heston/) for the stochastic-volatility implementation and API workflow
 - [Instruments guide](https://willemk-stack.github.io/option-pricing-library/user_guides/instruments/) for the recommended public API
@@ -170,6 +190,7 @@ Python requirement:
 - **Local-vol extraction and diagnostics** from differentiable implied surfaces
 - **Heston calibration and diagnostics** with bounded transforms, multistart, fit residuals, and model-comparison reports
 - **Heston vs eSSVI/local-vol comparison** for fit quality, interpretability, and validation tradeoffs
+- **Saved-bundle market-fit workflows** for Heston, SVI, and eSSVI, plus a thin `fit_market_model(...)` dispatcher for CLI/notebook use
 - **Convergence and repricing validation utilities**
 
 ## Project layout
