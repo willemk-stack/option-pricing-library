@@ -686,6 +686,173 @@ def _plot_coverage(output_dir: Path, coverage: pd.DataFrame, theme: str) -> None
     plt.close(fig)
 
 
+def _compact_policy_name(value: Any, *, default: str = "documented") -> str:
+    if isinstance(value, Mapping):
+        for key in ("policy", "name", "policy_id", "schema_version", "source"):
+            candidate = value.get(key)
+            if candidate not in (None, ""):
+                return str(candidate)
+        return default
+    if value in (None, ""):
+        return default
+    return str(value)
+
+
+def _compact_rate_details(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    result: dict[str, Any] = {}
+    for source_key, public_key in (
+        ("provider", "rate_provider"),
+        ("rate_source", "rate_source"),
+        ("series_id", "rate_series_id"),
+        ("rate_observation_date", "rate_observation_date"),
+        ("selected_rate", "selected_rate"),
+        ("flat_rate", "flat_rate"),
+        ("rate_compounding", "rate_compounding"),
+    ):
+        candidate = value.get(source_key)
+        if candidate not in (None, "", []):
+            result[public_key] = candidate
+    return result
+
+
+def _compact_dividend_details(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    result: dict[str, Any] = {}
+    for source_key, public_key in (
+        ("source", "dividend_source"),
+        ("dividend_source", "dividend_source"),
+        ("dividend_yield", "dividend_yield"),
+        ("dividend_fallback_used", "dividend_fallback_used"),
+    ):
+        candidate = value.get(source_key)
+        if candidate not in (None, "", []):
+            result[public_key] = candidate
+    return result
+
+
+def _compact_provider_public_summary(
+    *,
+    provider_summary: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+    counts: Mapping[str, int],
+    warnings_payload: Mapping[str, Any],
+    fit: pd.DataFrame,
+) -> dict[str, Any]:
+    rate_raw = _get_any(
+        provider_summary,
+        manifest,
+        keys=("rate_policy", "rate_policy_name"),
+        default="documented",
+    )
+    dividend_raw = _get_any(
+        provider_summary,
+        manifest,
+        keys=("dividend_policy", "dividend_policy_name"),
+        default="documented",
+    )
+    quality_raw = _get_any(
+        provider_summary,
+        manifest,
+        keys=(
+            "quality_policy_name",
+            "quote_cleaning_policy",
+            "option_cleaning_policy",
+            "model_validation_policy",
+        ),
+        default="QuoteCleaningPolicyV1",
+    )
+    data_raw = _get_any(
+        provider_summary,
+        manifest,
+        keys=("data_policy_name", "data_policy"),
+        default="ProviderPublicEvidencePolicyV1",
+    )
+
+    selected_quote_count = _safe_int(
+        _fit_value(
+            fit,
+            manifest,
+            ("selected_quote_count", "quote_count", "n_quotes"),
+            default=counts.get("selected_calibration_rows", 0),
+        )
+    )
+    best_cost = _safe_float(
+        _fit_value(
+            fit,
+            manifest,
+            ("best_cost", "cost", "objective_value"),
+            default=float("nan"),
+        )
+    )
+    heston_fit: dict[str, Any] = {
+        "status": str(_fit_value(fit, manifest, ("status",), default="unknown")),
+        "objective": str(
+            _fit_value(
+                fit, manifest, ("objective", "objective_type"), default="unknown"
+            )
+        ),
+        "selected_quote_count": selected_quote_count,
+    }
+    if not (isinstance(best_cost, float) and math.isnan(best_cost)):
+        heston_fit["best_cost"] = best_cost
+
+    payload: dict[str, Any] = {
+        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
+        "underlying": _get_any(
+            provider_summary, manifest, keys=("underlying", "symbol"), default="unknown"
+        ),
+        "asof": _get_any(
+            provider_summary,
+            manifest,
+            keys=("asof", "as_of", "valuation_timestamp_utc", "valuation_date", "date"),
+            default="unknown",
+        ),
+        "source_run_id": _get_any(
+            provider_summary,
+            manifest,
+            keys=("run_id", "source_run_id", "snapshot_id"),
+            default="unknown",
+        ),
+        "provider_label": _get_any(
+            provider_summary,
+            manifest,
+            keys=("provider_label", "provider"),
+            default="provider",
+        ),
+        "feed_label": _get_any(
+            provider_summary,
+            manifest,
+            keys=("feed_label", "feed"),
+            default="marketdata",
+        ),
+        "rate_policy": _compact_policy_name(rate_raw),
+        "dividend_policy": _compact_policy_name(dividend_raw),
+        "quality_policy_name": _compact_policy_name(
+            quality_raw, default="QuoteCleaningPolicyV1"
+        ),
+        "data_policy_name": _compact_policy_name(
+            data_raw, default="ProviderPublicEvidencePolicyV1"
+        ),
+        "raw_contract_count": counts.get("raw_contracts", 0),
+        "normalized_contract_count": counts.get("normalized_contracts", 0),
+        "accepted_quote_count": counts.get("accepted_quotes", 0),
+        "rejected_quote_count": counts.get("rejected_quotes", 0),
+        "selected_quote_count": counts.get(
+            "selected_calibration_rows", selected_quote_count
+        ),
+        "warning_count": _warning_count(warnings_payload),
+        "heston_fit_status": heston_fit["status"],
+        "heston_fit": heston_fit,
+        "caveats": list(CAVEATS),
+    }
+    payload.update(_compact_rate_details(rate_raw))
+    payload.update(_compact_dividend_details(dividend_raw))
+    return payload
+
+
 def build_provider_evidence(
     *,
     bundle_root: Path,
@@ -722,59 +889,13 @@ def build_provider_evidence(
         str(row["stage"]): int(row["output_count"])
         for row in quote_summary.to_dict("records")
     }
-    public_summary = {
-        **provider_summary,
-        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
-        "underlying": _get_any(
-            provider_summary, manifest, keys=("underlying", "symbol"), default="unknown"
-        ),
-        "asof": _get_any(
-            provider_summary,
-            manifest,
-            keys=("asof", "as_of", "valuation_date", "date"),
-            default="unknown",
-        ),
-        "source_run_id": _get_any(
-            provider_summary,
-            manifest,
-            keys=("run_id", "source_run_id"),
-            default="unknown",
-        ),
-        "provider_label": _get_any(
-            provider_summary,
-            manifest,
-            keys=("provider_label", "provider"),
-            default="provider",
-        ),
-        "feed_label": _get_any(
-            provider_summary,
-            manifest,
-            keys=("feed_label", "feed"),
-            default="marketdata",
-        ),
-        "rate_policy": _get_any(
-            provider_summary,
-            manifest,
-            keys=("rate_policy", "rate_policy_name"),
-            default="documented",
-        ),
-        "dividend_policy": _get_any(
-            provider_summary,
-            manifest,
-            keys=("dividend_policy", "dividend_policy_name"),
-            default="documented",
-        ),
-        "raw_contract_count": counts.get("raw_contracts", 0),
-        "normalized_contract_count": counts.get("normalized_contracts", 0),
-        "accepted_quote_count": counts.get("accepted_quotes", 0),
-        "rejected_quote_count": counts.get("rejected_quotes", 0),
-        "selected_quote_count": counts.get("selected_calibration_rows", 0),
-        "warning_count": _warning_count(warnings_payload),
-        "heston_fit_status": str(
-            _fit_value(fit, manifest, ("status",), default="unknown")
-        ),
-        "caveats": list(CAVEATS),
-    }
+    public_summary = _compact_provider_public_summary(
+        provider_summary=provider_summary,
+        manifest=manifest,
+        counts=counts,
+        warnings_payload=warnings_payload,
+        fit=fit,
+    )
     _assert_no_forbidden_public_keys(
         public_summary, where="provider_public_summary.json"
     )
