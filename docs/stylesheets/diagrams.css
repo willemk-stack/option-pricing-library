@@ -423,6 +423,10 @@ figure.diagram--quiet figcaption {
     color: var(--docs-muted);
 }
 
+figure.diagram.diagram--quiet figcaption {
+    color: var(--docs-muted);
+    opacity: 1;
+}
 figure.diagram>p {
     margin: 0;
 }
