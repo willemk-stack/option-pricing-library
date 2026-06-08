@@ -136,3 +136,7 @@ Thumbs.db
 
 # Prompting
 prompts/
+
+# Public sanitized provider evidence data artifacts
+!docs/assets/generated/provider_evidence/data/
+!docs/assets/generated/provider_evidence/data/**

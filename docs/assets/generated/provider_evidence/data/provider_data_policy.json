@@ -1,0 +1,111 @@
+{
+  "keep_local_private": [
+    "raw provider response bodies",
+    "full provider-derived quote rows",
+    "credentials"
+  ],
+  "name": {
+    "dividend_policy": {
+      "dividend_fallback_used": true,
+      "dividend_inference": "not_enabled",
+      "dividend_is_explicit": false,
+      "dividend_source": "zero_assumption",
+      "dividend_yield": 0.0,
+      "policy": "zero_assumption",
+      "source": "zero_assumption"
+    },
+    "equity_feed": "iex",
+    "equity_provider": "alpaca",
+    "model_validation_policy": "model_ready_quotes_v1",
+    "option_cleaning_policy": {
+      "clean_option_quotes_layer": "clean_option_quotes",
+      "legacy_policy": "quote_cleaning_v1",
+      "model_validation_quotes_layer": "model_validation_quotes",
+      "policy": "staged_recoverable_quotes_v1",
+      "policy_id": "quote_cleaning_policy.v1",
+      "raw_option_quotes_layer": "raw_option_quotes",
+      "reason_codes": [
+        "unparseable_contract",
+        "bad_expiry",
+        "expired_contract",
+        "nonpositive_mid",
+        "nonpositive_strike",
+        "negative_bid",
+        "negative_ask",
+        "crossed_bid_ask",
+        "quote_after_asof",
+        "stale_quote",
+        "missing_price_source",
+        "missing_spot_for_moneyness",
+        "missing_rate_for_model",
+        "missing_dividend_for_model",
+        "missing_time_to_expiry_for_model",
+        "missing_iv_for_iv_validation",
+        "unsupported_option_right",
+        "nonfinite_numeric_field",
+        "vanilla_no_arbitrage_violation",
+        "nonstandard_or_adjusted_contract",
+        "spot_option_chain_mismatch"
+      ],
+      "recoverable_missing_fields": [
+        "mid",
+        "time_to_expiry",
+        "moneyness",
+        "log_moneyness",
+        "forward_moneyness",
+        "iv",
+        "delta",
+        "gamma",
+        "theta",
+        "vega",
+        "rho"
+      ],
+      "rejected_quotes_preserved": true
+    },
+    "option_feed": "indicative",
+    "option_provider": "alpaca",
+    "quote_freshness_mode": "demo_lenient",
+    "rate_policy": {
+      "curve_interpolation": "linear",
+      "curve_series_ids": [
+        "DGS1MO",
+        "DGS3MO",
+        "DGS6MO",
+        "DGS1",
+        "DGS2"
+      ],
+      "flat_rate": 0.0371030879515022,
+      "lookback_days": 90,
+      "policy": "fred_treasury_zero_proxy_linear_cc",
+      "provider": "fred",
+      "rate_compounding": "continuous",
+      "rate_curve_series_ids": [
+        "DGS1MO",
+        "DGS3MO",
+        "DGS6MO",
+        "DGS1",
+        "DGS2"
+      ],
+      "rate_curve_source": "fred",
+      "rate_extrapolation": "clamp_with_warning",
+      "rate_interpolation": "linear",
+      "rate_is_bootstrapped": false,
+      "rate_observation_date": "2026-06-04",
+      "rate_source": "fred:treasury_zero_proxy_curve",
+      "rate_warnings": [],
+      "selected_rate": 0.03692878206921478,
+      "selected_rate_fallback_used": false,
+      "series_id": "DGS3MO"
+    },
+    "schema_version": "provider_snapshot_data_policy.v1"
+  },
+  "publish": [
+    "labels",
+    "counts",
+    "reason counts",
+    "coverage summaries",
+    "policy names",
+    "status",
+    "warnings"
+  ]
+}

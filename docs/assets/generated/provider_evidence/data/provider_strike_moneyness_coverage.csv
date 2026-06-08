@@ -1,0 +1,6 @@
+bucket,min_log_moneyness,max_log_moneyness,accepted_quotes,calls,puts
+deep_downside,-1.592468,-0.151054,1586,634,952
+downside,-0.149478,-0.050595,1082,535,547
+atm,-0.04917,0.04976,1740,870,870
+upside,0.051049,0.147998,880,440,440
+deep_upside,0.153829,0.304652,493,247,246

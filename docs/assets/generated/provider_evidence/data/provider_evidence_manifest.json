@@ -1,0 +1,136 @@
+{
+    "artifact_schema_version":  "provider_evidence.v1",
+    "artifacts":  [
+                      {
+                          "artifact_type":  "data",
+                          "filename":  "provider_evidence_manifest.json",
+                          "path":  "data/provider_evidence_manifest.json"
+                      },
+                      {
+                          "artifact_type":  "data",
+                          "filename":  "provider_public_summary.json",
+                          "path":  "data/provider_public_summary.json"
+                      },
+                      {
+                          "artifact_type":  "data",
+                          "filename":  "provider_run_metadata.json",
+                          "path":  "data/provider_run_metadata.json"
+                      },
+                      {
+                          "artifact_type":  "data",
+                          "filename":  "provider_quality_policy.json",
+                          "path":  "data/provider_quality_policy.json"
+                      },
+                      {
+                          "artifact_type":  "data",
+                          "filename":  "provider_data_policy.json",
+                          "path":  "data/provider_data_policy.json"
+                      },
+                      {
+                          "artifact_type":  "data",
+                          "filename":  "provider_quote_cleaning_summary.csv",
+                          "path":  "data/provider_quote_cleaning_summary.csv"
+                      },
+                      {
+                          "artifact_type":  "data",
+                          "filename":  "provider_rejection_reason_counts.csv",
+                          "path":  "data/provider_rejection_reason_counts.csv"
+                      },
+                      {
+                          "artifact_type":  "data",
+                          "filename":  "provider_expiry_coverage.csv",
+                          "path":  "data/provider_expiry_coverage.csv"
+                      },
+                      {
+                          "artifact_type":  "data",
+                          "filename":  "provider_strike_moneyness_coverage.csv",
+                          "path":  "data/provider_strike_moneyness_coverage.csv"
+                      },
+                      {
+                          "artifact_type":  "data",
+                          "filename":  "provider_model_ready_summary.json",
+                          "path":  "data/provider_model_ready_summary.json"
+                      },
+                      {
+                          "artifact_type":  "data",
+                          "filename":  "provider_heston_fit_summary.csv",
+                          "path":  "data/provider_heston_fit_summary.csv"
+                      },
+                      {
+                          "artifact_type":  "data",
+                          "filename":  "provider_heston_parameter_summary.csv",
+                          "path":  "data/provider_heston_parameter_summary.csv"
+                      },
+                      {
+                          "artifact_type":  "data",
+                          "filename":  "provider_warnings.json",
+                          "path":  "data/provider_warnings.json"
+                      },
+                      {
+                          "artifact_type":  "figure",
+                          "filename":  "provider_evidence_summary_card.light.svg",
+                          "path":  "provider_evidence_summary_card.light.svg"
+                      },
+                      {
+                          "artifact_type":  "figure",
+                          "filename":  "provider_evidence_summary_card.dark.svg",
+                          "path":  "provider_evidence_summary_card.dark.svg"
+                      },
+                      {
+                          "artifact_type":  "figure",
+                          "filename":  "provider_pipeline_flow.light.svg",
+                          "path":  "provider_pipeline_flow.light.svg"
+                      },
+                      {
+                          "artifact_type":  "figure",
+                          "filename":  "provider_pipeline_flow.dark.svg",
+                          "path":  "provider_pipeline_flow.dark.svg"
+                      },
+                      {
+                          "artifact_type":  "figure",
+                          "filename":  "provider_quote_cleaning_waterfall.light.png",
+                          "path":  "provider_quote_cleaning_waterfall.light.png"
+                      },
+                      {
+                          "artifact_type":  "figure",
+                          "filename":  "provider_quote_cleaning_waterfall.dark.png",
+                          "path":  "provider_quote_cleaning_waterfall.dark.png"
+                      },
+                      {
+                          "artifact_type":  "figure",
+                          "filename":  "provider_expiry_strike_coverage.light.png",
+                          "path":  "provider_expiry_strike_coverage.light.png"
+                      },
+                      {
+                          "artifact_type":  "figure",
+                          "filename":  "provider_expiry_strike_coverage.dark.png",
+                          "path":  "provider_expiry_strike_coverage.dark.png"
+                      },
+                      {
+                          "artifact_type":  "figure",
+                          "filename":  "provider_heston_fit_summary.light.png",
+                          "path":  "provider_heston_fit_summary.light.png"
+                      },
+                      {
+                          "artifact_type":  "figure",
+                          "filename":  "provider_heston_fit_summary.dark.png",
+                          "path":  "provider_heston_fit_summary.dark.png"
+                      }
+                  ],
+    "asof":  "2026-06-06T11:10:02.232938Z",
+    "caveats":  [
+                    "Sanitized public provider evidence only.",
+                    "Raw provider payloads, credentials, and full provider-derived quote rows remain local/private.",
+                    "Heston fit status is workflow evidence, not a trading or production calibration-quality claim."
+                ],
+    "generated_at":  "2026-06-08T11:58:32.683725+00:00",
+    "input_references":  {
+                             "bundle_root":  "data/gold/model_validation_bundle/underlying=SPY/date=2026-06-06/run_id=b4a-20260606T111002Z-a037b8fe",
+                             "existing_fit_summary_csv":  null,
+                             "provider_summary_json":  "data/gold/model_validation_bundle/underlying=SPY/date=2026-06-06/run_id=b4a-20260606T111002Z-a037b8fe/provider_public_summary.json"
+                         },
+    "profile":  "release",
+    "rebuild_command":  "python scripts/build_provider_evidence_artifacts.py --bundle-root \u003cbundle-root\u003e --provider-summary-json \u003cprovider-public-summary.json\u003e --output-dir docs/assets/generated/provider_evidence --profile release",
+    "source_run_id":  "b4a-20260606T111002Z-a037b8fe",
+    "underlying":  "SPY"
+}
