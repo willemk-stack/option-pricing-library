@@ -1,0 +1,10 @@
+{
+  "artifact_schema_version": "provider_evidence.v1",
+  "asof": "2026-06-06T11:10:02.232938Z",
+  "bundle_root": "data/gold/model_validation_bundle/underlying=SPY/date=2026-06-06/run_id=b4a-20260606T111002Z-a037b8fe",
+  "feed_label": "equity=iex; option=indicative",
+  "provider_label": "equity=alpaca; option=alpaca",
+  "provider_summary_json": "data/gold/model_validation_bundle/underlying=SPY/date=2026-06-06/run_id=b4a-20260606T111002Z-a037b8fe/provider_public_summary.json",
+  "source_run_id": "b4a-20260606T111002Z-a037b8fe",
+  "underlying": "SPY"
+}

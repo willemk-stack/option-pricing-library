@@ -36,6 +36,19 @@ def _quotes() -> HestonQuoteSet:
     )
 
 
+def _strong_negative_skew_quotes() -> HestonQuoteSet:
+    strike = np.array([90.0, 100.0, 110.0, 90.0, 100.0, 110.0], dtype=np.float64)
+    expiry = np.array([0.25, 0.25, 0.25, 1.0, 1.0, 1.0], dtype=np.float64)
+    return HestonQuoteSet.from_flat_market(
+        market=MarketData(spot=100.0, rate=0.0, dividend_yield=0.0),
+        strike=strike,
+        expiry=expiry,
+        is_call=np.ones_like(strike, dtype=np.bool_),
+        mid=np.array([50.0, 12.0, 1.0, 55.0, 14.0, 1.2], dtype=np.float64),
+        iv_mid=np.array([1.20, 0.30, 0.05, 1.35, 0.34, 0.06], dtype=np.float64),
+    )
+
+
 def _seed(
     *,
     kappa: float = 1.0,
@@ -429,3 +442,27 @@ def test_generated_seed_path_uses_heston_seed_grid(
         "include_default": False,
     }
     assert calibrator_calls == [seed1, seed2]
+
+
+def test_generated_seed_path_handles_strong_negative_skew(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calibrator_calls: list[HestonParams] = []
+
+    def fake_calibrate_heston(**kwargs: object) -> tuple[HestonParams, OptimizeResult]:
+        seed = kwargs["x0_params"]
+        assert isinstance(seed, HestonParams)
+        assert -1.0 <= seed.rho <= 1.0
+        calibrator_calls.append(seed)
+        return seed, _fake_result(cost=float(len(calibrator_calls)))
+
+    monkeypatch.setattr(calibrate_module, "calibrate_heston", fake_calibrate_heston)
+
+    result = calibrate_module.calibrate_heston_multistart(
+        quotes=_strong_negative_skew_quotes(),
+        objective_type="price_rmse",
+        max_seeds=4,
+    )
+
+    assert calibrator_calls
+    assert result.success_count == len(calibrator_calls)

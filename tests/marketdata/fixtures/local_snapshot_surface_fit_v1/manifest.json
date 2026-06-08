@@ -1,0 +1,29 @@
+{
+  "asof": "2026-05-22T00:00:00Z",
+  "assumptions": {
+    "day_count": "ACT/365",
+    "dividend_yield": 0.0,
+    "dividend_yield_source": "assumption",
+    "dividend_yield_units": "annualized_decimal",
+    "rate": 0.01,
+    "rate_compounding": "continuous",
+    "rate_source": "local_fixture",
+    "rate_units": "annualized_decimal"
+  },
+  "datasets": {
+    "market_inputs": "market_inputs.v1",
+    "option_chain": "option_chain.v1"
+  },
+  "description": "Provider-neutral synthetic local market snapshot fixture for surface market-fit workflow tests.",
+  "files": {
+    "market_inputs": "market_inputs.csv",
+    "option_chain": "option_chain.csv"
+  },
+  "fixture_name": "local_snapshot_surface_fit_v1",
+  "fixture_schema_version": "local_snapshot_fixture.v1",
+  "provider_neutral": true,
+  "scope": "surface_fit_workflow",
+  "source": "local_fixture",
+  "synthetic": true,
+  "underlying": "SYNTH"
+}

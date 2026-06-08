@@ -32,6 +32,14 @@ The practical workflow is split into pricing, implied-vol smile generation,
 quadrature policy, Monte Carlo, calibration, diagnostics, and model
 comparison.
 
+If you are starting from saved marketdata artifacts or a provider-backed
+model-validation bundle, use the
+[model-ready Heston workflow](model_ready_heston_workflow.md) first. It loads
+the bundle, prepares selected and rejected Heston quotes, and then fits through
+the public workflow helpers. The low-level calibration APIs below remain the
+right path for synthetic fixtures, diagnostics builders, and advanced users who
+already have a validated `HestonQuoteSet`.
+
 For generated signatures and exact import paths across that whole stack, use
 the [Heston API reference](../api/heston.md). It covers the namespaced
 parameter object, Fourier pricers, Monte Carlo pricers, simulation primitives,
@@ -257,6 +265,14 @@ The calibrators themselves are re-exported from that package, but
 `preflight_heston_quotes(...)` is also re-exported from the calibration package
 when you want an explicit economic sanity check before running an optimizer.
 
+For saved bundles, do not manually rebuild `HestonQuoteSet` from
+`market_data.json` and `heston_quotes.parquet`. Use
+`load_model_validation_bundle(...)` and `prepare_heston_market_fit(...)`, or
+the one-shot `fit_heston_from_bundle(...)`, as shown in the
+[model-ready Heston workflow](model_ready_heston_workflow.md). That preparation
+layer records selected quotes, rejected quotes, stats, preflight, warnings, and
+errors before the optimizer runs.
+
 A `HestonQuoteSet` stores:
 
 - required market context and quote arrays: `ctx`, `strike`, `expiry`,
@@ -352,7 +368,9 @@ The main report families are:
     `price_slice_with_diagnostics(...)`, and
     `probability_slice_with_diagnostics(...)`;
 - calibration fit evidence: `run_heston_calibration_fit_diagnostics(...)` and
-    `run_heston_calibration_diagnostics(...)`;
+    `run_heston_calibration_diagnostics(...)`, plus
+    `heston_calibration_fit_summary(...)` for a compact public verdict over an
+    existing report;
 - Monte Carlo comparison: `run_heston_mc_comparison_sweep(...)`,
     `summarize_bias_vs_timestep(...)`, `summarize_runtime_vs_error(...)`, and
     `compare_heston_mc_schemes(...)`;
@@ -430,9 +448,13 @@ note.
 
 1. Price a vanilla call/put slice with the Gauss-Legendre Fourier pricer.
 2. Invert those prices to Black implied vols if you want a smile view.
-3. Build a `HestonQuoteSet` and run `calibrate_heston_multistart(...)`.
+3. For saved bundles, run the
+     [model-ready Heston workflow](model_ready_heston_workflow.md). For advanced
+     synthetic or custom targets, build a `HestonQuoteSet` and run
+     `calibrate_heston_multistart(...)`.
 4. Run `run_heston_calibration_fit_diagnostics(...)` on the fitted result.
-5. Review held-out errors separately when a held-out mask exists.
+5. Build `heston_calibration_fit_summary(...)` for a compact verdict, then
+     review held-out errors separately when a held-out mask exists.
 6. Compare against eSSVI and the direct local-vol PDE validation grid with
      `run_heston_vs_local_vol_comparison(...)`.
 7. Re-read the limitations before drawing capstone conclusions.

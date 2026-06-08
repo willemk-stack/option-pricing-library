@@ -43,6 +43,177 @@ def _reason_counts(reason: np.ndarray) -> dict[str, int]:
     return out
 
 
+def fixed_strikes_from_forward_y(
+    y_grid: np.ndarray,
+    *,
+    forward: Any,
+    reference_expiry: float | None = None,
+    reference_forward: float | None = None,
+) -> np.ndarray:
+    """Build a fixed strike grid from a forward-log-moneyness grid.
+
+    ``local_vol_from_call_grid_diagnostics`` differentiates call prices across
+    maturities at fixed strikes. eSSVI surfaces, however, are parameterized by
+    ``y = log(K / F(T))``. This helper chooses one reference forward and returns
+    ``K = F_ref * exp(y_grid)``; each maturity then has its own effective
+    forward log-moneyness ``log(K / F(T))`` when the surface is evaluated.
+    """
+
+    y = np.asarray(y_grid, dtype=float)
+    if y.ndim != 1 or y.size == 0:
+        raise ValueError("y_grid must be a non-empty 1D array")
+    if not np.all(np.isfinite(y)):
+        raise ValueError("y_grid must contain finite values")
+    if not np.all(np.diff(y) > 0):
+        raise ValueError("y_grid must be strictly increasing")
+
+    if reference_forward is None:
+        if reference_expiry is None:
+            raise ValueError(
+                "Pass either reference_forward or reference_expiry to set the "
+                "fixed strike-grid anchor."
+            )
+        reference_forward = float(forward(float(reference_expiry)))
+
+    f_ref = float(reference_forward)
+    if not np.isfinite(f_ref) or f_ref <= 0.0:
+        raise ValueError("reference_forward must be positive and finite")
+
+    strikes = np.asarray(f_ref * np.exp(y), dtype=float)
+    if not np.all(np.diff(strikes) > 0):  # pragma: no cover - guarded by y monotone
+        raise ValueError("constructed strikes must be strictly increasing")
+    return strikes
+
+
+def _boundary_mask(
+    shape: tuple[int, int],
+    *,
+    trim_t: int,
+    trim_k: int,
+) -> np.ndarray:
+    nT, nK = shape
+    boundary = np.zeros(shape, dtype=bool)
+    if trim_t > 0:
+        trim_t_eff = min(int(trim_t), nT)
+        boundary[:trim_t_eff, :] = True
+        boundary[nT - trim_t_eff :, :] = True
+    if trim_k > 0:
+        trim_k_eff = min(int(trim_k), nK)
+        boundary[:, :trim_k_eff] = True
+        boundary[:, nK - trim_k_eff :] = True
+    return boundary
+
+
+def _invalid_points_table(
+    *,
+    invalid: np.ndarray,
+    reason: np.ndarray,
+    expiries: np.ndarray,
+    strikes: np.ndarray,
+    y: np.ndarray,
+    sigma: np.ndarray,
+    local_var: np.ndarray,
+    denom: np.ndarray,
+    trim_t: int,
+    trim_k: int,
+    numerator: np.ndarray | None = None,
+    curvature: np.ndarray | None = None,
+    top_n: int | None = None,
+) -> pd.DataFrame:
+    invalid_mask = np.asarray(invalid, dtype=bool)
+    if invalid_mask.ndim != 2:
+        raise ValueError("invalid must be a 2D mask")
+
+    Ts = np.asarray(expiries, dtype=float)
+    K = np.asarray(strikes, dtype=float)
+    y_arr = np.asarray(y, dtype=float)
+    reason_arr = np.asarray(reason, dtype=np.uint32)
+    boundary = _boundary_mask(
+        cast(tuple[int, int], invalid_mask.shape),
+        trim_t=int(trim_t),
+        trim_k=int(trim_k),
+    )
+
+    rows: list[dict[str, Any]] = []
+    nT, nK = invalid_mask.shape
+    for i in range(nT):
+        for j in range(nK):
+            if not invalid_mask[i, j]:
+                continue
+            K_ij = float(K[i, j]) if K.ndim == 2 else float(K[j])
+            row: dict[str, Any] = {
+                "T": float(Ts[i]),
+                "K": K_ij,
+                "y": float(y_arr[i, j]),
+                "i_t": int(i),
+                "i_k": int(j),
+                "is_boundary": bool(boundary[i, j]),
+                "is_interior": bool(not boundary[i, j]),
+                "sigma": float(sigma[i, j]) if np.isfinite(sigma[i, j]) else np.nan,
+                "local_var": (
+                    float(local_var[i, j]) if np.isfinite(local_var[i, j]) else np.nan
+                ),
+                "denom": float(denom[i, j]) if np.isfinite(denom[i, j]) else np.nan,
+                "reason_code": int(reason_arr[i, j]),
+                "reasons": _reasons_to_str(int(reason_arr[i, j])),
+            }
+            if numerator is not None:
+                row["numerator"] = (
+                    float(numerator[i, j]) if np.isfinite(numerator[i, j]) else np.nan
+                )
+            if curvature is not None:
+                row["curvature"] = (
+                    float(curvature[i, j]) if np.isfinite(curvature[i, j]) else np.nan
+                )
+            rows.append(row)
+
+    table = pd.DataFrame(rows)
+    if table.empty:
+        return table
+    table = table.sort_values(
+        ["is_interior", "T", "K"],
+        ascending=[False, True, True],
+    ).reset_index(drop=True)
+    if top_n is not None:
+        return table.head(int(top_n)).copy()
+    return table
+
+
+def _boundary_summary(
+    *,
+    invalid: np.ndarray,
+    trim_t: int,
+    trim_k: int,
+) -> dict[str, float | int | bool]:
+    invalid_mask = np.asarray(invalid, dtype=bool)
+    boundary = _boundary_mask(
+        cast(tuple[int, int], invalid_mask.shape),
+        trim_t=int(trim_t),
+        trim_k=int(trim_k),
+    )
+    total = int(invalid_mask.size)
+    invalid_count = int(np.sum(invalid_mask))
+    boundary_invalid = int(np.sum(invalid_mask & boundary))
+    interior_invalid = int(np.sum(invalid_mask & ~boundary))
+    boundary_cells = int(np.sum(boundary))
+    interior_cells = int(total - boundary_cells)
+    return {
+        "n_total": total,
+        "invalid_count": invalid_count,
+        "boundary_cell_count": boundary_cells,
+        "interior_cell_count": interior_cells,
+        "boundary_invalid_count": boundary_invalid,
+        "interior_invalid_count": interior_invalid,
+        "boundary_invalid_frac": (
+            float(boundary_invalid) / float(boundary_cells) if boundary_cells else 0.0
+        ),
+        "interior_invalid_frac": (
+            float(interior_invalid) / float(interior_cells) if interior_cells else 0.0
+        ),
+        "invalids_are_boundary_only": bool(invalid_count > 0 and interior_invalid == 0),
+    }
+
+
 def localvol_grid_diagnostics(
     localvol: LocalVolSurface,
     *,
@@ -118,6 +289,19 @@ def localvol_grid_diagnostics(
         taken += 1
 
     worst_df = pd.DataFrame(rows)
+    invalid_points = _invalid_points_table(
+        invalid=invalid,
+        reason=reason,
+        expiries=Ts,
+        strikes=K_grid,
+        y=np.broadcast_to(y[None, :], (nT, ny)),
+        sigma=sig,
+        local_var=lv,
+        denom=denom,
+        trim_t=0,
+        trim_k=0,
+        top_n=None,
+    )
 
     return LocalVolGridReport(
         expiries=Ts,
@@ -132,6 +316,11 @@ def localvol_grid_diagnostics(
         invalid_frac=invalid_frac,
         reason_counts=reason_counts,
         worst_points=worst_df,
+        invalid_points=invalid_points,
+        coordinate_conventions={
+            "analytic_gatheral": "y = log(K / F(T)); K grid is rebuilt as F(T) * exp(y) for each maturity.",
+            "surface_derivatives": "LocalVolSurface.local_var_diagnostics uses implied.w_and_derivs(y, T) when available.",
+        },
     )
 
 
@@ -270,7 +459,7 @@ def localvol_compare_gatheral_vs_dupire(
     mae = float(np.nanmean(abs_diff)) if n_valid else float("nan")
     max_abs = float(np.nanmax(abs_diff)) if n_valid else float("nan")
 
-    summary: dict[str, float | int] = {
+    summary: dict[str, float | int | bool] = {
         "n_total": n_total,
         "n_compared": n_valid,
         "compared_frac": float(n_valid) / float(n_total) if n_total else 0.0,
@@ -287,6 +476,12 @@ def localvol_compare_gatheral_vs_dupire(
         "diff_sigma_mae": mae,
         "diff_sigma_max_abs": max_abs,
     }
+    boundary_summary = _boundary_summary(
+        invalid=dup.invalid,
+        trim_t=int(trim_t),
+        trim_k=int(trim_k),
+    )
+    summary.update(boundary_summary)
 
     rows: list[dict[str, Any]] = []
     if n_valid:
@@ -315,6 +510,21 @@ def localvol_compare_gatheral_vs_dupire(
             taken += 1
 
     worst_df = pd.DataFrame(rows)
+    invalid_points = _invalid_points_table(
+        invalid=dup.invalid,
+        reason=dup.reason,
+        expiries=Ts,
+        strikes=K,
+        y=y,
+        sigma=dup.sigma,
+        local_var=dup.local_var,
+        denom=dup.denom,
+        numerator=dup.num,
+        curvature=dup.curvature,
+        trim_t=int(trim_t),
+        trim_k=int(trim_k),
+        top_n=None,
+    )
 
     return LocalVolCompareReport(
         expiries=Ts,
@@ -334,4 +544,95 @@ def localvol_compare_gatheral_vs_dupire(
         worst_diffs=worst_df,
         gatheral_reason_counts=_reason_counts(g_reason),
         dupire_reason_counts=_reason_counts(dup.reason),
+        invalid_points=invalid_points,
+        boundary_summary=boundary_summary,
+        coordinate_conventions={
+            "gatheral": "Analytic path evaluates y = log(K / F(T)) at each fixed strike and maturity.",
+            "dupire_call_grid": "Finite-difference path expects call prices on one fixed K grid across all taus.",
+            "strike_coordinate_logK": "strike_coordinate='logK' means differentiate along log(strikes); pass positive strikes, not log-strike values.",
+            "price_convention_discounted": "price_convention='discounted' means PV call prices with the q*C term in the Dupire numerator.",
+        },
+    )
+
+
+def localvol_compare_gatheral_vs_dupire_on_forward_y(
+    localvol: LocalVolSurface,
+    *,
+    expiries: Sequence[float],
+    y_grid: np.ndarray,
+    market: Any,
+    reference_expiry: float | None = None,
+    reference_forward: float | None = None,
+    eps_w: float = 1e-12,
+    eps_denom: float = 1e-12,
+    price_convention: str = "discounted",
+    strike_coordinate: str = "logK",
+    trim_t: int = 1,
+    trim_k: int = 1,
+    eps_rel: float = 1e-12,
+    eps_gamma_rel: float = 1e-12,
+    top_n: int = 10,
+    bs_model: Black76Module | None = None,
+) -> LocalVolCompareReport:
+    """Compare Gatheral and call-grid Dupire from a forward-y reference grid.
+
+    The returned strike grid is fixed across maturities. It is anchored by
+    ``reference_forward`` or by ``localvol.forward(reference_expiry)``; it is
+    not rebuilt per expiry. This is the notebook-safe bridge from an eSSVI
+    ``y`` domain to a Dupire call-price grid.
+    """
+
+    strikes = fixed_strikes_from_forward_y(
+        y_grid,
+        forward=localvol.forward,
+        reference_expiry=reference_expiry,
+        reference_forward=reference_forward,
+    )
+    report = localvol_compare_gatheral_vs_dupire(
+        localvol,
+        expiries=expiries,
+        strikes=strikes,
+        market=market,
+        eps_w=eps_w,
+        eps_denom=eps_denom,
+        price_convention=price_convention,
+        strike_coordinate=strike_coordinate,
+        trim_t=trim_t,
+        trim_k=trim_k,
+        eps_rel=eps_rel,
+        eps_gamma_rel=eps_gamma_rel,
+        top_n=top_n,
+        bs_model=bs_model,
+    )
+    conventions = dict(report.coordinate_conventions)
+    conventions["forward_y_reference_grid"] = (
+        "Input y_grid is used only to build fixed strikes K = F_ref * exp(y); "
+        "per-maturity comparison y is log(K / F(T))."
+    )
+    if reference_forward is not None:
+        conventions["reference_forward"] = str(float(reference_forward))
+    elif reference_expiry is not None:
+        conventions["reference_expiry"] = str(float(reference_expiry))
+
+    return LocalVolCompareReport(
+        expiries=report.expiries,
+        strikes=report.strikes,
+        forwards=report.forwards,
+        y=report.y,
+        g_sigma=report.g_sigma,
+        g_local_var=report.g_local_var,
+        g_denom=report.g_denom,
+        g_invalid=report.g_invalid,
+        g_reason=report.g_reason,
+        dupire=report.dupire,
+        diff_sigma=report.diff_sigma,
+        diff_local_var=report.diff_local_var,
+        invalid_union=report.invalid_union,
+        summary=report.summary,
+        worst_diffs=report.worst_diffs,
+        gatheral_reason_counts=report.gatheral_reason_counts,
+        dupire_reason_counts=report.dupire_reason_counts,
+        invalid_points=report.invalid_points,
+        boundary_summary=report.boundary_summary,
+        coordinate_conventions=conventions,
     )

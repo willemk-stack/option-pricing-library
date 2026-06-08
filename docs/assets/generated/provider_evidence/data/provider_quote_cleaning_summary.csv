@@ -1,0 +1,6 @@
+stage,input_count,output_count,dropped_count,retained_count
+raw_contracts,6112,6112,0,6112
+normalized_contracts,6112,6112,0,6112
+accepted_quotes,6112,5781,331,5781
+rejected_quotes,6112,331,5781,331
+selected_calibration_rows,5781,5533,248,5533

@@ -226,7 +226,7 @@ def _silver_cleaning_manifest(
     library_commit: str | None,
 ) -> dict[str, Any]:
     market_row = market_inputs.iloc[0]
-    return {
+    manifest = {
         "silver_schema_version": SILVER_CLEANING_SCHEMA_VERSION,
         "cleaning_policy": _CLEANING_POLICY_ID,
         "market_inputs_schema_version": MARKET_INPUTS_SCHEMA_VERSION,
@@ -235,12 +235,20 @@ def _silver_cleaning_manifest(
         "fixture_name": local_snapshot.fixture_name,
         "snapshot_id": local_snapshot.snapshot_id,
         "run_id": run_id,
-        "source_type": "local_fixture",
+        "source_type": _snapshot_source_type(local_snapshot),
         "underlying": local_snapshot.underlying,
         "valuation_timestamp_utc": _utc_isoformat(valuation_timestamp),
         "spot": _float_field(market_row, "spot"),
+        "spot_source": _text_field(market_row, "spot_source"),
         "rate": _float_field(market_row, "rate"),
+        "rate_source": _text_field(market_row, "rate_source"),
+        "rate_observation_date": _timestamp_field(
+            market_row,
+            "rate_observation_date",
+        ),
+        "rate_compounding": _text_field(market_row, "rate_compounding"),
         "dividend_yield": _float_field(market_row, "dividend_yield"),
+        "dividend_yield_source": _text_field(market_row, "dividend_yield_source"),
         "day_count": _text_field(market_row, "day_count"),
         "rows": {
             "market_inputs": int(len(market_inputs)),
@@ -260,6 +268,33 @@ def _silver_cleaning_manifest(
         },
         "library_commit": _optional_text(library_commit),
     }
+    _add_optional_policy_metadata(manifest, getattr(local_snapshot, "metadata", None))
+    return manifest
+
+
+def _add_optional_policy_metadata(
+    manifest: dict[str, Any],
+    metadata: object,
+) -> None:
+    if not isinstance(metadata, Mapping):
+        return
+    for key in (
+        "equity_provider",
+        "equity_feed",
+        "option_provider",
+        "option_feed",
+        "selected_rate",
+        "flat_rate",
+        "rate_policy",
+        "dividend_policy",
+        "option_cleaning_policy",
+        "quote_freshness_mode",
+        "model_validation_policy",
+        "data_policy",
+    ):
+        value = metadata.get(key)
+        if value is not None:
+            manifest[key] = dict(value) if isinstance(value, Mapping) else value
 
 
 def _float_field(row: pd.Series, column: str) -> float | None:
@@ -276,6 +311,13 @@ def _text_field(row: pd.Series, column: str) -> str | None:
     return str(value)
 
 
+def _timestamp_field(row: pd.Series, column: str) -> str | None:
+    value = row[column]
+    if pd.isna(value):
+        return None
+    return pd.Timestamp(value).isoformat()
+
+
 def _optional_text(value: str | None) -> str | None:
     if value is None:
         return None
@@ -283,6 +325,20 @@ def _optional_text(value: str | None) -> str | None:
     if not cleaned:
         raise ValueError("library_commit must be a non-empty string when provided")
     return cleaned
+
+
+def _snapshot_source_type(local_snapshot: LocalSnapshotResult) -> str:
+    metadata = getattr(local_snapshot, "metadata", None)
+    if isinstance(metadata, Mapping):
+        source_type = metadata.get("source_type")
+        if isinstance(source_type, str) and source_type.strip():
+            return source_type.strip()
+
+    source_type = getattr(local_snapshot, "source_type", None)
+    if isinstance(source_type, str) and source_type.strip():
+        return source_type.strip()
+
+    return "local_fixture"
 
 
 __all__ = [

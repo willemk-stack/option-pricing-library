@@ -11,10 +11,12 @@ import pytest
 import option_pricing.marketdata.bundles as bundles_module
 from option_pricing.marketdata.bundles import (
     HestonSmokeResult,
+    LoadedModelValidationBundle,
     ModelValidationBundleConfig,
     ModelValidationBundlePaths,
     build_model_validation_manifest,
     build_surface_inputs,
+    load_model_validation_bundle,
 )
 from option_pricing.marketdata.contracts import ModelValidationBundleResult
 from option_pricing.marketdata.manifests import (
@@ -132,6 +134,19 @@ def test_public_dataclasses_have_exact_expected_fields() -> None:
         "heston_fit_summary",
         "warnings",
     )
+    assert tuple(field.name for field in fields(LoadedModelValidationBundle)) == (
+        "root",
+        "manifest_path",
+        "manifest",
+        "warnings",
+        "market_snapshot",
+        "market_data",
+        "cleaned_quotes",
+        "rejected_quotes",
+        "heston_quotes",
+        "surface_inputs",
+        "heston_fit_summary",
+    )
     assert tuple(field.name for field in fields(HestonSmokeResult)) == (
         "status",
         "message",
@@ -154,15 +169,18 @@ def test_public_dataclasses_have_exact_expected_fields() -> None:
 def test_bundle_all_exposes_intended_a5_s1_api() -> None:
     assert tuple(bundles_module.__all__) == (
         "HestonSmokeResult",
+        "LoadedModelValidationBundle",
         "ModelValidationBundleConfig",
         "ModelValidationBundlePaths",
         "ModelValidationBundleResult",
         "build_model_validation_manifest",
         "build_surface_inputs",
+        "load_model_validation_bundle",
         "write_model_validation_bundle_artifacts",
     )
     assert bundles_module.ModelValidationBundleResult is ModelValidationBundleResult
     assert bundles_module.build_surface_inputs is build_surface_inputs
+    assert bundles_module.load_model_validation_bundle is load_model_validation_bundle
     for symbol in bundles_module.__all__:
         assert getattr(bundles_module, symbol) is not None
 

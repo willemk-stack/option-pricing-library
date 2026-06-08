@@ -28,10 +28,13 @@ turning into one long flat list.
 8. [Dupire local vol](local-vol-pde/dupire_local_vol.md) and
    [finite differences](local-vol-pde/finite_difference_pde.md) - the
    local-vol/PDE bridge and its numerical risks.
-9. [Heston stochastic volatility](heston/heston_stochastic_vol.md) and
+9. [Market-model workflow architecture](market_fit/future_market_model_workflows.md) -
+    the future explicit-helper pattern for Heston, SVI, eSSVI, and derived
+    local-vol workflows.
+10. [Heston stochastic volatility](heston/heston_stochastic_vol.md) and
    [Heston pricing conventions](heston/heston_pricing_conventions.md) - the
    stochastic-volatility branch.
-10. [Heston versus local volatility](heston/heston_vs_local_vol.md) - the
+11. [Heston versus local volatility](heston/heston_vs_local_vol.md) - the
     model-comparison evidence surface.
 
 ## Topic groups
@@ -64,6 +67,12 @@ turning into one long flat list.
   nodal eSSVI calibration and smooth projection policy.
 - [Interpolation](volatility/interpolation.md) - review notes on interpolation
   choices and arbitrage-aware alternatives.
+
+### Market fit
+
+- [Market-model workflow architecture](market_fit/future_market_model_workflows.md) -
+    future bundle-to-fit workflow policy for Heston, SVI, eSSVI, and derived
+    local-vol workflows.
 
 ### Local-vol and PDE
 
@@ -105,6 +114,9 @@ turning into one long flat list.
   quadrature and Heston integration rationale.
 - [Docs workflow architecture](diagnostics/docs_workflow_architecture.md) -
   documentation and publishing policy for generated artifacts.
+- [Feature data providers release notes](feature_data_providers_release_notes.md)
+  - maintainer summary for the local proof, private provider evidence, and
+  model-ready Heston workflow delivery surface.
 
 ## Taxonomy for future notes
 
@@ -113,10 +125,11 @@ repository's implementation. Use **Pricing** for model pricing recipes and
 baseline numerical estimators. Use **Volatility** for implied-volatility,
 surface-fitting, repair, and cross-maturity handoff design. Use
 **Local-vol and PDE** for Dupire extraction, local-vol pricing, grids, and
-convergence. Use **Heston** for stochastic-volatility pricing, calibration,
-simulation, and model-comparison evidence. Use **Diagnostics and numerical
-methods** for report interpretation, integration rules, generated-artifact
-policy, and provisional review notes.
+convergence. Use **Market fit** for bundle-to-model workflow contracts and
+public calibration orchestration. Use **Heston** for stochastic-volatility
+pricing, calibration, simulation, and model-comparison evidence. Use
+**Diagnostics and numerical methods** for report interpretation, integration
+rules, generated-artifact policy, and provisional review notes.
 
 ## Status language
 

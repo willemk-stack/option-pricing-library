@@ -11,6 +11,11 @@ flow is:
 3. review convergence, smoothness, continuity, and visible failure modes with
    the frozen plot set
 
+If your starting point is a saved marketdata model-validation bundle, first use
+the [model-ready Heston workflow](model_ready_heston_workflow.md). It loads the
+bundle, prepares selected and rejected quotes, and fits Heston before you move
+into calibration diagnostics.
+
 [Open the notebook](https://github.com/willemk-stack/option-pricing-library/blob/main/demos/11_heston_diagnostics_review.ipynb){ .md-button .md-button--primary }
 
 ## What this report is for

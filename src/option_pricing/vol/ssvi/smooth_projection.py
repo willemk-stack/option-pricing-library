@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Self
 
 import numpy as np
 
@@ -116,6 +117,9 @@ class ESSVIProjectionConfig:
     dupire_y_min: float = -1.5
     dupire_y_max: float = 1.5
     dupire_ny: int = 41
+    strike_tol: float = 1e-8
+    butterfly_tol: float = 1e-10
+    calendar_tol: float = 1e-8
     eps_w: float = 1e-12
     eps_denom: float = 1e-12
     strict_validation: bool = False
@@ -129,6 +133,77 @@ class ESSVIProjectionConfig:
             raise ValueError("validation_y_min must be < validation_y_max.")
         if self.dupire_y_min >= self.dupire_y_max:
             raise ValueError("dupire_y_min must be < dupire_y_max.")
+        for name, value in (
+            ("strike_tol", self.strike_tol),
+            ("butterfly_tol", self.butterfly_tol),
+            ("calendar_tol", self.calendar_tol),
+        ):
+            value_f = float(value)
+            if not np.isfinite(value_f) or value_f < 0.0:
+                raise ValueError(f"{name} must be finite and >= 0.")
+
+    @classmethod
+    def from_observed_y(
+        cls,
+        y: ArrayLike,
+        *,
+        padding: float = 0.0,
+        validation_padding: float | None = None,
+        dupire_padding: float | None = None,
+        min_width: float = 1e-6,
+        **kwargs,
+    ) -> Self:
+        """Create a projection config whose validation domains cover observed y."""
+
+        return cls(**kwargs).with_observed_y(
+            y,
+            padding=padding,
+            validation_padding=validation_padding,
+            dupire_padding=dupire_padding,
+            min_width=min_width,
+        )
+
+    def with_observed_y(
+        self,
+        y: ArrayLike,
+        *,
+        padding: float = 0.0,
+        validation_padding: float | None = None,
+        dupire_padding: float | None = None,
+        min_width: float = 1e-6,
+    ) -> Self:
+        """Return a copy with validation and Dupire y-ranges set from quotes."""
+
+        y_arr = np.asarray(y, dtype=np.float64).reshape(-1)
+        if y_arr.size == 0 or np.any(~np.isfinite(y_arr)):
+            raise ValueError("observed y support must be non-empty and finite.")
+        if not np.isfinite(float(min_width)) or float(min_width) <= 0.0:
+            raise ValueError("min_width must be finite and > 0.")
+
+        base_min = float(np.min(y_arr))
+        base_max = float(np.max(y_arr))
+        if base_max - base_min < float(min_width):
+            center = 0.5 * (base_min + base_max)
+            half_width = 0.5 * float(min_width)
+            base_min = center - half_width
+            base_max = center + half_width
+
+        def _padding(name: str, value: float | None) -> float:
+            pad = float(padding if value is None else value)
+            if not np.isfinite(pad) or pad < 0.0:
+                raise ValueError(f"{name} must be finite and >= 0.")
+            return pad
+
+        validation_pad = _padding("validation_padding", validation_padding)
+        dupire_pad = _padding("dupire_padding", dupire_padding)
+
+        return replace(
+            self,
+            validation_y_min=base_min - validation_pad,
+            validation_y_max=base_max + validation_pad,
+            dupire_y_min=base_min - dupire_pad,
+            dupire_y_max=base_max + dupire_pad,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +217,12 @@ class ESSVIProjectionDiagnostics:
     dupire_invalid_count: int
     dupire_total_points: int
     message: str
+    calendar_ok: bool = False
+    calendar_bad_pair_count: int = 0
+    calendar_max_violation: float = 0.0
+    static_noarb_message: str = ""
+    continuous_constraint_message: str = ""
+    dupire_invalid_rate: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +233,46 @@ class ESSVIProjectionResult:
     surface: ESSVISmoothedSurface | None
     fallback_surface: ESSVINodalSurface
     diag: ESSVIProjectionDiagnostics
+    candidate_params: ESSVITermStructures | None = None
+    candidate_surface: ESSVISmoothedSurface | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _ValidationDiagnosticFields:
+    calendar_ok: bool
+    calendar_bad_pair_count: int
+    calendar_max_violation: float
+    static_noarb_message: str
+    continuous_constraint_message: str
+
+
+def _validation_diagnostic_fields(
+    validation: ESSVIValidationReport | None,
+) -> _ValidationDiagnosticFields:
+    if validation is None:
+        return _ValidationDiagnosticFields(
+            calendar_ok=False,
+            calendar_bad_pair_count=0,
+            calendar_max_violation=0.0,
+            static_noarb_message="",
+            continuous_constraint_message="",
+        )
+
+    static_noarb = validation.static_noarb
+    calendar = static_noarb.calendar_total_variance
+    return _ValidationDiagnosticFields(
+        calendar_ok=bool(calendar.ok),
+        calendar_bad_pair_count=int(calendar.bad_pairs.shape[0]),
+        calendar_max_violation=float(calendar.max_violation),
+        static_noarb_message=static_noarb.message,
+        continuous_constraint_message=validation.constraints.message,
+    )
+
+
+def _dupire_invalid_rate(invalid_count: int, total_points: int) -> float:
+    if int(total_points) <= 0:
+        return 0.0
+    return float(invalid_count) / float(total_points)
 
 
 def project_essvi_nodes(
@@ -240,6 +361,9 @@ def project_essvi_nodes(
             y_grid=validation_y_grid,
             strict=False,
             tol=nodes.eps,
+            strike_tol=cfg.strike_tol,
+            butterfly_tol=cfg.butterfly_tol,
+            calendar_tol=cfg.calendar_tol,
         )
 
         dupire_invalid_count = 0
@@ -265,6 +389,7 @@ def project_essvi_nodes(
             if success
             else f"validation_ok={validation.ok}, dupire_invalid_count={dupire_invalid_count}"
         )
+        validation_diag = _validation_diagnostic_fields(validation)
         diag = ESSVIProjectionDiagnostics(
             node_validation_ok=bool(node_report.ok),
             validation_expiries=validation_expiries,
@@ -275,6 +400,16 @@ def project_essvi_nodes(
             dupire_invalid_count=dupire_invalid_count,
             dupire_total_points=dupire_total_points,
             message=message,
+            dupire_invalid_rate=_dupire_invalid_rate(
+                dupire_invalid_count, dupire_total_points
+            ),
+            calendar_ok=validation_diag.calendar_ok,
+            calendar_bad_pair_count=validation_diag.calendar_bad_pair_count,
+            calendar_max_violation=validation_diag.calendar_max_violation,
+            static_noarb_message=validation_diag.static_noarb_message,
+            continuous_constraint_message=(
+                validation_diag.continuous_constraint_message
+            ),
         )
         if cfg.strict_validation and not success:
             raise ValueError(message)
@@ -285,8 +420,11 @@ def project_essvi_nodes(
             surface=surface if success else None,
             fallback_surface=fallback_surface,
             diag=diag,
+            candidate_params=params,
+            candidate_surface=surface,
         )
     except Exception as exc:
+        dupire_total_points = int(dupire_expiries.size * dupire_y_grid.size)
         diag = ESSVIProjectionDiagnostics(
             node_validation_ok=bool(node_report.ok),
             validation_expiries=validation_expiries,
@@ -295,8 +433,10 @@ def project_essvi_nodes(
             dupire_expiries=dupire_expiries,
             dupire_y_grid=dupire_y_grid,
             dupire_invalid_count=0,
-            dupire_total_points=int(dupire_expiries.size * dupire_y_grid.size),
+            dupire_total_points=dupire_total_points,
             message=str(exc),
+            continuous_constraint_message=str(exc),
+            dupire_invalid_rate=_dupire_invalid_rate(0, dupire_total_points),
         )
         if cfg.strict_validation:
             raise

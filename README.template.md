@@ -82,6 +82,18 @@ Evidence is based on deterministic synthetic fixtures and reference-price tests,
 
 The proof card above is generated from the published eSSVI and local-vol validation pages plus the committed benchmark artifacts, so the README stays aligned with the same source of truth as the performance page.
 
+### Marketdata and Heston fit paths
+
+The marketdata layer has three intentionally separate review paths:
+
+| Path | What to use | Boundary |
+| --- | --- | --- |
+| Credential-free proof | [Market snapshot validation](https://willemk-stack.github.io/option-pricing-library/user_guides/market_snapshot_validation/) and `scripts/demo_local_market_validation.py` | Synthetic local fixtures, no live providers or credentials, redistributable artifacts. |
+| Private provider-backed evidence | [Marketdata CLI and private provider runs](https://willemk-stack.github.io/option-pricing-library/user_guides/marketdata_cli/) and `option-pricing-marketdata` | Alpaca/FRED-backed local artifacts for private validation; do not commit or redistribute provider data. |
+| Official model-ready Heston workflow | [Model-ready Heston workflow](https://willemk-stack.github.io/option-pricing-library/user_guides/model_ready_heston_workflow/) | `load_model_validation_bundle(...) -> prepare_heston_market_fit(...) -> fit_heston_market(...)`, or `fit_heston_from_bundle(...)`. |
+
+Provider-backed runs are useful evidence surfaces, not the public proof path and not a production trading or universal calibration claim.
+
 | Area | What to review | Open |
 | --- | --- | --- |
 | Surface repair | Quote-vs-repaired surfaces, no-arbitrage checks, and per-expiry SVI residual tables | [Surface workflow](https://willemk-stack.github.io/option-pricing-library/user_guides/surface_workflow/) |
@@ -95,6 +107,8 @@ The proof card above is generated from the published eSSVI and local-vol validat
 - [Decision guide](https://willemk-stack.github.io/option-pricing-library/user_guides/decision_guide/) for the strongest end-to-end review path
 - [Heston model comparison](https://willemk-stack.github.io/option-pricing-library/user_guides/heston_model_comparison/) for the reviewer-facing model-choice proof path
 - [Market snapshot validation](https://willemk-stack.github.io/option-pricing-library/user_guides/market_snapshot_validation/) for the local fixture-to-artifact reviewer workflow with no live providers or credentials
+- [Marketdata CLI and private provider runs](https://willemk-stack.github.io/option-pricing-library/user_guides/marketdata_cli/) for the optional local/private provider-backed artifact workflow
+- [Model-ready Heston workflow](https://willemk-stack.github.io/option-pricing-library/user_guides/model_ready_heston_workflow/) for the bundle -> prepare -> fit path
 - [Validation matrix](https://willemk-stack.github.io/option-pricing-library/validation_matrix/) for the claim-to-evidence map across the library
 - [Heston guide](https://willemk-stack.github.io/option-pricing-library/user_guides/heston/) for the stochastic-volatility implementation and API workflow
 - [Instruments guide](https://willemk-stack.github.io/option-pricing-library/user_guides/instruments/) for the recommended public API
@@ -125,7 +139,7 @@ pip install -e .
 
 Supported extras from `pyproject.toml`:
 
-- `pip install -e ".[marketdata]"` for local market snapshot demos and Parquet-backed marketdata artifacts
+- `pip install -e ".[marketdata]"` for provider-backed marketdata CLI runs, local snapshot demos, and Parquet-backed marketdata artifacts
 - `pip install -e ".[plot]"` for plotting helpers used by diagnostics and docs figures
 - `pip install -e ".[notebooks]"` for the demo notebook environment
 - `pip install -e ".[dev]"` for tests, benchmarks, linting, formatting, and typing
@@ -167,6 +181,8 @@ Python requirement:
 | **`pricers/`** | Public pricing entry points for analytic, tree, Monte Carlo, and PDE workflows |
 | **`models/`** | Model-specific internals such as Black-Scholes and local-vol components |
 | **`vol/`** | Implied vol, smiles, surfaces, SVI/eSSVI tooling, and local-vol extraction |
+| **`marketdata/`** | Optional local fixture and provider-backed artifact workflows, bundle loading, and model-ready preparation |
+| **`workflows/`** | High-level orchestration such as saved bundle to Heston market fit |
 | **`numerics/`** | Root-finding, finite differences, tridiagonal solvers, and PDE building blocks |
 | **`diagnostics/`** | Arbitrage checks, convergence studies, repricing audits, and reports |
 | **`viz/`** | Plotting helpers for surfaces, diagnostics, and published figures |

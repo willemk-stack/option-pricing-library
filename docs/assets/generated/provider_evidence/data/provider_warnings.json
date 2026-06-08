@@ -1,0 +1,15 @@
+{
+  "data_quality": [
+    "optional IV values are incomplete or invalid for HestonQuoteSet reconstruction; iv_mid will be omitted unless every IV is finite and > 0",
+    "optional vega values are incomplete or invalid for HestonQuoteSet reconstruction; bs_vega will be omitted unless every vega is finite and >= 0"
+  ],
+  "heston_smoke": [
+    "Heston smoke skipped because config.run_heston_smoke is False."
+  ],
+  "warnings": [
+    "documented_assumption: dividend_yield=0.0, dividend_policy=zero_assumption, dividend_inference=not_enabled",
+    "documented_assumption: rate_series_id=DGS3MO, default_rate_series_id=DGS3MO, rate_curve=FRED Treasury zero-rate proxy, interpolation=linear, compounding=continuous, rate_is_bootstrapped=false",
+    "current_provider_scope: option_chain_backfill=not_enabled",
+    "current_provider_scope: scheduling=not_enabled"
+  ]
+}

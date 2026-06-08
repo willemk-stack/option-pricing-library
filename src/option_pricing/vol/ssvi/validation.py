@@ -288,6 +288,9 @@ def validate_essvi_continuous(
     y_grid: ArrayLike | None = None,
     strict: bool = False,
     tol: float = 1e-10,
+    strike_tol: float = 1e-8,
+    butterfly_tol: float = 1e-10,
+    calendar_tol: float = 1e-8,
 ) -> ESSVIValidationReport:
     if expiries is None:
         inferred = getattr(params.theta_term, "sample_expiries", None)
@@ -323,6 +326,9 @@ def validate_essvi_continuous(
         static_noarb = check_surface_noarb(
             surface,
             df=ctx.df,
+            tol_strike=strike_tol,
+            tol_butterfly=butterfly_tol,
+            tol_calendar=calendar_tol,
             calendar_x_grid=y_grid_arr,
         )
     except Exception as exc:
@@ -369,6 +375,9 @@ def validate_essvi_surface(
     y_grid: ArrayLike | None = None,
     strict: bool = False,
     tol: float = 1e-10,
+    strike_tol: float = 1e-8,
+    butterfly_tol: float = 1e-10,
+    calendar_tol: float = 1e-8,
 ) -> ESSVIValidationReport:
     warnings.warn(
         "validate_essvi_surface is deprecated; use validate_essvi_continuous.",
@@ -382,4 +391,7 @@ def validate_essvi_surface(
         y_grid=y_grid,
         strict=strict,
         tol=tol,
+        strike_tol=strike_tol,
+        butterfly_tol=butterfly_tol,
+        calendar_tol=calendar_tol,
     )

@@ -30,6 +30,10 @@ common target: Heston gives interpretable stochastic variance dynamics, while
 eSSVI/local-vol gives flexible vanilla-surface fit and direct Dupire/PDE
 repricing diagnostics.
 
+For the real-market companion workflow, use
+[Real-market provider evidence](provider_market_evidence.md). This page keeps the
+main model comparison synthetic so the controlled model-choice story stays clean.
+
 Heston is not presented as automatically superior. The comparison asks what
 each model is good for: Heston gives interpretable stochastic variance
 dynamics; eSSVI/local vol gives flexible vanilla surface fit and direct

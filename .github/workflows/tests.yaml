@@ -24,7 +24,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -c scripts/ci-constraints.txt -e ".[dev]"
+          python -m pip install -c scripts/ci-constraints.txt -e ".[dev,marketdata]"
 
       - name: README is up to date
         run: python scripts/render_readme.py --check
@@ -42,6 +42,10 @@ jobs:
     needs: lint-and-typecheck
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -57,17 +61,17 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -c scripts/ci-constraints.txt -e ".[dev]"
+          python -m pip install -c scripts/ci-constraints.txt -e ".[dev,marketdata]"
 
       - name: Pytest (non-slow tests + coverage)
         run: pytest -q tests -m "not slow" --cov=option_pricing --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=80
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           files: coverage.xml
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
+          use_oidc: true
+          fail_ci_if_error: false
           verbose: true
 
   pytest-slow-diagnostics:
@@ -89,7 +93,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -c scripts/ci-constraints.txt -e ".[dev]"
+          python -m pip install -c scripts/ci-constraints.txt -e ".[dev,marketdata]"
 
       - name: Pytest (slow diagnostics)
         run: pytest -q tests -m slow
@@ -113,7 +117,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -c scripts/ci-constraints.txt -e ".[dev]"
+          python -m pip install -c scripts/ci-constraints.txt -e ".[dev,marketdata]"
 
       - name: Pytest (notebooks)
         env:

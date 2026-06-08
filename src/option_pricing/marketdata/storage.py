@@ -45,14 +45,32 @@ _DATASET_ALIASES = {
 }
 _PARTITION_ORDERS: dict[tuple[str, str], tuple[str, ...]] = {
     ("bronze", "equity_quotes"): ("date",),
-    ("bronze", "equity_bars"): ("symbol", "timeframe", "date"),
+    (
+        "bronze",
+        "equity_bars",
+    ): ("symbol", "timeframe", "start_date", "end_date", "run_id", "date"),
     ("bronze", "option_chain"): ("underlying", "asof_date"),
     ("bronze", "local_snapshot"): ("underlying", "date", "run_id"),
-    ("bronze", "fred_series"): ("series_id", "date"),
+    ("bronze", "fred_series"): (
+        "series_id",
+        "start_date",
+        "end_date",
+        "run_id",
+        "date",
+    ),
     ("silver", "equity_quotes"): ("date",),
-    ("silver", "equity_bars"): ("symbol", "timeframe", "date"),
+    (
+        "silver",
+        "equity_bars",
+    ): ("symbol", "timeframe", "start_date", "end_date", "run_id", "date"),
     ("silver", "option_chain"): ("underlying", "asof_date"),
-    ("silver", "fred_series"): ("series_id", "date"),
+    ("silver", "fred_series"): (
+        "series_id",
+        "start_date",
+        "end_date",
+        "run_id",
+        "date",
+    ),
     ("silver", "market_inputs"): ("underlying", "date", "run_id"),
     ("silver", "cleaned_quotes"): ("underlying", "date", "run_id"),
     ("silver", "rejected_quotes"): ("underlying", "date", "run_id"),

@@ -1,4 +1,4 @@
-"""Local-first marketdata pipeline orchestration."""
+"""Compatibility facade for local and provider-backed marketdata pipelines."""
 
 from __future__ import annotations
 
@@ -24,6 +24,19 @@ from option_pricing.marketdata.gold import GoldConversionPaths, write_gold_artif
 from option_pricing.marketdata.normalize import (
     normalize_market_inputs,
     normalize_option_chain,
+)
+from option_pricing.marketdata.provider_pipeline import (
+    MarketDataPipeline,
+    ProviderSnapshotDataUnavailableError,
+)
+from option_pricing.marketdata.provider_results import (
+    ProviderRefreshDailyCounts,
+    ProviderRefreshDailyResult,
+    ProviderSnapshotBronzePaths,
+    ProviderSnapshotRateCurvePaths,
+    ProviderSnapshotResult,
+    ProviderSnapshotSilverPaths,
+    provider_snapshot_public_summary,
 )
 from option_pricing.marketdata.providers.local import (
     LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1,
@@ -367,5 +380,14 @@ def _iter_pipeline_target_paths(paths: _PipelineTargetPaths) -> tuple[Path, ...]
 
 __all__ = [
     "LocalModelValidationPipelineResult",
+    "MarketDataPipeline",
+    "ProviderRefreshDailyCounts",
+    "ProviderRefreshDailyResult",
+    "ProviderSnapshotBronzePaths",
+    "ProviderSnapshotDataUnavailableError",
+    "ProviderSnapshotRateCurvePaths",
+    "ProviderSnapshotResult",
+    "ProviderSnapshotSilverPaths",
+    "provider_snapshot_public_summary",
     "run_local_model_validation_pipeline",
 ]

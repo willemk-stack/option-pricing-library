@@ -1,0 +1,40 @@
+{
+  "accepted_quote_count": 5781,
+  "artifact_schema_version": "provider_evidence.v1",
+  "asof": "2026-06-06T11:10:02.232938Z",
+  "caveats": [
+    "Sanitized public provider evidence only.",
+    "Raw provider payloads, credentials, and full provider-derived quote rows remain local/private.",
+    "Heston fit status is workflow evidence, not a trading or production calibration-quality claim."
+  ],
+  "data_policy_name": "provider_snapshot_data_policy.v1",
+  "dividend_fallback_used": true,
+  "dividend_policy": "zero_assumption",
+  "dividend_source": "zero_assumption",
+  "dividend_yield": 0.0,
+  "feed_label": "equity=iex; option=indicative",
+  "flat_rate": 0.0371030879515022,
+  "heston_fit": {
+    "best_cost": 4740.3519038056365,
+    "objective": "price_rmse",
+    "selected_quote_count": 5533,
+    "status": "ok"
+  },
+  "heston_fit_status": "ok",
+  "normalized_contract_count": 6112,
+  "provider_label": "equity=alpaca; option=alpaca",
+  "quality_policy_name": "quote_cleaning_policy.v1",
+  "rate_compounding": "continuous",
+  "rate_observation_date": "2026-06-04",
+  "rate_policy": "fred_treasury_zero_proxy_linear_cc",
+  "rate_provider": "fred",
+  "rate_series_id": "DGS3MO",
+  "rate_source": "fred:treasury_zero_proxy_curve",
+  "raw_contract_count": 6112,
+  "rejected_quote_count": 331,
+  "selected_quote_count": 5533,
+  "selected_rate": 0.03692878206921478,
+  "source_run_id": "b4a-20260606T111002Z-a037b8fe",
+  "underlying": "SPY",
+  "warning_count": 7
+}

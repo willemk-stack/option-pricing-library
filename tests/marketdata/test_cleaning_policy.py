@@ -80,17 +80,27 @@ def _is_disallowed_import(name: str) -> bool:
 
 def test_quote_rejection_reason_values_match_contract() -> None:
     assert [reason.value for reason in QuoteRejectionReason] == [
-        "negative_bid",
-        "nonpositive_ask",
-        "crossed_market",
+        "unparseable_contract",
+        "bad_expiry",
         "expired_contract",
+        "nonpositive_mid",
         "nonpositive_strike",
-        "missing_required_price",
-        "invalid_mid",
-        "below_intrinsic_tolerance",
-        "spread_too_wide",
-        "missing_iv_for_iv_required_workflow",
-        "missing_vega_for_weighted_calibration",
+        "negative_bid",
+        "negative_ask",
+        "crossed_bid_ask",
+        "quote_after_asof",
+        "stale_quote",
+        "missing_price_source",
+        "missing_spot_for_moneyness",
+        "missing_rate_for_model",
+        "missing_dividend_for_model",
+        "missing_time_to_expiry_for_model",
+        "missing_iv_for_iv_validation",
+        "unsupported_option_right",
+        "nonfinite_numeric_field",
+        "vanilla_no_arbitrage_violation",
+        "nonstandard_or_adjusted_contract",
+        "spot_option_chain_mismatch",
     ]
 
 
@@ -104,7 +114,7 @@ def test_quote_cleaning_policy_v1_defaults_match_contract() -> None:
         "require_vega",
         "day_count",
     )
-    assert policy.max_relative_spread == pytest.approx(1.00)
+    assert policy.max_relative_spread is None
     assert policy.intrinsic_tolerance == pytest.approx(1e-8)
     assert policy.require_iv is False
     assert policy.require_vega is False

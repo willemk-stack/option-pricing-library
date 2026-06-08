@@ -9,6 +9,8 @@ Use this section either to evaluate the repo quickly or to start from the public
 - [eSSVI smooth handoff](essvi_smooth_handoff.md) - why slice-wise repair is not the final Dupire handoff, and what the smoothed surface fixes.
 - [Local-vol and PDE validation](localvol_pde_validation.md) - repricing accuracy, error structure, and convergence evidence.
 - [Market snapshot validation](market_snapshot_validation.md) - local fixture-to-artifact validation for reviewer reproducibility with no live providers or credentials.
+- [Marketdata CLI and private provider runs](marketdata_cli.md) - optional Alpaca/FRED-backed local artifact workflow, private evidence boundaries, and bundle validation.
+- [Model-ready Heston workflow](model_ready_heston_workflow.md) - official bundle-to-prepare-to-fit path for local model-validation bundles.
 - [Performance evidence](../performance.md) - committed scaling plots, runtime/error tradeoffs, and reproducibility notes.
 - [Architecture](../architecture.md) - typed package structure, dependency direction, and system-design intent.
 
@@ -27,6 +29,7 @@ Use this section either to evaluate the repo quickly or to start from the public
 - [PDE pricing](pde_pricing.md) - finite-difference pricing under Black-Scholes and local vol.
 - [Diagnostics](diagnostics.md) - notebook-friendly helpers for comparisons, sweeps, and reports.
 - [Heston](heston.md) - vanilla pricing, smile inversion, Monte Carlo, calibration, diagnostics, and model comparison.
+- [Model-ready Heston workflow](model_ready_heston_workflow.md) - canonical public path from saved validation bundles to Heston fitting.
 - [Heston diagnostics](heston_diagnostics.md) - one-call slice review for convergence, smoothness, continuity, and visible failure modes.
 
 ## Volatility workflows

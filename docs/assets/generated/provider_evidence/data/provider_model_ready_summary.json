@@ -1,0 +1,13 @@
+{
+  "artifact_schema_version": "provider_evidence.v1",
+  "call_count": 2726,
+  "candidate_heston_rows": 5781,
+  "expiry_count": 16,
+  "objective": "price_rmse",
+  "preflight_status": "ready",
+  "put_count": 3055,
+  "rejected_quotes": 331,
+  "selected_quotes": 5533,
+  "status": "ready",
+  "warning_count": 7
+}

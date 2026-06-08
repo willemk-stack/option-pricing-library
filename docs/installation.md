@@ -38,11 +38,16 @@ These extras come directly from `pyproject.toml`:
 | Extra | Install command | Use it for |
 | --- | --- | --- |
 | Core only | `pip install -e .` | Pricing library development without optional tooling |
-| Marketdata | `pip install -e ".[marketdata]"` | Local market snapshot demos and Parquet-backed marketdata artifacts |
+| Marketdata | `pip install -e ".[marketdata]"` | Provider-backed marketdata CLI runs, local snapshot demos, and Parquet-backed artifacts |
 | Plotting | `pip install -e ".[plot]"` | Matplotlib and pandas-backed diagnostics or figure generation |
 | Notebooks | `pip install -e ".[notebooks]"` | Jupyter-based demo and exploration workflows |
 | Development | `pip install -e ".[dev]"` | Tests, benchmarks, linting, formatting, and type checks |
 | Docs | `pip install -e ".[docs]"` | MkDocs Material and API-reference generation |
+
+After installing `.[marketdata]`, use
+[Marketdata CLI and private provider runs](user_guides/marketdata_cli.md) for
+the supported `option-pricing-marketdata` commands and local/private evidence
+boundaries.
 
 ## Common local commands
 

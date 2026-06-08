@@ -1,0 +1,4 @@
+{
+  "name": "quote_cleaning_policy.v1",
+  "rejection_handling": "Rejected rows stay local/private; public bundle publishes reason counts only."
+}

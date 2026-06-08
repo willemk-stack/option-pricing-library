@@ -5,8 +5,11 @@ from .calibration import (
     run_heston_calibration_benchmark_diagnostics,
 )
 from .calibration_fit import (
+    heston_calibration_fit_summary,
     run_heston_calibration_diagnostics,
     run_heston_calibration_fit_diagnostics,
+    run_heston_kappa_profile_diagnostics,
+    summarize_heston_calibration_fit,
 )
 from .fixtures import (
     MARKET_LIKE_SYNTHETIC_FIXTURE_LABEL,
@@ -81,13 +84,16 @@ __all__ = [
     "price_slice_with_diagnostics",
     "probability_slice_with_diagnostics",
     "heston_calibration_quote_policy_tables",
+    "heston_calibration_fit_summary",
     "run_heston_calibration_benchmark_diagnostics",
     "run_heston_calibration_diagnostics",
     "run_heston_calibration_fit_diagnostics",
+    "run_heston_kappa_profile_diagnostics",
     "run_heston_mc_comparison_sweep",
     "run_heston_pricing_diagnostics",
     "run_heston_slice_diagnostics",
     "run_heston_vs_local_vol_comparison",
+    "summarize_heston_calibration_fit",
     "summarize_bias_vs_timestep",
     "summarize_runtime_vs_error",
 ]

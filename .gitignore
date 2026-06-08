@@ -37,6 +37,17 @@ artifacts/visual-state/
 /tmp-ci/
 /.benchmarks/
 
+# Local/private provider market-data artifacts and assumptions
+/data-private-demo/
+/data-private/
+/marketdata-private/
+/demos/private_*.ipynb
+/demos/*_private_*.ipynb
+/marketdata_policy.local.*
+/marketdata_policy.private.*
+/.marketdata-policy.local.*
+/.marketdata-policy.private.*
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -98,6 +109,9 @@ target/
 
 # Virtual environments
 .env
+.env.*
+*.env
+.env.local.ps1
 .venv
 env/
 venv/
@@ -122,3 +136,7 @@ Thumbs.db
 
 # Prompting
 prompts/
+
+# Public sanitized provider evidence data artifacts
+!docs/assets/generated/provider_evidence/data/
+!docs/assets/generated/provider_evidence/data/**

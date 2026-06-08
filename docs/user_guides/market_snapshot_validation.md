@@ -1,7 +1,7 @@
 # Market Snapshot Validation
 
 The market snapshot validation workflow is a deterministic, local-first review
-path for marketdata artifacts. It runs from checked-in local fixture snapshots
+path for marketdata artifacts. It runs from local synthetic fixture snapshots
 and writes Bronze, Silver, Gold, and model-validation bundle artifacts without
 credentials or live market access.
 
@@ -28,14 +28,119 @@ demonstrates:
 The workflow uses the local fixture snapshot only. It does not call live market
 provider APIs, network clients, or any credential-backed data source.
 
+Provider-backed snapshots have a separate confidence path. After a provider run
+writes artifacts, `validate_provider_snapshot_bundle(...)` can read back
+`market_data.json`, `cleaned_quotes.parquet`, and `heston_quotes.parquet`,
+reconstruct `MarketData`, and verify Heston quote-set compatibility. This is a
+controlled real-data validation check, not a production data-quality claim.
+The same helper is available through:
+
+```bash
+option-pricing-marketdata validate-bundle \
+  --market-data path/to/market_data.json \
+  --cleaned-quotes path/to/cleaned_quotes.parquet \
+  --heston-quotes path/to/heston_quotes.parquet
+```
+
+## Workflow boundaries
+
+### Local synthetic fixture workflow
+
+The local workflow uses synthetic fixtures from `tests/marketdata/fixtures`.
+These inputs are intentionally small, deterministic, redistributable, and
+credential-free. They are the clean path for docs, tests, and examples because
+they contain no licensed provider data.
+
+### Live provider-backed workflow
+
+The provider-backed snapshot and refresh commands may call Alpaca and FRED,
+normalize provider responses, clean option quotes, and write Bronze, Silver,
+Gold, and model-validation bundle artifacts under the configured local storage
+root. Those outputs are local operator evidence. They prove that the library can
+consume provider-derived artifacts and produce model-facing validation bundles;
+they are not redistributable market-data artifacts.
+
+Use [Marketdata CLI and private provider runs](marketdata_cli.md) for the
+installed CLI commands, private evidence boundaries, and quality-policy flags.
+This page keeps the credential-free synthetic fixture workflow as the public
+proof path.
+
+For notebook or CLI display, use the compact summary surface instead of parsing
+raw provider files:
+
+```python
+from pathlib import Path
+
+from option_pricing.marketdata import (
+    MarketDataPipeline,
+    provider_snapshot_public_summary,
+)
+
+pipeline = MarketDataPipeline(storage=Path("data-private-demo"))
+result = pipeline.snapshot("SPY")
+summary = provider_snapshot_public_summary(result)
+print(summary)
+```
+
+The `option-pricing-marketdata snapshot --json` payload also includes
+`public_summary`. It is useful for notebooks because it contains counts, policy
+names, provider/feed labels, freshness shape, warning count, and main local
+artifact references without provider response bodies.
+
+### Provider bundle validation
+
+Provider bundle validation is credential-free once the local provider artifacts
+already exist. It reads the model-facing `market_data.json`,
+`cleaned_quotes.parquet`, and `heston_quotes.parquet` paths and checks that the
+library can reconstruct `MarketData` and consume the Heston-compatible quote
+shape. This validation is compatibility evidence, not a data redistribution
+mechanism and not a production data-quality claim.
+
+For calibration from the packaged local bundle, use the
+[model-ready Heston workflow](model_ready_heston_workflow.md):
+`load_model_validation_bundle(...)`, `prepare_heston_market_fit(...)`, then
+`fit_heston_market(...)`, or the shorthand `fit_heston_from_bundle(...)`.
+
+### Local-only provider artifacts
+
+Real provider-derived outputs stay in the local evidence roots. This includes:
+
+- Bronze provider JSON payloads
+- Silver provider-normalized Parquet files
+- Gold market snapshots
+- model-validation bundles from real provider runs
+- generated manifests from live provider runs
+- real option-chain summaries, tables, or notebook exports
+- local policy files that encode private dividend, rate, or data-quality
+  assumptions
+
+The default local roots `data/`, `out/`, and `data-private-demo/` are working
+directories for local evidence, separate from the documented synthetic workflow.
+
+## Synthetic vs real-provider evidence
+
+The deterministic local snapshot remains the reproducibility baseline. It is the
+right page for local fixture mechanics, Bronze/Silver/Gold artifact contracts,
+quote-cleaning auditability, and model-validation bundle packaging.
+
+The companion [Real-market provider evidence](provider_market_evidence.md) page
+answers the production-shaped provider question. It publishes sanitized
+provider-backed summaries for ingestion, normalization, quote cleaning,
+policy capture, model-ready Heston preparation, and fit status while keeping raw
+provider payloads and full provider-derived quote rows local/private.
+
 ## What this workflow does not prove
 
 This workflow does not prove production data quality, live-provider correctness,
 calibration quality, trading performance, or empirical research conclusions.
 
-It also does not provide a provider refresh path, credential setup, a CLI
-refresh workflow, a production CLI, or research exports. Those are outside this
-demo workflow.
+It also does not exercise provider-backed refresh commands, credential setup,
+live-provider snapshot or refresh CLI paths, production CLI workflows, or
+research exports. The credential-free provider bundle validation command only
+checks already-written model-facing artifacts.
+
+For the local demo workflow itself, the non-goals remain: no CLI, no provider
+refresh path, and no provider refresh CLI or production CLI.
 
 ## Requirements
 
@@ -56,7 +161,7 @@ The only runtime inputs are:
 
 - a writable local storage root, such as `out/marketdata-demo`
 - an explicit `run_id`
-- the explicit checked-in local fixture root used by
+- the explicit local fixture root used by
   `run_local_model_validation_pipeline(...)`
 
 No provider credentials, environment variables, network access, or live market
@@ -64,7 +169,7 @@ data accounts are required.
 
 ## Run the local demo
 
-Use the checked-in demo script for the canonical reviewer path:
+Use the demo script for the canonical local validation path:
 
 ```bash
 python scripts/demo_local_market_validation.py --output-dir out/marketdata-demo --run-id demo-run
@@ -72,9 +177,9 @@ python scripts/demo_local_market_validation.py --output-dir out/marketdata-demo 
 
 The command runs the deterministic local fixture through Bronze, Silver, Gold,
 and model-validation bundle writes. Heston smoke is skipped by default so the
-reviewer path stays fast and deterministic. The script passes the checked-in
-test fixture root explicitly instead of relying on package data. The summary
-prints the key artifact paths:
+path stays fast and deterministic. The script passes the test fixture root
+explicitly instead of relying on package data. The summary prints the key
+artifact paths:
 
 ```text
 Local market validation demo completed.
@@ -353,7 +458,11 @@ claims.
 ### Inspect Heston-compatible quotes
 
 `heston_quotes.parquet` is the Heston-compatible quote artifact used to
-reconstruct model inputs from cleaned local quotes.
+reconstruct model inputs from cleaned local quotes. Treat it as a candidate
+artifact: it proves the saved rows have the Heston-compatible shape, not that
+every row is calibration-ready. The
+[model-ready Heston workflow](model_ready_heston_workflow.md) uses
+`prepare_heston_market_fit(...)` to select and reject rows before fitting.
 
 ```python
 from pathlib import Path
@@ -445,8 +554,8 @@ print(context)
 ```
 
 Review the payload for spot, rate, dividend yield, day-count, compounding,
-source labels, run ID, and `library_commit` when provided. The JSON should stay
-local-only and credential-free.
+source labels, policy metadata, run ID, and `library_commit` when provided. The
+JSON should stay local-only and credential-free.
 
 ### What a reviewer should look for
 
@@ -459,7 +568,7 @@ local-only and credential-free.
   `rejected_quotes.parquet`.
 - Heston smoke is `skipped`, `success`, or `failed` with an actionable message.
 - `market_data.json` records spot, rate, dividend, day-count, compounding,
-  sources, run ID, and library commit if provided.
+  sources, policy metadata, run ID, and library commit if provided.
 - Generated artifacts contain no credentials, provider names, secret-looking
   keys, or live-source claims.
 
@@ -491,20 +600,21 @@ Component responsibilities are intentionally narrow:
 - Gold conversion writes `MarketData` reload evidence and Heston-compatible
   quote artifacts.
 - The model-validation bundle packages the local artifacts into one
-  self-contained reviewer directory.
-- The reviewer path documents reproducibility, expected artifacts, and
+  self-contained validation directory.
+- The local validation path documents reproducibility, expected artifacts, and
   limitation boundaries.
 
-The local demo remains deterministic and local-only. It does not modify
-providers, add provider refresh logic, introduce a provider refresh or
-production CLI, or create research exports.
+The local demo remains deterministic and local-only. It does not call providers,
+run provider refresh logic, execute the provider-backed CLI, or create research
+exports.
 
 The current workflow intentionally excludes:
 
-- no live providers
-- no credentials
+- no live providers in this local workflow
+- no credential use in this local workflow
 - no CLI
 - no provider refresh path
+- no provider refresh CLI or production CLI
 - no production data-quality claim
 - no trading-performance claim
 - no research exports
@@ -532,11 +642,16 @@ reloaded market data payload, cleaned quotes, rejected quotes, Heston-compatible
 quotes, surface inputs, warnings, and a minimal Heston smoke summary into one
 self-contained local bundle.
 
+To fit Heston from that bundle, follow the
+[model-ready Heston workflow](model_ready_heston_workflow.md) instead of
+manually reading `market_data.json` and `heston_quotes.parquet` in notebook
+code.
+
 ## Quote-cleaning policy
 
 Quote cleaning is deterministic. The default `QuoteCleaningPolicyV1` values are:
 
-- `max_relative_spread=1.00`
+- `max_relative_spread=None`
 - `intrinsic_tolerance=1e-8`
 - `require_iv=False`
 - `require_vega=False`
@@ -545,6 +660,19 @@ Quote cleaning is deterministic. The default `QuoteCleaningPolicyV1` values are:
 Each rejected row receives one primary rejection reason in policy order. Rejected
 quotes remain first-class evidence and are written to `rejected_quotes.parquet`
 in Silver and in the model-validation bundle.
+
+The provider-backed policy metadata names the staged layers explicitly:
+
+- `raw_option_quotes` preserves provider rows as close to raw as practical
+- `clean_option_quotes` contains market-sane recoverable quotes
+- `model_validation_quotes` is the stricter model-ready subset
+
+Clean quotes may still be missing IV, Greeks, moneyness, or other derived
+fields. The cleaner computes `mid`, `spread`, `relative_spread`,
+`time_to_expiry_years`, `moneyness`, `log_moneyness`, and
+`option_price_for_model` when the needed inputs are available, and records
+readiness flags such as `model_validation_ready`, `iv_validation_ready`, and
+`greek_validation_ready`.
 
 Rejected quote rows must not be duplicated into manifest JSON. Manifests may
 record rejected row counts, reason counts, warnings, and artifact filenames, but
@@ -556,22 +684,31 @@ The local cleaning conventions are:
 - date-only expiry is interpreted as midnight UTC
 - `moneyness = strike / spot`
 - `spot` comes from normalized `market_inputs`
-- intrinsic value uses simple spot intrinsic for calls and puts
 - `relative_spread = (ask - bid) / mid`
 
 Primary rejection reasons are:
 
-- `negative_bid`
-- `nonpositive_ask`
-- `crossed_market`
+- `unparseable_contract`
+- `bad_expiry`
 - `expired_contract`
+- `nonpositive_mid`
 - `nonpositive_strike`
-- `missing_required_price`
-- `invalid_mid`
-- `below_intrinsic_tolerance`
-- `spread_too_wide`
-- `missing_iv_for_iv_required_workflow`
-- `missing_vega_for_weighted_calibration`
+- `negative_bid`
+- `negative_ask`
+- `crossed_bid_ask`
+- `quote_after_asof`
+- `stale_quote`
+- `missing_price_source`
+- `missing_spot_for_moneyness`
+- `missing_rate_for_model`
+- `missing_dividend_for_model`
+- `missing_time_to_expiry_for_model`
+- `missing_iv_for_iv_validation`
+- `unsupported_option_right`
+- `nonfinite_numeric_field`
+- `vanilla_no_arbitrage_violation`
+- `nonstandard_or_adjusted_contract`
+- `spot_option_chain_mismatch`
 
 ## Model-validation bundle
 
@@ -606,8 +743,8 @@ The bundle may include a Heston smoke result, but that result is a packaging and
 compatibility signal only. It is not a claim about production calibration
 quality, model fitness, strategy performance, or empirical validity.
 
-No live providers, no credentials, no provider refresh CLI or production CLI,
-and no research exports are part of this demo workflow.
+No live providers, credentials, provider-backed CLI execution, or research
+exports are part of this local demo workflow.
 
 ## Developer checks
 

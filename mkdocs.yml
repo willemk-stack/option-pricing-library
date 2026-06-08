@@ -130,6 +130,7 @@ nav:
       - PDE pricing: user_guides/pde_pricing.md
       - Diagnostics: user_guides/diagnostics.md
       - Heston: user_guides/heston.md
+      - Model-ready Heston workflow: user_guides/model_ready_heston_workflow.md
       - Heston diagnostics: user_guides/heston_diagnostics.md
       - Implied volatility: user_guides/implied_vol.md
       - Volatility surface: user_guides/vol_surface.md
@@ -144,6 +145,9 @@ nav:
       - Local-vol and PDE validation: user_guides/localvol_pde_validation.md
       - Heston model comparison: user_guides/heston_model_comparison.md
       - Market snapshot validation: user_guides/market_snapshot_validation.md
+      - Marketdata CLI and private provider runs: user_guides/marketdata_cli.md
+      - Real-market provider evidence: user_guides/provider_market_evidence.md
+      - Model-ready Heston workflow: user_guides/model_ready_heston_workflow.md
   - API:
       - Overview: api/index.md
       - Public: api/public.md
@@ -172,6 +176,8 @@ nav:
           - SVI calibration design: notes/volatility/svi_calibration_design.md
           - eSSVI calibration design: notes/volatility/essvi_calibration_design.md
           - Interpolation: notes/volatility/interpolation.md
+      - Market fit:
+          - Future market-model workflows: notes/market_fit/future_market_model_workflows.md
       - Local-vol and PDE:
           - Dupire local vol: notes/local-vol-pde/dupire_local_vol.md
           - Finite differences: notes/local-vol-pde/finite_difference_pde.md
@@ -192,4 +198,5 @@ nav:
           - Diagnostics notes: notes/diagnostics/diagnostics_notes.md
           - Fixed-rule quadrature: notes/diagnostics/integration_quadrature.md
           - Docs workflow architecture: notes/diagnostics/docs_workflow_architecture.md
+          - Feature data providers release notes: notes/feature_data_providers_release_notes.md
   - Future work: roadmap.md

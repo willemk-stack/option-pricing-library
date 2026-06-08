@@ -81,6 +81,7 @@ def build_market_data_snapshot(
     snapshot_id: str,
     cleaning_policy: str,
     library_commit: str | None = None,
+    source_metadata: Mapping[str, object] | None = None,
 ) -> GoldMarketDataSnapshot:
     """Convert one normalized ``market_inputs`` row into a Gold MarketData snapshot."""
 
@@ -126,6 +127,7 @@ def build_market_data_snapshot(
         "quote_cleaning_policy": cleaning_policy,
         "library_commit": _optional_text("library_commit", library_commit),
     }
+    _add_optional_policy_metadata(metadata, source_metadata)
     return GoldMarketDataSnapshot(
         market_data=MarketData(
             spot=spot,
@@ -413,6 +415,7 @@ def write_gold_artifacts(
         snapshot_id=snapshot_id,
         cleaning_policy=cleaning_policy,
         library_commit=library_commit,
+        source_metadata=getattr(local_snapshot, "metadata", None),
     )
     market_payload = market_data_snapshot_to_json(snapshot)
     heston_result = _build_heston_quotes_for_artifacts(cleaned_quotes)
@@ -677,7 +680,7 @@ def _market_snapshot_manifest(
     if not isinstance(market_data, Mapping):
         raise ValueError("market_data payload must contain market_data object")
 
-    return {
+    manifest: dict[str, object] = {
         "conversion_manifest_version": GOLD_CONVERSION_MANIFEST_VERSION,
         "artifact": "market_data",
         "artifact_schema_version": GOLD_MARKET_DATA_SCHEMA_VERSION,
@@ -712,11 +715,13 @@ def _market_snapshot_manifest(
         "artifacts": {
             "market_data": "market_data.json",
         },
-        "source": {
-            "source_type": "local_fixture",
-            "fixture_name": fixture_name,
-        },
+        "source": _snapshot_source_payload(
+            local_snapshot,
+            fixture_name=fixture_name,
+        ),
     }
+    _add_optional_policy_metadata(manifest, market_payload)
+    return manifest
 
 
 def _heston_quotes_manifest(
@@ -765,10 +770,10 @@ def _heston_quotes_manifest(
         "artifacts": {
             "heston_quotes": "heston_quotes.parquet",
         },
-        "source": {
-            "source_type": "local_fixture",
-            "fixture_name": fixture_name,
-        },
+        "source": _snapshot_source_payload(
+            local_snapshot,
+            fixture_name=fixture_name,
+        ),
     }
 
 
@@ -788,6 +793,32 @@ def _market_payload_sources(
     }
 
 
+def _add_optional_policy_metadata(
+    payload: dict[str, object],
+    source_metadata: Mapping[str, object] | None,
+) -> None:
+    if not isinstance(source_metadata, Mapping):
+        return
+    for key in (
+        "equity_provider",
+        "equity_feed",
+        "option_provider",
+        "option_feed",
+        "selected_rate",
+        "flat_rate",
+        "rate_policy",
+        "dividend_policy",
+        "option_cleaning_policy",
+        "quote_freshness_mode",
+        "model_validation_policy",
+        "data_policy",
+        "spot_option_chain_diagnostic",
+    ):
+        value = source_metadata.get(key)
+        if value is not None:
+            payload[key] = dict(value) if isinstance(value, Mapping) else value
+
+
 def _reason_counts_payload(reason_counts: Mapping[str, int]) -> dict[str, int]:
     if not isinstance(reason_counts, Mapping):
         raise TypeError("reason_counts must be a mapping")
@@ -803,6 +834,31 @@ def _warnings_payload(warnings: Sequence[str]) -> list[str]:
     if isinstance(warnings, (str, bytes, bytearray)):
         raise TypeError("warnings must be a sequence of strings")
     return [str(warning) for warning in warnings]
+
+
+def _snapshot_source_payload(
+    local_snapshot: _GoldLocalSnapshot,
+    *,
+    fixture_name: str,
+) -> dict[str, str]:
+    return {
+        "source_type": _snapshot_source_type(local_snapshot),
+        "fixture_name": fixture_name,
+    }
+
+
+def _snapshot_source_type(local_snapshot: _GoldLocalSnapshot) -> str:
+    metadata = getattr(local_snapshot, "metadata", None)
+    if isinstance(metadata, Mapping):
+        source_type = metadata.get("source_type")
+        if isinstance(source_type, str) and source_type.strip():
+            return source_type.strip()
+
+    source_type = getattr(local_snapshot, "source_type", None)
+    if isinstance(source_type, str) and source_type.strip():
+        return source_type.strip()
+
+    return "local_fixture"
 
 
 def _required_finite_float(row: pd.Series, column: str) -> float:
