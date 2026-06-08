@@ -112,7 +112,7 @@
     "source": "zero_assumption"
   },
   "feed_label": "equity=iex; option=indicative",
-  "heston_fit_status": "skipped",
+  "heston_fit_status": "ok",
   "normalized_contract_count": 6112,
   "provider_label": "equity=alpaca; option=alpaca",
   "quality_policy_name": "quote_cleaning_policy.v1",
@@ -151,7 +151,7 @@
   "raw_contract_count": 6112,
   "rejected_quote_count": 331,
   "run_id": "b4a-20260606T111002Z-a037b8fe",
-  "selected_quote_count": 5781,
+  "selected_quote_count": 5533,
   "source_run_id": "b4a-20260606T111002Z-a037b8fe",
   "underlying": "SPY",
   "warning_count": 7

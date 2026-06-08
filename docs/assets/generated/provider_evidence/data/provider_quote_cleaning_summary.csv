@@ -3,4 +3,4 @@ raw_contracts,6112,6112,0,6112
 normalized_contracts,6112,6112,0,6112
 accepted_quotes,6112,5781,331,5781
 rejected_quotes,6112,331,5781,331
-selected_calibration_rows,5781,5781,0,5781
+selected_calibration_rows,5781,5533,248,5533
