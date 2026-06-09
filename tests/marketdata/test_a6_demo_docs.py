@@ -285,21 +285,42 @@ def test_a6_docs_are_discoverable_from_index_and_readme() -> None:
     assert readme_line in readme
 
 
-def test_phase6_three_path_story_is_discoverable() -> None:
+def test_marketdata_and_model_fit_paths_are_discoverable() -> None:
     docs_index = DOCS_INDEX_PATH.read_text(encoding="utf-8")
     guide_index = GUIDE_INDEX_PATH.read_text(encoding="utf-8")
     marketdata_cli = MARKETDATA_CLI_GUIDE_PATH.read_text(encoding="utf-8")
     readme_template = README_TEMPLATE_PATH.read_text(encoding="utf-8")
     readme = README_PATH.read_text(encoding="utf-8")
 
-    for text in (docs_index, marketdata_cli, readme_template, readme):
+    all_public_surfaces = (docs_index, marketdata_cli, readme_template, readme)
+    for text in all_public_surfaces:
         assert "Credential-free proof" in text
+        assert "market_snapshot_validation" in text
+        assert "fit_heston_from_bundle" in text
+
+    for text in (docs_index, readme_template, readme):
+        assert "marketdata_cli" in text
+
+    # The docs landing page and CLI guide keep the concise three-path operator
+    # story. The README can use the richer four-path portfolio taxonomy, so this
+    # test verifies durable links and boundaries instead of exact label copy.
+    for text in (docs_index, marketdata_cli):
         assert "Private provider-backed evidence" in text
         assert "Official model-ready Heston workflow" in text
+
+    for text in (readme_template, readme):
+        assert "Private provider-backed" in text
+        assert "provider_market_evidence" in text
+        assert "model_ready_heston_workflow" in text
+        assert "raw payloads" in text or "raw provider" in text
+        assert "local/private" in text or "private validation" in text
 
     assert "marketdata_cli.md" in guide_index
     assert "model_ready_heston_workflow.md" in marketdata_cli
     assert "market_snapshot_validation.md" in marketdata_cli
+    assert "provider_market_evidence" in docs_index
+    assert "provider_market_evidence" in readme_template
+    assert "provider_market_evidence" in readme
     assert "option-pricing-marketdata" in marketdata_cli
     assert "fit_heston_from_bundle" in marketdata_cli
 
