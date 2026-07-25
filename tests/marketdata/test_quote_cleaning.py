@@ -57,13 +57,13 @@ def _fixture_option_chain() -> pd.DataFrame:
     return normalize_option_chain(pd.read_csv(FIXTURE_ROOT / "option_chain.csv"))
 
 
-def _market_inputs() -> pd.DataFrame:
+def _market_inputs(asof: str = "2026-05-22T15:30:00Z") -> pd.DataFrame:
     return normalize_market_inputs(
         pd.DataFrame(
             [
                 {
                     "underlying": "SYNTH",
-                    "asof": "2026-05-22T15:30:00Z",
+                    "asof": asof,
                     "spot": 100.0,
                     "spot_source": "unit_test",
                     "rate": 0.04,
@@ -190,6 +190,28 @@ def test_expiry_years_is_act_365_and_positive_for_valid_rows() -> None:
         expected
     )
     assert (result.cleaned_quotes["expiry_years"] > 0).all()
+
+
+def test_optionsdx_source_preserves_explicit_provider_expiry_timestamp() -> None:
+    asof = "2023-01-03T21:00:00Z"
+    option_chain = _option_chain(
+        underlying="SPY",
+        contract_symbol="ODX|SPY|20230110|C|00100000",
+        quote_ts=asof,
+        asof=asof,
+        expiry="2023-01-10T21:00:00",
+        source="optionsdx_eod_2023",
+    )
+
+    result = clean_option_quotes(option_chain, _market_inputs(asof))
+
+    assert len(result.cleaned_quotes) == 1
+    assert float(result.cleaned_quotes.loc[0, "expiry_years"]) == pytest.approx(
+        7.0 / 365.0
+    )
+    assert float(result.cleaned_quotes.loc[0, "time_to_expiry_years"]) == pytest.approx(
+        7.0 / 365.0
+    )
 
 
 def test_moneyness_equals_strike_divided_by_spot() -> None:
