@@ -13,6 +13,7 @@ from ....exceptions import NoConvergenceError
 from ....typing import FloatArray
 from ..charfunc import HESTON_ANALYTIC_JAC_ETA_MIN
 from ..fourier import HestonBackend, QuadratureConfig
+from ..numerical import HestonNumericalEvaluationError
 from ..params import HestonParams
 from .bounds import HestonCalibrationBounds, transform_to_bounded_constrained
 from .heston_types import (
@@ -26,6 +27,7 @@ from .heston_types import (
 )
 from .objective import HestonObjective
 from .seeding import default_heston_seed, heston_seed_grid
+from .validation import validate_heston_calibration_solution
 
 
 def _dedupe_multistart_seeds(
@@ -101,6 +103,12 @@ def _optional_finite_float(value: SupportsFloat | None) -> float | None:
     if not np.isfinite(value_float):
         return None
     return value_float
+
+
+def _optional_float(value: SupportsFloat | None) -> float | None:
+    if value is None:
+        return None
+    return float(value)
 
 
 def _optional_int(value: SupportsInt | SupportsIndex | None) -> int | None:
@@ -317,7 +325,6 @@ def calibrate_heston(
     gtol: float | None = None,
     return_result: bool = False,
 ) -> HestonParams | tuple[HestonParams, OptimizeResult]:
-
     if parameter_transform not in HESTON_PARAMETER_TRANSFORMS:
         supported = ", ".join(repr(value) for value in HESTON_PARAMETER_TRANSFORMS)
         raise ValueError(
@@ -439,6 +446,24 @@ def calibrate_heston(
     if not res.success or not np.all(np.isfinite(res.x)):
         raise NoConvergenceError(f"Heston calibration failed: {res.message}")
 
+    raw_fit = np.asarray(res.x, dtype=np.float64)
+    if parameter_transform == "bounded":
+        assert resolved_bounds is not None
+        fitted_params = transform_to_bounded_constrained(raw_fit, resolved_bounds)
+    else:
+        fitted_params = HestonParams.transform_to_constrained(raw_fit)
+    validation = validate_heston_calibration_solution(
+        quotes,
+        fitted_params,
+        bounds=resolved_bounds,
+        backend=backend,
+        quad_cfg=quad_cfg,
+        require_analytic_jacobian=use_analytic_jac,
+        required_diagnostics={
+            "optimizer_cost": _optional_float(getattr(res, "cost", None)),
+            "optimizer_optimality": _optional_float(getattr(res, "optimality", None)),
+        },
+    )
     res.update(
         _analytic_jacobian_policy_metadata(
             use_analytic_jac=use_analytic_jac,
@@ -446,13 +471,18 @@ def calibrate_heston(
             parameter_transform=parameter_transform,
         )
     )
-
-    raw_fit = np.asarray(res.x, dtype=np.float64)
-    if parameter_transform == "bounded":
-        assert resolved_bounds is not None
-        fitted_params = transform_to_bounded_constrained(raw_fit, resolved_bounds)
-    else:
-        fitted_params = HestonParams.transform_to_constrained(raw_fit)
+    res.update(
+        {
+            "heston_authoritative_validation_passed": True,
+            "heston_authoritative_validation_analytic_jacobian": (
+                validation.analytic_jacobian_validated
+            ),
+            "heston_authoritative_validation_price_rmse": validation.price_rmse,
+            "heston_authoritative_validation_max_abs_price_error": (
+                validation.max_abs_price_error
+            ),
+        }
+    )
     if return_result:
         return fitted_params, res
     return fitted_params
@@ -548,10 +578,22 @@ def calibrate_heston_multistart(
                 status=_optional_int(getattr(scipy_result, "status", None)),
                 message=str(scipy_result.message),
                 raw_x=np.asarray(scipy_result.x, dtype=np.float64),
+                authoritative_validation_passed=bool(
+                    getattr(
+                        scipy_result,
+                        "heston_authoritative_validation_passed",
+                        False,
+                    )
+                ),
             )
         except Exception as exc:
             # NOTE: Do not raise on individual seed failures; retain failed
             # runs because initialization sensitivity is a calibration diagnostic.
+            numerical_failure = (
+                exc.contextualized(seed_index=seed_index)
+                if isinstance(exc, HestonNumericalEvaluationError)
+                else None
+            )
             run = HestonCalibrationRun(
                 seed_index=seed_index,
                 seed_params=seed,
@@ -562,8 +604,13 @@ def calibrate_heston_multistart(
                 nfev=None,
                 njev=None,
                 status=None,
-                message=f"{type(exc).__name__}: {exc}",
+                message=(
+                    f"{type(exc).__name__}: "
+                    f"{numerical_failure if numerical_failure is not None else exc}"
+                ),
                 raw_x=None,
+                numerical_failure=numerical_failure,
+                authoritative_validation_passed=False,
             )
 
         runs.append(run)
@@ -591,4 +638,5 @@ def calibrate_heston_multistart(
         failure_count=len(sorted_runs) - len(successful_runs),
         jacobian_mode="analytic" if use_analytic_jac else "finite_difference",
         analytic_jacobian_eta_min=HESTON_ANALYTIC_JAC_ETA_MIN,
+        authoritative_validation_passed=(best_run.authoritative_validation_passed),
     )

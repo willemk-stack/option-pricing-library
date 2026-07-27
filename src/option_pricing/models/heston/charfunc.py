@@ -9,6 +9,13 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ...typing import ArrayLike
+from .numerical import (
+    HestonNumericalEvaluationError,
+    numerical_error_from_floating_point,
+    require_finite,
+    require_nonzero,
+    require_safe_exp_argument,
+)
 from .params import HestonParams
 
 type ComplexArray = NDArray[np.complex128]
@@ -96,7 +103,7 @@ def _quadratic_term(u: np.ndarray, *, j: HestonProbabilityIndex) -> ComplexArray
 def _integrated_variance(params: HestonParams, tau: float) -> float:
     return float(
         params.vbar * tau
-        + (params.v - params.vbar) * (1.0 - np.exp(-params.kappa * tau)) / params.kappa
+        + (params.v - params.vbar) * (-np.expm1(-params.kappa * tau)) / params.kappa
     )
 
 
@@ -108,7 +115,7 @@ def _deterministic_affine_coeffs(
     j: HestonProbabilityIndex,
 ) -> tuple[np.ndarray, np.ndarray]:
     quadratic_term = _quadratic_term(u, j=j)
-    mean_reversion_loading = (1.0 - np.exp(-params.kappa * tau)) / params.kappa
+    mean_reversion_loading = -np.expm1(-params.kappa * tau) / params.kappa
 
     C = -0.5 * quadratic_term * (tau - mean_reversion_loading)
     D = -0.5 * quadratic_term * mean_reversion_loading
@@ -126,10 +133,11 @@ def _stable_discriminant(
         dtype=np.complex128,
     )
 
-    with np.errstate(divide="ignore", invalid="ignore"):
-        g: ComplexArray = np.asarray((beta - d) / (beta + d), dtype=np.complex128)
-
-    flip_sign: BoolArray = (~np.isfinite(g)) | (np.abs(g) > 1.0)
+    denominator = beta + d
+    singular = denominator == 0
+    g = np.zeros_like(d, dtype=np.complex128)
+    np.divide(beta - d, denominator, out=g, where=~singular)
+    flip_sign: BoolArray = singular | (~np.isfinite(g)) | (np.abs(g) > 1.0)
 
     return np.asarray(np.where(flip_sign, -d, d), dtype=np.complex128)
 
@@ -180,22 +188,87 @@ def _heston_affine_coeffs(
     if tau == 0.0 or abs(params.eta) <= HESTON_ETA_DETERMINISTIC_THRESHOLD:
         return _deterministic_affine_coeffs(u, tau, params, j=j)
 
-    eta2 = params.eta * params.eta
-    quadratic_term = _quadratic_term(u, j=j)
-    beta = params.kappa - params.rho * params.eta * (j + 1j * u)
-    d = _stable_discriminant(beta, quadratic_term, params.eta)
+    parameter_vector = params.as_array()
+    stage = "stable_affine_coefficients"
+    try:
+        with np.errstate(divide="raise", invalid="raise", over="raise"):
+            eta2 = params.eta * params.eta
+            require_nonzero(
+                eta2,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=j,
+                failing_expression="eta**2",
+            )
+            quadratic_term = _quadratic_term(u, j=j)
+            beta = params.kappa - params.rho * params.eta * (j + 1j * u)
+            d = _stable_discriminant(beta, quadratic_term, params.eta)
 
-    r_minus = -quadratic_term / (beta + d)
-    g = -eta2 * quadratic_term / (beta + d) ** 2
-    exp_neg_dt = np.exp(-d * tau)
-    one_minus_exp_neg_dt = -np.expm1(-d * tau)
-    one_minus_g_exp = 1.0 - g * exp_neg_dt
+            beta_plus_d = beta + d
+            require_nonzero(
+                beta_plus_d,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=j,
+                failing_expression="beta + d",
+            )
+            r_minus = -quadratic_term / beta_plus_d
+            g = -eta2 * quadratic_term / beta_plus_d**2
+            exp_argument = -d * tau
+            require_safe_exp_argument(
+                exp_argument,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=j,
+                failing_expression="-d * tau",
+            )
+            exp_neg_dt = np.exp(exp_argument)
+            one_minus_exp_neg_dt = -np.expm1(exp_argument)
+            one_minus_g_exp = 1.0 - g * exp_neg_dt
+            require_nonzero(
+                one_minus_g_exp,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=j,
+                failing_expression="one_minus_g_exp",
+            )
 
-    D = r_minus * (one_minus_exp_neg_dt / one_minus_g_exp)
-    C = params.kappa * (
-        r_minus * tau - 2.0 * (np.log1p(-g * exp_neg_dt) - np.log1p(-g)) / eta2
-    )
-    return C, D
+            D = r_minus * (one_minus_exp_neg_dt / one_minus_g_exp)
+            C = params.kappa * (
+                r_minus * tau - 2.0 * (np.log1p(-g * exp_neg_dt) - np.log1p(-g)) / eta2
+            )
+            require_finite(
+                C,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=j,
+                failing_expression="C",
+            )
+            require_finite(
+                D,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=j,
+                failing_expression="D",
+            )
+            return C, D
+    except HestonNumericalEvaluationError:
+        raise
+    except FloatingPointError as exc:
+        raise numerical_error_from_floating_point(
+            exc,
+            evaluation_stage=stage,
+            parameter_vector=parameter_vector,
+            maturity=tau,
+            probability_index=j,
+            failing_expression="stable affine expression",
+        ) from exc
 
 
 def _cui_stable_terms(
@@ -213,6 +286,8 @@ def _cui_stable_terms(
     tau = _validate_tau(tau)
     u_arr = np.asarray(u, dtype=np.complex128)
 
+    parameter_vector = params.as_array()
+    stage = "cui_stable_terms"
     kappa = float(params.kappa)
     eta = float(params.eta)
     rho = float(params.rho)
@@ -221,22 +296,92 @@ def _cui_stable_terms(
     xi = kappa - eta * rho * iu
     quadratic_term = u_arr * u_arr + iu
 
-    # The Cui-gradient branch behavior is regression-tested against the production
-    # stable affine path on stressed real-frequency grids. This analytic-gradient
-    # path is supported for the nonzero real quadrature nodes used by calibration,
-    # not as a general-purpose complex-plane branch-continuity guarantee.
-    d = np.sqrt(xi * xi + eta * eta * quadratic_term)
-    half_d_tau = 0.5 * d * tau
-    A1 = quadratic_term * np.sinh(half_d_tau)
-    A2 = d * np.cosh(half_d_tau) + xi * np.sinh(half_d_tau)
-    A = A1 / A2
-    B = d * np.exp(0.5 * kappa * tau) / A2
-    exp_neg_d_tau = np.exp(-d * tau)
-    D = (
-        np.log(d)
-        + 0.5 * (kappa - d) * tau
-        - np.log(0.5 * (d + xi) + 0.5 * (d - xi) * exp_neg_d_tau)
+    # Scale sinh(d*tau/2), cosh(d*tau/2), A1, and A2 by exp(-d*tau/2).
+    # Their ratios are unchanged, while the exponentially growing hyperbolic
+    # terms disappear. In particular:
+    #
+    #   A2_scaled = 0.5 * ((d + xi) + (d - xi) * exp(-d*tau))
+    #   B = d * exp((kappa - d)*tau/2) / A2_scaled
+    #
+    # This is algebraically equivalent to the Cui expressions and avoids the
+    # former exp(kappa*tau/2) / cosh(d*tau/2) overflow pair.
+    require_finite(
+        xi,
+        evaluation_stage=stage,
+        parameter_vector=parameter_vector,
+        maturity=tau,
+        probability_index=None,
+        failing_expression="xi",
     )
+    eta2 = eta * eta
+    require_nonzero(
+        eta2,
+        evaluation_stage=stage,
+        parameter_vector=parameter_vector,
+        maturity=tau,
+        probability_index=None,
+        failing_expression="eta**2",
+    )
+    d = np.sqrt(xi * xi + eta2 * quadratic_term)
+    require_nonzero(
+        d,
+        evaluation_stage=stage,
+        parameter_vector=parameter_vector,
+        maturity=tau,
+        probability_index=None,
+        failing_expression="d",
+    )
+    exp_neg_d_tau_argument = -d * tau
+    require_safe_exp_argument(
+        exp_neg_d_tau_argument,
+        evaluation_stage=stage,
+        parameter_vector=parameter_vector,
+        maturity=tau,
+        probability_index=None,
+        failing_expression="-d * tau",
+    )
+    exp_neg_d_tau = np.exp(exp_neg_d_tau_argument)
+    scaled_sinh_half_d_tau = -0.5 * np.expm1(exp_neg_d_tau_argument)
+    scaled_cosh_half_d_tau = 0.5 * (1.0 + exp_neg_d_tau)
+    A1 = quadratic_term * scaled_sinh_half_d_tau
+    A2 = d * scaled_cosh_half_d_tau + xi * scaled_sinh_half_d_tau
+    require_nonzero(
+        A2,
+        evaluation_stage=stage,
+        parameter_vector=parameter_vector,
+        maturity=tau,
+        probability_index=None,
+        failing_expression="A2_scaled",
+    )
+    A = A1 / A2
+    B_exp_argument = 0.5 * (kappa - d) * tau
+    require_safe_exp_argument(
+        B_exp_argument,
+        evaluation_stage=stage,
+        parameter_vector=parameter_vector,
+        maturity=tau,
+        probability_index=None,
+        failing_expression="0.5 * (kappa - d) * tau",
+    )
+    B = d * np.exp(B_exp_argument) / A2
+    require_nonzero(
+        B,
+        evaluation_stage=stage,
+        parameter_vector=parameter_vector,
+        maturity=tau,
+        probability_index=None,
+        failing_expression="B",
+    )
+    D = np.log(d) + B_exp_argument - np.log(A2)
+    for name, value in (("A", A), ("D", D), ("exp(-d*tau)", exp_neg_d_tau)):
+        require_finite(
+            value,
+            evaluation_stage=stage,
+            parameter_vector=parameter_vector,
+            maturity=tau,
+            probability_index=None,
+            failing_expression=name,
+        )
 
     return _CuiStableTerms(
         u=np.asarray(u_arr, dtype=np.complex128),
@@ -263,35 +408,77 @@ def _cui_intermediate_derivatives(
     u = terms.u
     iu = 1j * u
     quadratic_term = u * u + iu
-    half_d_tau = 0.5 * terms.d * tau
-    sinh_half_d_tau = np.sinh(half_d_tau)
-    cosh_half_d_tau = np.cosh(half_d_tau)
+    parameter_vector = params.as_array()
+    stage = "cui_intermediate_derivatives"
+    eta_u = eta * u
+    require_nonzero(
+        eta_u,
+        evaluation_stage=stage,
+        parameter_vector=parameter_vector,
+        maturity=tau,
+        probability_index=None,
+        failing_expression="eta * u",
+    )
+    require_nonzero(
+        terms.xi,
+        evaluation_stage=stage,
+        parameter_vector=parameter_vector,
+        maturity=tau,
+        probability_index=None,
+        failing_expression="xi",
+    )
+    require_nonzero(
+        terms.d,
+        evaluation_stage=stage,
+        parameter_vector=parameter_vector,
+        maturity=tau,
+        probability_index=None,
+        failing_expression="d",
+    )
+    require_nonzero(
+        terms.A2,
+        evaluation_stage=stage,
+        parameter_vector=parameter_vector,
+        maturity=tau,
+        probability_index=None,
+        failing_expression="A2_scaled",
+    )
+    scaled_sinh_half_d_tau = 0.5 * (1.0 - terms.exp_neg_d_tau)
+    scaled_cosh_half_d_tau = 0.5 * (1.0 + terms.exp_neg_d_tau)
 
     d_drho = -terms.xi * eta * iu / terms.d
     A2_drho = -(eta * iu * (2.0 + tau * terms.xi) / (2.0 * terms.d)) * (
-        terms.xi * cosh_half_d_tau + terms.d * sinh_half_d_tau
+        terms.xi * scaled_cosh_half_d_tau + terms.d * scaled_sinh_half_d_tau
     )
-    B_drho = np.exp(0.5 * params.kappa * tau) * (
+    B_exp_argument = 0.5 * (params.kappa - terms.d) * tau
+    require_safe_exp_argument(
+        B_exp_argument,
+        evaluation_stage=stage,
+        parameter_vector=parameter_vector,
+        maturity=tau,
+        probability_index=None,
+        failing_expression="0.5 * (kappa - d) * tau",
+    )
+    B_drho = np.exp(B_exp_argument) * (
         d_drho / terms.A2 - terms.d * A2_drho / (terms.A2 * terms.A2)
     )
     A1_drho = (
         -iu * quadratic_term * tau * terms.xi * eta / (2.0 * terms.d)
-    ) * cosh_half_d_tau
+    ) * scaled_cosh_half_d_tau
     A_drho = A1_drho / terms.A2 - terms.A * A2_drho / terms.A2
 
     A_dkappa = 1j / (eta * u) * A_drho
     B_dkappa = 1j / (eta * u) * B_drho + 0.5 * tau * terms.B
 
     d_deta = (rho / eta - 1.0 / terms.xi) * d_drho + eta * u * u / terms.d
-    A1_deta = 0.5 * quadratic_term * tau * d_deta * cosh_half_d_tau
+    A1_deta = 0.5 * quadratic_term * tau * d_deta * scaled_cosh_half_d_tau
     A2_deta = (
         rho / eta * A2_drho
         - (2.0 + tau * terms.xi) / (iu * tau * terms.xi) * A1_drho
         + 0.5 * eta * tau * terms.A1
     )
     A_deta = A1_deta / terms.A2 - terms.A * A2_deta / terms.A2
-
-    return {
+    derivatives = {
         "d_drho": np.asarray(d_drho, dtype=np.complex128),
         "A2_drho": np.asarray(A2_drho, dtype=np.complex128),
         "B_drho": np.asarray(B_drho, dtype=np.complex128),
@@ -304,6 +491,16 @@ def _cui_intermediate_derivatives(
         "A2_deta": np.asarray(A2_deta, dtype=np.complex128),
         "A_deta": np.asarray(A_deta, dtype=np.complex128),
     }
+    for name, value in derivatives.items():
+        require_finite(
+            value,
+            evaluation_stage=stage,
+            parameter_vector=parameter_vector,
+            maturity=tau,
+            probability_index=None,
+            failing_expression=name,
+        )
+    return derivatives
 
 
 def _cui_h_vector(
@@ -322,6 +519,24 @@ def _cui_h_vector(
     eta2 = eta * eta
     eta3 = eta * eta2
     iu = 1j * terms.u
+    parameter_vector = params.as_array()
+    stage = "cui_h_vector"
+    for name, value in (
+        ("eta * u", eta * terms.u),
+        ("eta**2", eta2),
+        ("eta**3", eta3),
+        ("d", terms.d),
+        ("A2_scaled", terms.A2),
+        ("B", terms.B),
+    ):
+        require_nonzero(
+            value,
+            evaluation_stage=stage,
+            parameter_vector=parameter_vector,
+            maturity=tau,
+            probability_index=None,
+            failing_expression=name,
+        )
 
     h_kappa = (
         v / (eta * iu) * derivs["A_drho"]
@@ -351,10 +566,19 @@ def _cui_h_vector(
     )
     h_v = -terms.A
 
-    return np.asarray(
+    h = np.asarray(
         np.stack([h_kappa, h_vbar, h_eta, h_rho, h_v], axis=-1),
         dtype=np.complex128,
     )
+    require_finite(
+        h,
+        evaluation_stage=stage,
+        parameter_vector=parameter_vector,
+        maturity=tau,
+        probability_index=None,
+        failing_expression="h",
+    )
+    return h
 
 
 def _cui_char_fn_and_param_grad(
@@ -407,32 +631,73 @@ def _cui_char_fn_and_param_grad(
     if np.any(u_arr == 0.0):
         raise ValueError("analytic Heston gradient formulas require nonzero u.")
 
-    terms = _cui_stable_terms(u_arr, tau, params)
-    derivs = _cui_intermediate_derivatives(terms, tau, params)
-    h = _cui_h_vector(terms, derivs, tau, params)
+    parameter_vector = params.as_array()
+    stage = "cui_characteristic_function_and_jacobian"
+    try:
+        with np.errstate(divide="raise", invalid="raise", over="raise"):
+            terms = _cui_stable_terms(u_arr, tau, params)
+            derivs = _cui_intermediate_derivatives(terms, tau, params)
+            h = _cui_h_vector(terms, derivs, tau, params)
 
-    kappa = float(params.kappa)
-    vbar = float(params.vbar)
-    eta = float(params.eta)
-    rho = float(params.rho)
-    v = float(params.v)
-    iu = 1j * terms.u
+            kappa = float(params.kappa)
+            vbar = float(params.vbar)
+            eta = float(params.eta)
+            rho = float(params.rho)
+            v = float(params.v)
+            iu = 1j * terms.u
 
-    phi = np.exp(
-        -tau * kappa * vbar * rho * iu / eta
-        - v * terms.A
-        + 2.0 * kappa * vbar / (eta * eta) * terms.D
-    )
-    grad_phi = phi[:, None] * h
+            characteristic_exponent = (
+                -tau * kappa * vbar * rho * iu / eta
+                - v * terms.A
+                + 2.0 * kappa * vbar / (eta * eta) * terms.D
+            )
+            require_safe_exp_argument(
+                characteristic_exponent,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=None,
+                failing_expression="characteristic_exponent",
+            )
+            phi = np.exp(characteristic_exponent)
+            grad_phi = phi[:, None] * h
+            require_finite(
+                phi,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=None,
+                failing_expression="phi",
+            )
+            require_finite(
+                grad_phi,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=None,
+                failing_expression="phi * h",
+            )
 
-    return (
-        _restore_frequency_shape(
-            phi, scalar_input=scalar_input, original_shape=original_shape
-        ),
-        _restore_frequency_param_shape(
-            grad_phi, scalar_input=scalar_input, original_shape=original_shape
-        ),
-    )
+            return (
+                _restore_frequency_shape(
+                    phi, scalar_input=scalar_input, original_shape=original_shape
+                ),
+                _restore_frequency_param_shape(
+                    grad_phi,
+                    scalar_input=scalar_input,
+                    original_shape=original_shape,
+                ),
+            )
+    except HestonNumericalEvaluationError:
+        raise
+    except FloatingPointError as exc:
+        raise numerical_error_from_floating_point(
+            exc,
+            evaluation_stage=stage,
+            parameter_vector=parameter_vector,
+            maturity=tau,
+            failing_expression="Cui characteristic-function/Jacobian expression",
+        ) from exc
 
 
 def heston_char_fn(
@@ -479,11 +744,43 @@ def heston_char_fn(
         raise ValueError("x must be finite.")
 
     u_arr, scalar_input, original_shape = _normalize_frequency_grid(u)
-    C, D = _heston_affine_coeffs(u_arr, tau, params, j=0)
-    values = np.exp(C * params.vbar + D * params.v + 1j * u_arr * x)
-    return _restore_frequency_shape(
-        values, scalar_input=scalar_input, original_shape=original_shape
-    )
+    parameter_vector = params.as_array()
+    stage = "characteristic_function"
+    try:
+        with np.errstate(divide="raise", invalid="raise", over="raise"):
+            C, D = _heston_affine_coeffs(u_arr, tau, params, j=0)
+            characteristic_exponent = C * params.vbar + D * params.v + 1j * u_arr * x
+            require_safe_exp_argument(
+                characteristic_exponent,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=0,
+                failing_expression="characteristic_exponent",
+            )
+            values = np.exp(characteristic_exponent)
+            require_finite(
+                values,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=0,
+                failing_expression="characteristic_function",
+            )
+            return _restore_frequency_shape(
+                values, scalar_input=scalar_input, original_shape=original_shape
+            )
+    except HestonNumericalEvaluationError:
+        raise
+    except FloatingPointError as exc:
+        raise numerical_error_from_floating_point(
+            exc,
+            evaluation_stage=stage,
+            parameter_vector=parameter_vector,
+            maturity=tau,
+            probability_index=0,
+            failing_expression="characteristic_function",
+        ) from exc
 
 
 # Backward-compatible alias for earlier notebook-facing releases.

@@ -191,10 +191,10 @@ def integrate_composite_rule(
     weighted = values_panel * omega
 
     panel_contribs = np.sum(weighted, axis=-1)  # integrates nodes_per_panel
-    total = np.sum(panel_contribs, axis=-1)  # integrates n_panels
+    total_array = np.sum(panel_contribs, axis=-1)  # integrates n_panels
 
     return CompositeIntegrationResult(
-        total=np.asarray(total, dtype=np.float64),
+        total=np.asarray(total_array, dtype=np.float64),
         panel_contribs=np.asarray(panel_contribs, dtype=np.float64),
     )
 

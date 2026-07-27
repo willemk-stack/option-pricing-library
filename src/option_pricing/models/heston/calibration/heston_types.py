@@ -9,6 +9,7 @@ import numpy as np
 from ....types import MarketData, PricingContext
 from ....typing import BoolArray, FloatArray
 from ..fourier import HestonBackend
+from ..numerical import HestonNumericalEvaluationError
 from ..params import HestonParams
 
 type HestonObjectiveType = Literal[
@@ -48,6 +49,8 @@ class HestonCalibrationRun:
     status: int | None
     message: str
     raw_x: FloatArray | None = None
+    numerical_failure: HestonNumericalEvaluationError | None = None
+    authoritative_validation_passed: bool = False
 
     @property
     def failed(self) -> bool:
@@ -69,6 +72,7 @@ class HestonMultistartResult:
     failure_count: int
     jacobian_mode: str = "analytic"
     analytic_jacobian_eta_min: float | None = None
+    authoritative_validation_passed: bool = False
 
     @property
     def successful_runs(self) -> tuple[HestonCalibrationRun, ...]:

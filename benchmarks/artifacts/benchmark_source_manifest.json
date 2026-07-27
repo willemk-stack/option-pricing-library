@@ -53,7 +53,7 @@
     "src/option_pricing/numerics/pde/solver.py": "670fc3b119dc5f1f2622f6a102c3fb6ea9efbabd70b818153e1557a82e244422",
     "src/option_pricing/numerics/pde/time_steppers.py": "8f973c36a22a4adc97f7aca303aad6f379f87097bce60bb88d64afd307ffd2c4",
     "src/option_pricing/numerics/pde/types.py": "42406534ffed6daba09b69fd8faad05532c781bd373a47c5caf7799540ca866a",
-    "src/option_pricing/numerics/quadrature.py": "eb2ba43b2faacaf18b80196880996d24b4c7ba999f0a0fd31f8eb1b8e3b5c24a",
+    "src/option_pricing/numerics/quadrature.py": "c5706d25d7bf98895c098007ef013caae0d8fc85f62bed3edb19b4fc26be3a6b",
     "src/option_pricing/numerics/regression.py": "d53c1ceaa141fea95ac5bc82626b00e1af318c9176432c103afc35d300c49d5b",
     "src/option_pricing/numerics/root_finding.py": "683144327bb8c709fb3e516eb05afae09ed6a1aecc1d73e046a912d6fe4dd058",
     "src/option_pricing/numerics/tridiag.py": "e9edf1df0dca1625384f903b00e5a2871a5ecca4767641e6577fa6ec29b4dd21",

@@ -26,6 +26,12 @@ from .charfunc import (
     _normalize_frequency_grid,
     _restore_frequency_shape,
 )
+from .numerical import (
+    HestonNumericalEvaluationError,
+    numerical_error_from_floating_point,
+    require_finite,
+    require_safe_exp_argument,
+)
 from .params import HestonParams
 
 type QuadratureQuality = Literal["fast", "balanced", "robust", "diagnostics"]
@@ -230,13 +236,45 @@ def _pj_affine_factor(
     j: HestonProbabilityIndex,
 ) -> complex | ComplexArray:
     u_arr, scalar_input, original_shape = _normalize_frequency_grid(u)
-    C, D = _heston_affine_coeffs(u_arr, tau, params, j=j)
-    values = np.exp(C * params.vbar + D * params.v)
-    return _restore_frequency_shape(
-        values,
-        scalar_input=scalar_input,
-        original_shape=original_shape,
-    )
+    parameter_vector = params.as_array()
+    stage = "probability_affine_factor"
+    try:
+        with np.errstate(divide="raise", invalid="raise", over="raise"):
+            C, D = _heston_affine_coeffs(u_arr, tau, params, j=j)
+            exponent = C * params.vbar + D * params.v
+            require_safe_exp_argument(
+                exponent,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=j,
+                failing_expression="characteristic_exponent",
+            )
+            values = np.exp(exponent)
+            require_finite(
+                values,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=j,
+                failing_expression="affine_factor",
+            )
+            return _restore_frequency_shape(
+                values,
+                scalar_input=scalar_input,
+                original_shape=original_shape,
+            )
+    except HestonNumericalEvaluationError:
+        raise
+    except FloatingPointError as exc:
+        raise numerical_error_from_floating_point(
+            exc,
+            evaluation_stage=stage,
+            parameter_vector=parameter_vector,
+            maturity=tau,
+            probability_index=j,
+            failing_expression="probability affine factor",
+        ) from exc
 
 
 def _pj_affine_factor_and_param_jac(
@@ -255,11 +293,14 @@ def _pj_affine_factor_and_param_jac(
     else:
         raise ValueError("j must be either 0 or 1.")
 
-    affine, d_affine = _cui_char_fn_and_param_grad(
-        gradient_frequency,
-        tau,
-        params,
-    )
+    try:
+        affine, d_affine = _cui_char_fn_and_param_grad(
+            gradient_frequency,
+            tau,
+            params,
+        )
+    except HestonNumericalEvaluationError as exc:
+        raise exc.contextualized(probability_index=j) from exc
     affine_arr = np.asarray(affine, dtype=np.complex128).reshape(-1)
     d_affine_arr = np.asarray(d_affine, dtype=np.complex128).reshape(-1, 5)
 
@@ -287,11 +328,34 @@ def _integrand(
         _pj_affine_factor(u_flat, tau, params, j=j), dtype=np.complex128
     )
 
-    values_2d = np.real(
-        np.exp(1j * x_flat[:, None] * u_flat[None, :])
-        * affine[None, :]
-        / (1j * u_flat[None, :])
-    )
+    parameter_vector = params.as_array()
+    stage = "probability_integrand"
+    try:
+        with np.errstate(divide="raise", invalid="raise", over="raise"):
+            values_2d = np.real(
+                np.exp(1j * x_flat[:, None] * u_flat[None, :])
+                * affine[None, :]
+                / (1j * u_flat[None, :])
+            )
+            require_finite(
+                values_2d,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=j,
+                failing_expression="phase * affine / (i * u)",
+            )
+    except HestonNumericalEvaluationError:
+        raise
+    except FloatingPointError as exc:
+        raise numerical_error_from_floating_point(
+            exc,
+            evaluation_stage=stage,
+            parameter_vector=parameter_vector,
+            maturity=tau,
+            probability_index=j,
+            failing_expression="phase * affine / (i * u)",
+        ) from exc
 
     if x_scalar and u_scalar:
         return float(values_2d[0, 0])
@@ -328,14 +392,45 @@ def _integrand_and_param_jac(
     affine_arr = np.asarray(affine, dtype=np.complex128).reshape(-1)
     d_affine_arr = np.asarray(d_affine, dtype=np.complex128).reshape(-1, 5)
 
-    phase = np.exp(1j * x_flat[:, None] * u_flat[None, :])
-    denom = 1j * u_flat[None, :]
+    parameter_vector = params.as_array()
+    stage = "probability_integrand_and_jacobian"
+    try:
+        with np.errstate(divide="raise", invalid="raise", over="raise"):
+            phase = np.exp(1j * x_flat[:, None] * u_flat[None, :])
+            denom = 1j * u_flat[None, :]
 
-    values_2d = np.real(phase * affine_arr[None, :] / denom)
+            values_2d = np.real(phase * affine_arr[None, :] / denom)
 
-    jac_values_3d = np.real(
-        phase[:, :, None] * d_affine_arr[None, :, :] / denom[:, :, None]
-    )
+            jac_values_3d = np.real(
+                phase[:, :, None] * d_affine_arr[None, :, :] / denom[:, :, None]
+            )
+            require_finite(
+                values_2d,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=j,
+                failing_expression="integrand",
+            )
+            require_finite(
+                jac_values_3d,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=j,
+                failing_expression="integrand_jacobian",
+            )
+    except HestonNumericalEvaluationError:
+        raise
+    except FloatingPointError as exc:
+        raise numerical_error_from_floating_point(
+            exc,
+            evaluation_stage=stage,
+            parameter_vector=parameter_vector,
+            maturity=tau,
+            probability_index=j,
+            failing_expression="analytic probability integrand",
+        ) from exc
 
     if x_scalar and u_scalar:
         return (
@@ -953,14 +1048,16 @@ def _integrate_pj_fixed_rule_with_diagnostics(
     panel_reason = _compute_fixed_rule_panel_reason(values_panel, panel_contribs)
     panel_invalid = np.asarray(panel_reason != 0, dtype=np.bool_)
 
-    warning_flags_arr, tail_abs_fraction_arr, cancellation_ratio_arr = (
-        _compute_global_warning_flags(
-            total_integral,
-            probability,
-            panel_invalid=panel_invalid,
-            panel_contribs=panel_contribs,
-            panel_reason=panel_reason,
-        )
+    (
+        warning_flags_arr,
+        tail_abs_fraction_arr,
+        cancellation_ratio_arr,
+    ) = _compute_global_warning_flags(
+        total_integral,
+        probability,
+        panel_invalid=panel_invalid,
+        panel_contribs=panel_contribs,
+        panel_reason=panel_reason,
     )
 
     tail_abs_fraction = (
@@ -1029,14 +1126,16 @@ def _integrate_pj_fixed_rule_batch_with_diagnostics(
     )
     panel_invalid_flat = np.asarray(panel_reason_flat != 0, dtype=np.bool_)
 
-    warning_flags_flat, tail_abs_fraction_flat, cancellation_ratio_flat = (
-        _compute_global_warning_flags(
-            total_integral,
-            probability,
-            panel_invalid=panel_invalid_flat,
-            panel_contribs=panel_contribs_flat,
-            panel_reason=panel_reason_flat,
-        )
+    (
+        warning_flags_flat,
+        tail_abs_fraction_flat,
+        cancellation_ratio_flat,
+    ) = _compute_global_warning_flags(
+        total_integral,
+        probability,
+        panel_invalid=panel_invalid_flat,
+        panel_contribs=panel_contribs_flat,
+        panel_reason=panel_reason_flat,
     )
 
     n_panels = rule.u_panel.shape[0]
@@ -1137,12 +1236,36 @@ def heston_probability(
 
     if backend == "gauss_legendre":
         active_rule = _resolve_gauss_rule(quad_cfg=quad_cfg, rule=rule)
-        integral = _integrate_pj_fixed_rule(x, tau, params, j, active_rule)
-        return _restore_x_shape(
-            _probability_from_integral(integral),
-            scalar_input=scalar_input,
-            original_shape=original_shape,
-        )
+        parameter_vector = params.as_array()
+        stage = "probability_integration"
+        try:
+            with np.errstate(divide="raise", invalid="raise", over="raise"):
+                integral = _integrate_pj_fixed_rule(x, tau, params, j, active_rule)
+                probability = _probability_from_integral(integral)
+                require_finite(
+                    probability,
+                    evaluation_stage=stage,
+                    parameter_vector=parameter_vector,
+                    maturity=tau,
+                    probability_index=j,
+                    failing_expression="probability",
+                )
+                return _restore_x_shape(
+                    probability,
+                    scalar_input=scalar_input,
+                    original_shape=original_shape,
+                )
+        except HestonNumericalEvaluationError:
+            raise
+        except FloatingPointError as exc:
+            raise numerical_error_from_floating_point(
+                exc,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=j,
+                failing_expression="fixed-rule probability integration",
+            ) from exc
 
     raise ValueError(f"Unknown backend: {backend}")
 
@@ -1184,34 +1307,67 @@ def heston_probability_and_param_jac(
 
     if backend == "gauss_legendre":
         active_rule = _resolve_gauss_rule(quad_cfg=quad_cfg, rule=rule)
-        integral, d_integral_dtheta = _integrate_pj_fixed_rule_and_param_jac(
-            x=x,
-            tau=tau,
-            params=params,
-            j=j,
-            rule=active_rule,
-        )
+        parameter_vector = params.as_array()
+        stage = "probability_and_jacobian_integration"
+        try:
+            with np.errstate(divide="raise", invalid="raise", over="raise"):
+                integral, d_integral_dtheta = _integrate_pj_fixed_rule_and_param_jac(
+                    x=x,
+                    tau=tau,
+                    params=params,
+                    j=j,
+                    rule=active_rule,
+                )
 
-        probability = _restore_x_shape(
-            _probability_from_integral(integral),
-            scalar_input=scalar_input,
-            original_shape=original_shape,
-        )
-        d_probability_arr = np.asarray(d_integral_dtheta, dtype=np.float64) / np.pi
-        if scalar_input:
-            d_probability_dtheta = np.asarray(
-                d_probability_arr.reshape(-1, 5)[0],
-                dtype=np.float64,
-            )
-        else:
-            d_probability_dtheta = np.asarray(
-                d_probability_arr.reshape(original_shape + (5,)),
-                dtype=np.float64,
-            )
+                probability = _restore_x_shape(
+                    _probability_from_integral(integral),
+                    scalar_input=scalar_input,
+                    original_shape=original_shape,
+                )
+                d_probability_arr = (
+                    np.asarray(d_integral_dtheta, dtype=np.float64) / np.pi
+                )
+                if scalar_input:
+                    d_probability_dtheta = np.asarray(
+                        d_probability_arr.reshape(-1, 5)[0],
+                        dtype=np.float64,
+                    )
+                else:
+                    d_probability_dtheta = np.asarray(
+                        d_probability_arr.reshape(original_shape + (5,)),
+                        dtype=np.float64,
+                    )
+                require_finite(
+                    probability,
+                    evaluation_stage=stage,
+                    parameter_vector=parameter_vector,
+                    maturity=tau,
+                    probability_index=j,
+                    failing_expression="probability",
+                )
+                require_finite(
+                    d_probability_dtheta,
+                    evaluation_stage=stage,
+                    parameter_vector=parameter_vector,
+                    maturity=tau,
+                    probability_index=j,
+                    failing_expression="probability_jacobian",
+                )
 
-        # NOTE: This function exposes constrained-parameter derivatives only;
-        # unconstrained optimizer chain-rule belongs in the calibration objective.
-        return probability, d_probability_dtheta
+                # NOTE: This function exposes constrained-parameter derivatives only;
+                # unconstrained optimizer chain-rule belongs in the calibration objective.
+                return probability, d_probability_dtheta
+        except HestonNumericalEvaluationError:
+            raise
+        except FloatingPointError as exc:
+            raise numerical_error_from_floating_point(
+                exc,
+                evaluation_stage=stage,
+                parameter_vector=parameter_vector,
+                maturity=tau,
+                probability_index=j,
+                failing_expression="fixed-rule probability/Jacobian integration",
+            ) from exc
 
     raise ValueError(f"Unknown backend: {backend}")
 

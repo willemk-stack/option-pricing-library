@@ -141,8 +141,8 @@ def run_synthetic_iv_smile(
     Ks = np.linspace(K_min, K_max, n)
 
     rows = []
-    for K in Ks:
-        K = float(K)
+    for K_raw in Ks:
+        K = float(K_raw)
         sigma_true = float(true_vol_fn(K))
 
         spec = OptionSpec(kind=kind, strike=K, expiry=tau)

@@ -13,6 +13,11 @@ from ....types import OptionType
 from ....typing import FloatArray
 from ..charfunc import HESTON_ANALYTIC_JAC_ETA_MIN
 from ..fourier import HestonBackend, QuadratureConfig
+from ..numerical import (
+    HestonNumericalEvaluationError,
+    numerical_error_from_floating_point,
+    require_finite,
+)
 from ..params import HESTON_PARAM_NAMES, HestonParams
 from .bounds import (
     HestonCalibrationBounds,
@@ -77,15 +82,21 @@ def _price_heston_quotes(
             if idx.size == 0:
                 continue
 
-            prices[idx] = heston_price_from_ctx(
-                kind=kind,
-                strike=quotes.strike[idx],
-                tau=float(T),
-                ctx=quotes.ctx,  # or quotes.market.to_context()
-                params=params,
-                backend=backend,
-                quad_cfg=quad_cfg,
-            )
+            try:
+                prices[idx] = heston_price_from_ctx(
+                    kind=kind,
+                    strike=quotes.strike[idx],
+                    tau=float(T),
+                    ctx=quotes.ctx,  # or quotes.market.to_context()
+                    params=params,
+                    backend=backend,
+                    quad_cfg=quad_cfg,
+                )
+            except HestonNumericalEvaluationError as exc:
+                raise exc.contextualized(
+                    maturity=float(T),
+                    parameter_vector=params.as_array(),
+                ) from exc
 
     return prices
 
@@ -111,15 +122,21 @@ def _price_and_jac_heston_quotes(
             if idx.size == 0:
                 continue
 
-            price, jac = heston_price_and_param_jac_from_ctx(
-                kind=kind,
-                strike=quotes.strike[idx],
-                tau=float(T),
-                ctx=quotes.ctx,
-                params=params,
-                backend=backend,
-                quad_cfg=quad_cfg,
-            )
+            try:
+                price, jac = heston_price_and_param_jac_from_ctx(
+                    kind=kind,
+                    strike=quotes.strike[idx],
+                    tau=float(T),
+                    ctx=quotes.ctx,
+                    params=params,
+                    backend=backend,
+                    quad_cfg=quad_cfg,
+                )
+            except HestonNumericalEvaluationError as exc:
+                raise exc.contextualized(
+                    maturity=float(T),
+                    parameter_vector=params.as_array(),
+                ) from exc
             prices[idx] = np.asarray(price, dtype=np.float64)
             dprice_dtheta[idx, :] = np.asarray(jac, dtype=np.float64)
 
@@ -263,46 +280,115 @@ class HestonObjective:
         raise ValueError(f"Unsupported objective_type {self.objective_type!r}")
 
     def residual(self, u: FloatArray) -> FloatArray:
-        scale = self._price_residual_scale()
-        params = self._params_from_raw(u)
+        stage = "objective_residual"
+        params: HestonParams | None = None
+        try:
+            with np.errstate(divide="raise", invalid="raise", over="raise"):
+                scale = self._price_residual_scale()
+                params = self._params_from_raw(u)
 
-        model = _price_heston_quotes(
-            self.quotes,
-            params,
-            backend=self.backend,
-            quad_cfg=self.quad_cfg,
-        )
+                model = _price_heston_quotes(
+                    self.quotes,
+                    params,
+                    backend=self.backend,
+                    quad_cfg=self.quad_cfg,
+                )
+                require_finite(
+                    model,
+                    evaluation_stage=stage,
+                    parameter_vector=params.as_array(),
+                    maturity=None,
+                    probability_index=None,
+                    failing_expression="model_prices",
+                )
 
-        quote_residual = self.effective_sqrt_weights * (model - self.quotes.mid) / scale
-        reg_residual = heston_regularization_residuals(params, self.reg)
+                quote_residual = (
+                    self.effective_sqrt_weights * (model - self.quotes.mid) / scale
+                )
+                reg_residual = heston_regularization_residuals(params, self.reg)
 
-        full_residual = np.concatenate([quote_residual, reg_residual])
-        return np.asarray(full_residual, dtype=np.float64)
+                full_residual = np.concatenate([quote_residual, reg_residual])
+                require_finite(
+                    full_residual,
+                    evaluation_stage=stage,
+                    parameter_vector=params.as_array(),
+                    maturity=None,
+                    probability_index=None,
+                    failing_expression="optimizer_residual",
+                )
+                return np.asarray(full_residual, dtype=np.float64)
+        except HestonNumericalEvaluationError as exc:
+            raise exc.contextualized(
+                evaluation_stage=stage,
+                parameter_vector=(None if params is None else params.as_array()),
+            ) from exc
+        except FloatingPointError as exc:
+            raise numerical_error_from_floating_point(
+                exc,
+                evaluation_stage=stage,
+                parameter_vector=None if params is None else params.as_array(),
+                failing_expression="optimizer_residual",
+            ) from exc
 
     def jac(self, u: FloatArray) -> FloatArray:
-        scale = self._price_residual_scale()
-        params = self._params_from_raw(u)
-        bounds = self._resolved_bounds()
-        bounds.require_analytic_jacobian_compatible()
-        _validate_analytic_jacobian_params(params, bounds)
+        stage = "objective_jacobian"
+        params: HestonParams | None = None
+        try:
+            with np.errstate(divide="raise", invalid="raise", over="raise"):
+                scale = self._price_residual_scale()
+                params = self._params_from_raw(u)
+                bounds = self._resolved_bounds()
+                bounds.require_analytic_jacobian_compatible()
+                _validate_analytic_jacobian_params(params, bounds)
 
-        _, dprice_dtheta = _price_and_jac_heston_quotes(
-            self.quotes,
-            params,
-            backend=self.backend,
-            quad_cfg=self.quad_cfg,
-        )
-        dtheta_du = self._transform_jac_diag_from_raw(u)
-        dprice_du = dprice_dtheta * dtheta_du[None, :]
+                _, dprice_dtheta = _price_and_jac_heston_quotes(
+                    self.quotes,
+                    params,
+                    backend=self.backend,
+                    quad_cfg=self.quad_cfg,
+                )
+                require_finite(
+                    dprice_dtheta,
+                    evaluation_stage=stage,
+                    parameter_vector=params.as_array(),
+                    maturity=None,
+                    probability_index=None,
+                    failing_expression="price_jacobian",
+                )
+                dtheta_du = self._transform_jac_diag_from_raw(u)
+                dprice_du = dprice_dtheta * dtheta_du[None, :]
 
-        scaled_jac = np.asarray(
-            self.effective_sqrt_weights[:, None] * dprice_du / scale[:, None],
-            dtype=np.float64,
-        )
-        reg_jac = heston_regularization_jacobian(params, self.reg)
-        if reg_jac.size == 0:
-            return cast(FloatArray, scaled_jac)
-
-        reg_jac_raw = np.asarray(reg_jac * dtheta_du[None, :], dtype=np.float64)
-        full_jac = np.vstack([scaled_jac, reg_jac_raw])
-        return cast(FloatArray, full_jac)
+                scaled_jac = np.asarray(
+                    self.effective_sqrt_weights[:, None] * dprice_du / scale[:, None],
+                    dtype=np.float64,
+                )
+                reg_jac = heston_regularization_jacobian(params, self.reg)
+                if reg_jac.size == 0:
+                    full_jac = scaled_jac
+                else:
+                    reg_jac_raw = np.asarray(
+                        reg_jac * dtheta_du[None, :],
+                        dtype=np.float64,
+                    )
+                    full_jac = np.vstack([scaled_jac, reg_jac_raw])
+                require_finite(
+                    full_jac,
+                    evaluation_stage=stage,
+                    parameter_vector=params.as_array(),
+                    maturity=None,
+                    probability_index=None,
+                    failing_expression="optimizer_jacobian",
+                )
+                return cast(FloatArray, full_jac)
+        except HestonNumericalEvaluationError as exc:
+            raise exc.contextualized(
+                evaluation_stage=stage,
+                parameter_vector=(None if params is None else params.as_array()),
+            ) from exc
+        except FloatingPointError as exc:
+            raise numerical_error_from_floating_point(
+                exc,
+                evaluation_stage=stage,
+                parameter_vector=None if params is None else params.as_array(),
+                failing_expression="optimizer_jacobian",
+            ) from exc
