@@ -193,11 +193,24 @@ def implied_vol_black76_slice(
         # 4) compute next sigma (Newton if safe & inside bracket, else bisection)
         newton_ok = np.isfinite(vega) & (vega > vega_min) & np.isfinite(fx)
         x_curr = x[idx]
-        cand = x_curr - fx / vega
         mid = 0.5 * (a[idx] + b[idx])
 
-        inside = (cand > a[idx]) & (cand < b[idx])
-        x_new = np.where(newton_ok & inside, cand, mid)
+        # NumPy evaluates both branches of np.where eagerly. Computing
+        # ``fx / vega`` before applying ``newton_ok`` therefore emits a
+        # divide-by-zero warning for entries that are already designated
+        # for the bisection fallback. Evaluate the Newton step only where
+        # the vega and residual checks establish that the division is safe.
+        newton_step = np.zeros_like(fx)
+        np.divide(
+            fx,
+            vega,
+            out=newton_step,
+            where=newton_ok,
+        )
+        cand = x_curr - newton_step
+
+        inside = newton_ok & (cand > a[idx]) & (cand < b[idx])
+        x_new = np.where(inside, cand, mid)
 
         # 5) step convergence (sigma stops moving)
         step_small = np.abs(x_new - x_curr) <= tol_x * np.maximum(1.0, np.abs(x_new))

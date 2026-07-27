@@ -79,7 +79,7 @@
     "src/option_pricing/vol/implied_vol_common.py": "17dffcf091c0c08deb2e952eac41d3987e732caf2e431cfd2b4294ea71a1ba61",
     "src/option_pricing/vol/implied_vol_scalar.py": "febf655e5d7b497cf5acea875a793e52655e6c47e9ed5f11b91a8267795b97a0",
     "src/option_pricing/vol/implied_vol_seed.py": "b200c70a00b3f9ad82c50d5f97966e92c2b84b51bcef1d577eab32a993d1b8bd",
-    "src/option_pricing/vol/implied_vol_slice.py": "7081e446c80ff8b071db22b1baff16921cf39d347bcb056425b4614d74d5a4ef",
+    "src/option_pricing/vol/implied_vol_slice.py": "4ef3c5abea205419721d54fd56dc05a7b17957aa794a465598adb6f21320945c",
     "src/option_pricing/vol/implied_vol_types.py": "8f13934d615484f593c7ac8fe05a8417affbb271652117e665a16d83fdbec757",
     "src/option_pricing/vol/local_vol_dupire.py": "b52330943858d6f46f0a711433a0c9a03972832c887274a40015483a708f8ae3",
     "src/option_pricing/vol/local_vol_fd.py": "b844d719402b2850ff91b7a9f410183b724e57ddebcfb316637fb0f01aaae09a",
