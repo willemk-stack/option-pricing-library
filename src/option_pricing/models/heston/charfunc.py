@@ -363,16 +363,12 @@ def _cui_stable_terms(
         probability_index=None,
         failing_expression="0.5 * (kappa - d) * tau",
     )
-    B = d * np.exp(B_exp_argument) / A2
-    require_nonzero(
-        B,
-        evaluation_stage=stage,
-        parameter_vector=parameter_vector,
-        maturity=tau,
-        probability_index=None,
-        failing_expression="B",
-    )
     D = np.log(d) + B_exp_argument - np.log(A2)
+
+    # B itself may legitimately underflow on far-tail quadrature nodes even
+    # though log(B) and the characteristic-function gradient remain finite.
+    # Retain B for the internal terms contract, but never divide by it.
+    B = np.exp(D)
     for name, value in (("A", A), ("D", D), ("exp(-d*tau)", exp_neg_d_tau)):
         require_finite(
             value,
@@ -450,25 +446,17 @@ def _cui_intermediate_derivatives(
     A2_drho = -(eta * iu * (2.0 + tau * terms.xi) / (2.0 * terms.d)) * (
         terms.xi * scaled_cosh_half_d_tau + terms.d * scaled_sinh_half_d_tau
     )
-    B_exp_argument = 0.5 * (params.kappa - terms.d) * tau
-    require_safe_exp_argument(
-        B_exp_argument,
-        evaluation_stage=stage,
-        parameter_vector=parameter_vector,
-        maturity=tau,
-        probability_index=None,
-        failing_expression="0.5 * (kappa - d) * tau",
-    )
-    B_drho = np.exp(B_exp_argument) * (
-        d_drho / terms.A2 - terms.d * A2_drho / (terms.A2 * terms.A2)
-    )
+    # The h-vector requires B derivatives only through B_theta / B.
+    # Evaluate that logarithmic derivative directly. Forming B_theta and B
+    # separately creates avoidable overflow/underflow in the Fourier tail.
+    B_log_drho = d_drho / terms.d - A2_drho / terms.A2
     A1_drho = (
         -iu * quadratic_term * tau * terms.xi * eta / (2.0 * terms.d)
     ) * scaled_cosh_half_d_tau
     A_drho = A1_drho / terms.A2 - terms.A * A2_drho / terms.A2
 
     A_dkappa = 1j / (eta * u) * A_drho
-    B_dkappa = 1j / (eta * u) * B_drho + 0.5 * tau * terms.B
+    B_log_dkappa = 1j / (eta * u) * B_log_drho + 0.5 * tau
 
     d_deta = (rho / eta - 1.0 / terms.xi) * d_drho + eta * u * u / terms.d
     A1_deta = 0.5 * quadratic_term * tau * d_deta * scaled_cosh_half_d_tau
@@ -481,11 +469,11 @@ def _cui_intermediate_derivatives(
     derivatives = {
         "d_drho": np.asarray(d_drho, dtype=np.complex128),
         "A2_drho": np.asarray(A2_drho, dtype=np.complex128),
-        "B_drho": np.asarray(B_drho, dtype=np.complex128),
+        "B_log_drho": np.asarray(B_log_drho, dtype=np.complex128),
         "A1_drho": np.asarray(A1_drho, dtype=np.complex128),
         "A_drho": np.asarray(A_drho, dtype=np.complex128),
         "A_dkappa": np.asarray(A_dkappa, dtype=np.complex128),
-        "B_dkappa": np.asarray(B_dkappa, dtype=np.complex128),
+        "B_log_dkappa": np.asarray(B_log_dkappa, dtype=np.complex128),
         "d_deta": np.asarray(d_deta, dtype=np.complex128),
         "A1_deta": np.asarray(A1_deta, dtype=np.complex128),
         "A2_deta": np.asarray(A2_deta, dtype=np.complex128),
@@ -527,7 +515,6 @@ def _cui_h_vector(
         ("eta**3", eta3),
         ("d", terms.d),
         ("A2_scaled", terms.A2),
-        ("B", terms.B),
     ):
         require_nonzero(
             value,
@@ -541,7 +528,7 @@ def _cui_h_vector(
     h_kappa = (
         v / (eta * iu) * derivs["A_drho"]
         + 2.0 * vbar / eta2 * terms.D
-        + 2.0 * kappa * vbar / (eta2 * terms.B) * derivs["B_dkappa"]
+        + 2.0 * kappa * vbar / eta2 * derivs["B_log_dkappa"]
         - tau * vbar * rho * iu / eta
     )
     h_vbar = 2.0 * kappa / eta2 * terms.D - tau * kappa * rho * iu / eta
