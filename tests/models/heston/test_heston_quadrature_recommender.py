@@ -141,3 +141,75 @@ def test_recommend_heston_quadrature_config_robust_and_diagnostics_are_monotone_
     assert diagnostics.u_max >= robust.u_max
     assert diagnostics.n_panels >= robust.n_panels
     assert diagnostics.nodes_per_panel >= robust.nodes_per_panel
+
+
+def test_robust_rule_promotes_short_deep_production_stress() -> None:
+    params = HestonParams(
+        kappa=1.5,
+        vbar=0.08,
+        eta=1.2,
+        rho=-0.6,
+        v=0.04,
+    )
+
+    cfg = recommend_heston_quadrature_config(
+        x=0.8,
+        tau=0.10,
+        params=params,
+        quality="robust",
+    )
+
+    assert cfg.u_max >= 600.0
+    assert cfg.n_panels >= 96
+    assert cfg.nodes_per_panel >= 48
+    assert cfg.panel_spacing == PanelSpacing.CLUSTERED
+
+
+def test_robust_rule_promotes_short_high_mean_reversion_near_money() -> None:
+    params = HestonParams(
+        kappa=3.0,
+        vbar=0.06,
+        eta=1.4,
+        rho=-0.6,
+        v=0.04,
+    )
+
+    cfg = recommend_heston_quadrature_config(
+        x=0.2,
+        tau=0.04,
+        params=params,
+        quality="robust",
+    )
+
+    assert cfg.u_max >= 600.0
+    assert cfg.n_panels >= 96
+    assert cfg.nodes_per_panel >= 48
+    assert cfg.panel_spacing == PanelSpacing.CLUSTERED
+
+
+def test_diagnostics_rule_remains_monotone_in_production_stress() -> None:
+    params = HestonParams(
+        kappa=5.0,
+        vbar=0.06,
+        eta=1.6,
+        rho=-0.63,
+        v=0.035,
+    )
+
+    robust = recommend_heston_quadrature_config(
+        x=0.2,
+        tau=2.0 / 365.0,
+        params=params,
+        quality="robust",
+    )
+    diagnostics = recommend_heston_quadrature_config(
+        x=0.2,
+        tau=2.0 / 365.0,
+        params=params,
+        quality="diagnostics",
+    )
+
+    assert diagnostics.u_max >= robust.u_max
+    assert diagnostics.n_panels >= robust.n_panels
+    assert diagnostics.nodes_per_panel >= robust.nodes_per_panel
+    assert diagnostics.panel_spacing == PanelSpacing.CLUSTERED

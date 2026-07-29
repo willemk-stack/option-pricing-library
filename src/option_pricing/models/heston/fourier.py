@@ -586,6 +586,12 @@ def recommend_heston_quadrature_config(
     nodes_per_panel = base_nodes
     panel_spacing = PanelSpacing.UNIFORM
     cluster_strength = 2.0
+    # Short, deep groups and short high-mean-reversion groups need a longer,
+    # denser clustered rule to keep truncation error inside the production
+    # price-bound tolerance.
+    production_stress = tau <= 0.10 and (
+        abs_x > 0.75 or (tau < 0.05 and float(params.kappa) >= 3.0 and eta >= 1.0)
+    )
 
     if tau < 0.05:
         u_max = max(u_max, 280.0)
@@ -634,11 +640,23 @@ def recommend_heston_quadrature_config(
         u_max *= 1.25
         n_panels = int(np.ceil(1.25 * n_panels))
         nodes_per_panel = max(nodes_per_panel, 24)
+        if production_stress:
+            u_max = max(u_max, 600.0)
+            n_panels = max(n_panels, 96)
+            nodes_per_panel = max(nodes_per_panel, 48)
+            panel_spacing = PanelSpacing.CLUSTERED
+            cluster_strength = 2.0
     elif quality == "diagnostics":
         u_max *= 1.50
         n_panels = int(np.ceil(1.50 * n_panels))
         nodes_per_panel = max(nodes_per_panel, 32)
         if panel_spacing == PanelSpacing.UNIFORM and (tau < 0.25 or eta < 0.10):
+            panel_spacing = PanelSpacing.CLUSTERED
+            cluster_strength = 2.0
+        if production_stress:
+            u_max = max(u_max, 800.0)
+            n_panels = max(n_panels, 128)
+            nodes_per_panel = max(nodes_per_panel, 48)
             panel_spacing = PanelSpacing.CLUSTERED
             cluster_strength = 2.0
 
