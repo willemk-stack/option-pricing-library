@@ -29,7 +29,7 @@ def generator() -> ModuleType:
 
 def _inputs(generator: ModuleType) -> dict[str, object]:
     scope = json.loads(
-        (ROOT / "certification" / "heston" / "certification_scope.v1.json").read_text(
+        (ROOT / "certification" / "heston" / "certification_scope.v2.json").read_text(
             encoding="utf-8"
         )
     )
@@ -79,24 +79,25 @@ def test_normalized_policy_matches_frozen_omrr_digest(
     generator: ModuleType,
 ) -> None:
     policy = json.loads(
-        (ROOT / "certification" / "heston" / "omrr_policy.normalized.json").read_text(
-            encoding="utf-8"
-        )
+        (
+            ROOT / "certification" / "heston" / "omrr_policy.normalized.v2.json"
+        ).read_text(encoding="utf-8")
     )
     assert (
         generator.verify_policy(policy)
-        == "7836958535e1f66a5c936952d75632f7dd4382b768c2db43c169929d95c48f9f"
+        == "dc115c2e4d67e8bd8c9937f62e4a1a1f239d6cf62cf6574dd70b1b401d538af1"
     )
 
 
-def test_certificate_builder_emits_exact_omrr_v1_fields(
+def test_certificate_builder_emits_exact_omrr_v2_fields(
     generator: ModuleType,
 ) -> None:
     payload = generator.build_certificate(**_inputs(generator))
 
     assert set(payload) == generator.CERTIFICATE_FIELDS
-    assert payload["schema_version"] == "omrr_opl_heston_certification.v1"
-    assert payload["opl_commit_sha"] == "6daf359c2c5c534fc95991f6b37a332258b52099"
+    assert payload["schema_version"] == "omrr_opl_heston_certification.v2"
+    assert payload["opl_commit_sha"] == "41c01d886aeddf87d6837927be63d5041cfc2f89"
+    assert len(payload["certified_parameter_regimes"]) == 6
     assert payload["opl_worktree_dirty"] is False
     assert (
         payload["environment_metadata"]["dependencies"][

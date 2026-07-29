@@ -1,0 +1,11 @@
+{
+  "certificate_schema_version": "omrr_opl_heston_certification.v2",
+  "clean_opl_worktree_required": true,
+  "coupled_parameter_regimes_required": true,
+  "evidence_artifact_hashes_required": true,
+  "out_of_domain_policy": "fail_closed",
+  "policy_version": "omrr_opl_heston_certification_policy.v2",
+  "required_certification_status": "PASS",
+  "supported_production_backend": "gauss_legendre",
+  "supported_production_quadrature_tier": "robust"
+}

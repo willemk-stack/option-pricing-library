@@ -15,11 +15,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-CERTIFIED_IMPLEMENTATION_COMMIT = "6daf359c2c5c534fc95991f6b37a332258b52099"
-CERTIFICATE_SCHEMA_VERSION = "omrr_opl_heston_certification.v1"
-CERTIFICATION_POLICY_VERSION = "omrr_opl_heston_certification_policy.v1"
+CERTIFIED_IMPLEMENTATION_COMMIT = "41c01d886aeddf87d6837927be63d5041cfc2f89"
+CERTIFICATE_SCHEMA_VERSION = "omrr_opl_heston_certification.v2"
+CERTIFICATION_POLICY_VERSION = "omrr_opl_heston_certification_policy.v2"
 EXPECTED_POLICY_SHA256 = (
-    "7836958535e1f66a5c936952d75632f7dd4382b768c2db43c169929d95c48f9f"
+    "dc115c2e4d67e8bd8c9937f62e4a1a1f239d6cf62cf6574dd70b1b401d538af1"
 )
 SCRIPT_PATH = Path(__file__).resolve()
 TOOLING_ROOT = SCRIPT_PATH.parents[1]
@@ -31,6 +31,7 @@ REQUIRED_IMPLEMENTATION_TESTS = (
     "tests/models/heston/test_heston_reference_prices.py",
     "tests/models/heston/test_heston_numerical_smoke_regimes.py",
     "tests/models/heston/test_heston_numerical_robustness.py",
+    "tests/models/heston/test_heston_production_stress_domain.py",
     "tests/models/heston/test_heston_quadrature_recommender.py",
     "tests/models/heston/test_fourier_diagnostics.py",
     "tests/models/heston/test_heston_params.py",
@@ -55,6 +56,7 @@ CERTIFICATE_FIELDS = {
     "supported_production_quadrature_tier",
     "supported_option_rights",
     "certified_parameter_envelope",
+    "certified_parameter_regimes",
     "certified_market_envelope",
     "numerical_tolerances",
     "test_suite_result_summary",
@@ -155,8 +157,7 @@ def verify_policy(policy: dict[str, Any]) -> str:
     digest = canonical_json_sha256(policy)
     if digest != EXPECTED_POLICY_SHA256:
         raise CertificationError(
-            "normalized policy does not match OMRR's frozen policy SHA-256: "
-            f"{digest}"
+            f"normalized policy does not match OMRR's frozen policy SHA-256: {digest}"
         )
     return digest
 
@@ -385,6 +386,7 @@ def build_certificate(
         "supported_production_quadrature_tier": scope["production_quadrature_tier"],
         "supported_option_rights": scope["supported_option_rights"],
         "certified_parameter_envelope": scope["certified_parameter_envelope"],
+        "certified_parameter_regimes": scope["certified_parameter_regimes"],
         "certified_market_envelope": scope["certified_market_envelope"],
         "numerical_tolerances": scope["numerical_tolerances"],
         "test_suite_result_summary": {
@@ -396,7 +398,7 @@ def build_certificate(
         "backend_comparison_evidence_summary": {
             "status": backend["status"],
             "test_identifiers": [
-                "certification/heston/full_envelope_grid:robust_vs_adaptive",
+                "certification/heston/stable_fixture_grid:robust_vs_adaptive",
                 "tests/models/heston/test_heston_fourier_backends.py",
             ],
             "case_count": backend["case_count"],
@@ -411,7 +413,8 @@ def build_certificate(
         "stress_regime_evidence_summary": {
             "status": grid_summary["status"],
             "test_identifiers": [
-                "certification/heston/full_envelope_grid",
+                "certification/heston/coupled_parameter_regime_grid",
+                "tests/models/heston/test_heston_production_stress_domain.py",
                 "tests/models/heston/test_heston_numerical_smoke_regimes.py",
                 "tests/models/heston/test_heston_numerical_robustness.py",
             ],
@@ -437,7 +440,7 @@ def build_certificate(
         "evidence_artifacts": evidence_artifacts,
     }
     if set(payload) != CERTIFICATE_FIELDS:
-        raise CertificationError("internal error: certificate field set is not v1")
+        raise CertificationError("internal error: certificate field set is not v2")
     if payload["opl_commit_sha"] != CERTIFIED_IMPLEMENTATION_COMMIT:
         raise CertificationError("internal error: wrong implementation identity")
     return payload
@@ -462,9 +465,9 @@ def generate(
         raise CertificationError(f"output directory already exists: {output_dir}")
     output_dir.mkdir(parents=True)
 
-    policy_source = POLICY_DIR / "omrr_policy.normalized.json"
-    scope_source = POLICY_DIR / "certification_scope.v1.json"
-    catalog_source = POLICY_DIR / "coverage_catalog.v1.json"
+    policy_source = POLICY_DIR / "omrr_policy.normalized.v2.json"
+    scope_source = POLICY_DIR / "certification_scope.v2.json"
+    catalog_source = POLICY_DIR / "coverage_catalog.v2.json"
     policy = json.loads(policy_source.read_text(encoding="utf-8"))
     scope = json.loads(scope_source.read_text(encoding="utf-8"))
     policy_sha = verify_policy(policy)
@@ -568,7 +571,7 @@ def generate(
         evidence_artifacts=evidence_artifacts,
         created_at_utc=created_at_utc,
     )
-    certificate_path = output_dir / "omrr_opl_heston_certification.v1.json"
+    certificate_path = output_dir / "omrr_opl_heston_certification.v2.json"
     _write_json(certificate_path, certificate)
     print(f"certificate_path={certificate_path.resolve()}")
     print(f"certificate_sha256={sha256_file(certificate_path)}")

@@ -1,0 +1,48 @@
+{
+  "catalog_version": "opl_heston_coverage_catalog.v2",
+  "certified_commit_sha": "41c01d886aeddf87d6837927be63d5041cfc2f89",
+  "coverage": {
+    "adaptive_quadrature": [
+      "tests/models/heston/test_heston_fourier_backends.py",
+      "tests/models/heston/test_heston_reference_prices.py",
+      "certification stable-fixture backend-comparison probe"
+    ],
+    "backend_agreement_and_convergence": [
+      "tests/models/heston/test_heston_fourier_backends.py",
+      "certification stable-fixture backend-comparison probe",
+      "certification coupled-domain robust-versus-diagnostics probe"
+    ],
+    "bounds_and_parity": [
+      "tests/models/heston/test_heston_reference_prices.py",
+      "tests/market/test_market_parity.py",
+      "certification coupled-domain grid probe"
+    ],
+    "diagnostics_quadrature": [
+      "tests/models/heston/test_fourier_diagnostics.py",
+      "tests/diagnostics/heston/test_heston_integration.py",
+      "tests/diagnostics/heston/test_heston_pricing.py"
+    ],
+    "finite_and_stress_regimes": [
+      "tests/models/heston/test_heston_numerical_smoke_regimes.py",
+      "tests/models/heston/test_heston_numerical_robustness.py",
+      "tests/models/heston/test_heston_production_stress_domain.py",
+      "certification coupled-domain grid probe"
+    ],
+    "public_api_and_scalar_batch": [
+      "tests/pricers/test_heston_pricer_vectorization.py",
+      "certification scalar/batch probe"
+    ],
+    "quadrature_recommendations": [
+      "tests/models/heston/test_heston_quadrature_recommender.py"
+    ],
+    "warnings_and_promotion": [
+      "tests/models/heston/test_fourier_diagnostics.py",
+      "tests/models/heston/test_heston_numerical_robustness.py",
+      "tests/diagnostics/heston/test_heston_integration.py"
+    ]
+  },
+  "identified_gap_and_resolution": {
+    "gap": "The v1 Cartesian envelope both excluded production regimes and implied unsupported cross-parameter combinations; its price-bound tolerance was looser than OMRR qualification.",
+    "resolution": "V2 certifies six coupled parameter regimes at all declared market boundaries and uses the same persisted-price bound tolerance as OMRR."
+  }
+}

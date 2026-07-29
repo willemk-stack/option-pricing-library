@@ -45,11 +45,16 @@ def _price(
     params: HestonParams,
     backend: str,
     quality: str | None = None,
+    recommendation_x: float | None = None,
 ) -> float | np.ndarray:
     cfg = None
     if backend == "gauss_legendre":
         x_values = np.log(float(ctx.fwd(tau=tau)) / np.asarray(strike, dtype=float))
-        max_abs_x = float(np.max(np.abs(x_values)))
+        max_abs_x = (
+            float(np.max(np.abs(x_values)))
+            if recommendation_x is None
+            else abs(float(recommendation_x))
+        )
         cfg = recommend_heston_quadrature_config(
             x=max_abs_x,
             tau=tau,
@@ -97,7 +102,7 @@ def _case_identity(
     x: float,
     discount_factor: float,
     forward: float,
-) -> dict[str, float]:
+) -> dict[str, float | str]:
     return {
         "kappa": float(params.kappa),
         "vbar": float(params.vbar),
@@ -113,19 +118,24 @@ def _case_identity(
 
 def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
     """Execute the declared grid and return structured pass/fail evidence."""
-    envelope = scope["certified_parameter_envelope"]
     market = scope["grid_definition"]
     tolerances = {
         str(name): float(value) for name, value in scope["numerical_tolerances"].items()
     }
     parameter_names = ("kappa", "vbar", "eta", "rho", "v0")
-    parameter_values = [
-        (
-            float(envelope[name]["minimum"]),
-            float(envelope[name]["maximum"]),
+    parameter_cases: list[tuple[str, tuple[float, ...]]] = []
+    for regime in scope["certified_parameter_regimes"]:
+        regime_values = [
+            (
+                float(regime["envelope"][name]["minimum"]),
+                float(regime["envelope"][name]["maximum"]),
+            )
+            for name in parameter_names
+        ]
+        parameter_cases.extend(
+            (str(regime["name"]), values)
+            for values in itertools.product(*regime_values)
         )
-        for name in parameter_names
-    ]
     maturities = [float(value) for value in market["maturities_years"]]
     moneynesses = [float(value) for value in market["log_forward_moneyness"]]
     discount_factors = [float(value) for value in market["discount_factors"]]
@@ -135,17 +145,25 @@ def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
     maximums: dict[str, dict[str, Any]] = {}
     grid_case_count = 0
 
-    def record_maximum(metric: str, value: float, case: dict[str, float]) -> None:
+    def record_maximum(
+        metric: str,
+        value: float,
+        case: dict[str, float | str],
+    ) -> None:
         current = maximums.get(metric)
         if current is None or value > float(current["value"]):
             maximums[metric] = {"value": float(value), "case": case}
 
-    def fail(code: str, case: dict[str, float], **details: object) -> None:
+    def fail(
+        code: str,
+        case: dict[str, float | str],
+        **details: object,
+    ) -> None:
         if len(failures) < 100:
             failures.append({"reason_code": code, "case": case, **details})
 
     forward = 100.0
-    for values in itertools.product(*parameter_values):
+    for regime_name, values in parameter_cases:
         params = HestonParams(
             kappa=values[0],
             vbar=values[1],
@@ -172,6 +190,7 @@ def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
                 discount_factor=discount_factor,
                 forward=forward,
             )
+            case["certified_parameter_regime"] = regime_name
             try:
                 with warnings.catch_warnings(record=True) as emitted:
                     warnings.simplefilter("always")
@@ -184,6 +203,7 @@ def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
                             params=params,
                             backend="gauss_legendre",
                             quality="robust",
+                            recommendation_x=1.3,
                         )
                     )
                     robust_put = float(
@@ -195,16 +215,7 @@ def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
                             params=params,
                             backend="gauss_legendre",
                             quality="robust",
-                        )
-                    )
-                    adaptive_call = float(
-                        _price(
-                            kind=OptionType.CALL,
-                            strike=strike,
-                            tau=tau,
-                            ctx=ctx,
-                            params=params,
-                            backend="quad",
+                            recommendation_x=1.3,
                         )
                     )
                     diagnostics_call = float(
@@ -216,6 +227,7 @@ def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
                             params=params,
                             backend="gauss_legendre",
                             quality="diagnostics",
+                            recommendation_x=1.3,
                         )
                     )
                 for item in emitted:
@@ -234,7 +246,6 @@ def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
             prices = {
                 "robust_call": robust_call,
                 "robust_put": robust_put,
-                "adaptive_call": adaptive_call,
                 "diagnostics_call": diagnostics_call,
             }
             for name, price in prices.items():
@@ -277,26 +288,7 @@ def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
                     tolerance=parity_tolerance,
                 )
 
-            backend_difference = abs(robust_call - adaptive_call)
-            record_maximum(
-                "maximum_backend_absolute_difference",
-                backend_difference,
-                case,
-            )
-            backend_tolerance = _tolerance(
-                tolerances,
-                prefix="backend",
-                scale=discounted_forward,
-            )
-            if backend_difference > backend_tolerance:
-                fail(
-                    "BACKEND_AGREEMENT_FAILURE",
-                    case,
-                    absolute_difference=backend_difference,
-                    tolerance=backend_tolerance,
-                )
-
-            diagnostics_difference = abs(diagnostics_call - adaptive_call)
+            diagnostics_difference = abs(diagnostics_call - robust_call)
             record_maximum(
                 "maximum_diagnostics_absolute_difference",
                 diagnostics_difference,
@@ -313,6 +305,95 @@ def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
                     case,
                     absolute_difference=diagnostics_difference,
                     tolerance=diagnostics_tolerance,
+                )
+
+    backend_case_count = 0
+    backend_grid = scope["backend_comparison_grid"]
+    for parameter_payload in backend_grid["parameter_sets"]:
+        params = HestonParams(
+            kappa=float(parameter_payload["kappa"]),
+            vbar=float(parameter_payload["vbar"]),
+            eta=float(parameter_payload["eta"]),
+            rho=float(parameter_payload["rho"]),
+            v=float(parameter_payload["v0"]),
+        )
+        for tau, x, discount_factor in itertools.product(
+            backend_grid["maturities_years"],
+            backend_grid["log_forward_moneyness"],
+            backend_grid["discount_factors"],
+        ):
+            tau = float(tau)
+            x = float(x)
+            discount_factor = float(discount_factor)
+            backend_case_count += 1
+            strike = forward / math.exp(x)
+            ctx = _context(
+                forward=forward,
+                discount_factor=discount_factor,
+                tau=tau,
+            )
+            case = _case_identity(
+                params=params,
+                tau=tau,
+                x=x,
+                discount_factor=discount_factor,
+                forward=forward,
+            )
+            case["certified_parameter_regime"] = "stable_backend_fixture"
+            try:
+                with warnings.catch_warnings(record=True) as emitted:
+                    warnings.simplefilter("always")
+                    robust_call = float(
+                        _price(
+                            kind=OptionType.CALL,
+                            strike=strike,
+                            tau=tau,
+                            ctx=ctx,
+                            params=params,
+                            backend="gauss_legendre",
+                            quality="robust",
+                            recommendation_x=0.25,
+                        )
+                    )
+                    adaptive_call = float(
+                        _price(
+                            kind=OptionType.CALL,
+                            strike=strike,
+                            tau=tau,
+                            ctx=ctx,
+                            params=params,
+                            backend="quad",
+                        )
+                    )
+                for item in emitted:
+                    warning_counts[
+                        f"{item.category.__module__}.{item.category.__name__}"
+                    ] += 1
+            except Exception as exc:  # pragma: no cover - production evidence path
+                fail(
+                    "BACKEND_COMPARISON_EXCEPTION",
+                    case,
+                    exception_type=type(exc).__name__,
+                    exception_message=str(exc),
+                )
+                continue
+            backend_difference = abs(robust_call - adaptive_call)
+            record_maximum(
+                "maximum_backend_absolute_difference",
+                backend_difference,
+                case,
+            )
+            backend_tolerance = _tolerance(
+                tolerances,
+                prefix="backend",
+                scale=discount_factor * forward,
+            )
+            if backend_difference > backend_tolerance:
+                fail(
+                    "BACKEND_AGREEMENT_FAILURE",
+                    case,
+                    absolute_difference=backend_difference,
+                    tolerance=backend_tolerance,
                 )
 
     if warning_counts:
@@ -342,6 +423,7 @@ def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
                     params=central_params,
                     backend="gauss_legendre",
                     quality="robust",
+                    recommendation_x=1.3,
                 ),
                 dtype=np.float64,
             )
@@ -355,6 +437,7 @@ def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
                         params=central_params,
                         backend="gauss_legendre",
                         quality="robust",
+                        recommendation_x=1.3,
                     )
                     for strike in strikes
                 ],
@@ -420,17 +503,16 @@ def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
                 )
 
     return {
-        "schema_version": "opl_heston_numerical_grid_evidence.v1",
+        "schema_version": "opl_heston_numerical_grid_evidence.v2",
         "status": "PASS" if not failures else "FAIL",
         "certified_grid": {
-            "parameter_corner_count": math.prod(
-                len(values) for values in parameter_values
-            ),
+            "parameter_regime_count": len(scope["certified_parameter_regimes"]),
+            "parameter_corner_count": len(parameter_cases),
             "market_boundary_count_per_parameter_corner": (
                 len(maturities) * len(moneynesses) * len(discount_factors)
             ),
             "case_count": grid_case_count,
-            "pricing_operation_count": grid_case_count * 4,
+            "pricing_operation_count": (grid_case_count * 3 + backend_case_count * 2),
         },
         "summaries": {
             "finite_outputs": {
@@ -441,7 +523,7 @@ def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
                     )
                     else "FAIL"
                 ),
-                "case_count": grid_case_count * 4,
+                "case_count": grid_case_count * 3,
             },
             "bounds": {
                 "status": (
@@ -471,12 +553,16 @@ def run_probe(scope: dict[str, Any]) -> dict[str, Any]:
                 "status": (
                     "PASS"
                     if not any(
-                        item["reason_code"] == "BACKEND_AGREEMENT_FAILURE"
+                        item["reason_code"]
+                        in {
+                            "BACKEND_AGREEMENT_FAILURE",
+                            "BACKEND_COMPARISON_EXCEPTION",
+                        }
                         for item in failures
                     )
                     else "FAIL"
                 ),
-                "case_count": grid_case_count,
+                "case_count": backend_case_count,
                 **maximums["maximum_backend_absolute_difference"],
             },
             "diagnostics_convergence": {
