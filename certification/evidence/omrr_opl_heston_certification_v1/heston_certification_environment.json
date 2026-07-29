@@ -1,0 +1,33 @@
+{
+  "architecture": "AMD64",
+  "certification_tooling_commit_sha": "505e7aedcb2312f089f21a4c30cb68ce1746dd08",
+  "certification_tooling_worktree": "C:\\Users\\ouwez\\Documents\\Quant\\omrr-worktrees\\opl-heston-certification",
+  "certified_implementation_commit_sha": "6daf359c2c5c534fc95991f6b37a332258b52099",
+  "certified_implementation_dirty": false,
+  "certified_implementation_worktree": "C:\\Users\\ouwez\\Documents\\Quant\\omrr-worktrees\\opl-heston-certified-6daf",
+  "numpy_version": "1.26.4",
+  "option_pricing_module_path": "C:\\Users\\ouwez\\Documents\\Quant\\omrr-worktrees\\opl-heston-certified-6daf\\src\\option_pricing\\__init__.py",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python_executable": "C:\\Users\\ouwez\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+  "python_version": "3.12.0",
+  "schema_version": "opl_heston_certification_environment.v1",
+  "scipy_version": "1.14.1",
+  "test_command": [
+    "C:\\Users\\ouwez\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+    "-m",
+    "pytest",
+    "tests/models/heston/test_heston_fourier_backends.py",
+    "tests/models/heston/test_heston_reference_prices.py",
+    "tests/models/heston/test_heston_numerical_smoke_regimes.py",
+    "tests/models/heston/test_heston_numerical_robustness.py",
+    "tests/models/heston/test_heston_quadrature_recommender.py",
+    "tests/models/heston/test_fourier_diagnostics.py",
+    "tests/models/heston/test_heston_params.py",
+    "tests/pricers/test_heston_pricer_vectorization.py",
+    "tests/market/test_market_parity.py",
+    "tests/diagnostics/heston/test_heston_integration.py",
+    "tests/diagnostics/heston/test_heston_pricing.py",
+    "-q",
+    "--junitxml=C:\\Users\\ouwez\\Documents\\Quant\\omrr-worktrees\\opl-heston-certification\\certification\\evidence\\omrr_opl_heston_certification_v1\\heston_certification_pytest.xml"
+  ]
+}

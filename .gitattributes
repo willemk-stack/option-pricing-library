@@ -1,0 +1,2 @@
+# Certification hashes must remain byte-identical on every platform.
+certification/evidence/omrr_opl_heston_certification_v1/** text eol=lf
