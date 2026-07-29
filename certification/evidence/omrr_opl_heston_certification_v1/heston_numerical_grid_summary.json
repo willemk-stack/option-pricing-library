@@ -1,0 +1,96 @@
+{
+  "certified_grid": {
+    "case_count": 384,
+    "market_boundary_count_per_parameter_corner": 12,
+    "parameter_corner_count": 32,
+    "pricing_operation_count": 1536
+  },
+  "failure_count": 0,
+  "failures": [],
+  "schema_version": "opl_heston_numerical_grid_evidence.v1",
+  "status": "PASS",
+  "summaries": {
+    "backend_comparison": {
+      "case": {
+        "discount_factor": 1.0,
+        "eta": 0.8,
+        "forward": 100.0,
+        "kappa": 0.8,
+        "log_forward_moneyness": -0.25,
+        "maturity_years": 0.1,
+        "rho": -0.75,
+        "v0": 0.02,
+        "vbar": 0.03
+      },
+      "case_count": 384,
+      "status": "PASS",
+      "value": 0.00046756240387180127
+    },
+    "bounds": {
+      "case": {
+        "discount_factor": 1.0,
+        "eta": 0.8,
+        "forward": 100.0,
+        "kappa": 0.8,
+        "log_forward_moneyness": -0.25,
+        "maturity_years": 0.1,
+        "rho": -0.75,
+        "v0": 0.02,
+        "vbar": 0.03
+      },
+      "case_count": 768,
+      "status": "PASS",
+      "value": 0.00046755149499499256
+    },
+    "certified_grid_warnings": {
+      "status": "PASS",
+      "warning_counts": {}
+    },
+    "diagnostics_convergence": {
+      "case": {
+        "discount_factor": 1.0,
+        "eta": 0.8,
+        "forward": 100.0,
+        "kappa": 0.8,
+        "log_forward_moneyness": 0.25,
+        "maturity_years": 0.1,
+        "rho": -0.75,
+        "v0": 0.02,
+        "vbar": 0.03
+      },
+      "case_count": 384,
+      "status": "PASS",
+      "value": 0.00010532534743390443
+    },
+    "finite_outputs": {
+      "case_count": 1536,
+      "status": "PASS"
+    },
+    "forward_scale_homogeneity": {
+      "case_count": 18,
+      "maximum_normalized_price_range": 9.71445146547012e-17,
+      "status": "PASS"
+    },
+    "parity": {
+      "case": {
+        "discount_factor": 1.0,
+        "eta": 0.2,
+        "forward": 100.0,
+        "kappa": 3.0,
+        "log_forward_moneyness": -0.25,
+        "maturity_years": 0.1,
+        "rho": -0.75,
+        "v0": 0.02,
+        "vbar": 0.03
+      },
+      "case_count": 384,
+      "status": "PASS",
+      "value": 2.4868995751603507e-14
+    },
+    "scalar_batch_consistency": {
+      "case_count": 12,
+      "maximum_absolute_difference": 0.0,
+      "status": "PASS"
+    }
+  }
+}

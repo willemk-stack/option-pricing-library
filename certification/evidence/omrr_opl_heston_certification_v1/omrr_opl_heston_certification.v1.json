@@ -1,0 +1,181 @@
+{
+  "backend_comparison_evidence_summary": {
+    "absolute_tolerance": 1e-08,
+    "case_count": 384,
+    "maximum_absolute_difference": 0.00046756240387180127,
+    "relative_tolerance": 5e-05,
+    "status": "PASS",
+    "test_identifiers": [
+      "certification/heston/full_envelope_grid:robust_vs_adaptive",
+      "tests/models/heston/test_heston_fourier_backends.py"
+    ]
+  },
+  "certification_policy_sha256": "7836958535e1f66a5c936952d75632f7dd4382b768c2db43c169929d95c48f9f",
+  "certification_policy_version": "omrr_opl_heston_certification_policy.v1",
+  "certification_status": "PASS",
+  "certified_market_envelope": {
+    "absolute_log_forward_moneyness": {
+      "maximum": 0.25,
+      "minimum": 0.0
+    },
+    "discount_factor": {
+      "maximum": 1.0,
+      "minimum": 0.8
+    },
+    "forward_positive": true,
+    "maturity_years": {
+      "maximum": 3.0,
+      "minimum": 0.1
+    },
+    "strike_positive": true
+  },
+  "certified_parameter_envelope": {
+    "eta": {
+      "maximum": 0.8,
+      "minimum": 0.2
+    },
+    "kappa": {
+      "maximum": 3.0,
+      "minimum": 0.8
+    },
+    "rho": {
+      "maximum": 0.25,
+      "minimum": -0.75
+    },
+    "v0": {
+      "maximum": 0.08,
+      "minimum": 0.02
+    },
+    "vbar": {
+      "maximum": 0.08,
+      "minimum": 0.03
+    }
+  },
+  "created_at_utc": "2026-07-29T16:21:14Z",
+  "environment_metadata": {
+    "dependencies": {
+      "certification_tooling_commit_sha": "505e7aedcb2312f089f21a4c30cb68ce1746dd08",
+      "numpy": "1.26.4",
+      "pytest": "9.0.1",
+      "scipy": "1.14.1"
+    },
+    "platform": "Windows-11-10.0.26200-SP0; architecture=AMD64",
+    "python_version": "3.12.0"
+  },
+  "evidence_artifacts": [
+    {
+      "path": "certification_scope.v1.json",
+      "sha256": "6462690656d1848e6959d69cb58851c1b1990ffa60d37d670f949baf9e1c2d94"
+    },
+    {
+      "path": "coverage_catalog.v1.json",
+      "sha256": "77045549aa1c582543d1cdeec6c230d16a305f5fd02f4db927ec21cd84ffbf78"
+    },
+    {
+      "path": "heston_certification_dependencies.txt",
+      "sha256": "5bd265a6902a4a43919a47640042db523594425aa4a43ad71534bd8e4235de82"
+    },
+    {
+      "path": "heston_certification_environment.json",
+      "sha256": "17af1c2e25fb3d911a32d8da4cf2fed1f4f3619ffa332367770fdc6299586552"
+    },
+    {
+      "path": "heston_certification_pytest.log",
+      "sha256": "4580d399db625b5b90c4df6c6c8bc4df46790ea66f95bca0380545c3c4395b8f"
+    },
+    {
+      "path": "heston_certification_pytest.xml",
+      "sha256": "cf57598c77031cd01406bcdf8432d26ef5ed3e0e057fbd126417c7ebcd7dac74"
+    },
+    {
+      "path": "heston_certification_test_summary.json",
+      "sha256": "d3df1b067532f7c762ecb2a96374cda07a5acbf3a3747c95af3ddfca679e082f"
+    },
+    {
+      "path": "heston_numerical_grid.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "heston_numerical_grid_summary.json",
+      "sha256": "2d21a18f64d28a6ea534e9b88d621293200858ba8e72bd04a11cd2cb58881c9c"
+    },
+    {
+      "path": "omrr_policy.normalized.json",
+      "sha256": "4e2fb4eb6d9c1ebfb7451105a08ff290f12f9cabb773c6baa1f40070224e5d5b"
+    }
+  ],
+  "numerical_tolerances": {
+    "backend_absolute_price": 1e-08,
+    "backend_relative_to_discounted_forward": 5e-05,
+    "bound_absolute_price": 1e-08,
+    "bound_relative_to_discounted_notional": 5e-05,
+    "diagnostics_absolute_price": 1e-08,
+    "diagnostics_relative_to_discounted_forward": 5e-05,
+    "parity_absolute_price": 1e-10,
+    "parity_relative_to_discounted_notional": 1e-10,
+    "scalar_batch_absolute_price": 1e-10,
+    "scalar_batch_relative_price": 1e-10,
+    "scale_homogeneity_absolute_normalized_price": 1e-10
+  },
+  "opl_commit_sha": "6daf359c2c5c534fc95991f6b37a332258b52099",
+  "opl_repository_identity": "https://github.com/willemk-stack/option-pricing-library.git",
+  "opl_worktree_dirty": false,
+  "pricer_identity": "option_pricing.pricers.heston.heston_price_from_ctx",
+  "schema_version": "omrr_opl_heston_certification.v1",
+  "stress_regime_evidence_summary": {
+    "case_count": 384,
+    "status": "PASS",
+    "test_identifiers": [
+      "certification/heston/full_envelope_grid",
+      "tests/models/heston/test_heston_numerical_smoke_regimes.py",
+      "tests/models/heston/test_heston_numerical_robustness.py"
+    ]
+  },
+  "supported_option_rights": [
+    "call",
+    "put"
+  ],
+  "supported_pricing_api": "option_pricing.pricers.heston.heston_price_from_ctx",
+  "supported_production_backend": "gauss_legendre",
+  "supported_production_quadrature_tier": "robust",
+  "test_suite_result_summary": {
+    "failed": 0,
+    "identifiers": [
+      "tests/models/heston/test_heston_fourier_backends.py",
+      "tests/models/heston/test_heston_reference_prices.py",
+      "tests/models/heston/test_heston_numerical_smoke_regimes.py",
+      "tests/models/heston/test_heston_numerical_robustness.py",
+      "tests/models/heston/test_heston_quadrature_recommender.py",
+      "tests/models/heston/test_fourier_diagnostics.py",
+      "tests/models/heston/test_heston_params.py",
+      "tests/pricers/test_heston_pricer_vectorization.py",
+      "tests/market/test_market_parity.py",
+      "tests/diagnostics/heston/test_heston_integration.py",
+      "tests/diagnostics/heston/test_heston_pricing.py"
+    ],
+    "passed": 129,
+    "skipped": 2
+  },
+  "warning_behavior_evidence_summary": {
+    "case_count": 11,
+    "status": "PASS",
+    "test_identifiers": [
+      "tests.diagnostics.heston.test_heston_integration.test_integration_diagnostics_decodes_warning_and_reason_counts_for_stressed_case",
+      "tests.diagnostics.heston.test_heston_integration.test_integration_diagnostics_gauss_builds_readable_panel_warning_and_reason_tables",
+      "tests.diagnostics.heston.test_heston_pricing.test_run_heston_pricing_diagnostics_matches_public_prices_when_probability_warnings_exist",
+      "tests.models.heston.test_fourier_diagnostics.test_compute_global_warning_flags_ignores_near_origin_only_panels",
+      "tests.models.heston.test_fourier_diagnostics.test_compute_global_warning_flags_probability_and_quad_error",
+      "tests.models.heston.test_fourier_diagnostics.test_compute_global_warning_flags_scales_with_panel_count",
+      "tests.models.heston.test_fourier_diagnostics.test_gauss_batch_warning_flags_match_scalar_warning_flags",
+      "tests.models.heston.test_fourier_diagnostics.test_heston_warning_calibration_action_policy_mapping",
+      "tests.models.heston.test_fourier_diagnostics.test_too_small_u_max_triggers_tail_warnings_on_hard_regime",
+      "tests.models.heston.test_heston_numerical_robustness.test_authoritative_validation_promotes_runtime_warning_to_failure",
+      "tests.models.heston.test_heston_numerical_robustness.test_overflowing_trial_is_structured_without_runtime_warning"
+    ],
+    "warning_classes": [
+      "HestonIntegralWarning",
+      "RuntimeWarning promoted to structured numerical failure",
+      "scipy.integrate.IntegrationWarning"
+    ]
+  }
+}

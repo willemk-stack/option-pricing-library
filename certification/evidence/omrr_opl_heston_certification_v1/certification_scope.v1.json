@@ -1,0 +1,108 @@
+{
+  "certified_implementation_commit_sha": "6daf359c2c5c534fc95991f6b37a332258b52099",
+  "certified_market_envelope": {
+    "absolute_log_forward_moneyness": {
+      "maximum": 0.25,
+      "minimum": 0.0
+    },
+    "discount_factor": {
+      "maximum": 1.0,
+      "minimum": 0.8
+    },
+    "forward_positive": true,
+    "maturity_years": {
+      "maximum": 3.0,
+      "minimum": 0.1
+    },
+    "strike_positive": true
+  },
+  "certified_parameter_envelope": {
+    "eta": {
+      "maximum": 0.8,
+      "minimum": 0.2
+    },
+    "kappa": {
+      "maximum": 3.0,
+      "minimum": 0.8
+    },
+    "rho": {
+      "maximum": 0.25,
+      "minimum": -0.75
+    },
+    "v0": {
+      "maximum": 0.08,
+      "minimum": 0.02
+    },
+    "vbar": {
+      "maximum": 0.08,
+      "minimum": 0.03
+    }
+  },
+  "diagnostics_backend": "gauss_legendre",
+  "diagnostics_quadrature_tier": "diagnostics",
+  "grid_definition": {
+    "discount_factors": [
+      0.8,
+      1.0
+    ],
+    "forward_scale_checks": [
+      1.0,
+      100.0,
+      10000.0
+    ],
+    "log_forward_moneyness": [
+      -0.25,
+      0.0,
+      0.25
+    ],
+    "maturities_years": [
+      0.1,
+      3.0
+    ],
+    "parameter_values": "all Cartesian corners of the certified parameter envelope"
+  },
+  "numerical_tolerances": {
+    "backend_absolute_price": 1e-08,
+    "backend_relative_to_discounted_forward": 5e-05,
+    "bound_absolute_price": 1e-08,
+    "bound_relative_to_discounted_notional": 5e-05,
+    "diagnostics_absolute_price": 1e-08,
+    "diagnostics_relative_to_discounted_forward": 5e-05,
+    "parity_absolute_price": 1e-10,
+    "parity_relative_to_discounted_notional": 1e-10,
+    "scalar_batch_absolute_price": 1e-10,
+    "scalar_batch_relative_price": 1e-10,
+    "scale_homogeneity_absolute_normalized_price": 1e-10
+  },
+  "policy_notes": [
+    "The certified domain is deliberately narrower than the optimizer's admissibility bounds.",
+    "The domain is Cartesian because the consuming OMRR v1 validator supports rectangular envelopes.",
+    "Inputs outside the envelope fail closed and require an explicitly expanded certificate.",
+    "No OMRR production observations are used by certification."
+  ],
+  "pricer_identity": "option_pricing.pricers.heston.heston_price_from_ctx",
+  "production_backend": "gauss_legendre",
+  "production_quadrature_tier": "robust",
+  "reference_backend": "quad",
+  "reference_quadrature_tier": "adaptive",
+  "required_test_categories": [
+    "public_api",
+    "production_grid_finite_outputs",
+    "production_grid_price_bounds",
+    "production_grid_put_call_parity",
+    "production_grid_backend_agreement",
+    "diagnostics_convergence",
+    "scalar_batch_consistency",
+    "stress_regimes",
+    "warning_classification",
+    "warning_promotion",
+    "invalid_input_rejection",
+    "quadrature_recommendations"
+  ],
+  "scope_policy_version": "opl_heston_certification_scope.v1",
+  "supported_option_rights": [
+    "call",
+    "put"
+  ],
+  "supported_pricing_api": "option_pricing.pricers.heston.heston_price_from_ctx"
+}
