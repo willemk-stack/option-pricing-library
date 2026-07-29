@@ -1,0 +1,101 @@
+{
+  "certified_grid": {
+    "case_count": 3456,
+    "market_boundary_count_per_parameter_corner": 18,
+    "parameter_corner_count": 192,
+    "parameter_regime_count": 6,
+    "pricing_operation_count": 10476
+  },
+  "failure_count": 0,
+  "failures": [],
+  "schema_version": "opl_heston_numerical_grid_evidence.v2",
+  "status": "PASS",
+  "summaries": {
+    "backend_comparison": {
+      "case": {
+        "certified_parameter_regime": "stable_backend_fixture",
+        "discount_factor": 1.0,
+        "eta": 1.6,
+        "forward": 100.0,
+        "kappa": 4.0,
+        "log_forward_moneyness": 0.25,
+        "maturity_years": 0.1,
+        "rho": -0.55,
+        "v0": 0.045,
+        "vbar": 0.065
+      },
+      "case_count": 54,
+      "status": "PASS",
+      "value": 3.380888813353522e-07
+    },
+    "bounds": {
+      "case": {
+        "certified_parameter_regime": "high_mean_reversion",
+        "discount_factor": 1.0,
+        "eta": 1.8,
+        "forward": 100.0,
+        "kappa": 3.0,
+        "log_forward_moneyness": -1.3,
+        "maturity_years": 0.005479452054794521,
+        "rho": -0.7,
+        "v0": 0.03,
+        "vbar": 0.05
+      },
+      "case_count": 6912,
+      "status": "PASS",
+      "value": 7.291128796558933e-05
+    },
+    "certified_grid_warnings": {
+      "status": "PASS",
+      "warning_counts": {}
+    },
+    "diagnostics_convergence": {
+      "case": {
+        "certified_parameter_regime": "high_mean_reversion",
+        "discount_factor": 1.0,
+        "eta": 1.8,
+        "forward": 100.0,
+        "kappa": 3.0,
+        "log_forward_moneyness": -1.3,
+        "maturity_years": 0.005479452054794521,
+        "rho": -0.7,
+        "v0": 0.03,
+        "vbar": 0.05
+      },
+      "case_count": 3456,
+      "status": "PASS",
+      "value": 6.803558268197908e-05
+    },
+    "finite_outputs": {
+      "case_count": 10368,
+      "status": "PASS"
+    },
+    "forward_scale_homogeneity": {
+      "case_count": 18,
+      "maximum_normalized_price_range": 4.440892098500626e-16,
+      "status": "PASS"
+    },
+    "parity": {
+      "case": {
+        "certified_parameter_regime": "high_mean_reversion",
+        "discount_factor": 1.0,
+        "eta": 1.8,
+        "forward": 100.0,
+        "kappa": 3.0,
+        "log_forward_moneyness": -1.3,
+        "maturity_years": 0.005479452054794521,
+        "rho": -0.45,
+        "v0": 0.06,
+        "vbar": 0.08
+      },
+      "case_count": 3456,
+      "status": "PASS",
+      "value": 1.1368683772161603e-13
+    },
+    "scalar_batch_consistency": {
+      "case_count": 18,
+      "maximum_absolute_difference": 0.0,
+      "status": "PASS"
+    }
+  }
+}
