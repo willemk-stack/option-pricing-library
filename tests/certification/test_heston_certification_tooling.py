@@ -29,7 +29,7 @@ def generator() -> ModuleType:
 
 def _inputs(generator: ModuleType) -> dict[str, object]:
     scope = json.loads(
-        (ROOT / "certification" / "heston" / "certification_scope.v2.json").read_text(
+        (ROOT / "certification" / "heston" / "certification_scope.v3.json").read_text(
             encoding="utf-8"
         )
     )
@@ -80,12 +80,12 @@ def test_normalized_policy_matches_frozen_omrr_digest(
 ) -> None:
     policy = json.loads(
         (
-            ROOT / "certification" / "heston" / "omrr_policy.normalized.v2.json"
+            ROOT / "certification" / "heston" / "omrr_policy.normalized.v3.json"
         ).read_text(encoding="utf-8")
     )
     assert (
         generator.verify_policy(policy)
-        == "dc115c2e4d67e8bd8c9937f62e4a1a1f239d6cf62cf6574dd70b1b401d538af1"
+        == "e5820c7a2cfbedfc083573ccfc925522ec10baecc6c32827ba2125c6f926bdd7"
     )
 
 
@@ -97,7 +97,7 @@ def test_certificate_builder_emits_exact_omrr_v2_fields(
     assert set(payload) == generator.CERTIFICATE_FIELDS
     assert payload["schema_version"] == "omrr_opl_heston_certification.v2"
     assert payload["opl_commit_sha"] == "41c01d886aeddf87d6837927be63d5041cfc2f89"
-    assert len(payload["certified_parameter_regimes"]) == 6
+    assert len(payload["certified_parameter_regimes"]) == 7
     assert payload["opl_worktree_dirty"] is False
     assert (
         payload["environment_metadata"]["dependencies"][
@@ -106,6 +106,27 @@ def test_certificate_builder_emits_exact_omrr_v2_fields(
         == "1" * 40
     )
     assert "certification_tooling_commit_sha" not in payload
+
+
+def test_v3_scope_includes_bounded_high_mean_reversion_high_vol_of_vol_regime(
+    generator: ModuleType,
+) -> None:
+    scope = _inputs(generator)["scope"]
+    regimes = {
+        regime["name"]: regime["envelope"]
+        for regime in scope["certified_parameter_regimes"]
+    }
+    envelope = regimes["high_mean_reversion_high_vol_of_vol"]
+
+    assert scope["certification_scope_version"] == "opl_heston_certification_scope.v3"
+    assert scope["certified_parameter_envelope"]["eta"]["maximum"] == 2.5
+    assert envelope == {
+        "kappa": {"minimum": 3.5, "maximum": 4.0},
+        "vbar": {"minimum": 0.06, "maximum": 0.07},
+        "eta": {"minimum": 2.4, "maximum": 2.5},
+        "rho": {"minimum": -0.45, "maximum": -0.4},
+        "v0": {"minimum": 0.05, "maximum": 0.06},
+    }
 
 
 def test_certificate_builder_requires_warning_evidence(

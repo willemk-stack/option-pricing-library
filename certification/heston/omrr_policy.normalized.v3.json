@@ -4,7 +4,7 @@
   "coupled_parameter_regimes_required": true,
   "evidence_artifact_hashes_required": true,
   "out_of_domain_policy": "fail_closed",
-  "policy_version": "omrr_opl_heston_certification_policy.v2",
+  "policy_version": "omrr_opl_heston_certification_policy.v3",
   "required_certification_status": "PASS",
   "supported_production_backend": "gauss_legendre",
   "supported_production_quadrature_tier": "robust"

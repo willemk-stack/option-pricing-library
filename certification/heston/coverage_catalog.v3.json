@@ -1,5 +1,5 @@
 {
-  "catalog_version": "opl_heston_coverage_catalog.v2",
+  "catalog_version": "opl_heston_coverage_catalog.v3",
   "certified_commit_sha": "41c01d886aeddf87d6837927be63d5041cfc2f89",
   "coverage": {
     "adaptive_quadrature": [
@@ -42,7 +42,7 @@
     ]
   },
   "identified_gap_and_resolution": {
-    "gap": "The v1 Cartesian envelope both excluded production regimes and implied unsupported cross-parameter combinations; its price-bound tolerance was looser than OMRR qualification.",
-    "resolution": "V2 certifies six coupled parameter regimes at all declared market boundaries and uses the same persisted-price bound tolerance as OMRR."
+    "gap": "The v2 coupled domain stopped at eta 2.4 and did not certify the high-mean-reversion/high-vol-of-vol regime needed immediately above that boundary.",
+    "resolution": "V3 adds a narrow seventh coupled regime with eta 2.4 through 2.5, tested at every parameter corner and declared market boundary, while preserving fail-closed handling for all other combinations."
   }
 }

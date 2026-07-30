@@ -38,7 +38,7 @@
       }
     ]
   },
-  "certification_scope_version": "opl_heston_certification_scope.v2",
+  "certification_scope_version": "opl_heston_certification_scope.v3",
   "certified_implementation_commit_sha": "41c01d886aeddf87d6837927be63d5041cfc2f89",
   "certified_market_envelope": {
     "absolute_log_forward_moneyness": {
@@ -58,7 +58,7 @@
   },
   "certified_parameter_envelope": {
     "eta": {
-      "maximum": 2.4,
+      "maximum": 2.5,
       "minimum": 0.6
     },
     "kappa": {
@@ -228,6 +228,31 @@
         }
       },
       "name": "high_mean_reversion"
+    },
+    {
+      "envelope": {
+        "eta": {
+          "maximum": 2.5,
+          "minimum": 2.4
+        },
+        "kappa": {
+          "maximum": 4.0,
+          "minimum": 3.5
+        },
+        "rho": {
+          "maximum": -0.4,
+          "minimum": -0.45
+        },
+        "v0": {
+          "maximum": 0.06,
+          "minimum": 0.05
+        },
+        "vbar": {
+          "maximum": 0.07,
+          "minimum": 0.06
+        }
+      },
+      "name": "high_mean_reversion_high_vol_of_vol"
     }
   ],
   "diagnostics_backend": "gauss_legendre",
@@ -272,6 +297,7 @@
     "Every Cartesian corner within each named regime is tested at every declared market boundary.",
     "The production price-bound tolerance matches the OMRR persisted-price lower-bound tolerance.",
     "Adaptive backend agreement is tested on deterministic stable library fixtures; difficult production regimes use robust-versus-diagnostics convergence evidence.",
+    "The v3 high-mean-reversion/high-vol-of-vol regime is certified independently at every coupled parameter corner and declared market boundary.",
     "Inputs outside every named regime fail closed and require an expanded certificate.",
     "No OMRR production observations are used by certification."
   ],

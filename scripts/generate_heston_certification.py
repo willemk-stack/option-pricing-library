@@ -17,9 +17,9 @@ from typing import Any
 
 CERTIFIED_IMPLEMENTATION_COMMIT = "41c01d886aeddf87d6837927be63d5041cfc2f89"
 CERTIFICATE_SCHEMA_VERSION = "omrr_opl_heston_certification.v2"
-CERTIFICATION_POLICY_VERSION = "omrr_opl_heston_certification_policy.v2"
+CERTIFICATION_POLICY_VERSION = "omrr_opl_heston_certification_policy.v3"
 EXPECTED_POLICY_SHA256 = (
-    "dc115c2e4d67e8bd8c9937f62e4a1a1f239d6cf62cf6574dd70b1b401d538af1"
+    "e5820c7a2cfbedfc083573ccfc925522ec10baecc6c32827ba2125c6f926bdd7"
 )
 SCRIPT_PATH = Path(__file__).resolve()
 TOOLING_ROOT = SCRIPT_PATH.parents[1]
@@ -465,9 +465,9 @@ def generate(
         raise CertificationError(f"output directory already exists: {output_dir}")
     output_dir.mkdir(parents=True)
 
-    policy_source = POLICY_DIR / "omrr_policy.normalized.v2.json"
-    scope_source = POLICY_DIR / "certification_scope.v2.json"
-    catalog_source = POLICY_DIR / "coverage_catalog.v2.json"
+    policy_source = POLICY_DIR / "omrr_policy.normalized.v3.json"
+    scope_source = POLICY_DIR / "certification_scope.v3.json"
+    catalog_source = POLICY_DIR / "coverage_catalog.v3.json"
     policy = json.loads(policy_source.read_text(encoding="utf-8"))
     scope = json.loads(scope_source.read_text(encoding="utf-8"))
     policy_sha = verify_policy(policy)
