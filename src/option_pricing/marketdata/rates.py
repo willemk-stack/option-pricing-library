@@ -260,9 +260,9 @@ def representative_time_to_expiry_years(
             continue
         expiry_timestamp = pd.Timestamp(cast(Any, expiry))
         if expiry_timestamp.tzinfo is None:
-            expiry_timestamp = expiry_timestamp.normalize().tz_localize("UTC")
+            expiry_timestamp = expiry_timestamp.tz_localize("UTC")
         else:
-            expiry_timestamp = expiry_timestamp.tz_convert("UTC").normalize()
+            expiry_timestamp = expiry_timestamp.tz_convert("UTC")
         years = (expiry_timestamp - asof_timestamp).total_seconds() / (365 * 24 * 3600)
         if math.isfinite(years) and years > 0.0:
             values.append(float(years))

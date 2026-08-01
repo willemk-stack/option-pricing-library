@@ -192,25 +192,58 @@ def test_expiry_years_is_act_365_and_positive_for_valid_rows() -> None:
     assert (result.cleaned_quotes["expiry_years"] > 0).all()
 
 
-def test_optionsdx_source_preserves_explicit_provider_expiry_timestamp() -> None:
+def test_explicit_expiry_timestamp_is_preserved_for_both_maturity_fields() -> None:
     asof = "2023-01-03T21:00:00Z"
     option_chain = _option_chain(
         underlying="SPY",
-        contract_symbol="ODX|SPY|20230110|C|00100000",
+        contract_symbol="ODX|SPY|20250117|C|00100000",
         quote_ts=asof,
         asof=asof,
-        expiry="2023-01-10T21:00:00",
+        expiry="2025-01-17T21:00:00",
+        bid=14.0,
+        ask=16.0,
+        mid=15.0,
+        last=15.0,
         source="optionsdx_eod_2023",
     )
 
     result = clean_option_quotes(option_chain, _market_inputs(asof))
 
+    expected = (
+        pd.Timestamp("2025-01-17T21:00:00Z") - pd.Timestamp("2023-01-03T21:00:00Z")
+    ).total_seconds() / (365.0 * 86400.0)
     assert len(result.cleaned_quotes) == 1
     assert float(result.cleaned_quotes.loc[0, "expiry_years"]) == pytest.approx(
-        7.0 / 365.0
+        expected,
+        abs=1.0e-15,
     )
     assert float(result.cleaned_quotes.loc[0, "time_to_expiry_years"]) == pytest.approx(
-        7.0 / 365.0
+        expected,
+        abs=1.0e-15,
+    )
+
+
+def test_non_midnight_expiry_across_daylight_saving_transition() -> None:
+    # New York moves from UTC-5 to UTC-4 during this interval, so the two
+    # same-local-clock timestamps are 71 hours apart, not three full days.
+    asof = "2024-03-08T21:00:00Z"
+    option_chain = _option_chain(
+        quote_ts=asof,
+        asof=asof,
+        expiry="2024-03-11T20:00:00",
+    )
+
+    result = clean_option_quotes(option_chain, _market_inputs(asof))
+
+    expected = (71.0 * 3600.0) / (365.0 * 86400.0)
+    assert len(result.cleaned_quotes) == 1
+    assert float(result.cleaned_quotes.loc[0, "expiry_years"]) == pytest.approx(
+        expected,
+        abs=1.0e-15,
+    )
+    assert float(result.cleaned_quotes.loc[0, "time_to_expiry_years"]) == pytest.approx(
+        expected,
+        abs=1.0e-15,
     )
 
 

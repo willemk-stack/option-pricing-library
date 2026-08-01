@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import json
+import shutil
 from dataclasses import fields
 from pathlib import Path
 from typing import cast
@@ -33,6 +34,7 @@ from option_pricing.marketdata.storage import LocalStorage
 from option_pricing.marketdata.validation import validate_dtypes
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+FIXTURE_ROOT = REPO_ROOT / "tests/marketdata/fixtures"
 BUNDLES_FILE = REPO_ROOT / "src/option_pricing/marketdata/bundles.py"
 PIPELINE_FILE = REPO_ROOT / "src/option_pricing/marketdata/pipeline.py"
 LOCAL_BUNDLE_CONFIG = ModelValidationBundleConfig(run_heston_smoke=False)
@@ -256,6 +258,42 @@ def test_local_model_validation_pipeline_writes_bronze_silver_gold_and_bundle(
         "best_cost": None,
         "parameters": None,
     }
+
+
+def test_local_snapshot_pipeline_round_trip_preserves_expiry_timestamp(
+    tmp_path: Path,
+    fake_parquet: None,
+) -> None:
+    fixture_root = tmp_path / "fixtures"
+    fixture_path = fixture_root / LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1
+    shutil.copytree(FIXTURE_ROOT / LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1, fixture_path)
+    option_chain_path = fixture_path / "option_chain.csv"
+    option_chain = pd.read_csv(option_chain_path)
+    option_chain["expiry"] = "2026-06-19T21:00:00"
+    option_chain.to_csv(option_chain_path, index=False)
+
+    result = run_local_model_validation_pipeline(
+        storage=tmp_path / "storage",
+        run_id="timestamp-round-trip",
+        fixture_name=LOCAL_SNAPSHOT_SYNTH_SCHEMA_V1,
+        fixture_root=fixture_root,
+        bundle_config=LOCAL_BUNDLE_CONFIG,
+        library_commit="abc123",
+    )
+    loaded = bundles_module.load_model_validation_bundle(
+        result.model_validation_bundle.manifest_path.parent
+    )
+
+    expected = (
+        pd.Timestamp("2026-06-19T21:00:00Z") - pd.Timestamp("2026-05-22T15:30:00Z")
+    ).total_seconds() / (365.0 * 86400.0)
+    assert set(result.option_chain["expiry"]) == {pd.Timestamp("2026-06-19 21:00:00")}
+    for field in ("expiry_years", "time_to_expiry_years"):
+        observed = pd.to_numeric(loaded.cleaned_quotes[field], errors="raise")
+        assert observed.to_numpy(dtype=float) == pytest.approx(
+            [expected] * len(observed),
+            abs=1.0e-15,
+        )
 
 
 def test_rejected_quote_fixture_flows_evidence_through_pipeline_and_bundle(

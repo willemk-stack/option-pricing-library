@@ -24,7 +24,6 @@ _CLEANING_POLICY_ID = "quote_cleaning_policy.v1"
 OPTION_CLEANING_POLICY_STAGED_RECOVERABLE_QUOTES_V1 = "staged_recoverable_quotes_v1"
 MODEL_VALIDATION_POLICY_MODEL_READY_QUOTES_V1 = "model_ready_quotes_v1"
 _ACT_365_SECONDS = 365 * 24 * 3600
-_OPTIONSDX_EXACT_EXPIRY_SOURCE = "optionsdx_eod_2023"
 _VANILLA_NO_ARB_ABS_TOL = 1e-7
 _VANILLA_NO_ARB_REL_TOL = 1e-6
 
@@ -124,11 +123,7 @@ def clean_option_quotes(
 
     for _, row in option_frame.iterrows():
         quote_id = _quote_id(row)
-        expiry_years = _expiry_years(
-            row["expiry"],
-            row["asof"],
-            source=row["source"],
-        )
+        expiry_years = _expiry_years(row["expiry"], row["asof"])
         derived, rejection = _classify_rejection(row, policy, market, expiry_years)
 
         if rejection is None:
@@ -270,33 +265,13 @@ def _timestamp_iso(value: Any) -> str:
     return timestamp.isoformat()
 
 
-def _expiry_years(
-    expiry: Any,
-    asof: Any,
-    *,
-    source: Any = None,
-) -> float:
+def _expiry_years(expiry: Any, asof: Any) -> float:
     if pd.isna(expiry) or pd.isna(asof):
         return math.nan
 
-    # The temporary OptionsDX bridge supplies provider EXPIRE_UNIX as an exact,
-    # UTC-naive timestamp in the existing option_chain.v1 expiry field. Preserve
-    # it for this explicitly marked source; all other v1 sources retain the
-    # historical date-only midnight-UTC behavior.
-    if _text_value(source).strip().lower() == _OPTIONSDX_EXACT_EXPIRY_SOURCE:
-        expiry_utc = _as_utc_timestamp(expiry)
-    else:
-        expiry_utc = _expiry_midnight_utc(expiry)
+    expiry_utc = _as_utc_timestamp(expiry)
     asof_utc = _as_utc_timestamp(asof)
     return (expiry_utc - asof_utc).total_seconds() / _ACT_365_SECONDS
-
-
-def _expiry_midnight_utc(value: Any) -> pd.Timestamp:
-    timestamp = pd.Timestamp(value)
-    if timestamp.tzinfo is None:
-        return timestamp.normalize().tz_localize("UTC")
-
-    return timestamp.tz_convert("UTC").normalize()
 
 
 def _as_utc_timestamp(value: Any) -> pd.Timestamp:

@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 import option_pricing.marketdata as marketdata
+import option_pricing.marketdata.surface_ready as surface_ready
 from option_pricing.marketdata import prepare_svi_market_fit
 from option_pricing.marketdata.schemas import SURFACE_INPUTS_COLUMNS
 from option_pricing.marketdata.surface_ready import (
@@ -88,6 +89,15 @@ def test_public_result_dataclasses_have_expected_fields() -> None:
         "status",
         "warnings",
     )
+
+
+def test_surface_expiry_fallback_preserves_non_midnight_timestamp() -> None:
+    result = surface_ready._compute_expiry_years(
+        "2024-03-11T20:00:00Z",
+        "2024-03-08T16:00:00-05:00",
+    )
+
+    assert result == pytest.approx((71.0 * 3600.0) / (365.0 * 86400.0))
 
 
 def test_prepare_svi_market_fit_success_from_bundle_like_object() -> None:

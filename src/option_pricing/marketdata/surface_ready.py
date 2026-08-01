@@ -451,9 +451,9 @@ def _compute_expiry_years(expiry: object, asof: object) -> float:
         return math.nan
 
     if expiry_timestamp.tzinfo is None:
-        expiry_timestamp = expiry_timestamp.normalize().tz_localize("UTC")
+        expiry_timestamp = expiry_timestamp.tz_localize("UTC")
     else:
-        expiry_timestamp = expiry_timestamp.tz_convert("UTC").normalize()
+        expiry_timestamp = expiry_timestamp.tz_convert("UTC")
     if asof_timestamp.tzinfo is None:
         asof_timestamp = asof_timestamp.tz_localize("UTC")
     else:
@@ -616,9 +616,9 @@ def _expiry_bucket_key(row: pd.Series) -> str | None:
         if timestamp is not None and not pd.isna(timestamp):
             timestamp = cast(pd.Timestamp, timestamp)
             if timestamp.tzinfo is None:
-                timestamp = timestamp.normalize().tz_localize("UTC")
+                timestamp = timestamp.tz_localize("UTC")
             else:
-                timestamp = timestamp.tz_convert("UTC").normalize()
+                timestamp = timestamp.tz_convert("UTC")
             return timestamp.isoformat()
 
     expiry_years = _numeric_value(row[_COMPUTABLE_EXPIRY_COLUMN])

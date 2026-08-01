@@ -335,9 +335,9 @@ def _compute_expiry_years(expiry: object, asof: object) -> float:
         return math.nan
 
     if expiry_timestamp.tzinfo is None:
-        expiry_timestamp = expiry_timestamp.normalize().tz_localize("UTC")
+        expiry_timestamp = expiry_timestamp.tz_localize("UTC")
     else:
-        expiry_timestamp = expiry_timestamp.tz_convert("UTC").normalize()
+        expiry_timestamp = expiry_timestamp.tz_convert("UTC")
     if asof_timestamp.tzinfo is None:
         asof_timestamp = asof_timestamp.tz_localize("UTC")
     else:

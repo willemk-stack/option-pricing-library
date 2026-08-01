@@ -108,11 +108,11 @@ def test_compute_expiry_years_handles_missing_bad_and_timezone_values() -> None:
     assert np.isnan(model_ready._compute_expiry_years("not-a-date", "2026-01-01"))
 
     out = model_ready._compute_expiry_years(
-        "2026-01-02",
+        "2026-01-02T15:30:00Z",
         "2026-01-01T12:00:00+02:00",
     )
 
-    assert out == pytest.approx((14.0 / 24.0) / 365.0)
+    assert out == pytest.approx((29.5 / 24.0) / 365.0)
 
 
 def test_model_ready_private_validators_and_ordering() -> None:

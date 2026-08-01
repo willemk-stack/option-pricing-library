@@ -10,6 +10,7 @@ from option_pricing.marketdata.providers.fred import FredRateUnavailableError
 from option_pricing.marketdata.rates import (
     build_fred_treasury_zero_proxy_curve,
     fred_percent_to_continuous_decimal,
+    representative_time_to_expiry_years,
     resolve_fred_treasury_zero_proxy_rate,
     select_latest_fred_rate_at_or_before_asof,
 )
@@ -41,6 +42,15 @@ def test_fred_percent_to_continuous_decimal_uses_log1p() -> None:
     assert fred_percent_to_continuous_decimal(4.25) == pytest.approx(
         math.log1p(4.25 / 100.0)
     )
+
+
+def test_representative_expiry_preserves_non_midnight_timestamp() -> None:
+    result = representative_time_to_expiry_years(
+        ["2024-03-11T20:00:00Z"],
+        asof="2024-03-08T16:00:00-05:00",
+    )
+
+    assert result == pytest.approx((71.0 * 3600.0) / (365.0 * 86400.0))
 
 
 def test_select_latest_fred_rate_at_or_before_asof() -> None:
